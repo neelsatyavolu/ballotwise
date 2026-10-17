@@ -52,10 +52,26 @@ export async function noteBallotActivity(db: Db, userId: string, activity: strin
   await db.prepare("UPDATE ballots SET activity = ?, searches = searches + ? WHERE user_id = ? AND status = 'finding'").bind(activity, newSearches, userId).run();
 }
 
+const normalizeLabel = (label: string) => label.trim().toLowerCase().replace(/\s+/g, " ");
+
 /** Same contest, same id: finding contests again never duplicates a guide or loses answers already given. */
 export function contestGuideId(userId: string, date: string, label: string): string {
-  const key = `${userId}|${date}|${label.trim().toLowerCase().replace(/\s+/g, " ")}`;
+  const key = `${userId}|${date}|${normalizeLabel(label)}`;
   return `b${createHash("sha256").update(key).digest("base64url").slice(0, 21)}`;
+}
+
+/**
+ * The guide already tracking this contest, if any. The label can be worded differently each time
+ * contests are found, so a guide whose researched title matches the label counts as the same contest.
+ */
+async function existingContestGuide(db: Db, userId: string, date: string, label: string): Promise<string | null> {
+  const id = contestGuideId(userId, date, label);
+  if (await db.prepare("SELECT 1 AS x FROM guides WHERE id = ?").bind(id).first()) return id;
+  const { results } = await db
+    .prepare("SELECT id, title FROM guides WHERE user_id = ? AND election_date = ? AND origin = 'ballot'")
+    .bind(userId, date)
+    .all<{ id: string; title: string }>();
+  return results.find((g) => normalizeLabel(g.title) === normalizeLabel(label))?.id ?? null;
 }
 
 /** Adds a queued guide for each contest not already tracked. Returns the ids that are new. */
@@ -63,14 +79,14 @@ export async function addContestGuides(db: Db, userId: string, contests: BallotC
   const added: string[] = [];
   for (const election of contests.elections) {
     for (const contest of election.contests) {
-      const id = contestGuideId(userId, election.date, contest.label);
       const kind = contest.kind ?? "office";
-      const exists = await db.prepare("SELECT 1 AS x FROM guides WHERE id = ?").bind(id).first();
-      if (exists) {
+      const existing = await existingContestGuide(db, userId, election.date, contest.label);
+      if (existing) {
         // Guides found before levels were recorded get sorted into their tab now.
-        await db.prepare("UPDATE guides SET level = ?, kind = ? WHERE id = ? AND level IS NULL").bind(contest.level, kind, id).run();
+        await db.prepare("UPDATE guides SET level = ?, kind = ? WHERE id = ? AND level IS NULL").bind(contest.level, kind, existing).run();
         continue;
       }
+      const id = contestGuideId(userId, election.date, contest.label);
       await db
         .prepare(
           `INSERT INTO guides (id, user_id, title, election_date, election_name, data, updated_at, origin, status, query, level, kind)

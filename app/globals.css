@@ -436,8 +436,8 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 .interview-note { margin: -10px 0 18px; padding: 10px 14px; border-radius: var(--radius); background: var(--mark); font-size: 15px; }
 
 /* Race cards on My ballot */
-.race-grid { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-.race-card { position: relative; display: grid; gap: 10px; align-content: start; min-height: 120px; padding: 14px 16px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); transition: border-color 0.15s; }
+.race-grid { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.race-card { position: relative; display: grid; gap: 10px; align-content: start; min-height: 120px; padding: 14px 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); transition: border-color 0.15s; }
 .race-card:hover { border-color: var(--accent); }
 .race-card.done { background: transparent; }
 .race-card.done .card-title { color: var(--muted); }

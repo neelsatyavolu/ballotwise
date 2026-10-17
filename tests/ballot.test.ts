@@ -109,6 +109,19 @@ describe("contest guides", () => {
       "Proposition 1": ["measure", "state"],
     });
   });
+
+  it("reuses a guide whose researched title matches a contest found under a different label", async () => {
+    const { db, user } = await setup();
+    const old = { elections: [{ name: "California General Election", date: "2026-11-03", contests: [{ label: "Board of Equalization, District 2", query: "BOE 2", level: null }] }] };
+    await addContestGuides(db, user.id, old as never, 1);
+    const id = contestGuideId(user.id, "2026-11-03", "Board of Equalization, District 2");
+    await db.prepare("UPDATE guides SET title = ? WHERE id = ?").bind("California State Board of Equalization District 2", id).run();
+
+    const again = { elections: [{ name: "General Election", date: "2026-11-03", contests: [{ label: "California State Board of Equalization  District 2", query: "BOE 2", level: "state" }] }] };
+    expect(await addContestGuides(db, user.id, again as never, 2)).toHaveLength(0);
+    const guides = await listGuides(db, user.id, "ballot");
+    expect(guides.map((g) => [g.id, g.level])).toEqual([[id, "state"]]);
+  });
 });
 
 describe("background research", () => {

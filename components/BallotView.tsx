@@ -288,7 +288,8 @@ export function BallotView() {
   const shownVoted = shown.filter((g) => g.voted);
   const byElection = new Map<string, GuideSummary[]>();
   for (const g of shown.filter((g) => !g.voted)) {
-    const key = `${g.electionDate ?? ""}|${g.electionName ?? ""}`;
+    // Grouped by date alone: the same election can come back under slightly different names.
+    const key = g.electionDate ?? "";
     byElection.set(key, [...(byElection.get(key) ?? []), g]);
   }
 
