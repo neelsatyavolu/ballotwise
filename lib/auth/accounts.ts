@@ -52,12 +52,33 @@ async function startSession(db: Db, userId: string, now: number): Promise<string
   return token;
 }
 
-export async function signUp(db: Db, email: string, password: string, now: number): Promise<{ user: User; token: string }> {
+/** `termsVersion` is the Terms and Privacy Policy version accepted on the signup form. */
+export async function signUp(db: Db, email: string, password: string, now: number, termsVersion: string | null = null): Promise<{ user: User; token: string }> {
   const existing = await db.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
   if (existing) throw new AccountError("An account with that email already exists. Sign in instead.", 409);
   const user = { id: randomUUID(), email };
-  await db.prepare("INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)").bind(user.id, email, await hashPassword(password), now).run();
+  await db
+    .prepare("INSERT INTO users (id, email, password_hash, created_at, terms_version, terms_accepted_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(user.id, email, await hashPassword(password), now, termsVersion, termsVersion ? now : null)
+    .run();
   return { user, token: await startSession(db, user.id, now) };
+}
+
+/** The Terms version this user last accepted, or null if they never have. */
+export async function acceptedTerms(db: Db, userId: string): Promise<string | null> {
+  const row = await db.prepare("SELECT terms_version FROM users WHERE id = ?").bind(userId).first<{ terms_version: string | null }>();
+  return row?.terms_version ?? null;
+}
+
+export async function acceptTerms(db: Db, userId: string, version: string, now: number): Promise<void> {
+  await db.prepare("UPDATE users SET terms_version = ?, terms_accepted_at = ? WHERE id = ?").bind(version, now, userId).run();
+}
+
+/** Deletes the account. Every table tied to a user cascades, so this removes all of their data. */
+export async function deleteAccount(db: Db, userId: string, password: string): Promise<void> {
+  const row = await db.prepare("SELECT password_hash FROM users WHERE id = ?").bind(userId).first<{ password_hash: string }>();
+  if (!row || !(await verifyPassword(password, row.password_hash))) throw new AccountError("That password isn't right.", 401);
+  await db.prepare("DELETE FROM users WHERE id = ?").bind(userId).run();
 }
 
 export async function signIn(db: Db, email: string, password: string, now: number): Promise<{ user: User; token: string }> {

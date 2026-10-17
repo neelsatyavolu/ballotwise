@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { finishReset, requestReset, signIn, signUp, endSession, userForSession, SESSION_TTL_MS, RESET_TTL_MS } from "../lib/auth/accounts";
+import { acceptedTerms, acceptTerms, deleteAccount, finishReset, requestReset, signIn, signUp, endSession, userForSession, SESSION_TTL_MS, RESET_TTL_MS } from "../lib/auth/accounts";
 import { hashPassword, verifyPassword } from "../lib/auth/password";
 import { testDb } from "./sqlite-db";
 
@@ -75,5 +75,35 @@ describe("password reset", () => {
     await signUp(db, "a@example.com", "old password!", NOW);
     for (let i = 0; i < 3; i++) expect(await requestReset(db, "a@example.com", NOW)).not.toBeNull();
     expect(await requestReset(db, "a@example.com", NOW)).toBeNull();
+  });
+});
+
+describe("terms and account deletion", () => {
+  it("records the terms accepted at signup, and asks again when they change", async () => {
+    const db = testDb();
+    const { user } = await signUp(db, "a@example.com", "a long password", NOW, "v1");
+    expect(await acceptedTerms(db, user.id)).toBe("v1");
+    const { user: old } = await signUp(db, "b@example.com", "a long password", NOW);
+    expect(await acceptedTerms(db, old.id)).toBeNull();
+    await acceptTerms(db, old.id, "v2", NOW);
+    expect(await acceptedTerms(db, old.id)).toBe("v2");
+  });
+
+  it("deletes the account and everything tied to it, only with the right password", async () => {
+    const db = testDb();
+    const { user, token } = await signUp(db, "a@example.com", "a long password", NOW, "v1");
+    await db.prepare("INSERT INTO guides (id, user_id, title, data, updated_at) VALUES ('g', ?, 't', 'null', 1)").bind(user.id).run();
+    await db.prepare("INSERT INTO guide_profiles (guide_id, candidate_id) VALUES ('g', 'c')").run();
+    await db.prepare("INSERT INTO voter_profiles (user_id, transcript, started_at, updated_at) VALUES (?, '[]', 1, 1)").bind(user.id).run();
+
+    await expect(deleteAccount(db, user.id, "wrong password")).rejects.toMatchObject({ status: 401 });
+    expect(await userForSession(db, token, NOW)).not.toBeNull();
+
+    await deleteAccount(db, user.id, "a long password");
+    expect(await userForSession(db, token, NOW)).toBeNull();
+    for (const table of ["users", "guides", "guide_profiles", "voter_profiles", "sessions"]) {
+      expect((await db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>())?.n).toBe(0);
+    }
+    await expect(signIn(db, "a@example.com", "a long password", NOW)).rejects.toMatchObject({ status: 401 });
   });
 });

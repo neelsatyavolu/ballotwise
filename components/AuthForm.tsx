@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/client";
+import { MIN_AGE } from "@/lib/legal";
 import { useAccount } from "./AccountProvider";
 
 type Mode = "signin" | "signup" | "forgot" | "reset";
@@ -21,6 +22,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const { refresh } = useAccount();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         setSent(res.message);
         return;
       }
-      const body = mode === "reset" ? { token, password } : { email, password };
+      const body = mode === "reset" ? { token, password } : mode === "signup" ? { email, password, acceptTerms } : { email, password };
       await api(`/api/account/${mode}`, { body });
       await refresh();
       router.push(next?.startsWith("/") && !next.startsWith("//") ? next : "/");
@@ -88,6 +90,15 @@ export function AuthForm({ mode }: { mode: Mode }) {
               />
               {mode !== "signin" && <span className="hint">At least 10 characters.</span>}
             </div>
+          )}
+          {mode === "signup" && (
+            <label className="check">
+              <input type="checkbox" required checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} />
+              <span>
+                I&apos;m {MIN_AGE} or older and I accept the <Link href="/terms" target="_blank">Terms of Service</Link> and{" "}
+                <Link href="/privacy" target="_blank">Privacy Policy</Link>.
+              </span>
+            </label>
           )}
           {error && <p className="error" role="alert">{error}</p>}
           <button className="btn" type="submit" disabled={busy}>{busy ? copy.busy : copy.button}</button>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Public_Sans, Source_Serif_4 } from "next/font/google";
 import { AccountProvider } from "@/components/AccountProvider";
 import { Header } from "@/components/Header";
+import { TermsGate } from "@/components/TermsGate";
 import "./globals.css";
 
 const sans = Public_Sans({ variable: "--font-sans", subsets: ["latin"] });
@@ -23,11 +24,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <AccountProvider>
           <Header />
-          <main>{children}</main>
+          <main>
+            <TermsGate>{children}</TermsGate>
+          </main>
           <footer className="site-footer">
             <div className="wrap">
               <span>Ballotwise is nonpartisan and not affiliated with any campaign, party, or election office.</span>
-              <Link href="/method">How it works</Link>
+              <span className="footer-links">
+                <Link href="/method">How it works</Link>
+                <Link href="/terms">Terms</Link>
+                <Link href="/privacy">Privacy</Link>
+                <Link href="/account">Account</Link>
+              </span>
             </div>
           </footer>
         </AccountProvider>
