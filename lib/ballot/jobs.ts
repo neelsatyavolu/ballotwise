@@ -7,7 +7,7 @@ import { guideForJob, noteGuideActivity, saveCandidateResult, saveRaceForGuide, 
 import { alignPositions, balanceSides, keepRetrievedRaceSources, keepRetrievedSources } from "../profile";
 import { BALLOT_INSTRUCTIONS, ballotPrompt, PROFILE_INSTRUCTIONS, profilePrompt, RACE_INSTRUCTIONS, racePrompt } from "../prompts";
 import { ballotContestsSchema, profileSchema, raceResultSchema, type Race } from "../schema";
-import { alignToIssues, claimAlignment, getValues, saveSuggested } from "../values";
+import { alignToIssues, getValues, releaseAlignment, saveSuggested, scheduleAlignment } from "../values";
 import { addContestGuides, getBallot, noteBallotActivity, setBallotStatus } from "./store";
 
 export const jobSchema = z.discriminatedUnion("type", [
@@ -54,6 +54,20 @@ export function activityReporter(write: (activity: string, newSearches: number) 
       return chain;
     },
   };
+}
+
+/** Queues interview mapping only when a summary exists, so an early finish cannot burn the claim. */
+async function enqueueAlignment(deps: JobDeps, userId: string, guideIds: string[]): Promise<void> {
+  const now = (deps.now ?? Date.now)();
+  await scheduleAlignment(
+    deps.db,
+    userId,
+    guideIds,
+    async (ids) => {
+      await deps.enqueue(ids.map((guideId) => ({ type: "align" as const, guideId })));
+    },
+    now,
+  );
 }
 
 async function tokensFor(deps: JobDeps, userId: string) {
@@ -110,7 +124,7 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
     await Promise.all(
       race.candidates.map(async (candidate) => {
         try {
-          await researchCandidate(deps, tokens, job.guideId, race, candidate.id, now);
+          await researchCandidate(deps, tokens, guide.userId, job.guideId, race, candidate.id, now);
         } catch {
           retries.push({ type: "candidate", guideId: job.guideId, candidateId: candidate.id });
         }
@@ -122,7 +136,12 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
 
   if (job.type === "align") {
     const values = await getValues(deps.db, guide.userId);
-    if (!values.summary || !guide.data) return;
+    // Research often finishes before the interview. Releasing the claim lets the
+    // interview (or the next ballot load) queue this race again.
+    if (!values.summary || !guide.data) {
+      await releaseAlignment(deps.db, job.guideId);
+      return;
+    }
     const suggested = await alignToIssues(tokens, values.summary, guide.data.race.title, guide.data.race.issues).catch(permanent);
     await saveSuggested(deps.db, job.guideId, suggested);
     return;
@@ -130,10 +149,10 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
 
   const race = guide.data?.race;
   if (!race) return;
-  await researchCandidate(deps, tokens, job.guideId, race, job.candidateId, now);
+  await researchCandidate(deps, tokens, guide.userId, job.guideId, race, job.candidateId, now);
 }
 
-async function researchCandidate(deps: JobDeps, tokens: GrokTokens, guideId: string, race: Race, candidateId: string, now: () => number): Promise<void> {
+async function researchCandidate(deps: JobDeps, tokens: GrokTokens, userId: string, guideId: string, race: Race, candidateId: string, now: () => number): Promise<void> {
   const candidate = race.candidates.find((c) => c.id === candidateId);
   if (!candidate) return;
   const activity = activityReporter((text) => noteGuideActivity(deps.db, guideId, text), `${candidate.name}. `);
@@ -143,7 +162,8 @@ async function researchCandidate(deps: JobDeps, tokens: GrokTokens, guideId: str
   const profile = alignPositions(keepRetrievedSources(data, retrieved), race.issues);
   const status = await saveCandidateResult(deps.db, guideId, candidateId, { profile }, race.candidates.length, now());
   // Once the last candidate is in, place the voter's interview on this race's issues.
-  if (status === "ready") await deps.enqueue((await claimAlignment(deps.db, [guideId])).map((id) => ({ type: "align" as const, guideId: id })));
+  // Skip it when the interview isn't done yet; finishing the interview queues these races.
+  if (status === "ready") await enqueueAlignment(deps, userId, [guideId]);
 }
 
 /** Records a job that gave up, so the page shows what went wrong instead of researching forever. */
@@ -151,12 +171,16 @@ export async function failJob(job: Job, message: string, deps: JobDeps): Promise
   const now = (deps.now ?? Date.now)();
   if (job.type === "ballot") return setBallotStatus(deps.db, job.userId, "failed", message, now);
   if (job.type === "race") return setGuideStatus(deps.db, job.guideId, "failed", message, now);
-  if (job.type === "align") return; // The match falls back to the voter's own answers.
+  if (job.type === "align") {
+    // Leave the race ready, but stop the card spinning. A retry clears this and queues the job again.
+    await deps.db.prepare("UPDATE guides SET error = ? WHERE id = ? AND status = 'ready' AND suggested IS NULL").bind(message, job.guideId).run();
+    return;
+  }
   const guide = await guideForJob(deps.db, job.guideId);
   const count = guide?.data?.race.candidates.length ?? 0;
   if (count === 0) return;
   const status = await saveCandidateResult(deps.db, job.guideId, job.candidateId, { error: message }, count, now);
-  if (status === "ready") await deps.enqueue((await claimAlignment(deps.db, [job.guideId])).map((id) => ({ type: "align" as const, guideId: id })));
+  if (status === "ready" && guide) await enqueueAlignment(deps, guide.userId, [job.guideId]);
 }
 
 export function readableError(err: unknown): string {

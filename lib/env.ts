@@ -16,3 +16,7 @@ export function db(): Db {
 export async function enqueue(jobs: Job[]): Promise<void> {
   if (jobs.length > 0) await appEnv().RESEARCH_QUEUE.sendBatch(jobs.map((body) => ({ body })));
 }
+
+export function enqueueAlignment(guideIds: string[]): Promise<void> {
+  return enqueue(guideIds.map((guideId) => ({ type: "align" as const, guideId })));
+}

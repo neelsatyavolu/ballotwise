@@ -3,14 +3,19 @@ import { z } from "zod";
 import { currentUser } from "@/lib/auth/session";
 import { lookUpDistricts } from "@/lib/ballot/census";
 import { getBallot, saveBallot } from "@/lib/ballot/store";
-import { db, enqueue } from "@/lib/env";
+import { db, enqueue, enqueueAlignment } from "@/lib/env";
 import { activeGrokSession } from "@/lib/grok/session";
-import { listGuides } from "@/lib/guides";
+import { claimableGuideIds, listGuides } from "@/lib/guides";
+import { scheduleAlignment } from "@/lib/values";
 
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Sign in to see your ballot." }, { status: 401 });
-  const [ballot, guides] = await Promise.all([getBallot(db(), user.id), listGuides(db(), user.id, "ballot")]);
+  const database = db();
+  // Races researched before the interview used to keep a dead claim and spin forever.
+  // Opening the ballot queues those, and any alignment that has gone stale, again.
+  await scheduleAlignment(database, user.id, await claimableGuideIds(database, user.id), enqueueAlignment);
+  const [ballot, guides] = await Promise.all([getBallot(database, user.id), listGuides(database, user.id, "ballot")]);
   return NextResponse.json({ ballot, guides });
 }
 

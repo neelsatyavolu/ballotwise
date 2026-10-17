@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { currentUser } from "@/lib/auth/session";
-import { db, enqueue } from "@/lib/env";
+import { db, enqueueAlignment } from "@/lib/env";
 import { ResearchError } from "@/lib/grok/research";
 import { activeGrokSession } from "@/lib/grok/session";
-import { researchedGuideIds } from "@/lib/guides";
-import { claimAlignment, getValues, MAX_QUESTIONS, nextTurn, questionsAsked, resetValues, saveValues, type TranscriptEntry, type ValuesState } from "@/lib/values";
+import { claimableGuideIds } from "@/lib/guides";
+import { getValues, MAX_QUESTIONS, nextTurn, questionsAsked, resetValues, saveValues, scheduleAlignment, type TranscriptEntry, type ValuesState } from "@/lib/values";
 
 export const maxDuration = 120;
 
@@ -55,9 +55,9 @@ export async function POST(req: NextRequest) {
       await saveValues(d, user.id, [...transcript, next], null, Date.now());
     } else {
       await saveValues(d, user.id, transcript, next, Date.now());
-      // Place the new interview on every race already researched; races still researching get it when they finish.
-      const claimed = await claimAlignment(d, await researchedGuideIds(d, user.id));
-      await enqueue(claimed.map((guideId) => ({ type: "align" as const, guideId })));
+      // Place the new interview on every race already researched, including ones whose
+      // alignment was claimed before this summary existed. Races still researching get it when they finish.
+      await scheduleAlignment(d, user.id, await claimableGuideIds(d, user.id), enqueueAlignment);
     }
     return NextResponse.json(view(await getValues(d, user.id)));
   } catch (err) {

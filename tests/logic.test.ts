@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractJson } from "../lib/json";
-import { agreement, matchCandidate } from "../lib/match";
+import { agreement, interviewMatchPhase, MATCH_WAIT_MS, matchCandidate } from "../lib/match";
 import { alignPositions, keepRetrievedSources } from "../lib/profile";
 import { normalizeUrl } from "../lib/url";
 import { profileSchema, raceResultSchema, type Issue, type Profile } from "../lib/schema";
@@ -23,6 +23,21 @@ describe("extractJson", () => {
   });
   it("throws when there is no object", () => {
     expect(() => extractJson("no json here")).toThrow();
+  });
+});
+
+describe("interviewMatchPhase", () => {
+  const base = { hasMatch: false, fromInterview: false, matchError: null, values: "done", waitedMs: 0 };
+  it("keeps matching only until the wait expires, then becomes retryable", () => {
+    expect(interviewMatchPhase(base)).toBe("matching");
+    expect(interviewMatchPhase({ ...base, waitedMs: MATCH_WAIT_MS - 1 })).toBe("matching");
+    expect(interviewMatchPhase({ ...base, waitedMs: MATCH_WAIT_MS })).toBe("slow");
+  });
+  it("stops on a recorded failure, a real match, or no comparable answers", () => {
+    expect(interviewMatchPhase({ ...base, matchError: "Grok returned an error." })).toBe("failed");
+    expect(interviewMatchPhase({ ...base, hasMatch: true })).toBe("ready");
+    expect(interviewMatchPhase({ ...base, fromInterview: true })).toBe("insufficient");
+    expect(interviewMatchPhase({ ...base, values: "none" })).toBe("prompt");
   });
 });
 

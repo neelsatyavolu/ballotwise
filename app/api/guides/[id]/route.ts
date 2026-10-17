@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/session";
-import { db, enqueue } from "@/lib/env";
-import { claimAlignment, getValues } from "@/lib/values";
+import { db, enqueueAlignment } from "@/lib/env";
+import { scheduleAlignment } from "@/lib/values";
 import { z } from "zod";
 import { deleteGuide, getGuide, guideDataSchema, guideIdSchema, saveGuide, setVoted } from "@/lib/guides";
 
@@ -16,6 +16,9 @@ export async function GET(_req: NextRequest, ctx: RouteContext<"/api/guides/[id]
   if (!user) return NextResponse.json({ error: "Sign in to open this guide." }, { status: 401 });
   const guide = id ? await getGuide(db(), user.id, id) : null;
   if (!guide) return NextResponse.json({ error: "That guide doesn't exist or isn't yours." }, { status: 404 });
+  if (id && guide.status === "ready" && guide.data && !guide.suggested && !guide.error) {
+    await scheduleAlignment(db(), user.id, [id], enqueueAlignment);
+  }
   return NextResponse.json(guide);
 }
 
@@ -29,9 +32,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext<"/api/guides/[id]"
     return NextResponse.json({ error: "This guide couldn't be saved." }, { status: 400 });
   }
   const complete = data.data.race.candidates.every((c) => data.data.profiles[c.id]);
-  if (complete && (await getValues(db(), user.id)).summary) {
-    await enqueue((await claimAlignment(db(), [id])).map((guideId) => ({ type: "align" as const, guideId })));
-  }
+  if (complete) await scheduleAlignment(db(), user.id, [id], enqueueAlignment);
   return NextResponse.json({ ok: true });
 }
 
