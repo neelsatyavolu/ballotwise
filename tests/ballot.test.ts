@@ -195,6 +195,21 @@ describe("background research", () => {
     expect(candidates.sort()).toEqual(["Ann", "Bob"]);
   });
 
+  it("drops the interview mapping when a race is researched again, since its issues may be worded or oriented differently", async () => {
+    stubGrok();
+    const { db, user, deps, queued } = await setup();
+    queued.push({ type: "ballot", userId: user.id });
+    await drain(deps, queued);
+    const [guide] = await listGuides(db, user.id, "ballot");
+    await db.prepare("UPDATE guides SET suggested = ?, align_requested = 5 WHERE id = ?").bind(JSON.stringify({ housing: { stance: 2, weight: 3, why: "old" } }), guide.id).run();
+
+    queued.push({ type: "race", guideId: guide.id });
+    await drain(deps, queued);
+
+    const row = await db.prepare("SELECT suggested, align_requested AS claim FROM guides WHERE id = ?").bind(guide.id).first<{ suggested: string | null; claim: number }>();
+    expect(row).toEqual({ suggested: null, claim: 0 });
+  });
+
   it("estimates stances that have no source, from the candidate's other positions", async () => {
     vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
       const prompt = String(init?.body);

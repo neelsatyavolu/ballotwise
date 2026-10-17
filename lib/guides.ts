@@ -206,7 +206,10 @@ export async function claimableGuideIds(db: Db, userId: string, now = Date.now()
   return results.map((r) => r.id);
 }
 
-/** Stores the researched race and clears any earlier candidate research for it. */
+/**
+ * Stores the researched race and clears any earlier candidate research for it. The interview mapping
+ * is cleared too: it was placed on the old issues, whose wording or side order may differ now.
+ */
 export async function saveRaceForGuide(db: Db, id: string, query: string, race: Race, now: number): Promise<void> {
   const data: GuideData = { query, race, profiles: {}, answers: {}, overrides: {} };
   await db.batch([
@@ -214,7 +217,7 @@ export async function saveRaceForGuide(db: Db, id: string, query: string, race: 
     db
       .prepare(
         `UPDATE guides SET data = ?, title = ?, election_date = COALESCE(election_date, ?), status = 'researching', error = NULL,
-           updated_at = ?, candidate_count = ?, activity = ?, kind = ? WHERE id = ?`,
+           updated_at = ?, candidate_count = ?, activity = ?, kind = ?, suggested = NULL, align_requested = 0 WHERE id = ?`,
       )
       .bind(
         JSON.stringify(data),
