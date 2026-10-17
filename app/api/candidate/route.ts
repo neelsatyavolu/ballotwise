@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { research } from "@/lib/grok/research";
 import { currentUser } from "@/lib/auth/session";
+import { getCached, profileKey, putCached } from "@/lib/cache";
+import { db } from "@/lib/env";
+import { estimateMissing } from "@/lib/estimate";
 import { activeGrokSession } from "@/lib/grok/session";
 import { alignPositions, keepRetrievedSources } from "@/lib/profile";
 import { PROFILE_INSTRUCTIONS, profilePrompt } from "@/lib/prompts";
@@ -32,7 +35,15 @@ export async function POST(req: NextRequest) {
   if (!tokens) return NextResponse.json({ error: "Connect your Grok account to research candidates." }, { status: 401 });
 
   return ndjsonResponse<Profile>(async (progress) => {
-    const { data, retrieved } = await research(tokens, PROFILE_INSTRUCTIONS, profilePrompt(race, candidate), profileSchema, progress);
-    return alignPositions(keepRetrievedSources(data, retrieved), race.issues);
+    const key = profileKey(race, candidate);
+    const cached = await getCached<Profile>(db(), key, Date.now());
+    let found = cached;
+    if (!found) {
+      const { data, retrieved } = await research(tokens, PROFILE_INSTRUCTIONS, profilePrompt(race, candidate), profileSchema, progress);
+      found = alignPositions(keepRetrievedSources(data, retrieved), race.issues);
+    }
+    const profile = await estimateMissing(tokens, race, candidate, found);
+    if (profile !== cached) await putCached(db(), key, profile, Date.now());
+    return profile;
   });
 }

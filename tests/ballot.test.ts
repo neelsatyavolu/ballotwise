@@ -50,6 +50,7 @@ function stubGrok(fail?: (prompt: string) => boolean) {
     if (!String(url).includes("api.x.ai")) return new Response("no", { status: 404 });
     const prompt = String(init?.body);
     if (fail?.(prompt)) return new Response("busy", { status: 429 });
+    if (prompt.includes("Issues to estimate")) return sse(JSON.stringify({ estimates: [] }));
     if (prompt.includes("Voter address")) return sse(JSON.stringify(contests));
     if (prompt.includes("The person searched for")) return sse(JSON.stringify(race));
     return sse(JSON.stringify(profile));
@@ -107,6 +108,52 @@ describe("background research", () => {
     const guide = await getGuide(db, user.id, guides[0].id);
     expect(Object.keys(guide!.data!.profiles).sort()).toEqual(["ann", "bob"]);
     expect(guide!.data!.profiles.ann.positions.map((p) => p.issueId)).toEqual(["housing", "transit", "safety"]);
+  });
+
+  it("reuses another voter's race and candidate research and offers their contests to Grok", async () => {
+    stubGrok();
+    const { db, user, deps, queued } = await setup();
+    queued.push({ type: "ballot", userId: user.id });
+    await drain(deps, queued);
+
+    const { user: second } = await signUp(db, "b@example.com", "a long password", 1);
+    await storeGrokTokens(db, KEY, second.id, { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 }, 1);
+    await saveBallot(db, second.id, "201 N Spring St, LA", "201 N SPRING ST, LOS ANGELES, CA", districts, 1);
+    const prompts: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string | URL, init?: RequestInit) => {
+      prompts.push(String(init?.body));
+      return sse(JSON.stringify(contests));
+    });
+    queued.push({ type: "ballot", userId: second.id });
+    await drain(deps, queued);
+
+    // Only the contest search went to Grok, and it was told which contests this county already has.
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("CA-34 general 2026");
+    const guides = await listGuides(db, second.id, "ballot");
+    expect(guides.every((g) => g.status === "ready")).toBe(true);
+    const guide = await getGuide(db, second.id, guides[0].id);
+    expect(Object.keys(guide!.data!.profiles).sort()).toEqual(["ann", "bob"]);
+  });
+
+  it("estimates stances that have no source, from the candidate's other positions", async () => {
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      const prompt = String(init?.body);
+      if (prompt.includes("Issues to estimate")) {
+        return sse(JSON.stringify({ estimates: [{ issueId: "transit", stance: 2, basis: "Based on wanting more housing." }, { issueId: "safety", stance: null, basis: "Nothing on safety." }] }));
+      }
+      if (prompt.includes("Voter address")) return sse(JSON.stringify(contests));
+      if (prompt.includes("The person searched for")) return sse(JSON.stringify(race));
+      return sse(JSON.stringify(profile));
+    });
+    const { db, user, deps, queued } = await setup();
+    queued.push({ type: "ballot", userId: user.id });
+    await drain(deps, queued);
+    const [first] = await listGuides(db, user.id, "ballot");
+    const positions = (await getGuide(db, user.id, first.id))!.data!.profiles.ann.positions;
+    expect(positions.find((p) => p.issueId === "transit")).toMatchObject({ stance: null, estimate: { stance: 2 } });
+    expect(positions.find((p) => p.issueId === "safety")?.estimate).toBeNull();
+    expect(positions.find((p) => p.issueId === "housing")?.estimate).toBeUndefined();
   });
 
   it("records a candidate that gave up and still shows the others", async () => {
@@ -178,6 +225,6 @@ describe("values interview", () => {
     expect(guide?.suggested).toEqual({ housing: { stance: 2, weight: 3, why: "You said build, build, build." } });
     const [summaryRow] = (await listGuides(db, user.id, "ballot")).filter((g) => g.id === first.id);
     expect(summaryRow.fromInterview).toBe(true);
-    expect(summaryRow.match).toMatchObject({ name: "Ann", score: 75 });
+    expect(summaryRow.match).toMatchObject({ picks: [{ name: "Ann", score: 75 }] });
   });
 });

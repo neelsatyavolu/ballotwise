@@ -28,7 +28,7 @@ export default function Method() {
       <ul>
         <li>Every fact needs a link to where it came from. Facts without one are dropped.</li>
         <li>We check each link against the pages Grok actually opened. Links to anything else are removed.</li>
-        <li>If we can&apos;t find where a candidate stands on an issue, we say so instead of guessing.</li>
+        <li>If we can&apos;t find where a candidate stands on an issue, we estimate it from their own other positions, record and endorsements (never from party alone), draw it with dashed ovals, and say what the estimate rests on.</li>
       </ul>
 
       <h2>Keeping it fair</h2>
@@ -41,13 +41,14 @@ export default function Method() {
       <h2>Your best match</h2>
       <p>
         The 10-minute interview asks what you want from government and how much each thing matters to you. For each race, the AI
-        places your answers on that race&apos;s issues without seeing any candidates. Where your answers don&apos;t clearly cover an
-        issue, it leaves that issue blank.
+        places your answers on that race&apos;s issues without seeing any candidates. Where your answers don&apos;t cover an
+        issue, it makes a mild, low-weight inference from your related views, marks it as inferred and says what it rests on. You
+        can change any answer.
       </p>
       <p>
         The match itself is simple math, not AI. On each issue, you and a candidate agree 100% if you picked the same circle and 0%
-        if you picked opposite ends. Issues that matter more to you count more. If we couldn&apos;t find where a candidate stands
-        on an issue, it&apos;s left out of their score, and the page tells you how much of your answers the score is based on.
+        if you picked opposite ends. Issues that matter more to you count more. Estimated stances count
+        toward the score; if not even an estimate is possible, that issue is left out of their score, and the page tells you how much of your answers the score is based on.
       </p>
       <p>
         You can change any of your answers in a race, or fix a candidate&apos;s position if you think we got it wrong. The score

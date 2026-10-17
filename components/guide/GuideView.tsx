@@ -8,9 +8,9 @@ import { GrokConnect } from "@/components/GrokConnect";
 import { api, ApiError, shuffled, streamResearch } from "@/lib/client";
 import type { Progress } from "@/lib/grok/research";
 import type { GuideData, GuideRecord, GuideStatus } from "@/lib/guides";
-import { effectiveAnswers, headlineMatch, type Answer, type Answers, type Overrides } from "@/lib/match";
+import { effectiveAnswers, headlineMatch, joinNames, type Answer, type Answers, type Overrides } from "@/lib/match";
 import type { Suggested } from "@/lib/values";
-import type { Profile, Race, RaceResult } from "@/lib/schema";
+import { profileStances, seatsOf, type Profile, type Race, type RaceResult } from "@/lib/schema";
 import { Sources } from "./bits";
 import { Compare } from "./Compare";
 import { Interview } from "./Interview";
@@ -318,9 +318,9 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
   const allDone = researchDone;
   const effective = effectiveAnswers(answers, suggested);
   const hasAnswers = Object.values(effective).some((a) => a.stance !== null);
-  const notes = Object.fromEntries(Object.entries(suggested ?? {}).filter(([id]) => !answers[id]).map(([id, s]) => [id, s.why]));
-  const stances = Object.fromEntries(Object.entries(profiles).map(([id, p]) => [id, Object.fromEntries(p.positions.map((x) => [x.issueId, x.stance]))]));
-  const headline = allDone && hasAnswers ? headlineMatch(order, stances, race.issues.map((i) => i.id), effective, overrides) : null;
+  const notes = Object.fromEntries(Object.entries(suggested ?? {}).filter(([id]) => !answers[id]).map(([id, s]) => [id, { why: s.why, inferred: s.inferred === true }]));
+  const stances = Object.fromEntries(Object.entries(profiles).map(([id, p]) => [id, profileStances(p)]));
+  const headline = allDone && hasAnswers ? headlineMatch(order, stances, race.issues.map((i) => i.id), effective, overrides, seatsOf(race)) : null;
   const showResults = !editing && (interviewDone || (hasAnswers && suggested !== null));
 
   return (
@@ -404,18 +404,26 @@ function MatchCard(props: {
   const { headline, researchDone, values, awaitingMatch, fromInterview, onSeeWhy } = props;
   if (!researchDone) return null;
   if (headline) {
+    const [first] = headline.picks;
+    const several = headline.picks.length > 1;
+    const label = several
+      ? `Your ${headline.picks.length} best matches`
+      : headline.closeCall ? "Too close to call" : "Your best match";
+    const names = several ? joinNames(headline.picks.map((p) => p.name)) : headline.closeCall ? `${first.name} and ${headline.runnerUpName}` : first.name;
+    const agreement = several
+      ? `They agree with you ${joinNames(headline.picks.map((p) => `${p.score}%`))} of the way${
+          headline.closeCall ? `. ${headline.runnerUpName} is close behind at ${headline.runnerUpScore}%.` : headline.runnerUpScore !== null ? ` (next closest: ${headline.runnerUpScore}%).` : "."
+        }`
+      : headline.closeCall
+        ? `They agree with you ${first.score}% and ${headline.runnerUpScore}% of the way.`
+        : `Agrees with you ${first.score}% of the way${headline.runnerUpScore !== null ? ` (next closest: ${headline.runnerUpScore}%)` : ""}.`;
     return (
       <section className="match-card" aria-label="Your match">
         <div>
-          <p className="match-card-label">{headline.closeCall ? "Too close to call" : "Your best match"}</p>
-          <p className="match-card-name">
-            {headline.closeCall ? `${headline.name} and ${headline.runnerUpName}` : headline.name}
-          </p>
+          <p className="match-card-label">{label}</p>
+          <p className="match-card-name">{names}</p>
           <p className="small match-card-sub">
-            {headline.closeCall
-              ? `They agree with you ${headline.score}% and ${headline.runnerUpScore}% of the way.`
-              : `Agrees with you ${headline.score}% of the way${headline.runnerUpScore !== null ? ` (next closest: ${headline.runnerUpScore}%)` : ""}.`}{" "}
-            {fromInterview ? "Based on your interview." : "Based on your answers."} This isn&apos;t advice on how to vote.
+            {agreement} {fromInterview ? "Based on your interview." : "Based on your answers."} This isn&apos;t advice on how to vote.
           </p>
         </div>
         <button type="button" className="btn" onClick={onSeeWhy}>See why</button>

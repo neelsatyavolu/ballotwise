@@ -106,7 +106,7 @@ export function Home({ initialQuery }: { initialQuery: string }) {
       <section className="principles" aria-label="How Ballotwise stays neutral">
         <div>
           <h3>Every fact has a link</h3>
-          <p>Each fact links to where it came from. When we can&apos;t find where a candidate stands, we say so instead of guessing.</p>
+          <p>Each fact links to where it came from. When we can&apos;t find where a candidate stands, we estimate it from their other positions and record, and label it as an estimate.</p>
         </div>
         <div>
           <h3>Same questions for everyone</h3>

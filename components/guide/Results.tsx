@@ -1,7 +1,7 @@
 "use client";
 
 import { matchCandidate, type Answers, type Overrides } from "@/lib/match";
-import type { CandidateRef, Issue, Profile } from "@/lib/schema";
+import { profileStances, type CandidateRef, type Issue, type Profile } from "@/lib/schema";
 import { describeStance, POINTS, Sources, StanceOvals } from "./bits";
 
 type Props = {
@@ -9,7 +9,7 @@ type Props = {
   candidates: CandidateRef[];
   profiles: Record<string, Profile | undefined>;
   answers: Answers;
-  notes?: Record<string, string>;
+  notes?: Record<string, { why: string; inferred: boolean }>;
   overrides: Overrides;
   onOverride: (candidateId: string, issueId: string, stance: number | null | undefined) => void;
   onRetake: () => void;
@@ -22,7 +22,7 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
   const matches = candidates
     .filter((c) => profiles[c.id])
     .map((c) => {
-      const stances = Object.fromEntries(profiles[c.id]!.positions.map((p) => [p.issueId, p.stance]));
+      const stances = profileStances(profiles[c.id]!);
       return { candidate: c, match: matchCandidate(c.id, stances, issueIds, answers, overrides) };
     })
     // Highest alignment first; candidates without enough data go last, in their shuffled order.
@@ -35,8 +35,8 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
       <div className="read stack">
         <p>
           This shows how much each candidate agrees with your {answered} answer{answered === 1 ? "" : "s"}, counting the issues you
-          care about most more heavily. If we couldn&apos;t find where a candidate stands on an issue, that issue is left out of their
-          score. This isn&apos;t advice on how to vote.
+          care about most more heavily. If we couldn&apos;t find where a candidate stands on an issue, we estimate it from their other
+          positions and record and mark it as estimated; if even that isn&apos;t possible, the issue is left out of their score. This isn&apos;t advice on how to vote.
         </p>
         <p className="small muted">
           Think we got someone&apos;s position wrong? Fix it in the table and the score updates.{" "}
@@ -81,8 +81,8 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
                           <StanceOvals voter stance={row.voter} label={describeStance(row.voter, issue.sideA, issue.sideB)} />
                         )}
                         {notes[row.issueId] && (
-                          <span className="cell-sub" title={notes[row.issueId]}>
-                            {row.voter === null ? "Your interview didn’t cover this" : "From your interview"} ⓘ
+                          <span className="cell-sub" title={notes[row.issueId].why}>
+                            {row.voter === null ? "Your interview didn’t cover this" : notes[row.issueId].inferred ? "Inferred from your interview" : "From your interview"} ⓘ
                           </span>
                         )}
                       </td>
@@ -90,10 +90,16 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
                         {row.candidate === null ? (
                           <span className="cell-empty">Unknown</span>
                         ) : (
-                          <StanceOvals stance={row.candidate} label={describeStance(row.candidate, issue.sideA, issue.sideB)} />
+                          <StanceOvals
+                            stance={row.candidate}
+                            estimated={!row.overridden && pos?.stance === null}
+                            label={describeStance(row.candidate, issue.sideA, issue.sideB)}
+                          />
                         )}
                         {row.overridden ? (
                           <span className="cell-sub edited">Changed by you</span>
+                        ) : pos?.stance === null && pos.estimate ? (
+                          <span className="cell-sub" title={pos.estimate.basis}>Estimated ⓘ</span>
                         ) : (
                           pos && pos.sources.length > 0 && <span className="cell-sub">Sources <Sources compact urls={pos.sources} /></span>
                         )}

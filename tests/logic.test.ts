@@ -162,9 +162,30 @@ describe("headline match", () => {
     const cands = [{ id: "a", name: "Ann" }, { id: "b", name: "Bob" }];
     const stances = { a: { housing: -2, transit: 2 }, b: { housing: 2, transit: -2 } };
     const m = headlineMatch(cands, stances, ["housing", "transit"], answers);
-    expect(m).toMatchObject({ name: "Ann", score: 100, runnerUpScore: 0, closeCall: false });
+    expect(m).toMatchObject({ picks: [{ name: "Ann", score: 100 }], runnerUpScore: 0, closeCall: false });
     const tie = headlineMatch(cands, { a: { housing: 0 }, b: { housing: 0 } }, ["housing"], answers);
     expect(tie?.closeCall).toBe(true);
     expect(headlineMatch(cands, stances, ["housing"], {})).toBeNull();
+  });
+
+  it("picks one candidate per seat", async () => {
+    const { headlineMatch, joinNames } = await import("../lib/match");
+    const cands = [{ id: "a", name: "Ann" }, { id: "b", name: "Bob" }, { id: "c", name: "Cy" }];
+    const stances = { a: { housing: 2 }, b: { housing: -2 }, c: { housing: 1 } };
+    const m = headlineMatch(cands, stances, ["housing"], { housing: { stance: 2, weight: 1 } }, {}, 2);
+    expect(m?.picks.map((p) => p.name)).toEqual(["Ann", "Cy"]);
+    expect(m).toMatchObject({ runnerUpName: "Bob", runnerUpScore: 0, closeCall: false });
+    expect(headlineMatch(cands, stances, ["housing"], { housing: { stance: 2, weight: 1 } }, {}, 5)?.picks).toHaveLength(3);
+    expect(joinNames(["Ann", "Bob", "Cy"])).toBe("Ann, Bob and Cy");
+  });
+
+  it("reads the seat count from the race or its voting rule", async () => {
+    const { seatsOf } = await import("../lib/schema");
+    expect(seatsOf({ seats: 3, votingRule: null })).toBe(3);
+    expect(seatsOf({ votingRule: "Vote for no more than 2" })).toBe(2);
+    expect(seatsOf({ votingRule: "Vote for up to three" })).toBe(3);
+    expect(seatsOf({ votingRule: "Two seats open" })).toBe(2);
+    expect(seatsOf({ votingRule: "Top two from the primary" })).toBe(1);
+    expect(seatsOf({ votingRule: null })).toBe(1);
   });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Db } from "./auth/accounts";
+import { getCached, putCached } from "./cache";
 import { ask } from "./grok/research";
 import type { GrokTokens } from "./grok/oauth";
 import type { Issue } from "./schema";
@@ -104,15 +105,20 @@ export const suggestedAnswerSchema = z.object({
   stance: z.number().int().min(-2).max(2).nullable(),
   weight: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   why: z.string().trim().max(320),
+  /** True when the interview didn't cover this issue and the stance was inferred from the voter's related values. */
+  inferred: z.boolean().optional(),
 });
 export type SuggestedAnswer = z.infer<typeof suggestedAnswerSchema>;
 export type Suggested = Record<string, SuggestedAnswer>;
 
 const alignSchema = z.object({ answers: z.array(suggestedAnswerSchema.extend({ issueId: z.string() })) });
 
-export const ALIGN_INSTRUCTIONS = `You place a voter on specific issue questions using only the voter's own interview summary. You are never shown candidates, and you never infer a view from ideology, party, or demographics.
-For each issue: choose a stance from -2 (strongly side A) to +2 (strongly side B) only if the summary clearly supports it, otherwise null. Weight 1 to 3 follows how much the voter said that topic matters. "why" is one sentence quoting or closely paraphrasing what the voter said; for null, say what was missing.
-Reply with one JSON object: {"answers": [{"issueId": "...", "stance": 1, "weight": 2, "why": "..."}]}`;
+export const ALIGN_INSTRUCTIONS = `You place a voter on specific issue questions using only the voter's own interview summary. You are never shown candidates, and you never infer a view from party, ideology labels, or demographics.
+For each issue choose a stance from -2 (strongly side A) to +2 (strongly side B):
+- If the summary speaks to the issue, use it: "inferred": false, weight 1 to 3 following how much the voter said that topic matters, and "why" is one sentence quoting or closely paraphrasing what they said.
+- If the interview didn't cover it, make the most reasonable inference from what the voter did say that bears on it (for example their views on costs, the role of government, regulation, fairness, risk, or local control): "inferred": true, weight 1, and "why" is one sentence starting "Inferred from" that names the views it rests on. Use a mild stance (-1, 0 or +1) unless their related views are strong.
+- Use null only if nothing the voter said bears on the issue at all, and say what was missing.
+Reply with one JSON object: {"answers": [{"issueId": "...", "stance": 1, "weight": 2, "why": "...", "inferred": false}]}`;
 
 export async function alignToIssues(tokens: GrokTokens, summary: ValuesSummary, office: string, issues: Issue[]): Promise<Suggested> {
   const list = issues.map((i) => `- id "${i.id}": ${i.question}\n  -2 = strongly: ${i.sideA}\n  +2 = strongly: ${i.sideB}`).join("\n");
@@ -124,6 +130,26 @@ export async function alignToIssues(tokens: GrokTokens, summary: ValuesSummary, 
 
 export async function saveSuggested(db: Db, guideId: string, suggested: Suggested): Promise<void> {
   await db.prepare("UPDATE guides SET suggested = ? WHERE id = ?").bind(JSON.stringify(suggested), guideId).run();
+}
+
+/**
+ * Ready guides whose interview mapping left issues blank, from before inferred answers existed.
+ * Each is claimed once (for the cache lifetime), so reloading the page doesn't queue it again.
+ */
+export async function claimRealignment(db: Db, userId: string, now: number): Promise<string[]> {
+  const { results } = await db
+    .prepare("SELECT id, suggested FROM guides WHERE user_id = ? AND status = 'ready' AND suggested LIKE '%\"stance\":null%'")
+    .bind(userId)
+    .all<{ id: string; suggested: string }>();
+  const claimed: string[] = [];
+  for (const { id, suggested } of results) {
+    const answers = Object.values(JSON.parse(suggested) as Suggested);
+    if (!answers.some((a) => a.stance === null && a.inferred === undefined)) continue;
+    if (await getCached(db, `realign:${id}`, now)) continue;
+    await putCached(db, `realign:${id}`, true, now);
+    claimed.push(id);
+  }
+  return claimed;
 }
 
 /** Marks guides as queued for mapping and returns the ones not already queued. */

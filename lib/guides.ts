@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { Db } from "./auth/accounts";
+import { getCached, putCached } from "./cache";
+import { needsEstimate } from "./estimate";
 import { effectiveAnswers, headlineMatch, type MatchHeadline } from "./match";
-import { profileSchema, raceSchema, type Profile, type Race } from "./schema";
+import { profileSchema, profileStances, raceSchema, seatsOf, type Profile, type Race } from "./schema";
 import type { Suggested } from "./values";
 
 const MAX_GUIDE_BYTES = 400_000;
@@ -75,8 +77,8 @@ function toSummary({ data, suggested, ...r }: GuideRow, profiles: Record<string,
   let match: MatchHeadline | null = null;
   if (parsed && r.status === "ready") {
     const all = { ...parsed.profiles, ...profiles };
-    const stances = Object.fromEntries(Object.entries(all).map(([id, p]) => [id, Object.fromEntries(p.positions.map((x) => [x.issueId, x.stance]))]));
-    match = headlineMatch(parsed.race.candidates, stances, parsed.race.issues.map((i) => i.id), effectiveAnswers(parsed.answers, fromInterview), parsed.overrides);
+    const stances = Object.fromEntries(Object.entries(all).map(([id, p]) => [id, profileStances(p)]));
+    match = headlineMatch(parsed.race.candidates, stances, parsed.race.issues.map((i) => i.id), effectiveAnswers(parsed.answers, fromInterview), parsed.overrides, seatsOf(parsed.race));
   }
   return { ...r, voted: r.voted === 1, match, fromInterview: Boolean(fromInterview) };
 }
@@ -221,4 +223,36 @@ export async function saveCandidateResult(
     return status;
   }
   return null;
+}
+
+/** The researched profiles for one ballot guide, by candidate. */
+export async function guideProfiles(db: Db, id: string): Promise<Record<string, Profile>> {
+  return (await backgroundProfiles(db, [id]))[id] ?? {};
+}
+
+export async function replaceCandidateProfile(db: Db, id: string, candidateId: string, profile: Profile): Promise<void> {
+  await db.prepare("UPDATE guide_profiles SET data = ? WHERE guide_id = ? AND candidate_id = ?").bind(JSON.stringify(profile), id, candidateId).run();
+}
+
+/**
+ * Ready ballot guides with unknown stances that were researched before estimates existed.
+ * Each is claimed once, so loading the page again doesn't queue the same work twice.
+ */
+export async function claimEstimates(db: Db, userId: string, now: number): Promise<string[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT gp.guide_id AS id FROM guide_profiles gp JOIN guides g ON g.id = gp.guide_id
+       WHERE g.user_id = ? AND g.status = 'ready' AND gp.data LIKE '%"stance":null%'`,
+    )
+    .bind(userId)
+    .all<{ id: string }>();
+  const profiles = await backgroundProfiles(db, results.map((r) => r.id));
+  const claimed: string[] = [];
+  for (const { id } of results) {
+    if (!Object.values(profiles[id] ?? {}).some(needsEstimate)) continue;
+    if (await getCached(db, `estimating:${id}`, now)) continue;
+    await putCached(db, `estimating:${id}`, true, now);
+    claimed.push(id);
+  }
+  return claimed;
 }

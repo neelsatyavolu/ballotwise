@@ -190,6 +190,31 @@ main { padding: 28px 0 0; }
 .cell .cell-name { display: none; font-family: var(--serif); font-weight: 600; font-size: 17px; }
 .cell blockquote { margin: 0; padding-left: 12px; border-left: 2px solid var(--rule); font-family: var(--serif); font-style: italic; }
 .unknown { color: var(--muted); font-style: italic; }
+/* Many candidates: each issue is one ballot scale with names placed on it. */
+.spectrum-issue { padding: 22px 0; border-bottom: 1px solid var(--rule); display: grid; gap: 14px; }
+.spectrum-issue:first-child { border-top: 1px solid var(--rule); }
+.spectrum-issue .issue-q { max-width: var(--read); }
+.spectrum-ends { display: flex; justify-content: space-between; gap: 24px; font-size: 14px; }
+.spectrum-ends span { max-width: 40%; }
+.spectrum-ends span:last-child { text-align: right; }
+.spectrum-ends b { font-weight: 600; }
+.spectrum { list-style: none; margin: 0; padding: 14px 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--rule); }
+.spectrum-col { display: grid; align-content: start; justify-items: center; gap: 10px; padding: 0 8px; text-align: center; }
+.spectrum-col + .spectrum-col { border-left: 1px dashed var(--rule); }
+.spectrum-mark { display: grid; justify-items: center; gap: 4px; }
+.spectrum-mark .oval { width: 26px; height: 16px; }
+.spectrum-label { font-size: 12px; color: var(--muted); }
+.spectrum-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-family: var(--serif); font-weight: 600; font-size: 16px; line-height: 1.25; }
+.spectrum-note { font-size: 14px; color: var(--muted); }
+.said summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 15px; }
+.said-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px 28px; margin-top: 16px; }
+.scale.estimated .oval { border-style: dashed; }
+.scale.estimated .oval.filled::after { opacity: 0.45; }
+.estimated-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px dashed var(--muted); border-radius: var(--radius); font-family: var(--sans); font-size: 11px; font-weight: 500; color: var(--muted); vertical-align: 2px; }
+.estimated-note { color: var(--muted); font-size: 14px; }
+.estimated-note .estimated-tag { margin-left: 0; }
+.cell.named { padding-left: 14px; border-left: 2px solid var(--rule); }
+.cell.named .cell-name { display: block; }
 
 /* Ovals */
 .scale { display: flex; align-items: center; gap: 6px; }
@@ -276,6 +301,13 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 @media (max-width: 860px) {
   .principles { grid-template-columns: 1fr; gap: 20px; }
   .issue-row, .issue-row.head { grid-template-columns: 1fr; gap: 16px; }
+  .spectrum-ends { flex-direction: column; gap: 4px; }
+  .spectrum-ends span { max-width: none; }
+  .spectrum-ends span:last-child { text-align: left; }
+  .spectrum { grid-template-columns: 1fr; padding-top: 0; }
+  .spectrum-col { grid-template-columns: 96px 1fr; justify-items: start; text-align: left; padding: 10px 0; gap: 12px; }
+  .spectrum-col + .spectrum-col { border-left: 0; border-top: 1px dashed var(--rule); }
+  .spectrum-mark { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
   .issue-row.head { display: none; }
   .cell { padding-left: 14px; border-left: 2px solid var(--rule); }
   .cell .cell-name { display: block; }
