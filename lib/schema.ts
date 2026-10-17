@@ -22,7 +22,8 @@ export const candidateRefSchema = z.object({
   id: z.string().trim().regex(/^[a-z0-9-]{2,60}$/),
   name: text(100),
   party: z.string().trim().max(60).nullable(),
-  ballotDesignation: z.string().trim().max(120).nullable(),
+  /** For a measure side this holds the ballot label's "A yes vote means..." sentence, which runs long. */
+  ballotDesignation: z.string().trim().max(300).nullable(),
   incumbent: z.boolean(),
 });
 
@@ -31,11 +32,13 @@ export const contestKinds = ["office", "measure"] as const;
 export const raceSchema = z.object({
   /** A ballot measure is stored as a race whose two "candidates" are its Yes and No sides. Absent on older races, which are offices. */
   kind: z.enum(contestKinds).optional(),
-  title: text(120),
+  /** Official measure titles run long, e.g. California's Proposition 41 at 134 characters. */
+  title: text(200),
   election: text(160),
   date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   jurisdiction: text(120),
-  office: sourced,
+  /** A measure's summary includes current law and fiscal impact, so it gets more room than a single claim. */
+  office: z.object({ text: text(1200), sources: z.array(url).min(1).max(5) }),
   votingRule: z.string().trim().max(200).nullable(),
   /** Seats filled; older saved races don't have it, see seatsOf. */
   seats: z.number().int().min(1).max(12).optional(),

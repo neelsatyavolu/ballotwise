@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { categoryOf } from "../lib/categories";
 import { profilePrompt } from "../lib/prompts";
-import { ballotContestsSchema, type Race } from "../lib/schema";
+import { ballotContestsSchema, raceSchema, type Race } from "../lib/schema";
 
 describe("categoryOf", () => {
   it("sorts offices by level", () => {
@@ -48,5 +48,16 @@ describe("measure research", () => {
     expect(profilePrompt(measure, measure.candidates[0])).toContain("official ballot argument in favor of");
     expect(profilePrompt(measure, measure.candidates[1])).toContain("official ballot argument against");
     expect(profilePrompt({ ...measure, kind: undefined }, measure.candidates[0])).not.toContain("official ballot argument");
+  });
+  it("accepts official titles, ballot-label sentences and analyses at their real length", () => {
+    const issue = (id: string) => ({ id, title: "Taxes", question: "q", sideA: "a", sideB: "b" });
+    const long = {
+      ...measure,
+      title: "Proposition 41: Prohibits New State Taxes That Exclude Revenues from State Spending Limit; Requires Audits for New State Special Taxes",
+      office: { text: "x".repeat(900), sources: ["https://example.gov/p41"] },
+      candidates: measure.candidates.map((c) => ({ ...c, ballotDesignation: `A ${c.id} vote means: ${"y".repeat(230)}` })),
+      issues: [issue("tax-a"), issue("tax-b"), issue("tax-c")],
+    };
+    expect(raceSchema.safeParse(long).error?.issues).toBeUndefined();
   });
 });
