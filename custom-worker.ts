@@ -30,26 +30,31 @@ export default {
 
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
     const d = deps(env);
-    for (const message of batch.messages) {
-      const parsed = jobSchema.safeParse(message.body);
-      if (!parsed.success) {
-        message.ack();
-        continue;
-      }
-      try {
-        await runJob(parsed.data, d);
-        message.ack();
-      } catch (err) {
-        const final = err instanceof PermanentJobError || message.attempts >= MAX_ATTEMPTS;
-        console.error(`research job ${parsed.data.type} failed (attempt ${message.attempts}${final ? ", giving up" : ""}):`, err instanceof Error ? err.message : err);
-        if (final) {
-          await failJob(parsed.data, readableError(err), d).catch(() => {});
-          message.ack();
-        } else {
-          // Back off so a Grok rate limit has time to clear.
-          message.retry({ delaySeconds: 60 * message.attempts });
-        }
-      }
-    }
+    // A ballot's races are sent together, so running a batch side by side starts them all at once
+    // instead of waiting for the queue to add consumers one at a time.
+    await Promise.all(batch.messages.map((message) => handle(message, d)));
   },
 } satisfies ExportedHandler<Env>;
+
+/** Runs one job and acks or retries its message. Never throws, so one failure doesn't touch the rest of the batch. */
+async function handle(message: Message<unknown>, d: JobDeps): Promise<void> {
+  const parsed = jobSchema.safeParse(message.body);
+  if (!parsed.success) {
+    message.ack();
+    return;
+  }
+  try {
+    await runJob(parsed.data, d);
+    message.ack();
+  } catch (err) {
+    const final = err instanceof PermanentJobError || message.attempts >= MAX_ATTEMPTS;
+    console.error(`research job ${parsed.data.type} failed (attempt ${message.attempts}${final ? ", giving up" : ""}):`, err instanceof Error ? err.message : err);
+    if (final) {
+      await failJob(parsed.data, readableError(err), d).catch(() => {});
+      message.ack();
+    } else {
+      // Back off so a Grok rate limit has time to clear.
+      message.retry({ delaySeconds: 60 * message.attempts });
+    }
+  }
+}

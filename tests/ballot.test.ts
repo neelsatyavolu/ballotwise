@@ -4,6 +4,7 @@ import { signUp } from "../lib/auth/accounts";
 import { districtsFrom } from "../lib/ballot/census";
 import { failJob, readableError, runJob, type Job, type JobDeps } from "../lib/ballot/jobs";
 import { addContestGuides, contestGuideId, getBallot, saveBallot } from "../lib/ballot/store";
+import { profileKey } from "../lib/cache";
 import { storeGrokTokens } from "../lib/grok/vault";
 import { claimableGuideIds, getGuide, listGuides } from "../lib/guides";
 import { testDb } from "./sqlite-db";
@@ -164,6 +165,34 @@ describe("background research", () => {
     expect(guides.every((g) => g.status === "ready")).toBe(true);
     const guide = await getGuide(db, second.id, guides[0].id);
     expect(Object.keys(guide!.data!.profiles).sort()).toEqual(["ann", "bob"]);
+  });
+
+  it("researches every candidate again when any one's shared profile is missing, so opponents are compared at the same time", async () => {
+    stubGrok();
+    const { db, user, deps, queued } = await setup();
+    queued.push({ type: "ballot", userId: user.id });
+    await drain(deps, queued);
+    const saved = (await getGuide(db, user.id, (await listGuides(db, user.id, "ballot"))[0].id))!.data!.race;
+    const bob = profileKey(saved, saved.candidates.find((c) => c.id === "bob")!);
+    await db.prepare("DELETE FROM research_cache WHERE key = ?").bind(bob).run();
+
+    const { user: second } = await signUp(db, "b@example.com", "a long password", 1);
+    await storeGrokTokens(db, KEY, second.id, { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 }, 1);
+    await saveBallot(db, second.id, "201 N Spring St, LA", "201 N SPRING ST, LOS ANGELES, CA", districts, 1);
+    const candidates: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string | URL, init?: RequestInit) => {
+      const prompt = String(init?.body);
+      const name = /Candidate: (\w+)/.exec(prompt)?.[1];
+      if (name && !prompt.includes("Issues to estimate")) candidates.push(name);
+      if (prompt.includes("Voter address")) return sse(JSON.stringify(contests));
+      return sse(JSON.stringify(profile));
+    });
+    queued.push({ type: "ballot", userId: second.id });
+    await drain(deps, queued);
+
+    // Ann is researched again with Bob rather than pairing a fresh Bob with a cached Ann. The second
+    // contest shares the same race and then finds both profiles cached.
+    expect(candidates.sort()).toEqual(["Ann", "Bob"]);
   });
 
   it("estimates stances that have no source, from the candidate's other positions", async () => {

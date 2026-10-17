@@ -113,6 +113,10 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
     await setGuideStatus(deps.db, job.guideId, "researching", null, now());
     const race = (await getCached<Race>(deps.db, raceKey(guide.query), now())) ?? (await researchRace(deps, tokens, job.guideId, guide.query, now));
     await saveRaceForGuide(deps.db, job.guideId, guide.query, race, now());
+    // Shared profiles are reused only as a full set. If any candidate's is missing, all are researched
+    // again, so no candidate is compared using older research than an opponent's.
+    const cached = await Promise.all(race.candidates.map((c) => getCached<Profile>(deps.db, profileKey(race, c), now())));
+    const reuse = cached.every(Boolean);
     // Candidates are researched in this same job, so each contest finishes as a unit instead of
     // waiting behind every other contest's race lookup in the queue. A candidate that fails here
     // becomes its own job, which the queue retries with backoff.
@@ -120,7 +124,7 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
     await Promise.all(
       race.candidates.map(async (candidate) => {
         try {
-          await researchCandidate(deps, tokens, guide.userId, job.guideId, race, candidate.id, now);
+          await researchCandidate(deps, tokens, guide.userId, job.guideId, race, candidate.id, now, reuse);
         } catch {
           retries.push({ type: "candidate", guideId: job.guideId, candidateId: candidate.id });
         }
@@ -180,10 +184,10 @@ async function researchRace(deps: JobDeps, tokens: GrokTokens, guideId: string, 
   return race;
 }
 
-async function researchCandidate(deps: JobDeps, tokens: GrokTokens, userId: string, guideId: string, race: Race, candidateId: string, now: () => number): Promise<void> {
+async function researchCandidate(deps: JobDeps, tokens: GrokTokens, userId: string, guideId: string, race: Race, candidateId: string, now: () => number, useCache = true): Promise<void> {
   const candidate = race.candidates.find((c) => c.id === candidateId);
   if (!candidate) return;
-  const cached = await getCached<Profile>(deps.db, profileKey(race, candidate), now());
+  const cached = useCache ? await getCached<Profile>(deps.db, profileKey(race, candidate), now()) : null;
   const found = cached ?? (await researchProfile(deps, tokens, guideId, race, candidate));
   const profile = await estimateMissing(tokens, race, candidate, found);
   if (profile !== cached) await putCached(deps.db, profileKey(race, candidate), profile, now());
