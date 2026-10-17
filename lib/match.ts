@@ -60,3 +60,48 @@ export function matchCandidate(
   const score = knownWeight === 0 ? null : Math.round((100 * known.reduce((s, i) => s + i.weight * (i.agreement ?? 0), 0)) / knownWeight);
   return { candidateId, score, coverage: answeredWeight === 0 ? 0 : knownWeight / answeredWeight, issues };
 }
+
+/** The voter's own answers win issue by issue; interview-derived answers fill the rest. */
+export function effectiveAnswers(own: Answers, suggested: Readonly<Record<string, { stance: number | null; weight: 1 | 2 | 3 }>> | null): Answers {
+  const fromInterview = Object.fromEntries(Object.entries(suggested ?? {}).map(([id, s]) => [id, { stance: s.stance, weight: s.weight }]));
+  return { ...fromInterview, ...own };
+}
+
+export type MatchHeadline = {
+  candidateId: string;
+  name: string;
+  score: number;
+  runnerUpScore: number | null;
+  runnerUpName: string | null;
+  /** Within this many points, the page says "too close to call" rather than naming a closest match. */
+  closeCall: boolean;
+  coverage: number;
+};
+
+export const CLOSE_CALL_POINTS = 5;
+
+/** The closest candidate on the voter's answers, or null when nothing can be compared. */
+export function headlineMatch(
+  candidates: readonly { id: string; name: string }[],
+  stancesByCandidate: Readonly<Record<string, Readonly<Record<string, number | null>>>>,
+  issueIds: readonly string[],
+  answers: Answers,
+  overrides: Overrides = {},
+): MatchHeadline | null {
+  const scored = candidates
+    .filter((c) => stancesByCandidate[c.id])
+    .map((c) => ({ c, m: matchCandidate(c.id, stancesByCandidate[c.id], issueIds, answers, overrides) }))
+    .filter((x) => x.m.score !== null)
+    .sort((a, b) => b.m.score! - a.m.score!);
+  if (scored.length === 0) return null;
+  const [top, second] = scored;
+  return {
+    candidateId: top.c.id,
+    name: top.c.name,
+    score: top.m.score!,
+    runnerUpScore: second?.m.score ?? null,
+    runnerUpName: second?.c.name ?? null,
+    closeCall: second !== undefined && top.m.score! - second.m.score! < CLOSE_CALL_POINTS,
+    coverage: top.m.coverage,
+  };
+}

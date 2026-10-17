@@ -1,18 +1,20 @@
 import { z } from "zod";
 import type { Db } from "../auth/accounts";
 import { refreshGrokTokens, type GrokTokens } from "../grok/oauth";
-import { research, ResearchError } from "../grok/research";
+import { research, ResearchError, type Progress } from "../grok/research";
 import { usableGrokTokens } from "../grok/vault";
-import { guideForJob, saveCandidateResult, saveRaceForGuide, setGuideStatus } from "../guides";
+import { guideForJob, noteGuideActivity, saveCandidateResult, saveRaceForGuide, setGuideStatus } from "../guides";
 import { alignPositions, balanceSides, keepRetrievedRaceSources, keepRetrievedSources } from "../profile";
 import { BALLOT_INSTRUCTIONS, ballotPrompt, PROFILE_INSTRUCTIONS, profilePrompt, RACE_INSTRUCTIONS, racePrompt } from "../prompts";
 import { ballotContestsSchema, profileSchema, raceResultSchema, type Race } from "../schema";
-import { addContestGuides, getBallot, setBallotStatus } from "./store";
+import { alignToIssues, claimAlignment, getValues, saveSuggested } from "../values";
+import { addContestGuides, getBallot, noteBallotActivity, setBallotStatus } from "./store";
 
 export const jobSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ballot"), userId: z.string() }),
   z.object({ type: z.literal("race"), guideId: z.string() }),
   z.object({ type: z.literal("candidate"), guideId: z.string(), candidateId: z.string() }),
+  z.object({ type: z.literal("align"), guideId: z.string() }),
 ]);
 export type Job = z.infer<typeof jobSchema>;
 
@@ -21,7 +23,38 @@ export type JobDeps = { db: Db; tokenKey: string; enqueue: (jobs: Job[]) => Prom
 /** A failure that won't fix itself on retry, such as a missing Grok connection. */
 export class PermanentJobError extends Error {}
 
-const ignoreProgress = (): void => {};
+const ACTIVITY_INTERVAL_MS = 1500;
+
+/**
+ * Turns Grok's progress events into occasional database writes for the live dashboard.
+ * Writes are throttled and chained; searches between writes are added to the next one.
+ */
+export function activityReporter(write: (activity: string, newSearches: number) => Promise<void>, prefix = "") {
+  let lastWrite = 0;
+  let unsent = 0;
+  let latest = "";
+  let chain = Promise.resolve();
+  const send = () => {
+    const n = unsent;
+    unsent = 0;
+    const text = latest;
+    chain = chain.then(() => write(text, n)).catch(() => {});
+  };
+  return {
+    onProgress(p: Progress) {
+      if (p.type === "search") unsent++;
+      latest = `${prefix}${p.type === "search" ? `Searching: ${p.query}` : "Writing up what it found"}`;
+      if (Date.now() - lastWrite >= ACTIVITY_INTERVAL_MS) {
+        lastWrite = Date.now();
+        send();
+      }
+    },
+    flush(): Promise<void> {
+      if (latest && unsent > 0) send();
+      return chain;
+    },
+  };
+}
 
 async function tokensFor(deps: JobDeps, userId: string) {
   const tokens = await usableGrokTokens(deps.db, deps.tokenKey, userId, refreshGrokTokens);
@@ -41,7 +74,10 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
     const ballot = await getBallot(deps.db, job.userId);
     if (!ballot) return;
     const tokens = await tokensFor(deps, job.userId);
-    const { data } = await research(tokens, BALLOT_INSTRUCTIONS, ballotPrompt(ballot.matchedAddress, ballot.districts), ballotContestsSchema, ignoreProgress).catch(permanent);
+    const activity = activityReporter((text, n) => noteBallotActivity(deps.db, job.userId, text, n));
+    const { data } = await research(tokens, BALLOT_INSTRUCTIONS, ballotPrompt(ballot.matchedAddress, ballot.districts), ballotContestsSchema, activity.onProgress)
+      .catch(permanent)
+      .finally(() => activity.flush());
     const added = await addContestGuides(deps.db, job.userId, data, now());
     await deps.enqueue(added.map((guideId) => ({ type: "race", guideId })));
     await setBallotStatus(deps.db, job.userId, "ready", null, now());
@@ -54,11 +90,13 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
 
   if (job.type === "race") {
     await setGuideStatus(deps.db, job.guideId, "researching", null, now());
-    let result = (await research(tokens, RACE_INSTRUCTIONS, racePrompt(guide.query), raceResultSchema, ignoreProgress).catch(permanent));
+    const activity = activityReporter((text) => noteGuideActivity(deps.db, job.guideId, text), "Finding who's running. ");
+    let result = await research(tokens, RACE_INSTRUCTIONS, racePrompt(guide.query), raceResultSchema, activity.onProgress).catch(permanent);
     // The query names one contest, so an ambiguous answer gets one more try with Grok's most specific option.
     if (result.data.kind === "choose") {
-      result = await research(tokens, RACE_INSTRUCTIONS, racePrompt(result.data.options[0].query), raceResultSchema, ignoreProgress).catch(permanent);
+      result = await research(tokens, RACE_INSTRUCTIONS, racePrompt(result.data.options[0].query), raceResultSchema, activity.onProgress).catch(permanent);
     }
+    await activity.flush();
     if (result.data.kind !== "race") {
       const reason = result.data.kind === "none" ? result.data.reason : "Grok couldn't pin down this contest.";
       throw new PermanentJobError(reason);
@@ -82,6 +120,14 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
     return;
   }
 
+  if (job.type === "align") {
+    const values = await getValues(deps.db, guide.userId);
+    if (!values.summary || !guide.data) return;
+    const suggested = await alignToIssues(tokens, values.summary, guide.data.race.title, guide.data.race.issues).catch(permanent);
+    await saveSuggested(deps.db, job.guideId, suggested);
+    return;
+  }
+
   const race = guide.data?.race;
   if (!race) return;
   await researchCandidate(deps, tokens, job.guideId, race, job.candidateId, now);
@@ -90,9 +136,14 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
 async function researchCandidate(deps: JobDeps, tokens: GrokTokens, guideId: string, race: Race, candidateId: string, now: () => number): Promise<void> {
   const candidate = race.candidates.find((c) => c.id === candidateId);
   if (!candidate) return;
-  const { data, retrieved } = await research(tokens, PROFILE_INSTRUCTIONS, profilePrompt(race, candidate), profileSchema, ignoreProgress).catch(permanent);
+  const activity = activityReporter((text) => noteGuideActivity(deps.db, guideId, text), `${candidate.name}. `);
+  const { data, retrieved } = await research(tokens, PROFILE_INSTRUCTIONS, profilePrompt(race, candidate), profileSchema, activity.onProgress)
+    .catch(permanent)
+    .finally(() => activity.flush());
   const profile = alignPositions(keepRetrievedSources(data, retrieved), race.issues);
-  await saveCandidateResult(deps.db, guideId, candidateId, { profile }, race.candidates.length, now());
+  const status = await saveCandidateResult(deps.db, guideId, candidateId, { profile }, race.candidates.length, now());
+  // Once the last candidate is in, place the voter's interview on this race's issues.
+  if (status === "ready") await deps.enqueue((await claimAlignment(deps.db, [guideId])).map((id) => ({ type: "align" as const, guideId: id })));
 }
 
 /** Records a job that gave up, so the page shows what went wrong instead of researching forever. */
@@ -100,9 +151,12 @@ export async function failJob(job: Job, message: string, deps: JobDeps): Promise
   const now = (deps.now ?? Date.now)();
   if (job.type === "ballot") return setBallotStatus(deps.db, job.userId, "failed", message, now);
   if (job.type === "race") return setGuideStatus(deps.db, job.guideId, "failed", message, now);
+  if (job.type === "align") return; // The match falls back to the voter's own answers.
   const guide = await guideForJob(deps.db, job.guideId);
   const count = guide?.data?.race.candidates.length ?? 0;
-  if (count > 0) await saveCandidateResult(deps.db, job.guideId, job.candidateId, { error: message }, count, now);
+  if (count === 0) return;
+  const status = await saveCandidateResult(deps.db, job.guideId, job.candidateId, { error: message }, count, now);
+  if (status === "ready") await deps.enqueue((await claimAlignment(deps.db, [job.guideId])).map((id) => ({ type: "align" as const, guideId: id })));
 }
 
 export function readableError(err: unknown): string {

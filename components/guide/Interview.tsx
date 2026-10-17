@@ -13,10 +13,10 @@ const WEIGHTS: { value: Answer["weight"]; label: string }[] = [
 
 const POINT_LABEL: Record<number, string> = { [-2]: "Strongly the first", [-1]: "Lean the first", 0: "In between", 1: "Lean the second", 2: "Strongly the second" };
 
-type Props = { issues: Issue[]; answers: Answers; onAnswer: (issueId: string, answer: Answer) => void; onFinish: () => void };
+type Props = { issues: Issue[]; answers: Answers; notes?: Record<string, string>; onAnswer: (issueId: string, answer: Answer) => void; onFinish: () => void };
 
 /** One issue at a time, in the race's order. Answers are never shown alongside candidates until the end. */
-export function Interview({ issues, answers, onAnswer, onFinish }: Props) {
+export function Interview({ issues, answers, notes = {}, onAnswer, onFinish }: Props) {
   const firstOpen = issues.findIndex((i) => !answers[i.id]);
   const [step, setStep] = useState(firstOpen === -1 ? 0 : firstOpen);
   const issue = issues[step];
@@ -27,6 +27,7 @@ export function Interview({ issues, answers, onAnswer, onFinish }: Props) {
     <div className="interview">
       <p className="step-count">Question {step + 1} of {issues.length}</p>
       <h2 className="question">{issue.question}</h2>
+      {notes[issue.id] && <p className="interview-note">From your values interview: {notes[issue.id]}</p>}
       <div className="answer-scale">
         <span className="side">{issue.sideA}</span>
         <div className="answer-ovals" role="radiogroup" aria-label="Your position">

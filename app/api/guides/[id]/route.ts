@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/session";
-import { db } from "@/lib/env";
+import { db, enqueue } from "@/lib/env";
+import { claimAlignment, getValues } from "@/lib/values";
 import { z } from "zod";
 import { deleteGuide, getGuide, guideDataSchema, guideIdSchema, saveGuide, setVoted } from "@/lib/guides";
 
@@ -26,6 +27,10 @@ export async function PUT(req: NextRequest, ctx: RouteContext<"/api/guides/[id]"
   if (!data.success) return NextResponse.json({ error: "This guide couldn't be saved because its data is incomplete." }, { status: 400 });
   if (!(await saveGuide(db(), user.id, id, data.data, Date.now()))) {
     return NextResponse.json({ error: "This guide couldn't be saved." }, { status: 400 });
+  }
+  const complete = data.data.race.candidates.every((c) => data.data.profiles[c.id]);
+  if (complete && (await getValues(db(), user.id)).summary) {
+    await enqueue((await claimAlignment(db(), [id])).map((guideId) => ({ type: "align" as const, guideId })));
   }
   return NextResponse.json({ ok: true });
 }

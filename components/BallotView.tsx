@@ -7,6 +7,8 @@ import { api, ApiError } from "@/lib/client";
 import type { Ballot } from "@/lib/ballot/store";
 import type { GuideSummary } from "@/lib/guides";
 import { useAccount } from "./AccountProvider";
+import { AddressInput } from "./AddressInput";
+import { BallotProgress, contestProgress } from "./BallotProgress";
 import { GrokConnect } from "./GrokConnect";
 
 type State = { ballot: Ballot | null; guides: GuideSummary[] };
@@ -55,9 +57,9 @@ function AddressForm({ initial, onSaved, onCancel }: { initial: string; onSaved:
     <form className="panel stack" onSubmit={submit}>
       <div className="field">
         <label htmlFor="address">Where you&apos;re registered to vote</label>
-        <input id="address" className="input" autoComplete="street-address" placeholder="Street address, city, state" value={address} onChange={(e) => setAddress(e.target.value)} />
+        <AddressInput id="address" value={address} onChange={setAddress} />
         <span className="hint">
-          Used to find your districts through the US Census geocoder and to look up your contests. It&apos;s stored with your account and never shown to anyone else.
+          Suggestions come from OpenStreetMap. Your address is matched to districts by the US Census geocoder, stored with your account, and never shown to anyone else.
         </span>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
@@ -69,9 +71,54 @@ function AddressForm({ initial, onSaved, onCancel }: { initial: string; onSaved:
   );
 }
 
+function MatchLine({ guide, values }: { guide: GuideSummary; values: string }) {
+  const m = guide.match;
+  if (!m) {
+    if (values === "done" && !guide.fromInterview) return <span className="match-line muted">Matching your interview to this race…</span>;
+    if (values !== "done") return <span className="match-line muted">Take the values interview to see your match</span>;
+    return <span className="match-line muted">Not enough sourced positions to match</span>;
+  }
+  if (m.closeCall) {
+    return (
+      <span className="match-line">
+        <span className="match-label">Too close to call:</span> {m.name} {m.score}%, {m.runnerUpName} {m.runnerUpScore}%
+      </span>
+    );
+  }
+  return (
+    <span className="match-line">
+      <span className="match-label">Your closest match:</span> <strong>{m.name}</strong> <span className="match-score">{m.score}%</span>
+      {m.coverage < 0.5 && <span className="muted"> (limited information)</span>}
+    </span>
+  );
+}
+
+function ValuesPrompt({ values, researching }: { values: string; researching: boolean }) {
+  if (values === "done") {
+    return (
+      <p className="small muted values-done">
+        Matches use your values interview. <Link href="/interview">Review or retake it</Link>
+      </p>
+    );
+  }
+  return (
+    <section className="values-prompt">
+      <span className="values-star" aria-hidden>★</span>
+      <div>
+        <h2>{values === "in-progress" ? "Finish your values interview" : researching ? "While you wait: tell us what matters to you" : "See your match in every race"}</h2>
+        <p>
+          A ten-minute interview about what you want from government. Answer once and every contest on your ballot shows the candidate
+          closest to you, with every step shown.
+        </p>
+      </div>
+      <Link href="/interview" className="btn">{values === "in-progress" ? "Continue" : "Start the interview"}</Link>
+    </section>
+  );
+}
+
 export function BallotView() {
   const router = useRouter();
-  const { user, loading, grok } = useAccount();
+  const { user, loading, grok, values } = useAccount();
   const [state, setState] = useState<State | null>(null);
   const [editing, setEditing] = useState(false);
   const [showVoted, setShowVoted] = useState(false);
@@ -85,7 +132,11 @@ export function BallotView() {
     else void load();
   }, [loading, user, router, load]);
 
-  const working = state?.ballot?.status === "finding" || state?.guides.some((g) => g.status === "queued" || g.status === "researching");
+  const working =
+    state?.ballot?.status === "finding" ||
+    state?.guides.some((g) => g.status === "queued" || g.status === "researching") ||
+    // After the interview, matches appear as each race is mapped.
+    (values === "done" && state?.guides.some((g) => g.status === "ready" && !g.fromInterview));
   useEffect(() => {
     if (!working) return;
     const timer = setInterval(load, POLL_MS);
@@ -147,17 +198,17 @@ export function BallotView() {
 
       {ballot && !editing && (
         <>
-          <div className="ballot-status" aria-live="polite">
-            {ballot.status === "finding" ? (
-              <p className="progress-row"><span className="spinner" aria-hidden /><span>Finding the contests on your ballot. This takes a minute or two.</span></p>
-            ) : ballot.status === "failed" ? (
+          <BallotProgress ballot={ballot} guides={guides} />
+          <ValuesPrompt values={values} researching={ballot.status === "finding" || guides.some((g) => g.status !== "ready" && g.status !== "failed")} />
+          <div className="ballot-status">
+            {ballot.status === "failed" ? (
               <p className="error">{ballot.error ?? "Couldn't find your contests."} <button type="button" className="btn quiet" onClick={refresh}>Try again</button></p>
-            ) : (
+            ) : ballot.status === "ready" ? (
               <p className="small muted">
                 {guides.length === 0 ? "No contests with filed candidates were found for the next 12 months." : `${open.length} to go, ${voted.length} voted.`}{" "}
                 <button type="button" className="btn quiet" onClick={refresh}>Check for new contests</button>
               </p>
-            )}
+            ) : null}
           </div>
 
           {[...byElection.entries()].map(([key, items]) => {
@@ -177,8 +228,17 @@ export function BallotView() {
                         <Link href={`/guide/${g.id}`} className="contest-title">{g.title}</Link>
                         <span className={`contest-status ${g.status}`}>
                           {(g.status === "queued" || g.status === "researching") && <span className="spinner small-spinner" aria-hidden />}
-                          {g.status === "failed" ? g.error ?? STATUS_TEXT.failed : STATUS_TEXT[g.status]}
+                          {g.status === "failed"
+                            ? g.error ?? STATUS_TEXT.failed
+                            : g.status === "researching" && g.candidateCount
+                              ? `${g.candidatesDone} of ${g.candidateCount} candidates researched`
+                              : STATUS_TEXT[g.status]}
                         </span>
+                        {g.status === "researching" && g.activity && <span className="contest-activity">{g.activity}</span>}
+                        {g.status === "ready" && <MatchLine guide={g} values={values} />}
+                        {g.status === "researching" && (
+                          <span className="mini-bar" aria-hidden><span style={{ width: `${Math.round(contestProgress(g) * 100)}%` }} /></span>
+                        )}
                       </div>
                       {g.status === "failed" ? (
                         <button type="button" className="btn secondary" onClick={() => retry(g.id)}>Try again</button>

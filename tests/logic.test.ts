@@ -153,3 +153,18 @@ describe("balanceSides", () => {
     expect((race as { issues: Issue[] }).issues[1].sideA).toBe("x");
   });
 });
+
+describe("headline match", () => {
+  it("prefers the voter's own answers over interview ones and flags close calls", async () => {
+    const { effectiveAnswers, headlineMatch } = await import("../lib/match");
+    const answers = effectiveAnswers({ housing: { stance: -2, weight: 1 } }, { housing: { stance: 2, weight: 3 }, transit: { stance: 2, weight: 2 } });
+    expect(answers.housing).toEqual({ stance: -2, weight: 1 });
+    const cands = [{ id: "a", name: "Ann" }, { id: "b", name: "Bob" }];
+    const stances = { a: { housing: -2, transit: 2 }, b: { housing: 2, transit: -2 } };
+    const m = headlineMatch(cands, stances, ["housing", "transit"], answers);
+    expect(m).toMatchObject({ name: "Ann", score: 100, runnerUpScore: 0, closeCall: false });
+    const tie = headlineMatch(cands, { a: { housing: 0 }, b: { housing: 0 } }, ["housing"], answers);
+    expect(tie?.closeCall).toBe(true);
+    expect(headlineMatch(cands, stances, ["housing"], {})).toBeNull();
+  });
+});

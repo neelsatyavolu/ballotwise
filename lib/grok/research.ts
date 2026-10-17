@@ -101,6 +101,29 @@ async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onPro
   return { text, retrieved };
 }
 
+/** A Grok request without web search, for conversation and reasoning over text the app already has. */
+export async function ask<T>(tokens: GrokTokens, instructions: string, messages: { role: "user" | "assistant"; content: string }[], schema: ZodType<T>): Promise<T> {
+  const base = [{ role: "system", content: instructions }, ...messages];
+  const first = await callGrok(tokens, { input: base }, () => {});
+  const parsed = parse(first.text, schema);
+  if (parsed.ok) return parsed.value;
+  const repair = await callGrok(
+    tokens,
+    {
+      input: [
+        ...base,
+        { role: "assistant", content: first.text },
+        { role: "user", content: `That reply did not match the required JSON format: ${parsed.error}\nReturn only the corrected JSON object.` },
+      ],
+    },
+    () => {},
+  );
+  const reparsed = parse(repair.text, schema);
+  if (reparsed.ok) return reparsed.value;
+  console.error("grok JSON invalid after repair:", reparsed.error);
+  throw new ResearchError("Grok's answer was not in a usable format. Try again.", 502);
+}
+
 /**
  * Runs one web-grounded Grok request and validates the JSON it returns.
  * If the JSON is malformed, Grok gets one chance to fix it without searching again.

@@ -52,7 +52,8 @@ export function Home({ initialQuery }: { initialQuery: string }) {
         {!loading && user && grok !== "connected" && <GrokConnect />}
         {!loading && user && grok === "connected" && (
           <p className="notice">
-            Want every contest on your ballot researched for you? <Link href="/ballot">Add your address on My ballot</Link>.
+            Want every contest on your ballot researched for you? <Link href="/ballot">Add your address on My ballot</Link>, and take the{" "}
+            <Link href="/interview">ten-minute values interview</Link> to see your closest match in each race.
           </p>
         )}
         <form className="search" onSubmit={submit} role="search">

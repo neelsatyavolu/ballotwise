@@ -4,29 +4,52 @@ import type { BallotContests } from "../schema";
 import type { Districts } from "./census";
 
 export type BallotStatus = "finding" | "ready" | "failed";
-export type Ballot = { address: string; matchedAddress: string; districts: Districts; status: BallotStatus; error: string | null; updatedAt: number };
+export type Ballot = {
+  address: string;
+  matchedAddress: string;
+  districts: Districts;
+  status: BallotStatus;
+  error: string | null;
+  updatedAt: number;
+  /** What the contest search is doing right now, while status is "finding". */
+  activity: string | null;
+  searches: number;
+  startedAt: number | null;
+};
 
 export async function saveBallot(db: Db, userId: string, address: string, matchedAddress: string, districts: Districts, now: number): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO ballots (user_id, address, matched_address, districts, status, error, updated_at) VALUES (?, ?, ?, ?, 'finding', NULL, ?)
+      `INSERT INTO ballots (user_id, address, matched_address, districts, status, error, updated_at, activity, searches, started_at)
+       VALUES (?, ?, ?, ?, 'finding', NULL, ?, NULL, 0, ?)
        ON CONFLICT(user_id) DO UPDATE SET address = excluded.address, matched_address = excluded.matched_address,
-         districts = excluded.districts, status = 'finding', error = NULL, updated_at = excluded.updated_at`,
+         districts = excluded.districts, status = 'finding', error = NULL, updated_at = excluded.updated_at,
+         activity = NULL, searches = 0, started_at = excluded.started_at`,
     )
-    .bind(userId, address, matchedAddress, JSON.stringify(districts), now)
+    .bind(userId, address, matchedAddress, JSON.stringify(districts), now, now)
     .run();
 }
 
 export async function getBallot(db: Db, userId: string): Promise<Ballot | null> {
   const row = await db
-    .prepare("SELECT address, matched_address AS matchedAddress, districts, status, error, updated_at AS updatedAt FROM ballots WHERE user_id = ?")
+    .prepare(
+      `SELECT address, matched_address AS matchedAddress, districts, status, error, updated_at AS updatedAt,
+         activity, searches, started_at AS startedAt FROM ballots WHERE user_id = ?`,
+    )
     .bind(userId)
     .first<Omit<Ballot, "districts"> & { districts: string }>();
   return row ? { ...row, districts: JSON.parse(row.districts) as Districts } : null;
 }
 
 export async function setBallotStatus(db: Db, userId: string, status: BallotStatus, error: string | null, now: number): Promise<void> {
-  await db.prepare("UPDATE ballots SET status = ?, error = ?, updated_at = ? WHERE user_id = ?").bind(status, error, now, userId).run();
+  // Starting a new search resets the live counters; finishing clears the activity line.
+  const reset = status === "finding" ? ", activity = NULL, searches = 0, started_at = ?" : ", activity = NULL";
+  const values = status === "finding" ? [status, error, now, now, userId] : [status, error, now, userId];
+  await db.prepare(`UPDATE ballots SET status = ?, error = ?, updated_at = ?${reset} WHERE user_id = ?`).bind(...values).run();
+}
+
+export async function noteBallotActivity(db: Db, userId: string, activity: string, newSearches: number): Promise<void> {
+  await db.prepare("UPDATE ballots SET activity = ?, searches = searches + ? WHERE user_id = ? AND status = 'finding'").bind(activity, newSearches, userId).run();
 }
 
 /** Same contest, same id: finding contests again never duplicates a guide or loses answers already given. */

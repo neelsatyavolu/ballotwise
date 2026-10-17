@@ -9,6 +9,7 @@ type Props = {
   candidates: CandidateRef[];
   profiles: Record<string, Profile | undefined>;
   answers: Answers;
+  notes?: Record<string, string>;
   overrides: Overrides;
   onOverride: (candidateId: string, issueId: string, stance: number | null | undefined) => void;
   onRetake: () => void;
@@ -16,7 +17,7 @@ type Props = {
 
 const OPTION_LABEL: Record<number, string> = { [-2]: "Strongly first side", [-1]: "Leans first side", 0: "In between", 1: "Leans second side", 2: "Strongly second side" };
 
-export function Results({ issues, candidates, profiles, answers, overrides, onOverride, onRetake }: Props) {
+export function Results({ issues, candidates, profiles, answers, notes = {}, overrides, onOverride, onRetake }: Props) {
   const issueIds = issues.map((i) => i.id);
   const matches = candidates
     .filter((c) => profiles[c.id])
@@ -39,7 +40,7 @@ export function Results({ issues, candidates, profiles, answers, overrides, onOv
         </p>
         <p className="small muted">
           Think a position is wrong? Change it in the table and the score updates. Your corrections are saved to this guide.{" "}
-          <button type="button" className="btn quiet" onClick={onRetake}>Change my answers</button>
+          <button type="button" className="btn quiet" onClick={onRetake}>Change my answers for this race</button>
         </p>
       </div>
       {matches.map(({ candidate, match }) => (
@@ -66,7 +67,10 @@ export function Results({ issues, candidates, profiles, answers, overrides, onOv
                   return (
                     <tr key={row.issueId}>
                       <td>{issue.title}</td>
-                      <td><StanceOvals voter stance={row.voter} label={row.voter === null ? "Skipped" : describeStance(row.voter, issue.sideA, issue.sideB)} /></td>
+                      <td>
+                        <StanceOvals voter stance={row.voter} label={row.voter === null ? "Skipped" : describeStance(row.voter, issue.sideA, issue.sideB)} />
+                        {notes[row.issueId] && <span className="from-interview" title={notes[row.issueId]}>From your interview</span>}
+                      </td>
                       <td>
                         <StanceOvals stance={row.candidate} label={describeStance(row.candidate, issue.sideA, issue.sideB)} />{" "}
                         {row.overridden ? <span className="edited">Edited by you</span> : pos && <Sources urls={pos.sources} />}

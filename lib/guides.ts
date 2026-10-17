@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { Db } from "./auth/accounts";
+import { effectiveAnswers, headlineMatch, type MatchHeadline } from "./match";
 import { profileSchema, raceSchema, type Profile, type Race } from "./schema";
+import type { Suggested } from "./values";
 
 const MAX_GUIDE_BYTES = 400_000;
 
@@ -23,6 +25,15 @@ export type GuideSummary = {
   status: GuideStatus;
   voted: boolean;
   error: string | null;
+  /** Live line from background research, such as the current web search. */
+  activity: string | null;
+  candidateCount: number | null;
+  candidatesDone: number;
+  finishedAt: number | null;
+  /** Closest candidate on the voter's answers (own or from the interview), once research is in. */
+  match: MatchHeadline | null;
+  /** True when interview answers exist for this race. */
+  fromInterview: boolean;
 };
 /** What the guide page loads: the data once the race is known, plus background research state. */
 export type GuideRecord = {
@@ -33,6 +44,7 @@ export type GuideRecord = {
   origin: "search" | "ballot";
   voted: boolean;
   failedCandidates: Record<string, string>;
+  suggested: Suggested | null;
 };
 
 export const guideIdSchema = z.string().regex(/^[A-Za-z0-9_-]{8,40}$/);
@@ -46,11 +58,39 @@ type GuideRow = {
   status: GuideStatus;
   voted: number;
   error: string | null;
+  activity: string | null;
+  candidateCount: number | null;
+  candidatesDone: number;
+  finishedAt: number | null;
+  data: string;
+  suggested: string | null;
 };
 
-const SUMMARY_COLUMNS =
-  "id, title, election_date AS electionDate, election_name AS electionName, updated_at AS updatedAt, status, voted, error";
-const toSummary = (r: GuideRow): GuideSummary => ({ ...r, voted: r.voted === 1 });
+const SUMMARY_COLUMNS = `data, suggested, id, title, election_date AS electionDate, election_name AS electionName, updated_at AS updatedAt, status, voted, error,
+  activity, candidate_count AS candidateCount, finished_at AS finishedAt,
+  (SELECT COUNT(*) FROM guide_profiles gp WHERE gp.guide_id = guides.id) AS candidatesDone`;
+function toSummary({ data, suggested, ...r }: GuideRow, profiles: Record<string, Profile>): GuideSummary {
+  const parsed = JSON.parse(data) as GuideData | null;
+  const fromInterview = suggested ? (JSON.parse(suggested) as Suggested) : null;
+  let match: MatchHeadline | null = null;
+  if (parsed && r.status === "ready") {
+    const all = { ...parsed.profiles, ...profiles };
+    const stances = Object.fromEntries(Object.entries(all).map(([id, p]) => [id, Object.fromEntries(p.positions.map((x) => [x.issueId, x.stance]))]));
+    match = headlineMatch(parsed.race.candidates, stances, parsed.race.issues.map((i) => i.id), effectiveAnswers(parsed.answers, fromInterview), parsed.overrides);
+  }
+  return { ...r, voted: r.voted === 1, match, fromInterview: Boolean(fromInterview) };
+}
+
+async function backgroundProfiles(db: Db, guideIds: string[]): Promise<Record<string, Record<string, Profile>>> {
+  if (guideIds.length === 0) return {};
+  const { results } = await db
+    .prepare(`SELECT guide_id AS guideId, candidate_id AS candidateId, data FROM guide_profiles WHERE data IS NOT NULL AND guide_id IN (${guideIds.map(() => "?").join(",")})`)
+    .bind(...guideIds)
+    .all<{ guideId: string; candidateId: string; data: string }>();
+  const out: Record<string, Record<string, Profile>> = {};
+  for (const r of results) out[r.guideId] = { ...(out[r.guideId] ?? {}), [r.candidateId]: JSON.parse(r.data) as Profile };
+  return out;
+}
 
 export async function listGuides(db: Db, userId: string, origin: "search" | "ballot"): Promise<GuideSummary[]> {
   const order = origin === "ballot" ? "election_date ASC, title ASC" : "updated_at DESC";
@@ -58,14 +98,15 @@ export async function listGuides(db: Db, userId: string, origin: "search" | "bal
     .prepare(`SELECT ${SUMMARY_COLUMNS} FROM guides WHERE user_id = ? AND origin = ? ORDER BY ${order} LIMIT 200`)
     .bind(userId, origin)
     .all<GuideRow>();
-  return results.map(toSummary);
+  const profiles = await backgroundProfiles(db, results.filter((r) => r.status === "ready").map((r) => r.id));
+  return results.map((r) => toSummary(r, profiles[r.id] ?? {}));
 }
 
 export async function getGuide(db: Db, userId: string, id: string): Promise<GuideRecord | null> {
   const row = await db
-    .prepare("SELECT data, title, status, error, origin, voted FROM guides WHERE id = ? AND user_id = ?")
+    .prepare("SELECT data, title, status, error, origin, voted, suggested FROM guides WHERE id = ? AND user_id = ?")
     .bind(id, userId)
-    .first<{ data: string; title: string; status: GuideStatus; error: string | null; origin: "search" | "ballot"; voted: number }>();
+    .first<{ data: string; title: string; status: GuideStatus; error: string | null; origin: "search" | "ballot"; voted: number; suggested: string | null }>();
   if (!row) return null;
   const parsed = JSON.parse(row.data) as GuideData | null;
   const { results } = await db
@@ -82,6 +123,7 @@ export async function getGuide(db: Db, userId: string, id: string): Promise<Guid
     origin: row.origin,
     voted: row.voted === 1,
     failedCandidates,
+    suggested: row.suggested ? (JSON.parse(row.suggested) as Suggested) : null,
   };
 }
 
@@ -112,12 +154,29 @@ export async function deleteGuide(db: Db, userId: string, id: string): Promise<v
 // Background research, written by queue jobs.
 
 export async function setGuideStatus(db: Db, id: string, status: GuideStatus, error: string | null, now: number): Promise<void> {
-  await db.prepare("UPDATE guides SET status = ?, error = ?, updated_at = ? WHERE id = ?").bind(status, error, now, id).run();
+  const finished = status === "ready" || status === "failed" ? now : null;
+  await db
+    .prepare("UPDATE guides SET status = ?, error = ?, updated_at = ?, finished_at = ?, activity = CASE WHEN ? IS NULL THEN activity ELSE NULL END WHERE id = ?")
+    .bind(status, error, now, finished, finished, id)
+    .run();
 }
 
-export async function guideForJob(db: Db, id: string): Promise<{ userId: string; query: string; data: GuideData | null } | null> {
-  const row = await db.prepare("SELECT user_id AS userId, query, data FROM guides WHERE id = ?").bind(id).first<{ userId: string; query: string; data: string }>();
-  return row ? { userId: row.userId, query: row.query, data: JSON.parse(row.data) as GuideData | null } : null;
+export async function noteGuideActivity(db: Db, id: string, activity: string): Promise<void> {
+  await db.prepare("UPDATE guides SET activity = ? WHERE id = ? AND status IN ('queued', 'researching')").bind(activity, id).run();
+}
+
+export async function guideForJob(db: Db, id: string): Promise<{ userId: string; query: string; data: GuideData | null; status: GuideStatus } | null> {
+  const row = await db
+    .prepare("SELECT user_id AS userId, query, data, status FROM guides WHERE id = ?")
+    .bind(id)
+    .first<{ userId: string; query: string; data: string; status: GuideStatus }>();
+  return row ? { userId: row.userId, query: row.query, data: JSON.parse(row.data) as GuideData | null, status: row.status } : null;
+}
+
+/** Guides with research in hand, for mapping a new or retaken interview onto them. */
+export async function researchedGuideIds(db: Db, userId: string): Promise<string[]> {
+  const { results } = await db.prepare("SELECT id FROM guides WHERE user_id = ? AND status = 'ready' AND data != 'null'").bind(userId).all<{ id: string }>();
+  return results.map((r) => r.id);
 }
 
 /** Stores the researched race and clears any earlier candidate research for it. */
@@ -126,8 +185,11 @@ export async function saveRaceForGuide(db: Db, id: string, query: string, race: 
   await db.batch([
     db.prepare("DELETE FROM guide_profiles WHERE guide_id = ?").bind(id),
     db
-      .prepare("UPDATE guides SET data = ?, title = ?, election_date = COALESCE(election_date, ?), status = 'researching', error = NULL, updated_at = ? WHERE id = ?")
-      .bind(JSON.stringify(data), race.title, race.date, now, id),
+      .prepare(
+        `UPDATE guides SET data = ?, title = ?, election_date = COALESCE(election_date, ?), status = 'researching', error = NULL,
+           updated_at = ?, candidate_count = ?, activity = ? WHERE id = ?`,
+      )
+      .bind(JSON.stringify(data), race.title, race.date, now, race.candidates.length, `Researching ${race.candidates.length} candidates`, id),
   ]);
 }
 
@@ -139,7 +201,7 @@ export async function saveCandidateResult(
   result: { profile: Profile } | { error: string },
   candidateCount: number,
   now: number,
-): Promise<void> {
+): Promise<GuideStatus | null> {
   const [data, error] = "profile" in result ? [JSON.stringify(result.profile), null] : [null, result.error];
   await db
     .prepare(
@@ -154,6 +216,9 @@ export async function saveCandidateResult(
     .first<{ done: number; ok: number | null }>();
   if (counts && counts.done >= candidateCount) {
     const ok = counts.ok ?? 0;
-    await setGuideStatus(db, id, ok > 0 ? "ready" : "failed", ok > 0 ? null : "Research didn't finish for any candidate. Try again.", now);
+    const status = ok > 0 ? "ready" : "failed";
+    await setGuideStatus(db, id, status, ok > 0 ? null : "Research didn't finish for any candidate. Try again.", now);
+    return status;
   }
+  return null;
 }

@@ -134,3 +134,50 @@ describe("background research", () => {
     await expect(runJob({ type: "ballot", userId: user.id }, deps)).rejects.toThrow(/Grok isn't connected/);
   });
 });
+
+describe("values interview", () => {
+  const summary = { overview: "You want lower rents.", priorities: [{ topic: "Housing", weight: 3, view: "Build more homes", quote: "build, build, build" }], dealbreakers: [], leadership: null };
+
+  function stubInterview() {
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      if (!String(url).includes("api.x.ai")) return new Response("no", { status: 404 });
+      const body = String(init?.body);
+      if (body.includes("Voter's interview summary")) {
+        // The mapping prompt must not contain candidates.
+        if (body.includes("Ann")) throw new Error("candidates leaked into the mapping prompt");
+        return sse(JSON.stringify({ answers: [{ issueId: "housing", stance: 2, weight: 3, why: "You said build, build, build." }, { issueId: "made-up", stance: 1, weight: 1, why: "x" }] }));
+      }
+      if (body.includes("end the interview now")) return sse(JSON.stringify({ done: true, summary }));
+      return sse(JSON.stringify({ done: false, message: "What matters most to you?", suggestions: ["Costs", "Safety"], progress: 0.1 }));
+    });
+  }
+
+  it("asks a question, then summarizes when asked to finish", async () => {
+    stubInterview();
+    const { nextTurn } = await import("../lib/values");
+    const tokens = { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 };
+    expect(await nextTurn(tokens, [], false)).toMatchObject({ role: "interviewer", suggestions: ["Costs", "Safety"] });
+    expect(await nextTurn(tokens, [{ role: "voter", text: "rent" }], true)).toMatchObject({ overview: "You want lower rents." });
+  });
+
+  it("maps the interview onto a finished race without showing candidates, once", async () => {
+    stubInterview();
+    const { saveValues, claimAlignment } = await import("../lib/values");
+    const { db, user, deps, queued } = await setup();
+    await addContestGuides(db, user.id, contests as never, 1);
+    const [first] = await listGuides(db, user.id, "ballot");
+    await db.prepare("UPDATE guides SET data = ?, status = 'ready' WHERE id = ?").bind(JSON.stringify({ query: "q", race: race.race, profiles: { ann: profile }, answers: {}, overrides: {} }), first.id).run();
+    await saveValues(db, user.id, [], summary as never, 1);
+
+    expect(await claimAlignment(db, [first.id])).toEqual([first.id]);
+    expect(await claimAlignment(db, [first.id])).toEqual([]);
+    queued.push({ type: "align", guideId: first.id });
+    await drain(deps, queued);
+
+    const guide = await getGuide(db, user.id, first.id);
+    expect(guide?.suggested).toEqual({ housing: { stance: 2, weight: 3, why: "You said build, build, build." } });
+    const [summaryRow] = (await listGuides(db, user.id, "ballot")).filter((g) => g.id === first.id);
+    expect(summaryRow.fromInterview).toBe(true);
+    expect(summaryRow.match).toMatchObject({ name: "Ann", score: 75 });
+  });
+});

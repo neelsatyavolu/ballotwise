@@ -8,7 +8,8 @@ import { GrokConnect } from "@/components/GrokConnect";
 import { api, ApiError, shuffled, streamResearch } from "@/lib/client";
 import type { Progress } from "@/lib/grok/research";
 import type { GuideData, GuideRecord, GuideStatus } from "@/lib/guides";
-import type { Answer, Answers, Overrides } from "@/lib/match";
+import { effectiveAnswers, headlineMatch, type Answer, type Answers, type Overrides } from "@/lib/match";
+import type { Suggested } from "@/lib/values";
 import type { Profile, Race, RaceResult } from "@/lib/schema";
 import { Sources } from "./bits";
 import { Compare } from "./Compare";
@@ -36,7 +37,7 @@ function progressText(p: Progress): string {
 
 export function GuideView({ id, query }: { id: string; query: string | null }) {
   const router = useRouter();
-  const { user, loading: accountLoading, grok } = useAccount();
+  const { user, loading: accountLoading, grok, values } = useAccount();
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [race, setRace] = useState<Race | null>(null);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
@@ -45,11 +46,13 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
   const [tasks, setTasks] = useState<Record<string, Task>>({});
   const [tab, setTab] = useState<Tab>("compare");
   const [interviewDone, setInterviewDone] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [searched, setSearched] = useState(query ?? "");
   const [origin, setOrigin] = useState<"search" | "ballot">("search");
   const [background, setBackground] = useState<{ status: GuideStatus; failed: Record<string, string> } | null>(null);
   const [voted, setVotedState] = useState(false);
+  const [suggested, setSuggested] = useState<Suggested | null>(null);
   const started = useRef(false);
 
   const setTask = (key: string, task: Partial<Task>) =>
@@ -107,6 +110,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
   const apply = useCallback((rec: GuideRecord, first: boolean) => {
     setOrigin(rec.origin);
     setVotedState(rec.voted);
+    setSuggested(rec.suggested);
     setBackground(rec.origin === "ballot" ? { status: rec.status, failed: rec.failedCandidates } : null);
     if (!rec.data) {
       setPhase({ kind: "queued", title: rec.title, status: rec.status, error: rec.error });
@@ -149,7 +153,9 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
   }, [accountLoading, user, id, query, router, lookUp, apply]);
 
   // Ballot guides research on the server; check back until they finish.
-  const pending = origin === "ballot" && background !== null && (background.status === "queued" || background.status === "researching");
+  const researchDone = race !== null && race.candidates.every((c) => profiles[c.id] || background?.failed[c.id]);
+  const awaitingMatch = values === "done" && suggested === null && researchDone;
+  const pending = (origin === "ballot" && background !== null && (background.status === "queued" || background.status === "researching")) || awaitingMatch;
   useEffect(() => {
     if (!pending) return;
     const timer = setInterval(() => {
@@ -309,7 +315,13 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
     );
   }
 
-  const allDone = race.candidates.every((c) => profiles[c.id] || background?.failed[c.id]);
+  const allDone = researchDone;
+  const effective = effectiveAnswers(answers, suggested);
+  const hasAnswers = Object.values(effective).some((a) => a.stance !== null);
+  const notes = Object.fromEntries(Object.entries(suggested ?? {}).filter(([id]) => !answers[id]).map(([id, s]) => [id, s.why]));
+  const stances = Object.fromEntries(Object.entries(profiles).map(([id, p]) => [id, Object.fromEntries(p.positions.map((x) => [x.issueId, x.stance]))]));
+  const headline = allDone && hasAnswers ? headlineMatch(order, stances, race.issues.map((i) => i.id), effective, overrides) : null;
+  const showResults = !editing && (interviewDone || (hasAnswers && suggested !== null));
 
   return (
     <div className="wrap">
@@ -335,6 +347,19 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
         {saveError && <p className="error small">{saveError}</p>}
       </header>
 
+      <MatchCard
+        headline={headline}
+        researchDone={allDone}
+        values={values}
+        awaitingMatch={awaitingMatch}
+        fromInterview={suggested !== null}
+        onSeeWhy={() => {
+          setTab("match");
+          setEditing(false);
+          if (hasAnswers) setInterviewDone(true);
+        }}
+      />
+
       <div className="tabs" role="tablist">
         {([["compare", "Compare positions"], ["profiles", "Candidate profiles"], ["match", "Find your match"]] as const).map(([key, label]) => (
           <button key={key} type="button" role="tab" className="tab" aria-selected={tab === key} onClick={() => setTab(key)}>
@@ -351,11 +376,11 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
         {tab === "profiles" && <Profiles candidates={order} profiles={profiles} />}
         {tab === "match" &&
           (!allDone && !interviewDone ? (
-            <p className="muted read">The interview opens once every candidate&apos;s research is in, so all of them are scored on the same footing.</p>
-          ) : interviewDone ? (
-            <Results issues={race.issues} candidates={order} profiles={profiles} answers={answers} overrides={overrides} onOverride={onOverride} onRetake={() => setInterviewDone(false)} />
+            <p className="muted read">Matching opens once every candidate&apos;s research is in, so all of them are scored on the same footing.</p>
+          ) : showResults ? (
+            <Results issues={race.issues} candidates={order} profiles={profiles} answers={effective} notes={notes} overrides={overrides} onOverride={onOverride} onRetake={() => { setInterviewDone(false); setEditing(true); }} />
           ) : (
-            <Interview issues={race.issues} answers={answers} onAnswer={onAnswer} onFinish={() => setInterviewDone(true)} />
+            <Interview issues={race.issues} answers={effective} notes={notes} onAnswer={onAnswer} onFinish={() => { setInterviewDone(true); setEditing(false); }} />
           ))}
       </div>
 
@@ -366,4 +391,53 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
       )}
     </div>
   );
+}
+
+function MatchCard(props: {
+  headline: ReturnType<typeof headlineMatch>;
+  researchDone: boolean;
+  values: string;
+  awaitingMatch: boolean;
+  fromInterview: boolean;
+  onSeeWhy: () => void;
+}) {
+  const { headline, researchDone, values, awaitingMatch, fromInterview, onSeeWhy } = props;
+  if (!researchDone) return null;
+  if (headline) {
+    return (
+      <section className="match-card" aria-label="Your match">
+        <div>
+          <p className="match-card-label">{headline.closeCall ? "Too close to call" : "Your closest match"}</p>
+          <p className="match-card-name">
+            {headline.closeCall ? `${headline.name} and ${headline.runnerUpName}` : headline.name}
+          </p>
+          <p className="small match-card-sub">
+            {headline.closeCall
+              ? `${headline.score}% and ${headline.runnerUpScore}% aligned with your answers.`
+              : `${headline.score}% aligned with your answers${headline.runnerUpScore !== null ? `, next closest ${headline.runnerUpScore}%` : ""}.`}{" "}
+            {fromInterview ? "Based on your values interview." : "Based on your answers."} Not a recommendation.
+          </p>
+        </div>
+        <button type="button" className="btn" onClick={onSeeWhy}>See why</button>
+      </section>
+    );
+  }
+  if (awaitingMatch) {
+    return (
+      <section className="match-card quiet">
+        <span className="spinner" aria-hidden /> <p>Placing your values interview on this race&apos;s issues…</p>
+      </section>
+    );
+  }
+  if (values !== "done") {
+    return (
+      <section className="match-card quiet">
+        <p>
+          <Link href="/interview">Take the ten-minute values interview</Link> once and every race shows your closest match, or answer
+          this race&apos;s questions under Find your match.
+        </p>
+      </section>
+    );
+  }
+  return null;
 }
