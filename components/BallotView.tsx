@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/client";
 import type { Ballot } from "@/lib/ballot/store";
 import type { GuideSummary } from "@/lib/guides";
+import { interviewMatchPhase } from "@/lib/match";
 import { useAccount } from "./AccountProvider";
 import { AddressInput } from "./AddressInput";
 import { BallotProgress, contestProgress } from "./BallotProgress";
@@ -71,13 +72,34 @@ function AddressForm({ initial, onSaved, onCancel }: { initial: string; onSaved:
   );
 }
 
-function MatchBlock({ guide, values }: { guide: GuideSummary; values: string }) {
-  const m = guide.match;
-  if (!m) {
-    const note =
-      values !== "done" ? "Take the interview to see your best match" : !guide.fromInterview ? "Matching your answers…" : "Not enough information to match";
-    return <p className="card-note">{note}</p>;
+function MatchBlock({ guide, values, waitedMs, onRetry }: { guide: GuideSummary; values: string; waitedMs: number; onRetry: () => void }) {
+  const phase = interviewMatchPhase({
+    hasMatch: Boolean(guide.match),
+    fromInterview: guide.fromInterview,
+    matchError: guide.matchError,
+    values,
+    waitedMs,
+  });
+  if (phase === "failed" || phase === "slow") {
+    return (
+      <div className="card-fail">
+        <p className="card-note error">{phase === "failed" ? (guide.matchError ?? "Couldn't match your answers.") : "Matching is taking too long."}</p>
+        <button type="button" className="btn quiet" onClick={onRetry}>Try again</button>
+      </div>
+    );
   }
+  if (phase === "matching") {
+    return (
+      <p className="card-note card-status">
+        <span className="spinner small-spinner" aria-hidden />
+        Matching your answers…
+      </p>
+    );
+  }
+  if (phase !== "ready" || !guide.match) {
+    return <p className="card-note">{phase === "insufficient" ? "Not enough information to match" : "Take the interview to see your best match"}</p>;
+  }
+  const m = guide.match;
   const [first] = m.picks;
   if (m.picks.length > 1) {
     return (
@@ -111,7 +133,7 @@ function MatchBlock({ guide, values }: { guide: GuideSummary; values: string }) 
   );
 }
 
-function RaceCard({ guide: g, values, onVoted, onRetry }: { guide: GuideSummary; values: string; onVoted: (voted: boolean) => void; onRetry: () => void }) {
+function RaceCard({ guide: g, values, waitedMs, onVoted, onRetry, onMatchRetry }: { guide: GuideSummary; values: string; waitedMs: number; onVoted: (voted: boolean) => void; onRetry: () => void; onMatchRetry: () => void }) {
   const working = g.status === "queued" || g.status === "researching";
   return (
     <li className={`race-card ${g.status}${g.voted ? " done" : ""}`}>
@@ -128,7 +150,7 @@ function RaceCard({ guide: g, values, onVoted, onRetry }: { guide: GuideSummary;
       {g.voted ? (
         <p className="card-note">Voted</p>
       ) : g.status === "ready" ? (
-        <MatchBlock guide={g} values={values} />
+        <MatchBlock guide={g} values={values} waitedMs={waitedMs} onRetry={onMatchRetry} />
       ) : g.status === "failed" ? (
         <div className="card-fail">
           <p className="card-note error">{g.error ?? STATUS_TEXT.failed}</p>
@@ -178,6 +200,9 @@ export function BallotView() {
   const [editing, setEditing] = useState(false);
   const [showVoted, setShowVoted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [matchAttempt, setMatchAttempt] = useState<Record<string, number>>({});
+  const [waitedById, setWaitedById] = useState<Record<string, number>>({});
+  const matchStarts = useRef(new Map<string, { token: number; at: number }>());
 
   const load = useCallback(() => api<State>("/api/ballot").then(setState).catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load your ballot.")), []);
 
@@ -187,11 +212,35 @@ export function BallotView() {
     else void load();
   }, [loading, user, router, load]);
 
+  const needsMatch = (g: GuideSummary) =>
+    values === "done" && g.status === "ready" && !g.match && !g.fromInterview && !g.matchError;
+  const waitingIds = state?.guides.filter(needsMatch).map((g) => g.id) ?? [];
+  const waitingKey = waitingIds.join(",");
+  useEffect(() => {
+    const ids = waitingKey ? waitingKey.split(",") : [];
+    const now = Date.now();
+    for (const id of [...matchStarts.current.keys()]) if (!ids.includes(id)) matchStarts.current.delete(id);
+    for (const id of ids) {
+      const token = matchAttempt[id] ?? 0;
+      const prev = matchStarts.current.get(id);
+      if (!prev || prev.token !== token) matchStarts.current.set(id, { token, at: now });
+    }
+    if (ids.length === 0) return;
+    const timer = setInterval(() => {
+      const t = Date.now();
+      const elapsed: Record<string, number> = {};
+      for (const id of ids) elapsed[id] = t - (matchStarts.current.get(id)?.at ?? t);
+      setWaitedById(elapsed);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [waitingKey, matchAttempt]);
+  const waitedMs = (id: string) => waitedById[id] ?? 0;
+
   const working =
     state?.ballot?.status === "finding" ||
     state?.guides.some((g) => g.status === "queued" || g.status === "researching") ||
     // After the interview, matches appear as each race is mapped.
-    (values === "done" && state?.guides.some((g) => g.status === "ready" && !g.fromInterview));
+    waitingIds.length > 0;
   useEffect(() => {
     if (!working) return;
     const timer = setInterval(load, POLL_MS);
@@ -210,6 +259,13 @@ export function BallotView() {
 
   async function retry(id: string) {
     await api(`/api/guides/${id}/retry`, { method: "POST" }).catch(() => {});
+    void load();
+  }
+
+  async function retryMatch(id: string) {
+    setMatchAttempt((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+    setWaitedById((prev) => ({ ...prev, [id]: 0 }));
+    await api(`/api/guides/${id}/retry`, { method: "POST", body: { kind: "match" } }).catch(() => {});
     void load();
   }
 
@@ -277,7 +333,7 @@ export function BallotView() {
                 </div>
                 <ul className="race-grid">
                   {items.map((g) => (
-                    <RaceCard key={g.id} guide={g} values={values} onVoted={(v) => setVoted(g.id, v)} onRetry={() => retry(g.id)} />
+                    <RaceCard key={g.id} guide={g} values={values} waitedMs={waitedMs(g.id)} onVoted={(v) => setVoted(g.id, v)} onRetry={() => retry(g.id)} onMatchRetry={() => retryMatch(g.id)} />
                   ))}
                 </ul>
               </section>
@@ -292,7 +348,7 @@ export function BallotView() {
               {showVoted && (
                 <ul className="race-grid">
                   {voted.map((g) => (
-                    <RaceCard key={g.id} guide={g} values={values} onVoted={(v) => setVoted(g.id, v)} onRetry={() => retry(g.id)} />
+                    <RaceCard key={g.id} guide={g} values={values} waitedMs={waitedMs(g.id)} onVoted={(v) => setVoted(g.id, v)} onRetry={() => retry(g.id)} onMatchRetry={() => retryMatch(g.id)} />
                   ))}
                 </ul>
               )}

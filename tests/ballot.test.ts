@@ -2,10 +2,10 @@ import { randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { signUp } from "../lib/auth/accounts";
 import { districtsFrom } from "../lib/ballot/census";
-import { failJob, runJob, type Job, type JobDeps } from "../lib/ballot/jobs";
+import { failJob, readableError, runJob, type Job, type JobDeps } from "../lib/ballot/jobs";
 import { addContestGuides, contestGuideId, getBallot, saveBallot } from "../lib/ballot/store";
 import { storeGrokTokens } from "../lib/grok/vault";
-import { getGuide, listGuides } from "../lib/guides";
+import { claimableGuideIds, getGuide, listGuides } from "../lib/guides";
 import { testDb } from "./sqlite-db";
 
 const KEY = randomBytes(32).toString("base64");
@@ -226,5 +226,86 @@ describe("values interview", () => {
     const [summaryRow] = (await listGuides(db, user.id, "ballot")).filter((g) => g.id === first.id);
     expect(summaryRow.fromInterview).toBe(true);
     expect(summaryRow.match).toMatchObject({ picks: [{ name: "Ann", score: 75 }] });
+  });
+
+  it("does not claim alignment when research finishes before the interview", async () => {
+    stubGrok();
+    const { db, user, deps, queued } = await setup();
+    queued.push({ type: "ballot", userId: user.id });
+    await drain(deps, queued);
+    // Statewide races often finish first. Claiming them before the interview exists
+    // used to ack the align job and leave the card on "Matching your answers…".
+    const row = await db.prepare("SELECT COALESCE(SUM(align_requested), 0) AS n FROM guides").first<{ n: number }>();
+    expect(row?.n).toBe(0);
+    expect(queued.filter((job) => job.type === "align")).toHaveLength(0);
+
+    vi.unstubAllGlobals();
+    stubInterview();
+    const { saveValues, scheduleAlignment } = await import("../lib/values");
+    await saveValues(db, user.id, [], summary as never, Date.now());
+    const ids = await claimableGuideIds(db, user.id);
+    expect(ids).toHaveLength(2);
+    await scheduleAlignment(db, user.id, ids, async (claimed) => {
+      queued.push(...claimed.map((guideId) => ({ type: "align" as const, guideId })));
+    });
+    await drain(deps, queued);
+    const after = await listGuides(db, user.id, "ballot");
+    expect(after.every((g) => g.fromInterview && g.match?.picks[0].name === "Ann" && !g.matchError)).toBe(true);
+  });
+
+  it("recovers races whose alignment was claimed before the interview existed", async () => {
+    stubInterview();
+    const { saveValues, scheduleAlignment } = await import("../lib/values");
+    const { db, user, deps, queued } = await setup();
+    await addContestGuides(db, user.id, contests as never, 1);
+    const guides = await listGuides(db, user.id, "ballot");
+    for (const g of guides) {
+      await db.prepare("UPDATE guides SET data = ?, status = 'ready', align_requested = 1 WHERE id = ?")
+        .bind(JSON.stringify({ query: "q", race: race.race, profiles: { ann: profile }, answers: {}, overrides: {} }), g.id)
+        .run();
+    }
+    await saveValues(db, user.id, [], summary as never, Date.now());
+    const ids = await claimableGuideIds(db, user.id);
+    expect(ids).toHaveLength(guides.length);
+    await scheduleAlignment(db, user.id, ids, async (claimed) => {
+      queued.push(...claimed.map((guideId) => ({ type: "align" as const, guideId })));
+    });
+    expect(await scheduleAlignment(db, user.id, ids, async () => {})).toEqual([]);
+    await drain(deps, queued);
+    const after = await listGuides(db, user.id, "ballot");
+    expect(after.every((g) => g.fromInterview && g.match?.picks[0].score === 75 && !g.matchError)).toBe(true);
+  });
+
+  it("releases a claim that runs before the interview is saved", async () => {
+    const { db, user, deps } = await setup();
+    await addContestGuides(db, user.id, contests as never, 1);
+    const [first] = await listGuides(db, user.id, "ballot");
+    await db.prepare("UPDATE guides SET data = ?, status = 'ready', align_requested = ? WHERE id = ?")
+      .bind(JSON.stringify({ query: "q", race: race.race, profiles: { ann: profile }, answers: {}, overrides: {} }), Date.now(), first.id)
+      .run();
+    await runJob({ type: "align", guideId: first.id }, deps);
+    const row = await db.prepare("SELECT align_requested AS n FROM guides WHERE id = ?").bind(first.id).first<{ n: number }>();
+    expect(row?.n).toBe(0);
+  });
+
+  it("records an alignment failure instead of matching forever", async () => {
+    vi.stubGlobal("fetch", async (url: string | URL) => {
+      if (!String(url).includes("api.x.ai")) return new Response("no", { status: 404 });
+      return new Response("busy", { status: 429 });
+    });
+    const { saveValues } = await import("../lib/values");
+    const { db, user, deps } = await setup();
+    await addContestGuides(db, user.id, contests as never, 1);
+    const [first] = await listGuides(db, user.id, "ballot");
+    await db.prepare("UPDATE guides SET data = ?, status = 'ready' WHERE id = ?")
+      .bind(JSON.stringify({ query: "q", race: race.race, profiles: { ann: profile }, answers: {}, overrides: {} }), first.id)
+      .run();
+    await saveValues(db, user.id, [], summary as never, Date.now());
+    const job = { type: "align" as const, guideId: first.id };
+    await runJob(job, deps).catch(async (err) => failJob(job, readableError(err), deps));
+    const [row] = (await listGuides(db, user.id, "ballot")).filter((g) => g.id === first.id);
+    expect(row.fromInterview).toBe(false);
+    expect(row.matchError).toMatch(/usage limit/);
+    expect(await claimableGuideIds(db, user.id)).not.toContain(first.id);
   });
 });

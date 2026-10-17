@@ -95,7 +95,7 @@ export async function saveValues(db: Db, userId: string, transcript: TranscriptE
 export async function resetValues(db: Db, userId: string): Promise<void> {
   await db.batch([
     db.prepare("DELETE FROM voter_profiles WHERE user_id = ?").bind(userId),
-    db.prepare("UPDATE guides SET suggested = NULL, align_requested = 0 WHERE user_id = ?").bind(userId),
+    db.prepare("UPDATE guides SET suggested = NULL, align_requested = 0, error = CASE WHEN status = 'ready' THEN NULL ELSE error END WHERE user_id = ?").bind(userId),
   ]);
 }
 
@@ -129,7 +129,10 @@ export async function alignToIssues(tokens: GrokTokens, summary: ValuesSummary, 
 }
 
 export async function saveSuggested(db: Db, guideId: string, suggested: Suggested): Promise<void> {
-  await db.prepare("UPDATE guides SET suggested = ? WHERE id = ?").bind(JSON.stringify(suggested), guideId).run();
+  await db
+    .prepare("UPDATE guides SET suggested = ?, error = CASE WHEN status = 'ready' THEN NULL ELSE error END WHERE id = ?")
+    .bind(JSON.stringify(suggested), guideId)
+    .run();
 }
 
 /**
@@ -152,12 +155,60 @@ export async function claimRealignment(db: Db, userId: string, now: number): Pro
   return claimed;
 }
 
-/** Marks guides as queued for mapping and returns the ones not already queued. */
-export async function claimAlignment(db: Db, guideIds: string[]): Promise<string[]> {
+/**
+ * How long a queued alignment may run before another may be queued.
+ * One attempt can be two Grok calls, each allowed to run for several minutes.
+ */
+export const ALIGN_STALE_MS = 20 * 60 * 1000;
+
+function changes(res: unknown): number {
+  const row = res as { meta?: { changes?: number }; changes?: number } | null;
+  return row?.meta?.changes ?? row?.changes ?? 0;
+}
+
+/**
+ * Marks guides as queued for mapping and returns the ones this call claimed.
+ * `align_requested` is the queue time in ms. 0 means not queued. 1 is the old
+ * boolean flag from before that timestamp existed; those rows are always claimable
+ * again, because that flag was set even when the interview did not exist yet.
+ */
+export async function claimAlignment(db: Db, guideIds: string[], now = Date.now()): Promise<string[]> {
+  const staleBefore = now - ALIGN_STALE_MS;
   const claimed: string[] = [];
   for (const id of guideIds) {
-    const res = (await db.prepare("UPDATE guides SET align_requested = 1 WHERE id = ? AND align_requested = 0").bind(id).run()) as { meta?: { changes?: number }; changes?: number };
-    if ((res.meta?.changes ?? res.changes ?? 0) > 0) claimed.push(id);
+    const res = await db
+      .prepare(
+        `UPDATE guides SET align_requested = ?
+         WHERE id = ? AND suggested IS NULL AND error IS NULL
+           AND (align_requested = 0 OR align_requested = 1 OR align_requested < ?)`,
+      )
+      .bind(now, id, staleBefore)
+      .run();
+    if (changes(res) > 0) claimed.push(id);
   }
+  return claimed;
+}
+
+/** Drops a claim that could not run, so a later interview can queue it. */
+export async function releaseAlignment(db: Db, guideId: string): Promise<void> {
+  await db.prepare("UPDATE guides SET align_requested = 0 WHERE id = ? AND suggested IS NULL").bind(guideId).run();
+}
+
+/**
+ * Queues interview mapping for guides that don't have it yet.
+ * Does nothing until the voter has a finished interview, so a race that finishes
+ * research first does not consume its claim and then sit on "Matching your answers…".
+ */
+export async function scheduleAlignment(
+  db: Db,
+  userId: string,
+  guideIds: string[],
+  enqueue: (guideIds: string[]) => Promise<void>,
+  now = Date.now(),
+): Promise<string[]> {
+  if (guideIds.length === 0) return [];
+  if (!(await getValues(db, userId)).summary) return [];
+  const claimed = await claimAlignment(db, guideIds, now);
+  if (claimed.length > 0) await enqueue(claimed);
   return claimed;
 }

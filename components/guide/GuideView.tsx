@@ -8,7 +8,7 @@ import { GrokConnect } from "@/components/GrokConnect";
 import { api, ApiError, shuffled, streamResearch } from "@/lib/client";
 import type { Progress } from "@/lib/grok/research";
 import type { GuideData, GuideRecord, GuideStatus } from "@/lib/guides";
-import { effectiveAnswers, headlineMatch, joinNames, type Answer, type Answers, type Overrides } from "@/lib/match";
+import { effectiveAnswers, headlineMatch, interviewMatchPhase, joinNames, type Answer, type Answers, type Overrides } from "@/lib/match";
 import type { Suggested } from "@/lib/values";
 import { profileStances, seatsOf, type Profile, type Race, type RaceResult } from "@/lib/schema";
 import { Sources } from "./bits";
@@ -53,6 +53,9 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
   const [background, setBackground] = useState<{ status: GuideStatus; failed: Record<string, string> } | null>(null);
   const [voted, setVotedState] = useState(false);
   const [suggested, setSuggested] = useState<Suggested | null>(null);
+  const [matchError, setMatchError] = useState<string | null>(null);
+  const [matchAttempt, setMatchAttempt] = useState(0);
+  const [waitedMs, setWaitedMs] = useState(0);
   const started = useRef(false);
 
   const setTask = (key: string, task: Partial<Task>) =>
@@ -111,6 +114,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
     setOrigin(rec.origin);
     setVotedState(rec.voted);
     setSuggested(rec.suggested);
+    setMatchError(rec.status === "ready" && rec.error ? rec.error : null);
     setBackground(rec.origin === "ballot" ? { status: rec.status, failed: rec.failedCandidates } : null);
     if (!rec.data) {
       setPhase({ kind: "queued", title: rec.title, status: rec.status, error: rec.error });
@@ -154,7 +158,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
 
   // Ballot guides research on the server; check back until they finish.
   const researchDone = race !== null && race.candidates.every((c) => profiles[c.id] || background?.failed[c.id]);
-  const awaitingMatch = values === "done" && suggested === null && researchDone;
+  const awaitingMatch = values === "done" && suggested === null && researchDone && !matchError;
   const pending = (origin === "ballot" && background !== null && (background.status === "queued" || background.status === "researching")) || awaitingMatch;
   useEffect(() => {
     if (!pending) return;
@@ -163,6 +167,13 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
     }, POLL_MS);
     return () => clearInterval(timer);
   }, [pending, id, apply]);
+
+  useEffect(() => {
+    if (!awaitingMatch) return;
+    const startedAt = Date.now();
+    const timer = setInterval(() => setWaitedMs(Date.now() - startedAt), 1000);
+    return () => clearInterval(timer);
+  }, [awaitingMatch, matchAttempt]);
 
   // Save answers and research. Debounced so clicking through the interview is one write.
   useEffect(() => {
@@ -195,6 +206,14 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
   async function retryBackground() {
     await api(`/api/guides/${id}/retry`, { method: "POST" }).catch(() => {});
     setBackground((b) => (b ? { status: "researching", failed: {} } : b));
+  }
+
+  async function retryMatch() {
+    setMatchError(null);
+    setWaitedMs(0);
+    setMatchAttempt((n) => n + 1);
+    await api(`/api/guides/${id}/retry`, { method: "POST", body: { kind: "match" } }).catch(() => {});
+    api<GuideRecord>(`/api/guides/${id}`).then((rec) => apply(rec, false)).catch(() => {});
   }
 
   const taskList = Object.entries(tasks);
@@ -351,8 +370,10 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
         headline={headline}
         researchDone={allDone}
         values={values}
-        awaitingMatch={awaitingMatch}
         fromInterview={suggested !== null}
+        matchError={matchError}
+        waitedMs={waitedMs}
+        onRetry={retryMatch}
         onSeeWhy={() => {
           setTab("match");
           setEditing(false);
@@ -397,13 +418,16 @@ function MatchCard(props: {
   headline: ReturnType<typeof headlineMatch>;
   researchDone: boolean;
   values: string;
-  awaitingMatch: boolean;
   fromInterview: boolean;
+  matchError: string | null;
+  waitedMs: number;
+  onRetry: () => void;
   onSeeWhy: () => void;
 }) {
-  const { headline, researchDone, values, awaitingMatch, fromInterview, onSeeWhy } = props;
+  const { headline, researchDone, values, fromInterview, matchError, waitedMs, onRetry, onSeeWhy } = props;
   if (!researchDone) return null;
-  if (headline) {
+  const phase = interviewMatchPhase({ hasMatch: Boolean(headline), fromInterview, matchError, values, waitedMs });
+  if (headline && phase === "ready") {
     const [first] = headline.picks;
     const several = headline.picks.length > 1;
     const label = several
@@ -430,20 +454,35 @@ function MatchCard(props: {
       </section>
     );
   }
-  if (awaitingMatch) {
+  if (phase === "matching") {
     return (
       <section className="match-card quiet">
         <span className="spinner" aria-hidden /> <p>Matching your interview answers to this race…</p>
       </section>
     );
   }
-  if (values !== "done") {
+  if (phase === "failed" || phase === "slow") {
+    return (
+      <section className="match-card quiet">
+        <p className="error">{phase === "failed" ? (matchError ?? "Couldn't match your answers.") : "Matching is taking too long."}</p>
+        <button type="button" className="btn secondary" onClick={onRetry}>Try again</button>
+      </section>
+    );
+  }
+  if (phase === "prompt") {
     return (
       <section className="match-card quiet">
         <p>
           <Link href="/interview">Take the 10-minute interview</Link> once to see your best match in every race, or answer this
           race&apos;s questions under Your match.
         </p>
+      </section>
+    );
+  }
+  if (phase === "insufficient") {
+    return (
+      <section className="match-card quiet">
+        <p>Not enough information to match this race from your interview.</p>
       </section>
     );
   }

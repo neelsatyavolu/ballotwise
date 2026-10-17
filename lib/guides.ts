@@ -4,7 +4,7 @@ import { getCached, putCached } from "./cache";
 import { needsEstimate } from "./estimate";
 import { effectiveAnswers, headlineMatch, type MatchHeadline } from "./match";
 import { profileSchema, profileStances, raceSchema, seatsOf, type Profile, type Race } from "./schema";
-import type { Suggested } from "./values";
+import { ALIGN_STALE_MS, type Suggested } from "./values";
 
 const MAX_GUIDE_BYTES = 400_000;
 
@@ -36,6 +36,8 @@ export type GuideSummary = {
   match: MatchHeadline | null;
   /** True when interview answers exist for this race. */
   fromInterview: boolean;
+  /** Set when mapping the interview onto this ready race failed. Null while that work is still in progress. */
+  matchError: string | null;
 };
 /** What the guide page loads: the data once the race is known, plus background research state. */
 export type GuideRecord = {
@@ -80,7 +82,14 @@ function toSummary({ data, suggested, ...r }: GuideRow, profiles: Record<string,
     const stances = Object.fromEntries(Object.entries(all).map(([id, p]) => [id, profileStances(p)]));
     match = headlineMatch(parsed.race.candidates, stances, parsed.race.issues.map((i) => i.id), effectiveAnswers(parsed.answers, fromInterview), parsed.overrides, seatsOf(parsed.race));
   }
-  return { ...r, voted: r.voted === 1, match, fromInterview: Boolean(fromInterview) };
+  return {
+    ...r,
+    voted: r.voted === 1,
+    match,
+    fromInterview: Boolean(fromInterview),
+    // A ready guide's error is an alignment failure. Research failures use status "failed".
+    matchError: r.status === "ready" && r.error ? r.error : null,
+  };
 }
 
 async function backgroundProfiles(db: Db, guideIds: string[]): Promise<Record<string, Record<string, Profile>>> {
@@ -175,9 +184,19 @@ export async function guideForJob(db: Db, id: string): Promise<{ userId: string;
   return row ? { userId: row.userId, query: row.query, data: JSON.parse(row.data) as GuideData | null, status: row.status } : null;
 }
 
-/** Guides with research in hand, for mapping a new or retaken interview onto them. */
-export async function researchedGuideIds(db: Db, userId: string): Promise<string[]> {
-  const { results } = await db.prepare("SELECT id FROM guides WHERE user_id = ? AND status = 'ready' AND data != 'null'").bind(userId).all<{ id: string }>();
+/**
+ * Ready guides whose interview mapping is missing and not already queued.
+ * Includes the old boolean claim (`align_requested = 1`), which was stored even
+ * when the interview did not exist yet and then never ran again.
+ */
+export async function claimableGuideIds(db: Db, userId: string, now = Date.now()): Promise<string[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id FROM guides WHERE user_id = ? AND status = 'ready' AND data != 'null' AND suggested IS NULL AND error IS NULL
+       AND (align_requested = 0 OR align_requested = 1 OR align_requested < ?)`,
+    )
+    .bind(userId, now - ALIGN_STALE_MS)
+    .all<{ id: string }>();
   return results.map((r) => r.id);
 }
 

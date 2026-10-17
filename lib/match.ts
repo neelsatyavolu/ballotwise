@@ -83,6 +83,26 @@ export type MatchHeadline = {
 
 export const CLOSE_CALL_POINTS = 5;
 
+/** How long a ballot card may say "Matching your answers…" before it offers a retry. */
+export const MATCH_WAIT_MS = 2 * 60 * 1000;
+
+export type InterviewMatchPhase = "ready" | "prompt" | "matching" | "slow" | "failed" | "insufficient";
+
+/** What a finished race should show for the voter's interview. "matching" is the only non-terminal phase. */
+export function interviewMatchPhase(input: {
+  hasMatch: boolean;
+  fromInterview: boolean;
+  matchError: string | null;
+  values: string;
+  waitedMs: number;
+}): InterviewMatchPhase {
+  if (input.hasMatch) return "ready";
+  if (input.matchError) return "failed";
+  if (input.values !== "done") return "prompt";
+  if (!input.fromInterview) return input.waitedMs >= MATCH_WAIT_MS ? "slow" : "matching";
+  return "insufficient";
+}
+
 /** The closest candidates on the voter's answers, as many as there are seats, or null when nothing can be compared. */
 export function headlineMatch(
   candidates: readonly { id: string; name: string }[],
