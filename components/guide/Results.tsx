@@ -12,12 +12,15 @@ type Props = {
   notes?: Record<string, { why: string; inferred: boolean }>;
   overrides: Overrides;
   onOverride: (candidateId: string, issueId: string, stance: number | null | undefined) => void;
+  /** How many of the voter's answers on this race are inferred guesses they haven't confirmed. */
+  guesses?: number;
+  onCheckGuesses?: () => void;
   onRetake: () => void;
 };
 
 const optionLabel = (p: number, issue: Issue) => (p === 0 ? "In between" : describeStance(p, issue.sideA, issue.sideB));
 
-export function Results({ issues, candidates, profiles, answers, notes = {}, overrides, onOverride, onRetake }: Props) {
+export function Results({ issues, candidates, profiles, answers, notes = {}, overrides, onOverride, guesses = 0, onCheckGuesses, onRetake }: Props) {
   const issueIds = issues.map((i) => i.id);
   const matches = candidates
     .filter((c) => profiles[c.id])
@@ -33,6 +36,13 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
   return (
     <div className="results">
       <div className="read stack">
+        {guesses > 0 && onCheckGuesses && (
+          <p className="notice">
+            {guesses} of your answers on this race {guesses === 1 ? "is a guess" : "are guesses"} from your interview, which didn&apos;t ask about{" "}
+            {guesses === 1 ? "it" : "them"} directly. Checking them makes your match more accurate.{" "}
+            <button type="button" className="btn quiet" onClick={onCheckGuesses}>Check {guesses === 1 ? "it" : "them"}</button>
+          </p>
+        )}
         <p>
           This shows how much each candidate agrees with your {answered} answer{answered === 1 ? "" : "s"}, counting the issues you
           care about most more heavily. If we couldn&apos;t find where a candidate stands on an issue, we estimate it from their other

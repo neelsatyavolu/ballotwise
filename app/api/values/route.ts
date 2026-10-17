@@ -5,7 +5,7 @@ import { db, enqueueAlignment } from "@/lib/env";
 import { ResearchError } from "@/lib/grok/research";
 import { activeGrokSession } from "@/lib/grok/session";
 import { claimableGuideIds } from "@/lib/guides";
-import { getValues, MAX_QUESTIONS, nextTurn, questionsAsked, resetValues, saveValues, scheduleAlignment, type TranscriptEntry, type ValuesState } from "@/lib/values";
+import { ballotTopics, getValues, MAX_QUESTIONS, nextTurn, questionsAsked, resetValues, saveValues, scheduleAlignment, type TranscriptEntry, type ValuesState } from "@/lib/values";
 
 export const maxDuration = 120;
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   else if (transcript.length > 0 && body.data.action !== "finish") return NextResponse.json(view(state));
 
   try {
-    const next = await nextTurn(tokens, transcript, body.data.action === "finish");
+    const next = await nextTurn(tokens, transcript, body.data.action === "finish", await ballotTopics(d, user.id));
     if ("role" in next) {
       await saveValues(d, user.id, [...transcript, next], null, Date.now());
     } else {

@@ -27,7 +27,12 @@ export function Interview({ issues, answers, notes = {}, onAnswer, onFinish }: P
     <div className="interview">
       <p className="step-count">Question {step + 1} of {issues.length}</p>
       <h2 className="question">{issue.question}</h2>
-      {notes[issue.id] && <p className="interview-note">From your values interview: {notes[issue.id].why}</p>}
+      {notes[issue.id] && (
+        <p className="interview-note">
+          {notes[issue.id].inferred ? "Our guess from your values interview" : "From your values interview"}: {notes[issue.id].why}
+          {notes[issue.id].inferred && answers[issue.id]?.stance != null && " Keep it or pick what fits you."}
+        </p>
+      )}
       <div className="answer-scale">
         <span className="side">{issue.sideA}</span>
         <div className="answer-ovals" role="radiogroup" aria-label="Your position">
@@ -62,7 +67,17 @@ export function Interview({ issues, answers, notes = {}, onAnswer, onFinish }: P
               Skip
             </button>
           )}
-          <button type="button" className="btn" disabled={answer.stance === null} onClick={() => (last ? onFinish() : setStep(step + 1))}>
+          <button
+            type="button"
+            className="btn"
+            disabled={answer.stance === null}
+            onClick={() => {
+              // Moving on keeps what's shown as the voter's own answer, which also confirms a guess.
+              onAnswer(issue.id, answer);
+              if (last) onFinish();
+              else setStep(step + 1);
+            }}
+          >
             {last ? "See my match" : "Next"}
           </button>
         </div>

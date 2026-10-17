@@ -19,7 +19,7 @@ export const summarySchema = z.object({
   priorities: z
     .array(z.object({ topic: text(60), weight: z.union([z.literal(1), z.literal(2), z.literal(3)]), view: text(320), quote: z.string().trim().max(320).nullable() }))
     .min(1)
-    .max(12),
+    .max(16),
   dealbreakers: z.array(text(200)).max(6),
   leadership: z.string().trim().max(320).nullable(),
 });
@@ -39,10 +39,11 @@ Rules:
 - One question at a time, in plain language, at most two short sentences. Be warm and brief. Never praise, agree with, disagree with, or comment on their views.
 - Never mention parties, candidates, politicians, ideology labels (left, right, liberal, conservative, progressive, MAGA and so on) or media figures. If they use a label, ask what they specifically want.
 - Ask about concrete tradeoffs, not slogans. Cover the range: cost of living and taxes, housing and development, public safety and policing, health care, schools, environment and energy, immigration, government spending and services, rights and civil liberties, transportation, and what they want in a leader (experience, style, independence). Go deeper where they care; after one quick check, skip what they don't.
+- If you are given the issues on this voter's ballot, spend most questions on the tradeoffs behind them, so their answers speak directly to what they will vote on. Ask about the underlying choice in your own neutral words; don't read the ballot questions out, and cover the topics that come up in the most races first.
 - Follow up on vague answers ("it depends" on what?) and learn how much each topic matters to them.
 - Offer 2 to 4 short suggested replies that span the reasonable range in balanced wording. Vary which view comes first. They can always answer in their own words.
 - "progress" is your estimate from 0 to 1 of how complete the picture is.
-- Finish when the picture is clear, after ${MAX_QUESTIONS} questions, or when told to. The summary uses their own words where possible, never infers views they did not state, and weights each priority 1 to 3 by how strongly they expressed it.
+- Finish when the picture is clear, after ${MAX_QUESTIONS} questions, or when told to. The summary uses their own words where possible, never infers views they did not state, and weights each priority 1 to 3 by how strongly they expressed it. Give each distinct topic they spoke to its own priority, so specific views aren't lost in a broad one.
 
 Reply with one JSON object and nothing else, either
 {"done": false, "message": "your next question", "suggestions": ["..."], "progress": 0.3}
@@ -59,14 +60,39 @@ function toMessages(transcript: TranscriptEntry[]) {
 
 export const questionsAsked = (t: TranscriptEntry[]) => t.filter((e) => e.role === "interviewer").length;
 
+/** The issue questions on one researched race. Candidates are left out, so the interview can't lean toward anyone. */
+export type BallotTopic = { race: string; questions: string[] };
+
+/** Races beyond this are left out of the interview prompt; the ones voted on soonest come first. */
+const MAX_TOPIC_RACES = 40;
+
+export async function ballotTopics(db: Db, userId: string): Promise<BallotTopic[]> {
+  const { results } = await db
+    .prepare("SELECT data FROM guides WHERE user_id = ? AND origin = 'ballot' AND data != 'null' ORDER BY election_date ASC, title ASC LIMIT ?")
+    .bind(userId, MAX_TOPIC_RACES)
+    .all<{ data: string }>();
+  const topics = results.map((r) => {
+    const { race } = JSON.parse(r.data) as { race: { title: string; issues: Issue[] } };
+    return { race: race.title, questions: race.issues.map((i) => i.question) };
+  });
+  // Two contests can resolve to the same race; list it once.
+  return topics.filter((t, i) => topics.findIndex((u) => u.race === t.race) === i);
+}
+
+function withBallot(topics: readonly BallotTopic[]): string {
+  if (topics.length === 0) return INTERVIEW_INSTRUCTIONS;
+  const list = topics.map((t) => `${t.race}:\n${t.questions.map((q) => `- ${q}`).join("\n")}`).join("\n");
+  return `${INTERVIEW_INSTRUCTIONS}\n\nIssues on this voter's ballot, by race:\n${list}`;
+}
+
 /** The next interviewer turn, or the summary when the interview is complete or the voter asked to finish. */
-export async function nextTurn(tokens: GrokTokens, transcript: TranscriptEntry[], finish: boolean): Promise<TranscriptEntry | ValuesSummary> {
+export async function nextTurn(tokens: GrokTokens, transcript: TranscriptEntry[], finish: boolean, topics: readonly BallotTopic[] = []): Promise<TranscriptEntry | ValuesSummary> {
   const messages = toMessages(transcript);
   if (messages.length === 0) messages.push({ role: "user", content: "I'm ready to start." });
   if (finish || questionsAsked(transcript) >= MAX_QUESTIONS) {
     messages.push({ role: "user", content: "Please end the interview now and return the summary of what I said." });
   }
-  const turn = await ask(tokens, INTERVIEW_INSTRUCTIONS, messages, turnSchema);
+  const turn = await ask(tokens, withBallot(topics), messages, turnSchema);
   if (turn.done) return turn.summary;
   return { role: "interviewer", text: turn.message, suggestions: turn.suggestions, progress: turn.progress };
 }
@@ -116,8 +142,8 @@ const alignSchema = z.object({ answers: z.array(suggestedAnswerSchema.extend({ i
 export const ALIGN_INSTRUCTIONS = `You place a voter on specific issue questions using only the voter's own interview summary. You are never shown candidates, and you never infer a view from party, ideology labels, or demographics.
 For each issue choose a stance from -2 (strongly side A) to +2 (strongly side B):
 - If the summary speaks to the issue, use it: "inferred": false, weight 1 to 3 following how much the voter said that topic matters, and "why" is one sentence quoting or closely paraphrasing what they said.
-- If the interview didn't cover it, make the most reasonable inference from what the voter did say that bears on it (for example their views on costs, the role of government, regulation, fairness, risk, or local control): "inferred": true, weight 1, and "why" is one sentence starting "Inferred from" that names the views it rests on. Use a mild stance (-1, 0 or +1) unless their related views are strong.
-- Use null only if nothing the voter said bears on the issue at all, and say what was missing.
+- If the interview didn't name the issue but the voter spoke to the same subject (for example their view on rent costs for a housing question, or on school funding for an education budget question), infer from that: "inferred": true, weight 1, and "why" is one sentence starting "Inferred from" that names what they said. Use a mild stance (-1, 0 or +1) unless what they said is strong.
+- Never infer across subjects. A view on one topic (taxes, crime, immigration, spending) does not tell you their view on a different one (insurance rules, school sports, election administration), and general outlook is not evidence. In that case use null, "inferred": false, and say what the interview didn't cover. A blank is better than a guess.
 Reply with one JSON object: {"answers": [{"issueId": "...", "stance": 1, "weight": 2, "why": "...", "inferred": false}]}`;
 
 export async function alignToIssues(tokens: GrokTokens, summary: ValuesSummary, office: string, issues: Issue[]): Promise<Suggested> {
@@ -125,7 +151,10 @@ export async function alignToIssues(tokens: GrokTokens, summary: ValuesSummary, 
   const prompt = `Office: ${office}\n\nVoter's interview summary:\n${JSON.stringify(summary, null, 2)}\n\nIssues:\n${list}`;
   const { answers } = await ask(tokens, ALIGN_INSTRUCTIONS, [{ role: "user", content: prompt }], alignSchema);
   const ids = new Set(issues.map((i) => i.id));
-  return Object.fromEntries(answers.filter((a) => ids.has(a.issueId)).map(({ issueId, ...rest }) => [issueId, rest]));
+  // A blank is recorded as uncovered (inferred: false), so claimRealignment doesn't treat it as an old mapping.
+  return Object.fromEntries(
+    answers.filter((a) => ids.has(a.issueId)).map(({ issueId, ...rest }) => [issueId, rest.stance === null ? { ...rest, inferred: rest.inferred ?? false } : rest]),
+  );
 }
 
 export async function saveSuggested(db: Db, guideId: string, suggested: Suggested): Promise<void> {

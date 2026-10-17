@@ -47,6 +47,8 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
   const [tab, setTab] = useState<Tab>("compare");
   const [interviewDone, setInterviewDone] = useState(false);
   const [editing, setEditing] = useState(false);
+  /** While checking guesses, the editor shows only these issues. */
+  const [checking, setChecking] = useState<string[] | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [searched, setSearched] = useState(query ?? "");
   const [origin, setOrigin] = useState<"search" | "ballot">("search");
@@ -339,6 +341,8 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
   const effective = effectiveAnswers(answers, suggested);
   const hasAnswers = Object.values(effective).some((a) => a.stance !== null);
   const notes = Object.fromEntries(Object.entries(suggested ?? {}).filter(([id]) => !answers[id]).map(([id, s]) => [id, { why: s.why, inferred: s.inferred === true }]));
+  // Answers inferred from the interview rather than stated in it, which the voter hasn't confirmed or changed.
+  const guesses = race.issues.filter((i) => notes[i.id]?.inferred && suggested?.[i.id]?.stance != null).map((i) => i.id);
   const stances = Object.fromEntries(Object.entries(profiles).map(([id, p]) => [id, profileStances(p)]));
   const headline = allDone && hasAnswers ? headlineMatch(order, stances, race.issues.map((i) => i.id), effective, overrides, seatsOf(race)) : null;
   const showResults = !editing && (interviewDone || (hasAnswers && suggested !== null));
@@ -404,9 +408,27 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
           (!allDone && !interviewDone ? (
             <p className="muted read">Your match will show up once every candidate has been looked up, so they&apos;re all compared fairly.</p>
           ) : showResults ? (
-            <Results issues={race.issues} candidates={order} profiles={profiles} answers={effective} notes={notes} overrides={overrides} onOverride={onOverride} onRetake={() => { setInterviewDone(false); setEditing(true); }} />
+            <Results
+              issues={race.issues}
+              candidates={order}
+              profiles={profiles}
+              answers={effective}
+              notes={notes}
+              overrides={overrides}
+              onOverride={onOverride}
+              guesses={guesses.length}
+              onCheckGuesses={() => { setChecking(guesses); setInterviewDone(false); setEditing(true); }}
+              onRetake={() => { setChecking(null); setInterviewDone(false); setEditing(true); }}
+            />
           ) : (
-            <Interview issues={race.issues} answers={effective} notes={notes} onAnswer={onAnswer} onFinish={() => { setInterviewDone(true); setEditing(false); }} />
+            <Interview
+              key={checking ? "checking" : "all"}
+              issues={checking ? race.issues.filter((i) => checking.includes(i.id)) : race.issues}
+              answers={effective}
+              notes={notes}
+              onAnswer={onAnswer}
+              onFinish={() => { setChecking(null); setInterviewDone(true); setEditing(false); }}
+            />
           ))}
       </div>
 

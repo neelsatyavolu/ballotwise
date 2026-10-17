@@ -281,6 +281,34 @@ describe("values interview", () => {
     expect(await nextTurn(tokens, [{ role: "voter", text: "rent" }], true)).toMatchObject({ overview: "You want lower rents." });
   });
 
+  it("steers the interview toward the issues on the voter's ballot, never its candidates", async () => {
+    stubGrok();
+    const { db, user, deps, queued } = await setup();
+    queued.push({ type: "ballot", userId: user.id });
+    await drain(deps, queued);
+    const { ballotTopics, nextTurn } = await import("../lib/values");
+    const topics = await ballotTopics(db, user.id);
+    expect(topics).toEqual([{ race: "Mayor of Los Angeles", questions: ["housing?", "transit?", "safety?"] }]);
+
+    const prompts: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string | URL, init?: RequestInit) => {
+      prompts.push(String(init?.body));
+      return sse(JSON.stringify({ done: false, message: "What matters most?", suggestions: [], progress: 0.1 }));
+    });
+    const tokens = { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 };
+    await nextTurn(tokens, [], false, topics);
+    expect(prompts[0]).toContain("transit?");
+    expect(prompts[0]).not.toMatch(/\bAnn\b|\bBob\b/);
+  });
+
+  it("records an issue the interview doesn't bear on as uncovered, so it isn't mapped again", async () => {
+    vi.stubGlobal("fetch", async () => sse(JSON.stringify({ answers: [{ issueId: "housing", stance: null, weight: 1, why: "Nothing you said is about housing." }] })));
+    const { alignToIssues } = await import("../lib/values");
+    const tokens = { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 };
+    const issue = { id: "housing", title: "Housing", question: "housing?", sideA: "less", sideB: "more" };
+    expect(await alignToIssues(tokens, summary as never, "Mayor", [issue])).toEqual({ housing: { stance: null, weight: 1, why: "Nothing you said is about housing.", inferred: false } });
+  });
+
   it("maps the interview onto a finished race without showing candidates, once", async () => {
     stubInterview();
     const { saveValues, claimAlignment } = await import("../lib/values");
