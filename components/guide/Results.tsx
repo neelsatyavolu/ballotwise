@@ -55,10 +55,17 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
               ? "Not enough information on the issues you answered."
               : match.coverage >= 0.999 ? "Based on every issue you answered." : `Based on ${Math.round(match.coverage * 100)}% of what you said matters.`}
           </p>
-          <div style={{ overflowX: "auto" }}>
+          <div className="breakdown-wrap">
             <table className="breakdown">
+              <colgroup>
+                <col className="c-issue" />
+                <col className="c-stance" />
+                <col className="c-stance" />
+                <col className="c-agree" />
+                <col className="c-fix" />
+              </colgroup>
               <thead>
-                <tr><th>Issue</th><th>You</th><th>{candidate.name}</th><th>Fix it</th></tr>
+                <tr><th>Issue</th><th>You</th><th>{candidate.name}</th><th className="num">Agree</th><th>Fix it</th></tr>
               </thead>
               <tbody>
                 {match.issues.map((row) => {
@@ -66,19 +73,36 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
                   const pos = profiles[candidate.id]!.positions.find((p) => p.issueId === row.issueId);
                   return (
                     <tr key={row.issueId}>
-                      <td>{issue.title}</td>
-                      <td>
-                        <StanceOvals voter stance={row.voter} label={row.voter === null ? "Skipped" : describeStance(row.voter, issue.sideA, issue.sideB)} />
-                        {notes[row.issueId] && <span className="from-interview" title={notes[row.issueId]}>From your interview</span>}
+                      <td className="issue-cell">{issue.title}</td>
+                      <td data-label="You">
+                        {row.voter === null ? (
+                          <span className="cell-empty">Not answered</span>
+                        ) : (
+                          <StanceOvals voter stance={row.voter} label={describeStance(row.voter, issue.sideA, issue.sideB)} />
+                        )}
+                        {notes[row.issueId] && (
+                          <span className="cell-sub" title={notes[row.issueId]}>
+                            {row.voter === null ? "Your interview didn’t cover this" : "From your interview"} ⓘ
+                          </span>
+                        )}
                       </td>
-                      <td>
-                        <StanceOvals stance={row.candidate} label={describeStance(row.candidate, issue.sideA, issue.sideB)} />{" "}
-                        {row.overridden ? <span className="edited">Changed by you</span> : pos && <Sources urls={pos.sources} />}
+                      <td data-label={candidate.name}>
+                        {row.candidate === null ? (
+                          <span className="cell-empty">Unknown</span>
+                        ) : (
+                          <StanceOvals stance={row.candidate} label={describeStance(row.candidate, issue.sideA, issue.sideB)} />
+                        )}
+                        {row.overridden ? (
+                          <span className="cell-sub edited">Changed by you</span>
+                        ) : (
+                          pos && pos.sources.length > 0 && <span className="cell-sub">Sources <Sources compact urls={pos.sources} /></span>
+                        )}
                       </td>
-                      <td>
+                      <td className="num agree" data-label="Agree">{row.agreement === null ? "—" : `${Math.round(row.agreement * 100)}%`}</td>
+                      <td data-label="Fix it">
                         <select
                           className="override-select"
-                          aria-label={`Correct ${candidate.name}'s position on ${issue.title}`}
+                          aria-label={`Fix ${candidate.name}'s position on ${issue.title}`}
                           value={row.overridden ? String(row.candidate) : "source"}
                           onChange={(e) => {
                             const v = e.target.value;

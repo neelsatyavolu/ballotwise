@@ -10,9 +10,20 @@ export function hostOf(url: string): string {
   }
 }
 
-/** Small numbered links after a claim. Numbering is per claim; the hover title shows the site. */
-export function Sources({ urls }: { urls: readonly string[] }) {
+/** Small links after a claim, labelled by site. `compact` shows numbers instead, for tight table cells. */
+export function Sources({ urls, compact = false }: { urls: readonly string[]; compact?: boolean }) {
   if (urls.length === 0) return null;
+  if (compact) {
+    return (
+      <span className="sources compact">
+        {urls.map((url, i) => (
+          <a key={url} className="src" href={url} target="_blank" rel="noopener noreferrer" title={hostOf(url)} aria-label={`Source ${i + 1}: ${hostOf(url)}`}>
+            {i + 1}
+          </a>
+        ))}
+      </span>
+    );
+  }
   return (
     <span className="sources">
       {urls.map((url, i) => (

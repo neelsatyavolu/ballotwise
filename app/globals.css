@@ -235,10 +235,36 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 .score { font-family: var(--serif); font-size: 28px; font-weight: 600; }
 .bar { height: 8px; border-radius: 4px; background: var(--rule); overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--accent); }
-.breakdown { width: 100%; border-collapse: collapse; font-size: 15px; }
-.breakdown th { text-align: left; font-weight: 600; color: var(--muted); font-size: 13px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--rule); }
-.breakdown td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
-.edited { font-size: 12px; color: var(--red); font-weight: 600; }
+.breakdown-wrap { overflow-x: auto; }
+.breakdown { width: 100%; min-width: 680px; border-collapse: collapse; table-layout: fixed; font-size: 15px; }
+.breakdown .c-issue { width: 24%; }
+.breakdown .c-stance { width: 22%; }
+.breakdown .c-agree { width: 9%; }
+.breakdown .c-fix { width: 23%; }
+.breakdown th { text-align: left; font-weight: 600; color: var(--muted); font-size: 13px; padding: 6px 16px 6px 0; border-bottom: 1px solid var(--rule); }
+.breakdown td { padding: 9px 16px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.breakdown td:last-child, .breakdown th:last-child { padding-right: 0; }
+.breakdown .num { text-align: right; }
+.breakdown .agree { font-weight: 600; font-variant-numeric: tabular-nums; padding-top: 10px; }
+.breakdown .issue-cell { font-weight: 500; line-height: 1.35; padding-top: 10px; }
+.breakdown .scale { height: 24px; }
+.cell-empty { display: inline-flex; align-items: center; height: 24px; font-size: 14px; color: var(--muted); font-style: italic; }
+.cell-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.cell-sub[title] { cursor: help; }
+.cell-sub.edited { color: var(--red); font-weight: 600; }
+.sources.compact .src { min-width: 18px; text-align: center; padding: 2px 4px; }
+.override-select { width: 100%; }
+/* On phones each issue becomes a small labelled block instead of a sideways-scrolling table. */
+@media (max-width: 620px) {
+  .breakdown { min-width: 0; table-layout: auto; }
+  .breakdown colgroup, .breakdown thead { display: none; }
+  .breakdown, .breakdown tbody, .breakdown tr, .breakdown td { display: block; width: 100%; }
+  .breakdown tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+  .breakdown td { border: 0; padding: 0; }
+  .breakdown td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .breakdown .issue-cell { grid-column: 1 / -1; padding: 0; font-weight: 600; }
+  .breakdown .agree { text-align: left; padding: 0; }
+}
 .override-select { font: inherit; font-size: 14px; padding: 4px 6px; border-radius: 4px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
 
 /* Method */
@@ -374,7 +400,6 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 .match-card-name { font-family: var(--serif); font-size: 24px; font-weight: 600; line-height: 1.2; }
 .match-card-sub { color: var(--muted); max-width: 60ch; }
 .interview-note { margin: -10px 0 18px; padding: 10px 14px; border-radius: var(--radius); background: var(--mark); font-size: 15px; }
-.from-interview { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; cursor: help; text-decoration: underline dotted; }
 
 /* Race cards on My ballot */
 .race-grid { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
