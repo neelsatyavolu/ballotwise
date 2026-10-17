@@ -1,4 +1,5 @@
 import type { Districts } from "./ballot/census";
+import type { KnownContest } from "./cache";
 import type { CandidateRef, Race } from "./schema";
 
 const NEUTRALITY = `You write for a nonpartisan voter guide. Rules that override everything else:
@@ -32,11 +33,13 @@ Search the web to identify the single contest they mean.
   "jurisdiction": "Where, e.g. 'State of California'",
   "office": { "text": "One or two sentences on what this office does and its term length.", "sources": ["url"] },
   "votingRule": "How the contest works if notable (e.g. 'Top two from the primary', 'Vote for up to 3', 'Ranked choice'), else null",
+  "seats": 1,
   "candidates": [{ "id": "kebab-case-name", "name": "Full name as on ballot", "party": "Party as listed on the ballot or null for nonpartisan", "ballotDesignation": "Ballot designation/occupation or null", "incumbent": false }],
   "issues": [{ "id": "kebab-case", "title": "2-4 words", "question": "A neutral question about a real tradeoff", "sideA": "One reasonable position", "sideB": "The opposing reasonable position" }],
   "sources": ["urls you used to establish the candidate list"]
 }
 Candidate list: use the certified/qualified list for that contest. If the general election list isn't set yet, use the candidates who qualified for the next ballot and note the stage in "election". Include every qualified candidate, not only major-party ones.
+Seats: the number of seats this contest fills, which is how many candidates each voter may vote for. It is 1 for most offices; at-large school boards and councils often fill 2-4 at once. Check the official sample ballot ("Vote for no more than 2").
 Issues: 4-6 issues that this specific office actually decides and that the candidates disagree on or have spoken about. Phrase each as one tradeoff on a single dimension where both sides are positions reasonable people hold, worded with equal care and similar length. Keep sideA and sideB to one short plain-language clause each (under 90 characters), not a bundle of several policies. Describe the policy choice, not any candidate's platform. Do not frame either side as obviously right. Do not use party or candidate names in issues.`;
 }
 
@@ -73,7 +76,7 @@ export const BALLOT_INSTRUCTIONS = `${NEUTRALITY}
 
 Your job: list the candidate contests that will appear on one voter's ballot.`;
 
-export function ballotPrompt(matchedAddress: string, districts: Districts): string {
+export function ballotPrompt(matchedAddress: string, districts: Districts, known: readonly KnownContest[] = []): string {
   const lines = [
     `State: ${districts.state}`,
     districts.county && `County: ${districts.county}`,
@@ -83,10 +86,13 @@ export function ballotPrompt(matchedAddress: string, districts: Districts): stri
     districts.stateHouse && `State house/assembly: ${districts.stateHouse}`,
     districts.schoolDistrict && `School district: ${districts.schoolDistrict}`,
   ].filter(Boolean);
+  const reuse = known.length
+    ? `\nContests already found for other addresses in this county. Some may not be on this address's ballot. When one of them is, copy its label and query exactly:\n${known.map((c) => `- ${JSON.stringify({ label: c.label, query: c.query, date: c.date })}`).join("\n")}\n`
+    : "";
   return `Today is ${today()}. Voter address: ${matchedAddress}
 Districts from the US Census geocoder:
 ${lines.join("\n")}
-
+${reuse}
 Search official sources (the county elections office and its sample ballot, the secretary of state's candidate list, Ballotpedia's sample ballot for this area) and list every contest between candidates that this address votes in, in elections from today through the next 12 months.
 - Include federal, statewide, state legislative, county, city, school board, judicial and special-district contests, but only the districts this address is in. For districts not listed above (city council ward, county supervisor district, judicial or special districts), find which one covers this address from an official source; if you can't confirm it, leave that contest out.
 - Leave out ballot measures, uncontested retention votes you can't confirm, and elections whose candidate filing hasn't closed.

@@ -67,14 +67,17 @@ export function effectiveAnswers(own: Answers, suggested: Readonly<Record<string
   return { ...fromInterview, ...own };
 }
 
+export type MatchPick = { candidateId: string; name: string; score: number };
+
 export type MatchHeadline = {
-  candidateId: string;
-  name: string;
-  score: number;
+  /** The closest candidates, one per seat the contest fills. */
+  picks: MatchPick[];
+  /** The closest candidate who didn't make the picks. */
   runnerUpScore: number | null;
   runnerUpName: string | null;
-  /** Within this many points, the page says "too close to call" rather than naming a closest match. */
+  /** The last pick and the runner-up are within this many points, so the page says "too close to call". */
   closeCall: boolean;
+  /** The lowest coverage among the picks. */
   coverage: number;
 };
 
@@ -100,13 +103,14 @@ export function interviewMatchPhase(input: {
   return "insufficient";
 }
 
-/** The closest candidate on the voter's answers, or null when nothing can be compared. */
+/** The closest candidates on the voter's answers, as many as there are seats, or null when nothing can be compared. */
 export function headlineMatch(
   candidates: readonly { id: string; name: string }[],
   stancesByCandidate: Readonly<Record<string, Readonly<Record<string, number | null>>>>,
   issueIds: readonly string[],
   answers: Answers,
   overrides: Overrides = {},
+  seats = 1,
 ): MatchHeadline | null {
   const scored = candidates
     .filter((c) => stancesByCandidate[c.id])
@@ -114,14 +118,19 @@ export function headlineMatch(
     .filter((x) => x.m.score !== null)
     .sort((a, b) => b.m.score! - a.m.score!);
   if (scored.length === 0) return null;
-  const [top, second] = scored;
+  const top = scored.slice(0, seats);
+  const last = top[top.length - 1];
+  const next = scored[top.length];
   return {
-    candidateId: top.c.id,
-    name: top.c.name,
-    score: top.m.score!,
-    runnerUpScore: second?.m.score ?? null,
-    runnerUpName: second?.c.name ?? null,
-    closeCall: second !== undefined && top.m.score! - second.m.score! < CLOSE_CALL_POINTS,
-    coverage: top.m.coverage,
+    picks: top.map(({ c, m }) => ({ candidateId: c.id, name: c.name, score: m.score! })),
+    runnerUpScore: next?.m.score ?? null,
+    runnerUpName: next?.c.name ?? null,
+    closeCall: next !== undefined && last.m.score! - next.m.score! < CLOSE_CALL_POINTS,
+    coverage: Math.min(...top.map((x) => x.m.coverage)),
   };
+}
+
+/** "Ann", "Ann and Bob", "Ann, Bob and Cy". */
+export function joinNames(names: readonly string[]): string {
+  return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }

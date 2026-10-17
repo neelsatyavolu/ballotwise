@@ -100,11 +100,22 @@ function MatchBlock({ guide, values, waitedMs, onRetry }: { guide: GuideSummary;
     return <p className="card-note">{phase === "insufficient" ? "Not enough information to match" : "Take the interview to see your best match"}</p>;
   }
   const m = guide.match;
+  const [first] = m.picks;
+  if (m.picks.length > 1) {
+    return (
+      <div className="card-match">
+        <span className="card-label">Best {m.picks.length} matches</span>
+        {m.picks.map((p) => <span key={p.candidateId} className="card-close">{p.name}, {p.score}%</span>)}
+        {m.closeCall && <span className="card-note">{m.runnerUpName} is close behind at {m.runnerUpScore}%</span>}
+        {m.coverage < 0.5 && <span className="card-note">Based on little information</span>}
+      </div>
+    );
+  }
   if (m.closeCall) {
     return (
       <div className="card-match">
         <span className="card-label">Too close to call</span>
-        <span className="card-close">{m.name}, {m.score}%</span>
+        <span className="card-close">{first.name}, {first.score}%</span>
         <span className="card-close">{m.runnerUpName}, {m.runnerUpScore}%</span>
       </div>
     );
@@ -112,10 +123,10 @@ function MatchBlock({ guide, values, waitedMs, onRetry }: { guide: GuideSummary;
   return (
     <div className="card-match">
       <span className="card-label">Best match</span>
-      <span className="card-name">{m.name}</span>
+      <span className="card-name">{first.name}</span>
       <span className="card-score">
-        <span className="bar" aria-hidden><span style={{ width: `${m.score}%` }} /></span>
-        <strong>{m.score}%</strong>
+        <span className="bar" aria-hidden><span style={{ width: `${first.score}%` }} /></span>
+        <strong>{first.score}%</strong>
       </span>
       {m.coverage < 0.5 && <span className="card-note">Based on little information</span>}
     </div>

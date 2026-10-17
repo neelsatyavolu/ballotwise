@@ -5,8 +5,8 @@ import { lookUpDistricts } from "@/lib/ballot/census";
 import { getBallot, saveBallot } from "@/lib/ballot/store";
 import { db, enqueue, enqueueAlignment } from "@/lib/env";
 import { activeGrokSession } from "@/lib/grok/session";
-import { claimableGuideIds, listGuides } from "@/lib/guides";
-import { scheduleAlignment } from "@/lib/values";
+import { claimableGuideIds, claimEstimates, listGuides } from "@/lib/guides";
+import { claimRealignment, scheduleAlignment } from "@/lib/values";
 
 export async function GET() {
   const user = await currentUser();
@@ -16,6 +16,10 @@ export async function GET() {
   // Opening the ballot queues those, and any alignment that has gone stale, again.
   await scheduleAlignment(database, user.id, await claimableGuideIds(database, user.id), enqueueAlignment);
   const [ballot, guides] = await Promise.all([getBallot(database, user.id), listGuides(database, user.id, "ballot")]);
+  // Guides researched before stance estimates existed get them filled in the background.
+  await enqueue((await claimEstimates(database, user.id, Date.now())).map((guideId) => ({ type: "estimate" as const, guideId })));
+  // Likewise, interview mappings that left issues blank are redone with inferred answers.
+  await enqueue((await claimRealignment(database, user.id, Date.now())).map((guideId) => ({ type: "align" as const, guideId })));
   return NextResponse.json({ ballot, guides });
 }
 

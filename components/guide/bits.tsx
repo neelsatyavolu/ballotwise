@@ -43,10 +43,10 @@ export function Claim({ claim }: { claim: Sourced }) {
   );
 }
 
-/** A read-only row of five ovals with one filled. Null fills none. */
-export function StanceOvals({ stance, label, voter = false }: { stance: number | null; label: string; voter?: boolean }) {
+/** A read-only row of five ovals with one filled. Null fills none. Estimated stances are drawn dashed and lighter. */
+export function StanceOvals({ stance, label, voter = false, estimated = false }: { stance: number | null; label: string; voter?: boolean; estimated?: boolean }) {
   return (
-    <span className="scale" role="img" aria-label={label}>
+    <span className={`scale${estimated ? " estimated" : ""}`} role="img" aria-label={estimated ? `Estimated. ${label}` : label}>
       {POINTS.map((p) => (
         <span key={p} className={`oval${voter ? " voter" : ""}${stance === p ? " filled" : ""}`} />
       ))}

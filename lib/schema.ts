@@ -33,6 +33,8 @@ export const raceSchema = z.object({
   jurisdiction: text(120),
   office: sourced,
   votingRule: z.string().trim().max(200).nullable(),
+  /** Seats filled; older saved races don't have it, see seatsOf. */
+  seats: z.number().int().min(1).max(12).optional(),
   candidates: z.array(candidateRefSchema).min(1).max(12),
   issues: z.array(issueSchema).min(3).max(7),
   sources: z.array(url).min(1).max(12),
@@ -69,6 +71,8 @@ export const positionSchema = z.object({
   summary: z.string().trim().max(500),
   quote: z.string().trim().max(400).nullable(),
   sources: z.array(url).max(5),
+  /** When no sourced stance exists: an inference from the candidate's other positions. Null means none could be made; absent means not tried yet. */
+  estimate: z.object({ stance, basis: text(300) }).nullable().optional(),
 });
 
 export const profileSchema = z.object({
@@ -80,6 +84,26 @@ export const profileSchema = z.object({
   endorsements: z.array(sourced).max(6),
   website: url.nullable(),
 });
+
+const NUMBER_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 };
+
+/** How many candidates a voter picks: the researched seat count, else read from a "Vote for 2" style rule. */
+export function seatsOf(race: Pick<Race, "seats" | "votingRule">): number {
+  if (race.seats) return race.seats;
+  const m = race.votingRule?.match(/vote for (?:up to |no more than )?(\d+|one|two|three|four|five|six|seven)\b/i) ?? race.votingRule?.match(/\b(\d+|two|three|four|five|six|seven) (?:open )?seats\b/i);
+  const n = m ? (NUMBER_WORDS[m[1].toLowerCase()] ?? Number(m[1])) : 1;
+  return n >= 1 && n <= 12 ? n : 1;
+}
+
+/** The stance used for matching: the sourced one, else the labelled estimate. */
+export function stanceOf(position: Position): number | null {
+  return position.stance ?? position.estimate?.stance ?? null;
+}
+
+/** issueId → stance for one candidate, for matching. */
+export function profileStances(profile: Profile): Record<string, number | null> {
+  return Object.fromEntries(profile.positions.map((p) => [p.issueId, stanceOf(p)]));
+}
 
 export type Issue = z.infer<typeof issueSchema>;
 export type CandidateRef = z.infer<typeof candidateRefSchema>;
