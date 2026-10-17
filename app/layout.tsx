@@ -11,7 +11,7 @@ const serif = Source_Serif_4({ variable: "--font-serif", subsets: ["latin"] });
 export const metadata: Metadata = {
   title: { default: "Ballotwise: a nonpartisan guide to any race", template: "%s · Ballotwise" },
   description:
-    "Look up any election and see every candidate's positions side by side, each one sourced. Answer a few questions to see who aligns with your priorities.",
+    "Look up any race and see where every candidate stands, side by side, with a link for every fact. Answer a few questions to see who agrees with you most.",
   metadataBase: new URL("https://ballotwise.n3el.dev"),
 };
 
@@ -25,7 +25,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <footer className="site-footer">
             <div className="wrap">
               <span>Ballotwise is nonpartisan and not affiliated with any campaign, party, or election office.</span>
-              <Link href="/method">How the research works</Link>
+              <Link href="/method">How it works</Link>
             </div>
           </footer>
         </AccountProvider>

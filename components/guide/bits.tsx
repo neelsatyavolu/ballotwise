@@ -45,7 +45,7 @@ export function StanceOvals({ stance, label, voter = false }: { stance: number |
 
 /** Plain-language reading of a stance on an issue's A–B scale. */
 export function describeStance(stance: number | null, sideA: string, sideB: string): string {
-  if (stance === null) return "No sourced position";
+  if (stance === null) return "Unknown";
   if (stance === 0) return "In between";
   const side = stance < 0 ? sideA : sideB;
   return `${Math.abs(stance) === 2 ? "Strongly" : "Leans"}: ${side}`;

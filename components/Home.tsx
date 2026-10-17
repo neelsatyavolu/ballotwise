@@ -46,14 +46,14 @@ export function Home({ initialQuery }: { initialQuery: string }) {
         <div className="hero-copy">
         <h1>See every candidate on the same page.</h1>
         <p className="lede">
-          Type any race on your ballot. Ballotwise researches each candidate the same way, cites a source for every claim, and
-          can show who lines up with the issues you care about.
+          Type in any race on your ballot. Ballotwise looks up every candidate the same way, links each fact to where it came
+          from, and shows who agrees with you most.
         </p>
         {!loading && user && grok !== "connected" && <GrokConnect />}
         {!loading && user && grok === "connected" && (
           <p className="notice">
-            Want every contest on your ballot researched for you? <Link href="/ballot">Add your address on My ballot</Link>, and take the{" "}
-            <Link href="/interview">ten-minute values interview</Link> to see your closest match in each race.
+            <Link href="/ballot">Add your address</Link> to get every race on your ballot, and take the{" "}
+            <Link href="/interview">10-minute interview</Link> to see who agrees with you most in each one.
           </p>
         )}
         <form className="search" onSubmit={submit} role="search">
@@ -61,13 +61,13 @@ export function Home({ initialQuery }: { initialQuery: string }) {
           <input
             id="q"
             className="input"
-            placeholder="Office and place, like Denver mayor"
+            placeholder="A race, like Denver mayor"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             disabled={Boolean(user) && !ready}
           />
           <button className="btn" type="submit" disabled={query.trim().length < 3 || (Boolean(user) && !ready)}>
-            Look up race
+            Look up
           </button>
         </form>
         <div className="examples">
@@ -80,8 +80,8 @@ export function Home({ initialQuery }: { initialQuery: string }) {
         </div>
         {!loading && !user && (
           <p className="hint">
-            Create a free account and add your address to have every contest on your ballot researched and tracked. You&apos;ll
-            need a Grok account for the research. <Link href="/signin">Sign in</Link> if you have one.
+            Make a free account to save your races, add your address, and see your best match. You&apos;ll also need a Grok
+            account. Have an account? <Link href="/signin">Sign in</Link>.
           </p>
         )}
         </div>
@@ -91,7 +91,7 @@ export function Home({ initialQuery }: { initialQuery: string }) {
 
       {user && guides && guides.length > 0 && (
         <section className="guides read">
-          <h2>Your guides</h2>
+          <h2>Races you looked up</h2>
           <ul className="guide-list">
             {guides.map((g) => (
               <li key={g.id}>
@@ -105,16 +105,16 @@ export function Home({ initialQuery }: { initialQuery: string }) {
 
       <section className="principles" aria-label="How Ballotwise stays neutral">
         <div>
-          <h3>Sourced or left out</h3>
-          <p>Each claim links to where it came from. Citations to pages Grok never opened are removed, and a missing position says so.</p>
+          <h3>Every fact has a link</h3>
+          <p>Each fact links to where it came from. When we can&apos;t find where a candidate stands, we say so instead of guessing.</p>
         </div>
         <div>
-          <h3>One template for everyone</h3>
-          <p>Every candidate is researched separately with the same questions, listed in shuffled order, with no party colors.</p>
+          <h3>Same questions for everyone</h3>
+          <p>Each candidate is looked up on their own with the same questions. Names are shuffled, and there are no party colors.</p>
         </div>
         <div>
-          <h3>Your answers do the matching</h3>
-          <p>The match is plain arithmetic on your answers and the sourced positions. You can see every step and correct any of it.</p>
+          <h3>You decide the match</h3>
+          <p>Your match is simple math on your own answers. You can see how it was worked out and change anything.</p>
         </div>
       </section>
     </div>

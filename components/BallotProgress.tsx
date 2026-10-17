@@ -68,7 +68,7 @@ export function BallotProgress({ ballot, guides }: { ballot: Ballot; guides: Gui
   return (
     <section className="ballot-progress panel" aria-live="polite" aria-label="Research progress">
       <div className="bp-head">
-        <h2>{finding ? "Building your ballot" : "Researching your contests"}</h2>
+        <h2>{finding ? "Building your ballot" : "Looking up your races"}</h2>
         <span className="bp-percent">{percent}%</span>
       </div>
       <div className="bp-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
@@ -76,23 +76,23 @@ export function BallotProgress({ ballot, guides }: { ballot: Ballot; guides: Gui
       </div>
       <p className="small muted">
         {finding
-          ? `Looking for every contest on your ballot · ${clock(now - (ballot.startedAt ?? now))} elapsed`
-          : `${ready} of ${guides.length} contests ready${estimate ? ` · ${estimate}` : ""}`}
-        . You can leave this page; research keeps going.
+          ? `Finding the races on your ballot (${clock(now - (ballot.startedAt ?? now))} so far).`
+          : `${ready} of ${guides.length} races ready.${estimate ? ` ${estimate}.` : ""}`}{" "}
+        You can close this page. We&apos;ll keep working.
       </p>
       <ol className="steps">
-        <Step state="done" title="Matched your address to your districts">
+        <Step state="done" title="Found your districts">
           <div className="chips">{districtList(ballot).map((d) => <span key={d} className="district">{d}</span>)}</div>
         </Step>
-        <Step state={finding ? "active" : "done"} title={finding ? "Finding the contests on your ballot" : `Found ${guides.length} contests`}>
+        <Step state={finding ? "active" : "done"} title={finding ? "Finding the races on your ballot" : `Found ${guides.length} races`}>
           {finding && (
             <div className="detail">
               {ballot.activity ?? "Starting the search"}
-              {ballot.searches > 0 && <span className="muted"> · {ballot.searches} searches so far</span>}
+              {ballot.searches > 0 && <span className="muted"> ({ballot.searches} searches so far)</span>}
             </div>
           )}
         </Step>
-        <Step state={finding ? "todo" : "active"} title="Researching each contest and every candidate" />
+        <Step state={finding ? "todo" : "active"} title="Looking up every candidate" />
       </ol>
     </section>
   );

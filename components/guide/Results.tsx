@@ -15,7 +15,7 @@ type Props = {
   onRetake: () => void;
 };
 
-const OPTION_LABEL: Record<number, string> = { [-2]: "Strongly first side", [-1]: "Leans first side", 0: "In between", 1: "Leans second side", 2: "Strongly second side" };
+const optionLabel = (p: number, issue: Issue) => (p === 0 ? "In between" : describeStance(p, issue.sideA, issue.sideB));
 
 export function Results({ issues, candidates, profiles, answers, notes = {}, overrides, onOverride, onRetake }: Props) {
   const issueIds = issues.map((i) => i.id);
@@ -34,12 +34,12 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
     <div className="results">
       <div className="read stack">
         <p>
-          This shows how closely each candidate&apos;s sourced positions line up with your {answered} answer{answered === 1 ? "" : "s"},
-          weighted by how much each issue matters to you. It is not a recommendation. Issues where a candidate has no sourced
-          position are left out of their score.
+          This shows how much each candidate agrees with your {answered} answer{answered === 1 ? "" : "s"}, counting the issues you
+          care about most more heavily. If we couldn&apos;t find where a candidate stands on an issue, that issue is left out of their
+          score. This isn&apos;t advice on how to vote.
         </p>
         <p className="small muted">
-          Think a position is wrong? Change it in the table and the score updates. Your corrections are saved to this guide.{" "}
+          Think we got someone&apos;s position wrong? Fix it in the table and the score updates.{" "}
           <button type="button" className="btn quiet" onClick={onRetake}>Change my answers for this race</button>
         </p>
       </div>
@@ -52,13 +52,13 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
           <div className="bar" aria-hidden><span style={{ width: `${match.score ?? 0}%` }} /></div>
           <p className="small muted">
             {match.score === null
-              ? "Not enough sourced positions on the issues you answered to compare."
-              : `Based on ${Math.round(match.coverage * 100)}% of what you said matters.`}
+              ? "Not enough information on the issues you answered."
+              : match.coverage >= 0.999 ? "Based on every issue you answered." : `Based on ${Math.round(match.coverage * 100)}% of what you said matters.`}
           </p>
           <div style={{ overflowX: "auto" }}>
             <table className="breakdown">
               <thead>
-                <tr><th>Issue</th><th>You</th><th>{candidate.name}</th><th>Correct it</th></tr>
+                <tr><th>Issue</th><th>You</th><th>{candidate.name}</th><th>Fix it</th></tr>
               </thead>
               <tbody>
                 {match.issues.map((row) => {
@@ -73,7 +73,7 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
                       </td>
                       <td>
                         <StanceOvals stance={row.candidate} label={describeStance(row.candidate, issue.sideA, issue.sideB)} />{" "}
-                        {row.overridden ? <span className="edited">Edited by you</span> : pos && <Sources urls={pos.sources} />}
+                        {row.overridden ? <span className="edited">Changed by you</span> : pos && <Sources urls={pos.sources} />}
                       </td>
                       <td>
                         <select
@@ -85,9 +85,9 @@ export function Results({ issues, candidates, profiles, answers, notes = {}, ove
                             onOverride(candidate.id, row.issueId, v === "source" ? undefined : v === "null" ? null : Number(v));
                           }}
                         >
-                          <option value="source">As sourced</option>
-                          {POINTS.map((p) => <option key={p} value={p}>{OPTION_LABEL[p]}</option>)}
-                          <option value="null">No position</option>
+                          <option value="source">As we found it</option>
+                          {POINTS.map((p) => <option key={p} value={p}>{optionLabel(p, issue)}</option>)}
+                          <option value="null">Unknown</option>
                         </select>
                       </td>
                     </tr>

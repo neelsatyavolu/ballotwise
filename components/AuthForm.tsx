@@ -9,10 +9,10 @@ import { useAccount } from "./AccountProvider";
 type Mode = "signin" | "signup" | "forgot" | "reset";
 
 const COPY: Record<Mode, { title: string; lede: string; button: string; busy: string }> = {
-  signin: { title: "Sign in", lede: "Pick up your saved guides.", button: "Sign in", busy: "Signing in…" },
-  signup: { title: "Create your account", lede: "Your guides and answers are saved to it, so you can come back before you vote.", button: "Create account", busy: "Creating account…" },
+  signin: { title: "Sign in", lede: "Welcome back.", button: "Sign in", busy: "Signing in…" },
+  signup: { title: "Create your account", lede: "Your races and answers are saved here, so you can come back any time before you vote.", button: "Create account", busy: "Creating account…" },
   forgot: { title: "Reset your password", lede: "Enter the email on your account and we'll send a link to set a new password.", button: "Send reset link", busy: "Sending…" },
-  reset: { title: "Set a new password", lede: "This signs you out everywhere else.", button: "Set password", busy: "Saving…" },
+  reset: { title: "Set a new password", lede: "This also signs you out on your other devices.", button: "Set password", busy: "Saving…" },
 };
 
 export function AuthForm({ mode }: { mode: Mode }) {

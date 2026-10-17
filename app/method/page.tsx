@@ -6,73 +6,76 @@ export const metadata: Metadata = { title: "How it works" };
 export default function Method() {
   return (
     <article className="wrap prose">
-      <h1>How Ballotwise researches a race</h1>
-      <p className="muted" style={{ marginTop: 12, fontSize: 19 }}>
-        An AI voter guide is only as fair as its method, so here is the whole method.
+      <h1>How Ballotwise works</h1>
+      <p className="lede-sm" style={{ marginTop: 10 }}>
+        A voter guide is only fair if you can check how it was made. Here is everything we do.
       </p>
 
       <h2>Finding the race</h2>
       <p>
-        When you search, Grok runs live web searches to identify the contest, its date, and the qualified candidates, preferring
-        official election offices and Ballotpedia. If your search covers several contests, you pick one. Grok also chooses the
-        4–6 issues that office actually decides and words each as a tradeoff between two positions reasonable people hold.
-        Which side is listed first is decided by a coin flip for every issue, so neither camp is always on the left.
+        When you search, Grok looks up the race on the web: the date, who&apos;s running, and what the office does. It prefers
+        official election websites and Ballotpedia. It also picks the 4 to 6 issues that office actually deals with, and words each
+        one as a choice between two reasonable views. Which view is shown on the left is decided by a coin flip, so one side
+        isn&apos;t always first.
       </p>
 
-      <h2>Researching each candidate</h2>
+      <h2>Looking up each candidate</h2>
       <p>
-        Every candidate gets the same request, sent separately, so the model never writes one profile while looking at another.
-        It is told to describe positions the way the candidate does, quote them where possible, avoid loaded adjectives, and
-        never infer a position from party.
+        Each candidate is looked up on their own, with the exact same questions, so the AI never writes about one candidate while
+        looking at another. It&apos;s told to describe positions the way the candidate does, use their own words when it can, avoid
+        loaded language, and never guess a position from someone&apos;s party.
       </p>
       <ul>
-        <li>Every claim must carry a source link. Claims without one are dropped.</li>
-        <li>Links are checked against the pages Grok actually retrieved during that search. Citations to anything else are removed, and a claim left with no source goes with them.</li>
-        <li>A position without a source shows as “No sourced position” rather than a guess.</li>
+        <li>Every fact needs a link to where it came from. Facts without one are dropped.</li>
+        <li>We check each link against the pages Grok actually opened. Links to anything else are removed.</li>
+        <li>If we can&apos;t find where a candidate stands on an issue, we say so instead of guessing.</li>
       </ul>
 
-      <h2>Showing it fairly</h2>
+      <h2>Keeping it fair</h2>
       <ul>
-        <li>Candidates appear in a random order that changes on every visit, as many states rotate names on ballots.</li>
-        <li>No party colors and no photos. Party is plain text, as listed on the ballot.</li>
-        <li>Each position is drawn on the same five-oval scale between the issue&apos;s two sides.</li>
+        <li>Candidates are listed in a new random order every time you visit.</li>
+        <li>No party colors and no photos. Party is shown the way it appears on the ballot.</li>
+        <li>Everyone&apos;s positions are shown on the same five-circle scale between the two views.</li>
       </ul>
 
-      <h2>Finding your match</h2>
+      <h2>Your best match</h2>
       <p>
-        The interview asks where you stand on each issue and how much it matters. The match is arithmetic, not AI: for each issue,
-        agreement is 100% when your oval and the candidate&apos;s are the same and 0% when they are at opposite ends, and issues
-        are weighted 1, 2 or 3 by how much they matter to you. Issues where a candidate has no sourced position are left out of
-        their score, and the page says how much of your answer it covers.
+        The 10-minute interview asks what you want from government and how much each thing matters to you. For each race, the AI
+        places your answers on that race&apos;s issues without seeing any candidates. Where your answers don&apos;t clearly cover an
+        issue, it leaves that issue blank.
       </p>
       <p>
-        If you think a position is wrong, correct it in the results table. The score updates, and your correction is marked as
-        yours. The result says who lines up with what you told it. It is not advice on how to vote.
+        The match itself is simple math, not AI. On each issue, you and a candidate agree 100% if you picked the same circle and 0%
+        if you picked opposite ends. Issues that matter more to you count more. If we couldn&apos;t find where a candidate stands
+        on an issue, it&apos;s left out of their score, and the page tells you how much of your answers the score is based on.
       </p>
-
-      <h2>Limits</h2>
-      <ul>
-        <li>AI can still misread a source. Follow the links on anything that matters to your vote.</li>
-        <li>Coverage is thinner for local races with little press, and research reflects what is online on the day you search.</li>
-        <li>Ballot measures aren&apos;t covered yet.</li>
-        <li>Check your official sample ballot and your election office for dates, deadlines, and where to vote.</li>
-      </ul>
+      <p>
+        You can change any of your answers in a race, or fix a candidate&apos;s position if you think we got it wrong. The score
+        updates right away. Your match shows who agrees with you most. It isn&apos;t advice on how to vote.
+      </p>
 
       <h2>Your ballot</h2>
       <p>
-        If you add your address, the US Census geocoder matches it to your congressional, state legislative, county, city and
-        school districts. Grok then searches official election sources for the contests in those districts over the next 12
-        months, and each contest is researched in the background the same way as a search. Districts the Census doesn&apos;t
-        publish, such as city council wards, are confirmed from official sources or left out. Your official sample ballot is
-        still the final word.
+        If you add your address, the US Census Bureau&apos;s free lookup tells us your districts: U.S. House, state legislature,
+        county, city, and school district. Grok then searches official election sources for the races in those districts over the
+        next 12 months, and looks up each race the same way as a search. Some districts, like city council wards, aren&apos;t in
+        the Census data. We only include those races when Grok can confirm them from an official source. Your official sample
+        ballot is always the final word.
       </p>
 
-      <h2>Your data</h2>
+      <h2>What it can get wrong</h2>
+      <ul>
+        <li>AI can misread a source. Follow the links on anything that matters to your vote.</li>
+        <li>Small local races have less written about them, so there&apos;s less to go on.</li>
+        <li>Ballot measures aren&apos;t covered yet.</li>
+        <li>Check your county election office for dates, deadlines, and where to vote.</li>
+      </ul>
+
+      <h2>Your information</h2>
       <p>
-        Your account holds your email, a scrambled version of your password, your address if you add one, and your guides,
-        including your answers and which contests you&apos;ve marked as voted. None of it is shown to anyone else. Research runs
-        on your own Grok account through xAI&apos;s sign-in, and that connection is stored encrypted so research can continue
-        while you&apos;re away. <Link href="/">Back to search</Link>
+        Your account keeps your email, your password (scrambled so no one can read it), your address if you add one, your races,
+        your answers, and which races you&apos;ve marked as voted. No one else can see any of it. The research runs on your own Grok
+        account, and we keep that connection encrypted. <Link href="/">Back to search</Link>
       </p>
     </article>
   );

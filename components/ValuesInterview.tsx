@@ -55,19 +55,31 @@ export function ValuesInterview() {
     api<View>("/api/values").then(setView).catch(() => setError("Couldn't load your interview."));
   }, [loading, user, router]);
 
+  // Keep the newest message in view, like a messaging app.
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [view?.transcript.length, busy]);
+    const box = bottom.current;
+    if (box) box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
+  }, [view?.transcript.length, busy, error]);
+
+  // Stay pinned to the newest message when the panel resizes (rotating a phone, the keyboard opening).
+  const hasChat = Boolean(view && !view.summary && view.transcript.length > 0);
+  useEffect(() => {
+    const box = bottom.current;
+    if (!box || !hasChat) return;
+    const observer = new ResizeObserver(() => box.scrollTo({ top: box.scrollHeight }));
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [hasChat]);
 
   if (loading || (!view && !error)) return <div className="wrap"><p className="muted">Loading…</p></div>;
-  if (grok !== "connected") return <div className="wrap read stack"><h1>Your values interview</h1><GrokConnect /></div>;
+  if (grok !== "connected") return <div className="wrap read stack"><h1>What matters to you?</h1><GrokConnect /></div>;
   if (!view) return <div className="wrap"><p className="error">{error}</p></div>;
 
   if (view.summary) {
     const s = view.summary;
     return (
       <div className="wrap read interview-done">
-        <h1>What you told us</h1>
+        <h1>Here&apos;s what we heard</h1>
         <p className="lede-sm">{s.overview}</p>
         <section>
           <h2>Your priorities</h2>
@@ -97,13 +109,12 @@ export function ValuesInterview() {
           </section>
         )}
         <div className="notice">
-          Every contest on your ballot now shows your closest match from these answers. In any race you can change an answer, and that
-          race uses yours instead.
+          Every race on your ballot now shows your best match based on this. You can still change any answer in a single race.
         </div>
         <div className="row-gap">
           <Link href="/ballot" className="btn">See my matches</Link>
-          <button type="button" className="btn secondary" disabled={busy} onClick={() => confirm("Start the interview over? Your matches will update.") && send({ action: "restart" })}>
-            Retake the interview
+          <button type="button" className="btn secondary" disabled={busy} onClick={() => confirm("Start over? Your matches will update when you finish.") && send({ action: "restart" })}>
+            Redo the interview
           </button>
         </div>
       </div>
@@ -122,15 +133,15 @@ export function ValuesInterview() {
   if (!started) {
     return (
       <div className="wrap read stack interview-intro">
-        <h1>Your values interview</h1>
+        <h1>What matters to you?</h1>
         <p className="lede-sm">
-          About ten minutes of plain questions about what you want from government: costs, housing, safety, schools, the environment,
-          and what you look for in a leader. No parties, no candidate names.
+          About 10 minutes of simple questions about what you want from government, like costs, housing, safety, schools, and the
+          environment. We won&apos;t ask about parties or candidates.
         </p>
         <ul className="muted">
-          <li>Answer in your own words or tap a suggested answer.</li>
-          <li>Your answers are matched to every race on your ballot. Candidates are never shown to the AI while it maps your answers.</li>
-          <li>You can stop early, and change any answer race by race.</li>
+          <li>Type your own answer, or tap one of ours.</li>
+          <li>We use your answers to find your best match in every race. The AI doesn&apos;t see the candidates while it does this.</li>
+          <li>You can stop early, and you can change any answer later.</li>
         </ul>
         {error && <p className="error">{error}</p>}
         <div><button type="button" className="btn" disabled={busy} onClick={() => send({ action: "start" })}>{busy ? "Starting…" : "Start the interview"}</button></div>
@@ -144,19 +155,20 @@ export function ValuesInterview() {
         <div className="bp-head">
           <span className="small muted">Question {Math.min(view.asked, view.maxQuestions)} of about {view.maxQuestions}</span>
           <button type="button" className="btn quiet small" disabled={busy || view.asked < 3} onClick={() => send({ action: "finish" })}>
-            Finish now
+            I&apos;m done
           </button>
         </div>
         <div className="bp-bar slim" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%` }} /></div>
       </div>
 
-      <ol className="messages" aria-live="polite">
-        {view.transcript.map((e, i) => (
-          <li key={i} className={`msg ${e.role}`}>{e.text}</li>
-        ))}
-        {busy && <li className="msg interviewer typing" aria-label="Thinking"><span /><span /><span /></li>}
-      </ol>
-      <div ref={bottom} />
+      <div className="chat-scroll" ref={bottom}>
+        <ol className="messages" aria-live="polite">
+          {view.transcript.map((e, i) => (
+            <li key={i} className={`msg ${e.role}`}>{e.text}</li>
+          ))}
+          {busy && <li className="msg interviewer typing" aria-label="Thinking"><span /><span /><span /></li>}
+        </ol>
+      </div>
 
       {!busy && last && view.transcript.at(-1)?.role === "interviewer" && last.suggestions.length > 0 && (
         <div className="quick" aria-label="Suggested answers">
@@ -172,7 +184,7 @@ export function ValuesInterview() {
           id="answer"
           className="input"
           rows={2}
-          placeholder="Answer in your own words"
+          placeholder="Type your answer"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {

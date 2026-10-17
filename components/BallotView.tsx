@@ -15,10 +15,10 @@ type State = { ballot: Ballot | null; guides: GuideSummary[] };
 const POLL_MS = 8000;
 
 const STATUS_TEXT: Record<GuideSummary["status"], string> = {
-  queued: "Waiting to be researched",
-  researching: "Researching",
+  queued: "In line",
+  researching: "Looking up candidates",
   ready: "Ready",
-  failed: "Research failed",
+  failed: "Couldn't finish",
 };
 
 function formatDate(date: string | null): string {
@@ -56,10 +56,10 @@ function AddressForm({ initial, onSaved, onCancel }: { initial: string; onSaved:
   return (
     <form className="panel stack" onSubmit={submit}>
       <div className="field">
-        <label htmlFor="address">Where you&apos;re registered to vote</label>
+        <label htmlFor="address">Your home address (where you&apos;re registered to vote)</label>
         <AddressInput id="address" value={address} onChange={setAddress} />
         <span className="hint">
-          Suggestions come from OpenStreetMap. Your address is matched to districts by the US Census geocoder, stored with your account, and never shown to anyone else.
+          We use it to find your districts and the races on your ballot. It&apos;s saved to your account and no one else can see it.
         </span>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
@@ -74,9 +74,9 @@ function AddressForm({ initial, onSaved, onCancel }: { initial: string; onSaved:
 function MatchLine({ guide, values }: { guide: GuideSummary; values: string }) {
   const m = guide.match;
   if (!m) {
-    if (values === "done" && !guide.fromInterview) return <span className="match-line muted">Matching your interview to this race…</span>;
-    if (values !== "done") return <span className="match-line muted">Take the values interview to see your match</span>;
-    return <span className="match-line muted">Not enough sourced positions to match</span>;
+    if (values === "done" && !guide.fromInterview) return <span className="match-line muted">Matching your answers to this race…</span>;
+    if (values !== "done") return <span className="match-line muted">Take the interview to see your best match</span>;
+    return <span className="match-line muted">Not enough information to match</span>;
   }
   if (m.closeCall) {
     return (
@@ -87,8 +87,8 @@ function MatchLine({ guide, values }: { guide: GuideSummary; values: string }) {
   }
   return (
     <span className="match-line">
-      <span className="match-label">Your closest match:</span> <strong>{m.name}</strong> <span className="match-score">{m.score}%</span>
-      {m.coverage < 0.5 && <span className="muted"> (limited information)</span>}
+      <span className="match-label">Best match:</span> <strong>{m.name}</strong> <span className="match-score">{m.score}%</span>
+      {m.coverage < 0.5 && <span className="muted"> (based on little information)</span>}
     </span>
   );
 }
@@ -97,7 +97,7 @@ function ValuesPrompt({ values, researching }: { values: string; researching: bo
   if (values === "done") {
     return (
       <p className="small muted values-done">
-        Matches use your values interview. <Link href="/interview">Review or retake it</Link>
+        Your matches come from your interview. <Link href="/interview">See or redo it</Link>
       </p>
     );
   }
@@ -105,10 +105,10 @@ function ValuesPrompt({ values, researching }: { values: string; researching: bo
     <section className="values-prompt">
       <span className="values-star" aria-hidden>★</span>
       <div>
-        <h2>{values === "in-progress" ? "Finish your values interview" : researching ? "While you wait: tell us what matters to you" : "See your match in every race"}</h2>
+        <h2>{values === "in-progress" ? "Finish your interview" : researching ? "While you wait: take a 10-minute interview" : "See your best match in every race"}</h2>
         <p>
-          A ten-minute interview about what you want from government. Answer once and every contest on your ballot shows the candidate
-          closest to you, with every step shown.
+          Answer some easy questions about what matters to you. We&apos;ll use them to show which candidate agrees with you most in
+          every race on your ballot.
         </p>
       </div>
       <Link href="/interview" className="btn">{values === "in-progress" ? "Continue" : "Start the interview"}</Link>
@@ -188,8 +188,8 @@ export function BallotView() {
         <div className="read" style={{ marginTop: 24 }}>
           {!ballot && (
             <p style={{ marginBottom: 16 }}>
-              Add your address and Ballotwise finds every contest on your ballot for the next year, then researches each one in
-              the background. You can close this page while it works.
+              Add your address and we&apos;ll find every race on your ballot for the next year and look up each one. You can close
+              this page while we work.
             </p>
           )}
           <AddressForm initial={ballot?.address ?? ""} onSaved={(s) => { setState(s); setEditing(false); }} onCancel={ballot ? () => setEditing(false) : undefined} />
@@ -202,11 +202,11 @@ export function BallotView() {
           <ValuesPrompt values={values} researching={ballot.status === "finding" || guides.some((g) => g.status !== "ready" && g.status !== "failed")} />
           <div className="ballot-status">
             {ballot.status === "failed" ? (
-              <p className="error">{ballot.error ?? "Couldn't find your contests."} <button type="button" className="btn quiet" onClick={refresh}>Try again</button></p>
+              <p className="error">{ballot.error ?? "We couldn't find your races."} <button type="button" className="btn quiet" onClick={refresh}>Try again</button></p>
             ) : ballot.status === "ready" ? (
               <p className="small muted">
-                {guides.length === 0 ? "No contests with filed candidates were found for the next 12 months." : `${open.length} to go, ${voted.length} voted.`}{" "}
-                <button type="button" className="btn quiet" onClick={refresh}>Check for new contests</button>
+                {guides.length === 0 ? "We didn't find any races with candidates in the next 12 months." : `${open.length} left to vote on, ${voted.length} done.`}{" "}
+                <button type="button" className="btn quiet" onClick={refresh}>Check for new races</button>
               </p>
             ) : null}
           </div>
@@ -231,7 +231,7 @@ export function BallotView() {
                           {g.status === "failed"
                             ? g.error ?? STATUS_TEXT.failed
                             : g.status === "researching" && g.candidateCount
-                              ? `${g.candidatesDone} of ${g.candidateCount} candidates researched`
+                              ? `${g.candidatesDone} of ${g.candidateCount} candidates done`
                               : STATUS_TEXT[g.status]}
                         </span>
                         {g.status === "researching" && g.activity && <span className="contest-activity">{g.activity}</span>}

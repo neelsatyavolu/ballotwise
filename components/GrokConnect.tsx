@@ -48,14 +48,15 @@ export function GrokConnect() {
     <div className="panel connect">
       <h2>{grok === "refresh-failed" ? "Reconnect your Grok account" : "Connect your Grok account"}</h2>
       <p className="muted" style={{ marginTop: 6 }}>
-        Ballotwise does its research with Grok&apos;s live web search, using your own Grok account. We never see your xAI password, and the connection is stored encrypted.
+        Ballotwise uses Grok to search the web for you, on your own Grok account. We never see your Grok password, and we keep the
+        connection encrypted.
       </p>
       <ol>
         <li>
-          <button type="button" className="btn quiet" onClick={open}>Open Grok sign-in</button> and approve access.
+          <button type="button" className="btn quiet" onClick={open}>Open Grok sign-in</button> and allow access.
         </li>
-        <li>Grok shows a code, or a page that won&apos;t load. Copy the code, or the whole address from that page.</li>
-        <li>Paste it here.</li>
+        <li>You&apos;ll see a code, or a page that won&apos;t load. Copy the code, or copy the whole web address of that page.</li>
+        <li>Paste it below.</li>
       </ol>
       <form className="row" onSubmit={complete}>
         <label htmlFor="grok-code" className="sr-only" style={{ position: "absolute", left: -9999 }}>Code from Grok</label>

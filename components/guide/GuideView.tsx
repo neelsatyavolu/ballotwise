@@ -126,7 +126,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
       setInterviewDone(Object.keys(data.answers).length > 0);
       if (rec.origin === "search") {
         for (const c of data.race.candidates.filter((c) => !data.profiles[c.id])) {
-          setTask(c.id, { label: c.name, state: "failed", detail: "Research didn't finish last time." });
+          setTask(c.id, { label: c.name, state: "failed", detail: "This didn't finish last time." });
         }
       }
     } else {
@@ -225,13 +225,13 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
             <span className={done ? "done-dot" : failed ? "fail-dot" : "spinner"} aria-hidden />
             <div>
               <div className="label">{c.name}</div>
-              <div className="detail">{done ? "Done" : failed ?? "Researching in the background. You can leave this page."}</div>
+              <div className="detail">{done ? "Done" : failed ?? "Looking it up. You can close this page."}</div>
             </div>
           </div>
         );
       })}
       {!pending && (
-        <button type="button" className="btn secondary" onClick={retryBackground}>Retry the ones that failed</button>
+        <button type="button" className="btn secondary" onClick={retryBackground}>Try the missing ones again</button>
       )}
     </div>
   );
@@ -254,8 +254,8 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
             <div className="progress-row">
               <span className="spinner" aria-hidden />
               <div>
-                <div className="label">{phase.status === "queued" ? "Waiting its turn" : "Finding who's running"}</div>
-                <div className="detail">This contest is being researched in the background. You can leave this page; it&apos;ll be on your ballot when it&apos;s ready.</div>
+                <div className="label">{phase.status === "queued" ? "In line" : "Finding who's running"}</div>
+                <div className="detail">We&apos;re looking this race up. You can close this page; it&apos;ll be on your ballot when it&apos;s ready.</div>
               </div>
             </div>
           </div>
@@ -283,7 +283,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
       <div className="wrap read">
         <h1 style={{ marginBottom: 20 }}>Researching “{searched}”</h1>
         {progress}
-        <p className="small muted">Grok is searching the web live. A race usually takes under a minute, then each candidate about as long, in parallel.</p>
+        <p className="small muted">Grok is searching the web right now. Finding the race takes about a minute, then the candidates take about another minute.</p>
       </div>
     );
   }
@@ -292,7 +292,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
     return (
       <div className="wrap read stack">
         <h1>Which race?</h1>
-        <p className="muted">“{searched}” covers more than one contest. Pick one.</p>
+        <p className="muted">“{searched}” could mean more than one race. Pick one.</p>
         <ul className="guide-list">
           {phase.options.map((o) => (
             <li key={o.query}>
@@ -343,7 +343,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
         <p className="race-office">
           {race.office.text} <Sources urls={race.office.sources} />
         </p>
-        <p className="shuffle-note">Candidates appear in a random order that changes each visit. Party is shown as listed on the ballot.</p>
+        <p className="shuffle-note">Candidates are listed in random order. Party is shown the way it appears on the ballot.</p>
         {saveError && <p className="error small">{saveError}</p>}
       </header>
 
@@ -361,7 +361,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
       />
 
       <div className="tabs" role="tablist">
-        {([["compare", "Compare positions"], ["profiles", "Candidate profiles"], ["match", "Find your match"]] as const).map(([key, label]) => (
+        {([["compare", "Compare"], ["profiles", "Candidates"], ["match", "Your match"]] as const).map(([key, label]) => (
           <button key={key} type="button" role="tab" className="tab" aria-selected={tab === key} onClick={() => setTab(key)}>
             {label}
           </button>
@@ -376,7 +376,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
         {tab === "profiles" && <Profiles candidates={order} profiles={profiles} />}
         {tab === "match" &&
           (!allDone && !interviewDone ? (
-            <p className="muted read">Matching opens once every candidate&apos;s research is in, so all of them are scored on the same footing.</p>
+            <p className="muted read">Your match will show up once every candidate has been looked up, so they&apos;re all compared fairly.</p>
           ) : showResults ? (
             <Results issues={race.issues} candidates={order} profiles={profiles} answers={effective} notes={notes} overrides={overrides} onOverride={onOverride} onRetake={() => { setInterviewDone(false); setEditing(true); }} />
           ) : (
@@ -407,15 +407,15 @@ function MatchCard(props: {
     return (
       <section className="match-card" aria-label="Your match">
         <div>
-          <p className="match-card-label">{headline.closeCall ? "Too close to call" : "Your closest match"}</p>
+          <p className="match-card-label">{headline.closeCall ? "Too close to call" : "Your best match"}</p>
           <p className="match-card-name">
             {headline.closeCall ? `${headline.name} and ${headline.runnerUpName}` : headline.name}
           </p>
           <p className="small match-card-sub">
             {headline.closeCall
-              ? `${headline.score}% and ${headline.runnerUpScore}% aligned with your answers.`
-              : `${headline.score}% aligned with your answers${headline.runnerUpScore !== null ? `, next closest ${headline.runnerUpScore}%` : ""}.`}{" "}
-            {fromInterview ? "Based on your values interview." : "Based on your answers."} Not a recommendation.
+              ? `They agree with you ${headline.score}% and ${headline.runnerUpScore}% of the way.`
+              : `Agrees with you ${headline.score}% of the way${headline.runnerUpScore !== null ? ` (next closest: ${headline.runnerUpScore}%)` : ""}.`}{" "}
+            {fromInterview ? "Based on your interview." : "Based on your answers."} This isn&apos;t advice on how to vote.
           </p>
         </div>
         <button type="button" className="btn" onClick={onSeeWhy}>See why</button>
@@ -425,7 +425,7 @@ function MatchCard(props: {
   if (awaitingMatch) {
     return (
       <section className="match-card quiet">
-        <span className="spinner" aria-hidden /> <p>Placing your values interview on this race&apos;s issues…</p>
+        <span className="spinner" aria-hidden /> <p>Matching your interview answers to this race…</p>
       </section>
     );
   }
@@ -433,8 +433,8 @@ function MatchCard(props: {
     return (
       <section className="match-card quiet">
         <p>
-          <Link href="/interview">Take the ten-minute values interview</Link> once and every race shows your closest match, or answer
-          this race&apos;s questions under Find your match.
+          <Link href="/interview">Take the 10-minute interview</Link> once to see your best match in every race, or answer this
+          race&apos;s questions under Your match.
         </p>
       </section>
     );

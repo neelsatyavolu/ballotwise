@@ -29,14 +29,14 @@ export function Profiles({ candidates, profiles }: { candidates: CandidateRef[];
               </p>
             </header>
             {!p ? (
-              <p className="unknown">Researching…</p>
+              <p className="unknown">Looking up…</p>
             ) : (
               <>
                 <p>{p.summary}</p>
-                <Section title="Background" items={p.background} empty="Nothing sourced found." />
-                <Section title="Record in office" items={p.record} empty="No prior office, or no sourced record found." />
-                <Section title="Funding" items={p.funding ? [p.funding] : []} empty="No sourced filing found." />
-                <Section title="Endorsements" items={p.endorsements} empty="No sourced endorsements found." />
+                <Section title="Background" items={p.background} empty="Nothing found." />
+                <Section title="Record in office" items={p.record} empty="Hasn't held office, or nothing found." />
+                <Section title="Funding" items={p.funding ? [p.funding] : []} empty="No campaign finance filing found." />
+                <Section title="Endorsements" items={p.endorsements} empty="No endorsements found." />
                 {p.website && (
                   <p className="small">
                     Campaign site: <a href={p.website} target="_blank" rel="noopener noreferrer">{hostOf(p.website)}</a>

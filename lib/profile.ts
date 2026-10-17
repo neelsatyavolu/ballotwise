@@ -1,7 +1,7 @@
 import type { Issue, Position, Profile, Race, Sourced } from "./schema";
 import { normalizeUrl } from "./url";
 
-const NO_POSITION = "No sourced public position found.";
+const NO_POSITION = "We couldn't find where they stand on this.";
 
 /**
  * Lines a profile up with the race's issues: one position per issue, in race order.

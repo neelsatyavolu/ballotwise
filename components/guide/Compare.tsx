@@ -19,8 +19,8 @@ export function Compare({ issues, candidates, profiles }: Props) {
             <h3>{issue.title}</h3>
             <p>{issue.question}</p>
             <div className="sides">
-              <span><b>Left oval:</b> {issue.sideA}</span>
-              <span><b>Right oval:</b> {issue.sideB}</span>
+              <span><b>◀</b> {issue.sideA}</span>
+              <span><b>▶</b> {issue.sideB}</span>
             </div>
           </div>
           {candidates.map((c) => {
@@ -30,11 +30,11 @@ export function Compare({ issues, candidates, profiles }: Props) {
               <div className="cell" key={c.id}>
                 <span className="cell-name">{c.name}</span>
                 {!profile ? (
-                  <span className="unknown">Researching…</span>
+                  <span className="unknown">Looking up…</span>
                 ) : !pos || pos.stance === null ? (
                   <>
-                    <StanceOvals stance={null} label="No sourced position" />
-                    <span className="unknown">{pos?.summary ?? "No sourced public position found."}</span>
+                    <StanceOvals stance={null} label="Unknown" />
+                    <span className="unknown">{pos?.summary ?? "We couldn't find where they stand on this."}</span>
                     {pos && <Sources urls={pos.sources} />}
                   </>
                 ) : (
