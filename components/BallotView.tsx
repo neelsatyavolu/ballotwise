@@ -71,25 +71,69 @@ function AddressForm({ initial, onSaved, onCancel }: { initial: string; onSaved:
   );
 }
 
-function MatchLine({ guide, values }: { guide: GuideSummary; values: string }) {
+function MatchBlock({ guide, values }: { guide: GuideSummary; values: string }) {
   const m = guide.match;
   if (!m) {
-    if (values === "done" && !guide.fromInterview) return <span className="match-line muted">Matching your answers to this race…</span>;
-    if (values !== "done") return <span className="match-line muted">Take the interview to see your best match</span>;
-    return <span className="match-line muted">Not enough information to match</span>;
+    const note =
+      values !== "done" ? "Take the interview to see your best match" : !guide.fromInterview ? "Matching your answers…" : "Not enough information to match";
+    return <p className="card-note">{note}</p>;
   }
   if (m.closeCall) {
     return (
-      <span className="match-line">
-        <span className="match-label">Too close to call:</span> {m.name} {m.score}%, {m.runnerUpName} {m.runnerUpScore}%
-      </span>
+      <div className="card-match">
+        <span className="card-label">Too close to call</span>
+        <span className="card-close">{m.name}, {m.score}%</span>
+        <span className="card-close">{m.runnerUpName}, {m.runnerUpScore}%</span>
+      </div>
     );
   }
   return (
-    <span className="match-line">
-      <span className="match-label">Best match:</span> <strong>{m.name}</strong> <span className="match-score">{m.score}%</span>
-      {m.coverage < 0.5 && <span className="muted"> (based on little information)</span>}
-    </span>
+    <div className="card-match">
+      <span className="card-label">Best match</span>
+      <span className="card-name">{m.name}</span>
+      <span className="card-score">
+        <span className="bar" aria-hidden><span style={{ width: `${m.score}%` }} /></span>
+        <strong>{m.score}%</strong>
+      </span>
+      {m.coverage < 0.5 && <span className="card-note">Based on little information</span>}
+    </div>
+  );
+}
+
+function RaceCard({ guide: g, values, onVoted, onRetry }: { guide: GuideSummary; values: string; onVoted: (voted: boolean) => void; onRetry: () => void }) {
+  const working = g.status === "queued" || g.status === "researching";
+  return (
+    <li className={`race-card ${g.status}${g.voted ? " done" : ""}`}>
+      <div className="card-top">
+        <Link href={`/guide/${g.id}`} className="card-title">{g.title}</Link>
+        <button
+          type="button"
+          className={`oval voter${g.voted ? " filled" : ""}`}
+          aria-label={g.voted ? `Unmark ${g.title} as voted` : `Mark ${g.title} as voted`}
+          title={g.voted ? "Unmark as voted" : "Mark as voted"}
+          onClick={() => onVoted(!g.voted)}
+        />
+      </div>
+      {g.voted ? (
+        <p className="card-note">Voted</p>
+      ) : g.status === "ready" ? (
+        <MatchBlock guide={g} values={values} />
+      ) : g.status === "failed" ? (
+        <div className="card-fail">
+          <p className="card-note error">{g.error ?? STATUS_TEXT.failed}</p>
+          <button type="button" className="btn quiet" onClick={onRetry}>Try again</button>
+        </div>
+      ) : (
+        <div className="card-working">
+          <span className="card-status">
+            <span className="spinner small-spinner" aria-hidden />
+            {g.status === "researching" && g.candidateCount ? `${g.candidatesDone} of ${g.candidateCount} candidates done` : STATUS_TEXT[g.status]}
+          </span>
+          {working && g.activity && <span className="contest-activity">{g.activity}</span>}
+          <span className="mini-bar" aria-hidden><span style={{ width: `${Math.round(contestProgress(g) * 100)}%` }} /></span>
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -220,32 +264,9 @@ export function BallotView() {
                   <span className="muted">{formatDate(electionDate)}</span>
                   {daysUntil(electionDate) && <span className="countdown">{daysUntil(electionDate)}</span>}
                 </div>
-                <ul className="contest-list">
+                <ul className="race-grid">
                   {items.map((g) => (
-                    <li key={g.id} className="contest">
-                      <button type="button" className="oval voter" aria-label={`Mark ${g.title} as voted`} title="Mark as voted" onClick={() => setVoted(g.id, true)} />
-                      <div className="contest-main">
-                        <Link href={`/guide/${g.id}`} className="contest-title">{g.title}</Link>
-                        <span className={`contest-status ${g.status}`}>
-                          {(g.status === "queued" || g.status === "researching") && <span className="spinner small-spinner" aria-hidden />}
-                          {g.status === "failed"
-                            ? g.error ?? STATUS_TEXT.failed
-                            : g.status === "researching" && g.candidateCount
-                              ? `${g.candidatesDone} of ${g.candidateCount} candidates done`
-                              : STATUS_TEXT[g.status]}
-                        </span>
-                        {g.status === "researching" && g.activity && <span className="contest-activity">{g.activity}</span>}
-                        {g.status === "ready" && <MatchLine guide={g} values={values} />}
-                        {g.status === "researching" && (
-                          <span className="mini-bar" aria-hidden><span style={{ width: `${Math.round(contestProgress(g) * 100)}%` }} /></span>
-                        )}
-                      </div>
-                      {g.status === "failed" ? (
-                        <button type="button" className="btn secondary" onClick={() => retry(g.id)}>Try again</button>
-                      ) : g.status === "ready" ? (
-                        <Link href={`/guide/${g.id}`} className="btn secondary">Open guide</Link>
-                      ) : null}
-                    </li>
+                    <RaceCard key={g.id} guide={g} values={values} onVoted={(v) => setVoted(g.id, v)} onRetry={() => retry(g.id)} />
                   ))}
                 </ul>
               </section>
@@ -258,15 +279,9 @@ export function BallotView() {
                 {showVoted ? "Hide" : "Show"} {voted.length} voted
               </button>
               {showVoted && (
-                <ul className="contest-list">
+                <ul className="race-grid">
                   {voted.map((g) => (
-                    <li key={g.id} className="contest done">
-                      <button type="button" className="oval voter filled" aria-label={`Unmark ${g.title} as voted`} title="Unmark as voted" onClick={() => setVoted(g.id, false)} />
-                      <div className="contest-main">
-                        <Link href={`/guide/${g.id}`} className="contest-title">{g.title}</Link>
-                        <span className="contest-status">{formatDate(g.electionDate)}</span>
-                      </div>
-                    </li>
+                    <RaceCard key={g.id} guide={g} values={values} onVoted={(v) => setVoted(g.id, v)} onRetry={() => retry(g.id)} />
                   ))}
                 </ul>
               )}

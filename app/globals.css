@@ -275,15 +275,6 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 .election { margin-top: 24px; }
 .election-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
 .countdown { font-weight: 700; color: var(--red); font-size: 15px; }
-.contest-list { list-style: none; margin: 0; padding: 0; }
-.contest { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--rule); }
-.contest > .oval { width: 34px; height: 22px; cursor: pointer; }
-.contest-main { display: grid; gap: 2px; min-width: 0; }
-.contest-title { font-family: var(--serif); font-size: 18px; font-weight: 600; color: var(--ink); text-decoration: none; }
-.contest-title:hover { text-decoration: underline; }
-.contest-status { font-size: 14px; color: var(--muted); display: inline-flex; align-items: center; gap: 8px; }
-.contest-status.failed { color: var(--danger); }
-.contest.done .contest-title { color: var(--muted); }
 .small-spinner { width: 12px; height: 12px; margin-top: 0; border-width: 2px; }
 .voted-section { padding-top: 8px; }
 
@@ -295,8 +286,6 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 .voted-toggle .oval { width: 26px; height: 16px; }
 
 @media (max-width: 520px) {
-  .contest { grid-template-columns: auto 1fr; }
-  .contest > .btn { grid-column: 2; justify-self: start; }
 }
 
 /* Address combobox */
@@ -375,9 +364,6 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 .values-prompt .btn { background: #fff; color: #0a3161; border-color: #fff; }
 .values-star { color: #ff5c7a; font-size: 26px; }
 .values-done { margin: 10px 0 0; }
-.match-line { font-size: 15px; margin-top: 2px; }
-.match-label { color: var(--muted); }
-.match-score { font-weight: 700; color: var(--accent); }
 @media (max-width: 680px) { .values-prompt { grid-template-columns: 1fr; } .values-star { display: none; } }
 
 /* Guide match card */
@@ -389,3 +375,32 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 .match-card-sub { color: var(--muted); max-width: 60ch; }
 .interview-note { margin: -10px 0 18px; padding: 10px 14px; border-radius: var(--radius); background: var(--mark); font-size: 15px; }
 .from-interview { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; cursor: help; text-decoration: underline dotted; }
+
+/* Race cards on My ballot */
+.race-grid { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.race-card { position: relative; display: grid; gap: 10px; align-content: start; min-height: 120px; padding: 14px 16px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); transition: border-color 0.15s; }
+.race-card:hover { border-color: var(--accent); }
+.race-card.done { background: transparent; }
+.race-card.done .card-title { color: var(--muted); }
+.race-card.failed { border-color: color-mix(in srgb, var(--danger) 45%, var(--rule)); }
+.card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.card-title { font-family: var(--serif); font-size: 17px; font-weight: 600; line-height: 1.25; color: var(--ink); text-decoration: none; }
+/* The whole card opens the guide; the voted oval sits above the link. */
+.card-title::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
+.card-title:focus-visible { outline: none; }
+.card-title:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card-top .oval { position: relative; z-index: 1; flex: none; width: 30px; height: 19px; cursor: pointer; }
+.card-match { display: grid; gap: 4px; }
+.card-label { font-size: 13px; color: var(--muted); }
+.card-name { font-weight: 700; font-size: 16px; }
+.card-close { font-weight: 600; font-size: 15px; }
+.card-score { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.card-score .bar { flex: 1; height: 6px; }
+.card-score strong { color: var(--accent); min-width: 3.2em; text-align: right; }
+.card-note { font-size: 14px; color: var(--muted); }
+.card-working { display: grid; gap: 4px; }
+.card-status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.card-working .mini-bar { max-width: none; }
+.card-fail { display: grid; gap: 4px; justify-items: start; }
+.card-fail .btn { position: relative; z-index: 1; }
+@media (max-width: 620px) { .race-card { min-height: 0; } .race-grid { gap: 8px; } }
