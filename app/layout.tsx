@@ -13,6 +13,8 @@ export const metadata: Metadata = {
   description:
     "Look up any race and see where every candidate stands, side by side, with a link for every fact. Answer a few questions to see who agrees with you most.",
   metadataBase: new URL("https://ballotwise.xanom.co"),
+  openGraph: { type: "website", siteName: "Ballotwise" },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
