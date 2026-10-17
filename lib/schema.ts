@@ -26,7 +26,11 @@ export const candidateRefSchema = z.object({
   incumbent: z.boolean(),
 });
 
+export const contestKinds = ["office", "measure"] as const;
+
 export const raceSchema = z.object({
+  /** A ballot measure is stored as a race whose two "candidates" are its Yes and No sides. Absent on older races, which are offices. */
+  kind: z.enum(contestKinds).optional(),
   title: text(120),
   election: text(160),
   date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
@@ -58,7 +62,7 @@ export const ballotContestsSchema = z.object({
         name: text(160),
         date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
         contests: z
-          .array(z.object({ label: text(140), query: text(220), level: z.enum(contestLevels) }))
+          .array(z.object({ label: text(140), query: text(220), level: z.enum(contestLevels), kind: z.enum(contestKinds).default("office") }))
           .max(40),
       }),
     )
@@ -95,6 +99,10 @@ export function seatsOf(race: Pick<Race, "seats" | "votingRule">): number {
   return n >= 1 && n <= 12 ? n : 1;
 }
 
+export function isMeasure(race: Pick<Race, "kind">): boolean {
+  return race.kind === "measure";
+}
+
 /** The stance used for matching: the sourced one, else the labelled estimate. */
 export function stanceOf(position: Position): number | null {
   return position.stance ?? position.estimate?.stance ?? null;
@@ -108,6 +116,8 @@ export function profileStances(profile: Profile): Record<string, number | null> 
 export type Issue = z.infer<typeof issueSchema>;
 export type CandidateRef = z.infer<typeof candidateRefSchema>;
 export type Race = z.infer<typeof raceSchema>;
+export type ContestKind = (typeof contestKinds)[number];
+export type ContestLevel = (typeof contestLevels)[number];
 export type RaceResult = z.infer<typeof raceResultSchema>;
 export type BallotContests = z.infer<typeof ballotContestsSchema>;
 export type Position = z.infer<typeof positionSchema>;

@@ -14,7 +14,14 @@ function Section({ title, items, empty }: { title: string; items: Sourced[]; emp
   );
 }
 
-export function Profiles({ candidates, profiles }: { candidates: CandidateRef[]; profiles: Record<string, Profile | undefined> }) {
+// A measure's two sides use the candidate template; these are the headings its sections are researched under.
+const LABELS = {
+  office: { background: "Background", record: "Record in office", noRecord: "Hasn't held office, or nothing found.", funding: "No campaign finance filing found." },
+  measure: { background: "Arguments", record: "If this side wins", noRecord: "Nothing found.", funding: "No campaign committee filing found." },
+};
+
+export function Profiles({ candidates, profiles, measure = false }: { candidates: CandidateRef[]; profiles: Record<string, Profile | undefined>; measure?: boolean }) {
+  const labels = LABELS[measure ? "measure" : "office"];
   const cols = { "--cols": Math.min(candidates.length, 3) } as React.CSSProperties;
   return (
     <div className="profiles" style={cols}>
@@ -25,7 +32,7 @@ export function Profiles({ candidates, profiles }: { candidates: CandidateRef[];
             <header>
               <h2>{c.name}</h2>
               <p className="party">
-                {[c.party ?? "No party listed", c.incumbent ? "Incumbent" : null, c.ballotDesignation].filter(Boolean).join(", ")}
+                {measure ? c.ballotDesignation : [c.party ?? "No party listed", c.incumbent ? "Incumbent" : null, c.ballotDesignation].filter(Boolean).join(", ")}
               </p>
             </header>
             {!p ? (
@@ -33,9 +40,9 @@ export function Profiles({ candidates, profiles }: { candidates: CandidateRef[];
             ) : (
               <>
                 <p>{p.summary}</p>
-                <Section title="Background" items={p.background} empty="Nothing found." />
-                <Section title="Record in office" items={p.record} empty="Hasn't held office, or nothing found." />
-                <Section title="Funding" items={p.funding ? [p.funding] : []} empty="No campaign finance filing found." />
+                <Section title={labels.background} items={p.background} empty="Nothing found." />
+                <Section title={labels.record} items={p.record} empty={labels.noRecord} />
+                <Section title="Funding" items={p.funding ? [p.funding] : []} empty={labels.funding} />
                 <Section title="Endorsements" items={p.endorsements} empty="No endorsements found." />
                 {p.website && (
                   <p className="small">

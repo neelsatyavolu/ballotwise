@@ -10,7 +10,7 @@ import type { Progress } from "@/lib/grok/research";
 import type { GuideData, GuideRecord, GuideStatus } from "@/lib/guides";
 import { effectiveAnswers, headlineMatch, interviewMatchPhase, joinNames, type Answer, type Answers, type Overrides } from "@/lib/match";
 import type { Suggested } from "@/lib/values";
-import { profileStances, seatsOf, type Profile, type Race, type RaceResult } from "@/lib/schema";
+import { isMeasure, profileStances, seatsOf, type Profile, type Race, type RaceResult } from "@/lib/schema";
 import { Sources } from "./bits";
 import { Compare } from "./Compare";
 import { Interview } from "./Interview";
@@ -62,7 +62,8 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
     setTasks((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { label: key, state: "running", detail: "" }), ...task } }));
 
   // Shuffled once per visit, like ballots that rotate candidate order.
-  const order = useMemo(() => (race ? shuffled(race.candidates) : []), [race]);
+  // Measures keep Yes before No, as on the ballot.
+  const order = useMemo(() => (race ? (isMeasure(race) ? race.candidates : shuffled(race.candidates)) : []), [race]);
 
   const researchCandidate = useCallback(async (r: Race, candidateId: string) => {
     const name = r.candidates.find((c) => c.id === candidateId)?.name ?? candidateId;
@@ -273,7 +274,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
             <div className="progress-row">
               <span className="spinner" aria-hidden />
               <div>
-                <div className="label">{phase.status === "queued" ? "In line" : "Finding who's running"}</div>
+                <div className="label">{phase.status === "queued" ? "In line" : "Looking it up"}</div>
                 <div className="detail">We&apos;re looking this race up. You can close this page; it&apos;ll be on your ballot when it&apos;s ready.</div>
               </div>
             </div>
@@ -362,7 +363,11 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
         <p className="race-office">
           {race.office.text} <Sources urls={race.office.sources} />
         </p>
-        <p className="shuffle-note">Candidates are listed in random order. Party is shown the way it appears on the ballot.</p>
+        <p className="shuffle-note">
+          {isMeasure(race)
+            ? "Each side is described from its own campaign's materials and the official analysis."
+            : "Candidates are listed in random order. Party is shown the way it appears on the ballot."}
+        </p>
         {saveError && <p className="error small">{saveError}</p>}
       </header>
 
@@ -382,7 +387,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
       />
 
       <div className="tabs" role="tablist">
-        {([["compare", "Compare"], ["profiles", "Candidates"], ["match", "Your match"]] as const).map(([key, label]) => (
+        {([["compare", "Compare"], ["profiles", isMeasure(race) ? "Each side" : "Candidates"], ["match", "Your match"]] as const).map(([key, label]) => (
           <button key={key} type="button" role="tab" className="tab" aria-selected={tab === key} onClick={() => setTab(key)}>
             {label}
           </button>
@@ -394,7 +399,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
 
       <div role="tabpanel">
         {tab === "compare" && <Compare issues={race.issues} candidates={order} profiles={profiles} />}
-        {tab === "profiles" && <Profiles candidates={order} profiles={profiles} />}
+        {tab === "profiles" && <Profiles candidates={order} profiles={profiles} measure={isMeasure(race)} />}
         {tab === "match" &&
           (!allDone && !interviewDone ? (
             <p className="muted read">Your match will show up once every candidate has been looked up, so they&apos;re all compared fairly.</p>
@@ -407,7 +412,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
 
       {race.sources.length > 0 && (
         <p className="small muted" style={{ marginTop: 40 }}>
-          Candidate list from <Sources urls={race.sources} />
+          {isMeasure(race) ? "Measure details from" : "Candidate list from"} <Sources urls={race.sources} />
         </p>
       )}
     </div>

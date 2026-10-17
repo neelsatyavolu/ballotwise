@@ -31,6 +31,14 @@ export default function Method() {
         <li>If we can&apos;t find where a candidate stands on an issue, we estimate it from their own other positions, record and endorsements (never from party alone), draw it with dashed ovals, and say what the estimate rests on.</li>
       </ul>
 
+      <h2>Ballot measures</h2>
+      <p>
+        Propositions and local measures are looked up the same way. We start with the official ballot label and the
+        analyst&apos;s summary of what the measure would change. Then the Yes side and the No side are each looked up on their own,
+        from their own ballot argument, campaign, funding and endorsements, and placed on the same issues. Your match tells you
+        which side is closer to your answers.
+      </p>
+
       <h2>Keeping it fair</h2>
       <ul>
         <li>Candidates are listed in a new random order every time you visit.</li>

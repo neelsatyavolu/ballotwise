@@ -64,14 +64,19 @@ export async function addContestGuides(db: Db, userId: string, contests: BallotC
   for (const election of contests.elections) {
     for (const contest of election.contests) {
       const id = contestGuideId(userId, election.date, contest.label);
+      const kind = contest.kind ?? "office";
       const exists = await db.prepare("SELECT 1 AS x FROM guides WHERE id = ?").bind(id).first();
-      if (exists) continue;
+      if (exists) {
+        // Guides found before levels were recorded get sorted into their tab now.
+        await db.prepare("UPDATE guides SET level = ?, kind = ? WHERE id = ? AND level IS NULL").bind(contest.level, kind, id).run();
+        continue;
+      }
       await db
         .prepare(
-          `INSERT INTO guides (id, user_id, title, election_date, election_name, data, updated_at, origin, status, query)
-           VALUES (?, ?, ?, ?, ?, 'null', ?, 'ballot', 'queued', ?)`,
+          `INSERT INTO guides (id, user_id, title, election_date, election_name, data, updated_at, origin, status, query, level, kind)
+           VALUES (?, ?, ?, ?, ?, 'null', ?, 'ballot', 'queued', ?, ?, ?)`,
         )
-        .bind(id, userId, contest.label, election.date, election.name, now, contest.query)
+        .bind(id, userId, contest.label, election.date, election.name, now, contest.query, contest.level, kind)
         .run();
       added.push(id);
     }

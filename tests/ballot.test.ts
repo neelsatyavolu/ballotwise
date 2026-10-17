@@ -92,6 +92,23 @@ describe("contest guides", () => {
     expect(await addContestGuides(db, user.id, contests as never, 2)).toHaveLength(0);
     expect(contestGuideId(user.id, "2026-11-03", " Mayor of  Los Angeles")).toBe(contestGuideId(user.id, "2026-11-03", "mayor of los angeles"));
   });
+
+  it("records each contest's level and kind, and fills them in for guides found before they were recorded", async () => {
+    const { db, user } = await setup();
+    const withMeasure = {
+      elections: [{ ...contests.elections[0], contests: [...contests.elections[0].contests, { label: "Proposition 1", query: "CA prop 1 2026", level: "state", kind: "measure" }] }],
+    };
+    await addContestGuides(db, user.id, contests as never, 1);
+    const mayor = contestGuideId(user.id, "2026-11-03", "Mayor of Los Angeles");
+    await db.prepare("UPDATE guides SET level = NULL WHERE id = ?").bind(mayor).run();
+    expect(await addContestGuides(db, user.id, withMeasure as never, 2)).toHaveLength(1);
+    const byTitle = Object.fromEntries((await listGuides(db, user.id, "ballot")).map((g) => [g.title, [g.kind, g.level]]));
+    expect(byTitle).toEqual({
+      "U.S. House, District 34": ["office", "federal"],
+      "Mayor of Los Angeles": ["office", "city"],
+      "Proposition 1": ["measure", "state"],
+    });
+  });
 });
 
 describe("background research", () => {

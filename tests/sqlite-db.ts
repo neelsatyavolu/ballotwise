@@ -6,7 +6,7 @@ import type { Db, Statement } from "../lib/auth/accounts";
 export function testDb(): Db {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON;");
-  for (const file of ["0001_init.sql", "0002_ballot.sql", "0003_progress.sql", "0004_values.sql", "0005_cache.sql"]) {
+  for (const file of ["0001_init.sql", "0002_ballot.sql", "0003_progress.sql", "0004_values.sql", "0005_cache.sql", "0006_measures.sql"]) {
     sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8"));
   }
 

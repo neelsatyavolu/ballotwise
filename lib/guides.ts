@@ -3,7 +3,7 @@ import type { Db } from "./auth/accounts";
 import { getCached, putCached } from "./cache";
 import { needsEstimate } from "./estimate";
 import { effectiveAnswers, headlineMatch, type MatchHeadline } from "./match";
-import { profileSchema, profileStances, raceSchema, seatsOf, type Profile, type Race } from "./schema";
+import { isMeasure, profileSchema, profileStances, raceSchema, seatsOf, type ContestKind, type ContestLevel, type Profile, type Race } from "./schema";
 import { ALIGN_STALE_MS, type Suggested } from "./values";
 
 const MAX_GUIDE_BYTES = 400_000;
@@ -38,6 +38,9 @@ export type GuideSummary = {
   fromInterview: boolean;
   /** Set when mapping the interview onto this ready race failed. Null while that work is still in progress. */
   matchError: string | null;
+  kind: ContestKind;
+  /** Null for guides found before levels were recorded, and for searched guides. */
+  level: ContestLevel | null;
 };
 /** What the guide page loads: the data once the race is known, plus background research state. */
 export type GuideRecord = {
@@ -66,12 +69,14 @@ type GuideRow = {
   candidateCount: number | null;
   candidatesDone: number;
   finishedAt: number | null;
+  kind: ContestKind;
+  level: ContestLevel | null;
   data: string;
   suggested: string | null;
 };
 
 const SUMMARY_COLUMNS = `data, suggested, id, title, election_date AS electionDate, election_name AS electionName, updated_at AS updatedAt, status, voted, error,
-  activity, candidate_count AS candidateCount, finished_at AS finishedAt,
+  activity, candidate_count AS candidateCount, finished_at AS finishedAt, kind, level,
   (SELECT COUNT(*) FROM guide_profiles gp WHERE gp.guide_id = guides.id) AS candidatesDone`;
 function toSummary({ data, suggested, ...r }: GuideRow, profiles: Record<string, Profile>): GuideSummary {
   const parsed = JSON.parse(data) as GuideData | null;
@@ -146,10 +151,11 @@ export async function saveGuide(db: Db, userId: string, id: string, data: GuideD
   if (owner && owner.user_id !== userId) return false;
   await db
     .prepare(
-      `INSERT INTO guides (id, user_id, title, election_date, data, updated_at, query) VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET title = excluded.title, election_date = excluded.election_date, data = excluded.data, updated_at = excluded.updated_at`,
+      `INSERT INTO guides (id, user_id, title, election_date, data, updated_at, query, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET title = excluded.title, election_date = excluded.election_date, data = excluded.data, updated_at = excluded.updated_at,
+         kind = excluded.kind`,
     )
-    .bind(id, userId, data.race.title, data.race.date, json, now, data.query)
+    .bind(id, userId, data.race.title, data.race.date, json, now, data.query, isMeasure(data.race) ? "measure" : "office")
     .run();
   return true;
 }
@@ -208,9 +214,18 @@ export async function saveRaceForGuide(db: Db, id: string, query: string, race: 
     db
       .prepare(
         `UPDATE guides SET data = ?, title = ?, election_date = COALESCE(election_date, ?), status = 'researching', error = NULL,
-           updated_at = ?, candidate_count = ?, activity = ? WHERE id = ?`,
+           updated_at = ?, candidate_count = ?, activity = ?, kind = ? WHERE id = ?`,
       )
-      .bind(JSON.stringify(data), race.title, race.date, now, race.candidates.length, `Researching ${race.candidates.length} candidates`, id),
+      .bind(
+        JSON.stringify(data),
+        race.title,
+        race.date,
+        now,
+        race.candidates.length,
+        isMeasure(race) ? "Researching both sides" : `Researching ${race.candidates.length} candidates`,
+        isMeasure(race) ? "measure" : "office",
+        id,
+      ),
   ]);
 }
 

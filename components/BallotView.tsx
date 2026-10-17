@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/client";
 import type { Ballot } from "@/lib/ballot/store";
+import { CATEGORIES, categoryOf, type Category } from "@/lib/categories";
 import type { GuideSummary } from "@/lib/guides";
 import { interviewMatchPhase } from "@/lib/match";
 import { useAccount } from "./AccountProvider";
@@ -160,7 +161,11 @@ function RaceCard({ guide: g, values, waitedMs, onVoted, onRetry, onMatchRetry }
         <div className="card-working">
           <span className="card-status">
             <span className="spinner small-spinner" aria-hidden />
-            {g.status === "researching" && g.candidateCount ? `${g.candidatesDone} of ${g.candidateCount} candidates done` : STATUS_TEXT[g.status]}
+            {g.status === "researching" && g.candidateCount
+              ? `${g.candidatesDone} of ${g.candidateCount} ${g.kind === "measure" ? "sides" : "candidates"} done`
+              : g.status === "researching" && g.kind === "measure"
+                ? "Looking up both sides"
+                : STATUS_TEXT[g.status]}
           </span>
           {working && g.activity && <span className="contest-activity">{g.activity}</span>}
           <span className="mini-bar" aria-hidden><span style={{ width: `${Math.round(contestProgress(g) * 100)}%` }} /></span>
@@ -199,6 +204,7 @@ export function BallotView() {
   const [state, setState] = useState<State | null>(null);
   const [editing, setEditing] = useState(false);
   const [showVoted, setShowVoted] = useState(false);
+  const [tab, setTab] = useState<Category | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [matchAttempt, setMatchAttempt] = useState<Record<string, number>>({});
   const [waitedById, setWaitedById] = useState<Record<string, number>>({});
@@ -273,10 +279,15 @@ export function BallotView() {
   if (error || !state) return <div className="wrap"><p className="error">{error}</p></div>;
 
   const { ballot, guides } = state;
+  const category = (g: GuideSummary) => categoryOf(g.kind, g.level);
+  const tabs = CATEGORIES.filter((c) => guides.some((g) => category(g) === c.id));
+  const activeTab = tabs.find((c) => c.id === tab)?.id ?? tabs[0]?.id;
+  const shown = guides.filter((g) => category(g) === activeTab);
   const open = guides.filter((g) => !g.voted);
   const voted = guides.filter((g) => g.voted);
+  const shownVoted = shown.filter((g) => g.voted);
   const byElection = new Map<string, GuideSummary[]>();
-  for (const g of open) {
+  for (const g of shown.filter((g) => !g.voted)) {
     const key = `${g.electionDate ?? ""}|${g.electionName ?? ""}`;
     byElection.set(key, [...(byElection.get(key) ?? []), g]);
   }
@@ -316,11 +327,25 @@ export function BallotView() {
               <p className="error">{ballot.error ?? "We couldn't find your races."} <button type="button" className="btn quiet" onClick={refresh}>Try again</button></p>
             ) : ballot.status === "ready" ? (
               <p className="small muted">
-                {guides.length === 0 ? "We didn't find any races with candidates in the next 12 months." : `${open.length} left to vote on, ${voted.length} done.`}{" "}
+                {guides.length === 0 ? "We didn't find any races or measures in the next 12 months." : `${open.length} left to vote on, ${voted.length} done.`}{" "}
                 <button type="button" className="btn quiet" onClick={refresh}>Check for new races</button>
               </p>
             ) : null}
           </div>
+
+          {tabs.length > 1 && (
+            <div className="tabs" role="tablist" aria-label="Ballot sections">
+              {tabs.map((c) => {
+                const left = guides.filter((g) => category(g) === c.id && !g.voted).length;
+                return (
+                  <button key={c.id} type="button" role="tab" className="tab" aria-selected={activeTab === c.id} onClick={() => setTab(c.id)}>
+                    {c.label}
+                    {left > 0 && <span className="tab-count">{left}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {[...byElection.entries()].map(([key, items]) => {
             const { electionDate, electionName } = items[0];
@@ -340,14 +365,14 @@ export function BallotView() {
             );
           })}
 
-          {voted.length > 0 && (
+          {shownVoted.length > 0 && (
             <section className="election voted-section">
               <button type="button" className="btn quiet" aria-expanded={showVoted} onClick={() => setShowVoted(!showVoted)}>
-                {showVoted ? "Hide" : "Show"} {voted.length} voted
+                {showVoted ? "Hide" : "Show"} {shownVoted.length} voted
               </button>
               {showVoted && (
                 <ul className="race-grid">
-                  {voted.map((g) => (
+                  {shownVoted.map((g) => (
                     <RaceCard key={g.id} guide={g} values={values} waitedMs={waitedMs(g.id)} onVoted={(v) => setVoted(g.id, v)} onRetry={() => retry(g.id)} onMatchRetry={() => retryMatch(g.id)} />
                   ))}
                 </ul>
