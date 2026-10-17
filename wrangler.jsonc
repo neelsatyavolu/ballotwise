@@ -6,7 +6,11 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "ballotwise" }],
-  "routes": [{ "pattern": "ballotwise.n3el.dev", "custom_domain": true }],
+  "routes": [
+    { "pattern": "ballotwise.xanom.co", "custom_domain": true },
+    // Old address; custom-worker.ts redirects it to the new one.
+    { "pattern": "ballotwise.n3el.dev", "custom_domain": true }
+  ],
   "d1_databases": [
     { "binding": "DB", "database_name": "ballotwise", "database_id": "a1ff97bd-8cbf-4b4c-8aa8-7efba6a6891e", "migrations_dir": "migrations" }
   ],
@@ -15,6 +19,6 @@
     // One job per invocation; a handful in parallel keeps a ballot moving without tripping Grok's rate limits.
     "consumers": [{ "queue": "ballotwise-research", "max_batch_size": 1, "max_concurrency": 6, "max_retries": 3 }]
   },
-  "vars": { "APP_URL": "https://ballotwise.n3el.dev" },
+  "vars": { "APP_URL": "https://ballotwise.xanom.co" },
   "observability": { "enabled": true }
 }

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: { default: "Ballotwise: a nonpartisan guide to any race", template: "%s · Ballotwise" },
   description:
     "Look up any race and see where every candidate stands, side by side, with a link for every fact. Answer a few questions to see who agrees with you most.",
-  metadataBase: new URL("https://ballotwise.n3el.dev"),
+  metadataBase: new URL("https://ballotwise.xanom.co"),
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

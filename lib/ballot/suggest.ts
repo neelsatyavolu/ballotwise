@@ -62,7 +62,7 @@ export async function suggestAddresses(query: string, near?: { lat: number; lon:
     params.set("lon", String(near.lon));
   }
   const res = await fetch(`${PHOTON}?${params}`, {
-    headers: { "user-agent": "Ballotwise (https://ballotwise.n3el.dev)" },
+    headers: { "user-agent": "Ballotwise (https://ballotwise.xanom.co)" },
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new Error(`Photon failed (${res.status})`);

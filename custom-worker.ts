@@ -7,6 +7,8 @@ import { failJob, jobSchema, PermanentJobError, readableError, runJob, type Job,
 
 type Env = CloudflareEnv & { GROK_TOKEN_KEY?: string };
 const MAX_ATTEMPTS = 3;
+const OLD_HOST = "ballotwise.n3el.dev";
+const NEW_ORIGIN = "https://ballotwise.xanom.co";
 
 function deps(env: Env): JobDeps {
   return {
@@ -19,7 +21,12 @@ function deps(env: Env): JobDeps {
 }
 
 export default {
-  fetch: nextHandler.fetch,
+  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    // The site moved; keep old links (including emailed reset links) working.
+    const url = new URL(request.url);
+    if (url.hostname === OLD_HOST) return Response.redirect(NEW_ORIGIN + url.pathname + url.search, 308);
+    return nextHandler.fetch(request, env, ctx);
+  },
 
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
     const d = deps(env);

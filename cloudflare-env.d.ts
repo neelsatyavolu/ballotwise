@@ -5,7 +5,7 @@ interface __BaseEnv_CloudflareEnv {
 	DB: D1Database;
 	RESEARCH_QUEUE: Queue;
 	ASSETS: Fetcher;
-	APP_URL: "https://ballotwise.n3el.dev";
+	APP_URL: "https://ballotwise.xanom.co";
 	WORKER_SELF_REFERENCE: Service<typeof import("./custom-worker").default>;
 }
 declare namespace Cloudflare {

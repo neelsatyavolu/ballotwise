@@ -2,7 +2,7 @@
 
 A nonpartisan voter guide. Look up any race and see every candidate's positions side by side, each claim linked to its source. Add your address and Ballotwise finds every contest on your ballot, researches each one in the background, and tracks which ones you've voted in.
 
-Live at **https://ballotwise.n3el.dev**.
+Live at **https://ballotwise.xanom.co**.
 
 ## How it stays neutral
 
