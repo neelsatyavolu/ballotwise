@@ -402,7 +402,7 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
       {backgroundPanel}
 
       <div role="tabpanel">
-        {tab === "compare" && <Compare issues={race.issues} candidates={order} profiles={profiles} />}
+        {tab === "compare" && <Compare issues={race.issues} candidates={order} profiles={profiles} answers={effective} />}
         {tab === "profiles" && <Profiles candidates={order} profiles={profiles} measure={isMeasure(race)} />}
         {tab === "match" &&
           (!allDone && !interviewDone ? (

@@ -229,6 +229,10 @@ main { padding: 28px 0 0; }
 .oval.filled::after { content: ""; position: absolute; inset: 0; background: var(--ink); animation: ink 0.28s ease-out; }
 .oval.voter { border-color: var(--red); }
 .oval.voter.filled::after { background: var(--red); }
+/* The voter's own answer, ringed on candidate scales so it reads at a glance. */
+.oval.mine { outline: 2px solid var(--red); outline-offset: 2px; }
+.spectrum-col .you { color: var(--red); font-weight: 600; }
+.compare-key { display: flex; align-items: center; gap: 8px; padding-left: 4px; font-size: 14px; color: var(--muted); margin: 0 0 12px; }
 @keyframes ink { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 button.oval { cursor: pointer; width: 34px; height: 22px; }
 button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, transparent); }
