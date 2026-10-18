@@ -11,6 +11,10 @@ export function Compare(props: Props) {
   const answered = props.issues.some((i) => mineOn(props.answers, i) !== null);
   return (
     <>
+      <p className="compare-key">
+        Each scale runs between the two answers to that issue’s question (◀ and ▶), not between left and right. Which answer
+        sits on which end is picked at random for each issue, so neither side is always first.
+      </p>
       {answered && (
         <p className="compare-key">
           <span className="scale" aria-hidden><span className="oval mine" /></span> Red ring: your answer
