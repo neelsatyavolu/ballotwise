@@ -270,14 +270,21 @@ export function pollAverages(polls: readonly VoteHubPoll[], office: Office, race
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const HEADERS = { accept: "application/json", "user-agent": "Ballotwise/1.0 (+https://ballotwise.xanom.co/midterms)" };
+
 async function getJson(url: string, retryDelays: readonly number[] = []): Promise<unknown> {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (res.status === 429 && attempt < retryDelays.length) {
-      await sleep(retryDelays[attempt]);
+      // Wait as long as the server asks (Retry-After, in seconds), within reason.
+      const asked = Number(res.headers.get("retry-after")) * 1000;
+      await sleep(Math.min(Number.isFinite(asked) && asked > 0 ? asked : retryDelays[attempt], 20_000));
       continue;
     }
-    if (!res.ok) throw new Error(`${new URL(url).hostname} returned ${res.status}`);
+    if (!res.ok) {
+      const u = new URL(url);
+      throw new Error(`${u.hostname}${u.pathname} returned ${res.status} (retry-after ${res.headers.get("retry-after") ?? "none"}, ${url.length} chars)`);
+    }
     return res.json();
   }
 }
