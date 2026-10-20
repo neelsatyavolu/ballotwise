@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { colorOf, compareRaces, lead, OFFICE_LABEL, pct, raceLabel, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { colorOf, compareRaces, lead, OFFICE_LABEL, pct, raceLabel, ratingFill, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { AiDashboards } from "./AiDashboard";
 import { BalanceBar } from "./Balance";
 import { ChatDock, type ChatHandle } from "./ChatDock";
 import { useDashboards, useFavorites, useLive } from "./hooks";
 import { NationMap } from "./maps";
-import { RaceCard, RatingTag } from "./RaceCard";
+import { ModeNav } from "./ModeNav";
+import { RaceCard } from "./RaceCard";
+import { RaceRows, type Star } from "./RaceRows";
 
 type Tab = "key" | "mine" | "ai" | "all";
 const TABS: { id: Tab; label: string }[] = [
@@ -21,8 +23,6 @@ const TABS: { id: Tab; label: string }[] = [
 const OFFICES: Office[] = ["senate", "governor", "house", "measure"];
 const PAGE = 60;
 
-type Star = { ids: number[] | null; toggle: (id: number) => void };
-
 function Grid({ races, star }: { races: RaceSummary[]; star: Star }) {
   return (
     <ul className="mt-grid">
@@ -31,16 +31,6 @@ function Grid({ races, star }: { races: RaceSummary[]; star: Star }) {
       ))}
     </ul>
   );
-}
-
-/** One link per forecaster ("Cook Political Report: Senate ratings" → "Cook Political Report"), skipping Wikipedia. */
-function publishers(sources: { name: string; url: string }[]) {
-  const seen = new Map<string, string>();
-  for (const s of sources) {
-    const name = s.name.split(":")[0].trim();
-    if (!/wikipedia/i.test(name) && !seen.has(name)) seen.set(name, s.url);
-  }
-  return [...seen].map(([name, url]) => ({ name, url }));
 }
 
 function mapTip(r: RaceSummary) {
@@ -67,7 +57,7 @@ function RaceMap({ races }: { races: RaceSummary[] }) {
     for (const r of races.filter((x) => x.office === office).sort((a, b) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title)))) {
       if (out.has(r.state)) continue;
       const ahead = lead(r.candidates);
-      out.set(r.state, { fill: ahead ? shade(colorOf(ahead.leader), ahead.margin) : r.rating === "tossup" ? "var(--tossup)" : "var(--rule-strong)", tip: mapTip(r) });
+      out.set(r.state, { fill: ahead ? shade(colorOf(ahead.leader), ahead.margin) : ratingFill(r.rating), tip: mapTip(r) });
     }
     return out;
   }, [races, office]);
@@ -87,66 +77,13 @@ function RaceMap({ races }: { races: RaceSummary[] }) {
       </div>
       <NationMap fills={fills} label={`Map of 2026 ${office} races`} onPick={(state) => idByState.has(state) && router.push(`/midterms/${idByState.get(state)}`)} />
       <p className="muted small mt-legend">
-        <span><i style={{ background: "var(--dem)" }} /> Dem leads</span>
-        <span><i style={{ background: "var(--rep)" }} /> Rep leads</span>
+        <span><i style={{ background: "var(--dem)" }} /> Dem</span>
+        <span><i style={{ background: "var(--rep)" }} /> Rep</span>
         <span><i style={{ background: "var(--tossup)" }} /> Toss-up</span>
-        <span><i style={{ background: "var(--rule-strong)" }} /> No votes yet</span>
-        <span>Darker = wider lead</span>
+        <span><i style={{ background: "var(--rule-strong)" }} /> Not competitive</span>
+        <span>Before votes: market/poll rating, paler = less certain. After: who leads, darker = wider lead.</span>
       </p>
     </section>
-  );
-}
-
-/** The key races as dense one-line rows: who leads, by how much, and how much is counted. */
-function RaceRows({ races, star }: { races: RaceSummary[]; star: Star }) {
-  return (
-    <div className="mt-rows-wrap">
-      <table className="mt-table mt-rows">
-        <thead>
-          <tr>
-            <th>Race</th>
-            <th>Rating</th>
-            <th>Leader</th>
-            <th className="num">Lead</th>
-            <th className="num">In</th>
-            {star.ids && <th aria-label="Star" />}
-          </tr>
-        </thead>
-        <tbody>
-          {races.map((r) => {
-            const ahead = lead(r.candidates);
-            const winner = r.candidates.find((c) => c.winner);
-            return (
-              <tr key={r.id}>
-                <td>
-                  <Link href={`/midterms/${r.id}`}>{raceLabel(r)}</Link>
-                </td>
-                <td><RatingTag rating={r.rating} /></td>
-                <td className="mt-leader">
-                  {ahead ? (
-                    <>
-                      <span className="swatch" style={{ background: colorOf(ahead.leader) }} aria-hidden /> {ahead.leader.name.split(" ").at(-1)}
-                      {winner && <span className="check"> ✓</span>}
-                    </>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                </td>
-                <td className="num">{ahead ? `+${ahead.margin.toFixed(1)}` : "—"}</td>
-                <td className="num">{r.reporting ? `${Math.round(r.reporting)}%` : "0%"}</td>
-                {star.ids && (
-                  <td>
-                    <button type="button" className={`mt-star sm${star.ids.includes(r.id) ? " on" : ""}`} aria-pressed={star.ids.includes(r.id)} aria-label={`Star ${raceLabel(r)}`} onClick={() => star.toggle(r.id)}>
-                      {star.ids.includes(r.id) ? "★" : "☆"}
-                    </button>
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
   );
 }
 
@@ -216,6 +153,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
 
   return (
     <div className="wrap mt">
+      <ModeNav current="/midterms" />
       <header className="mt-hero">
         <h1>Midterms 2026</h1>
         <span className="mt-kicker">Tuesday, Nov 3 · live results, every 30 seconds</span>
@@ -265,11 +203,8 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
                   </div>
                   <RaceRows races={key} star={star} />
                   <p className="muted small">
-                    Consensus of{" "}
-                    {publishers(data.ratings.sources).map((s, i) => (
-                      <span key={s.url}>{i > 0 && ", "}<a href={s.url}>{s.name}</a></span>
-                    ))}{" "}
-                    ratings, as of {data.ratings.asOf}.
+                    Ratings come live from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades
+                    {data.ratings.updatedAt ? `, updated ${timeAgo(data.ratings.updatedAt, now)}` : ""}.
                   </p>
                 </section>
               </div>

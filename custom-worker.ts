@@ -1,9 +1,12 @@
-// The Next.js app (built by OpenNext) handles requests; this file adds the background research queue.
+// The Next.js app (built by OpenNext) handles requests; this file adds the background research queue
+// and the scheduled refresh of midterm race ratings.
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment -- `.open-next/worker.js` exists only after `opennextjs-cloudflare build`.
 // @ts-ignore
 import { default as nextHandler } from "./.open-next/worker.js";
 import type { Db } from "./lib/auth/accounts";
 import { failJob, jobSchema, PermanentJobError, readableError, runJob, type Job, type JobDeps } from "./lib/ballot/jobs";
+import { bareRaces } from "./lib/midterms/catalog";
+import { refreshOdds } from "./lib/midterms/odds";
 
 type Env = CloudflareEnv & { GROK_TOKEN_KEY?: string };
 const MAX_ATTEMPTS = 3;
@@ -33,6 +36,16 @@ export default {
     // A ballot's races are sent together, so running a batch side by side starts them all at once
     // instead of waiting for the queue to add consumers one at a time.
     await Promise.all(batch.messages.map((message) => handle(message, d)));
+  },
+
+  /** Every 5 minutes (wrangler.jsonc): re-rate the midterm races from current market prices and polls. */
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const now = Date.now();
+    ctx.waitUntil(
+      bareRaces(now)
+        .then((races) => refreshOdds(env.DB as unknown as Db, races, now))
+        .catch((err) => console.error("midterms odds refresh failed:", err instanceof Error ? err.message : err)),
+    );
   },
 } satisfies ExportedHandler<Env>;
 

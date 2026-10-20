@@ -1,6 +1,6 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
-import { colorOf, fmt, lead, partyTag, pct, raceLabel, RATING_LABEL, type RaceSummary } from "@/lib/midterms/view";
+import { colorOf, fmt, lead, partyTag, pct, raceLabel, RATING_LABEL, signalLine, type RaceSummary } from "@/lib/midterms/view";
 
 export function StarButton({ starred, onToggle, label }: { starred: boolean; onToggle: () => void; label: string }) {
   return (
@@ -10,9 +10,13 @@ export function StarButton({ starred, onToggle, label }: { starred: boolean; onT
   );
 }
 
-export function RatingTag({ rating }: { rating: RaceSummary["rating"] }) {
+export function RatingTag({ rating, signal }: { rating: RaceSummary["rating"]; signal?: RaceSummary["signal"] }) {
   if (!rating) return null;
-  return <span className={`mt-rating r-${rating}`}>{RATING_LABEL[rating]}</span>;
+  return (
+    <span className={`mt-rating r-${rating}`} title={signalLine(signal) ?? undefined}>
+      {RATING_LABEL[rating]}
+    </span>
+  );
 }
 
 /** One race at a glance: the top candidates, a stacked vote bar, and how much is counted. */
@@ -27,7 +31,7 @@ export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred
         <Link href={`/midterms/${race.id}`} className="mt-card-title">
           {label}
         </Link>
-        <RatingTag rating={race.rating} />
+        <RatingTag rating={race.rating} signal={race.signal} />
         {starred !== null && <StarButton starred={starred} label={label} onToggle={() => onStar(race.id)} />}
       </div>
       <ul className="mt-card-cands">
@@ -38,7 +42,7 @@ export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred
               {c.name}
               {partyTag(c.party) && <span className="tag"> {partyTag(c.party)}</span>}
               {c.incumbent && <span className="tag" title="Incumbent">*</span>}
-              {c.winner && <span className="check" title="Called by civicAPI"> ✓</span>}
+              {c.winner && <span className="mt-check" title="Called by civicAPI"> ✓</span>}
             </span>
             <span className="num">{race.total ? pct(c.pct) : "—"}</span>
           </li>
@@ -48,7 +52,7 @@ export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred
         {race.total > 0 && race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: colorOf(c) }} />)}
       </div>
       <div className="mt-card-foot">
-        <span>{race.reporting > 0 ? `${Math.round(race.reporting)}% reporting` : "No results yet"}</span>
+        <span>{race.reporting > 0 ? `${Math.round(race.reporting)}% reporting` : (signalLine(race.signal) ?? "No results yet")}</span>
         {called ? <span className="called">Called</span> : ahead ? <span>Lead {ahead.margin.toFixed(1)} pts</span> : race.total > 0 ? <span>{fmt(race.total)} votes</span> : null}
       </div>
     </li>

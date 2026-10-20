@@ -2,49 +2,17 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { CountyResult, RaceDetail } from "@/lib/midterms/races";
-import { colorOf, fmt, lead, marginLabel, OFFICE_LABEL, partyTag, pct, raceLabel, shade, STATE_NAMES, timeAgo } from "@/lib/midterms/view";
+import type { RaceDetail } from "@/lib/midterms/races";
+import { colorOf, fmt, OFFICE_LABEL, partyTag, pct, raceLabel, signalLine, STATE_NAMES, timeAgo } from "@/lib/midterms/view";
+import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
 import { useFavorites, useLive } from "./hooks";
 import { CountyMap, type CountyFill } from "./maps";
+import { ModeNav } from "./ModeNav";
 import { RatingTag, StarButton } from "./RaceCard";
 
 type Fetched = { race: RaceDetail; fetchedAt: number; stale: boolean };
-type Mode = "results" | "reporting" | "2024";
-
-function fillFor(county: CountyResult, mode: Mode): string {
-  if (mode === "reporting") return `color-mix(in srgb, var(--accent) ${Math.round(county.reporting * 0.9)}%, var(--sheet))`;
-  if (mode === "2024") {
-    const m = county.baseline2024;
-    return m === null ? "var(--rule)" : shade(m > 0 ? "var(--dem)" : "var(--rep)", Math.abs(m));
-  }
-  const ahead = lead(county.candidates);
-  return ahead ? shade(colorOf(ahead.leader), ahead.margin) : "var(--rule)";
-}
-
-function CountyTip({ county }: { county: CountyResult }) {
-  return (
-    <>
-      <b>{county.name}</b>
-      <table>
-        <tbody>
-          {county.candidates.slice(0, 4).map((c) => (
-            <tr key={c.name}>
-              <td>
-                <span className="swatch" style={{ background: colorOf(c) }} /> {c.name}
-              </td>
-              <td className="num">{fmt(c.votes)}</td>
-              <td className="num">{pct(c.pct)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <span className="muted">
-        {Math.round(county.reporting)}% reporting{county.baseline2024 !== null && ` · 2024: ${marginLabel(county.baseline2024)}`}
-      </span>
-    </>
-  );
-}
+const SCREEN = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
 
 export function RaceView({ id }: { id: number }) {
   const { data, error, now } = useLive<Fetched>(`/api/midterms/race/${id}`);
@@ -74,16 +42,26 @@ export function RaceView({ id }: { id: number }) {
 
   return (
     <div className="wrap mt">
+      <ModeNav current={SCREEN[race.office]} />
       <nav className="mt-crumbs small" aria-label="Breadcrumb">
-        <Link href="/midterms">Midterms 2026</Link> › <Link href={`/midterms?state=${race.state}`}>{STATE_NAMES[race.state] ?? race.state}</Link> › {OFFICE_LABEL[race.office]}
+        <Link href="/midterms">Midterms 2026</Link> › <Link href={`${SCREEN[race.office]}?state=${race.state}`}>{STATE_NAMES[race.state] ?? race.state}</Link> › {OFFICE_LABEL[race.office]}
       </nav>
       <header className="mt-race-head">
         <div className="mt-race-title">
           <h1>{label}</h1>
-          <RatingTag rating={race.rating} />
+          <RatingTag rating={race.rating} signal={race.signal} />
           {favorites.ids !== null && <StarButton starred={favorites.ids.includes(race.id)} label={label} onToggle={() => favorites.toggle(race.id)} />}
         </div>
         {race.office === "measure" && <p className="muted">{race.title}</p>}
+        {signalLine(race.signal) && (
+          <p className="mt-meta small">
+            <span>
+              Forecast · {signalLine(race.signal)}
+              {race.signal?.market && ` (${race.signal.market.sources.join(" and ")})`}
+              {race.signal?.polls && `, polls through ${race.signal.polls.latest}`}
+            </span>
+          </p>
+        )}
         <p className="mt-meta small">
           <span>{race.reporting > 0 ? `${Math.round(race.reporting)}% reporting` : "No results yet"}</span>
           {close && <span>Polls close {close.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}</span>}
@@ -114,7 +92,7 @@ export function RaceView({ id }: { id: number }) {
                   <td style={{ boxShadow: `inset 4px 0 0 ${colorOf(c)}` }}>
                     {c.name}
                     {c.incumbent && <span title="Incumbent">*</span>}
-                    {c.winner && <span className="check"> ✓ Winner</span>}
+                    {c.winner && <span className="mt-check"> ✓ Winner</span>}
                   </td>
                   <td>{partyTag(c.party) || c.party || "—"}</td>
                   <td className="num">{fmt(c.votes)}</td>

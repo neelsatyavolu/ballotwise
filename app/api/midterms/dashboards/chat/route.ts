@@ -4,6 +4,7 @@ import { currentUser } from "@/lib/auth/session";
 import { db } from "@/lib/env";
 import { ResearchError } from "@/lib/grok/research";
 import { activeGrokSession } from "@/lib/grok/session";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { overview, UNAVAILABLE } from "@/lib/midterms/catalog";
 import { applyAction, chatMessageSchema, chatTurn, DashboardError, listDashboards } from "@/lib/midterms/dashboard";
 
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   let races;
   try {
-    races = (await overview(Date.now())).races;
+    races = (await overview(db(), Date.now(), (work) => getCloudflareContext().ctx.waitUntil(work))).races;
   } catch {
     return NextResponse.json({ error: UNAVAILABLE }, { status: 503 });
   }

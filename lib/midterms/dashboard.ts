@@ -32,7 +32,7 @@ export type Action = z.infer<typeof actionSchema>;
 const INSTRUCTIONS = `You manage a voter's election-night dashboards for the 2026 US midterms (Nov 3, 2026) in a chat.
 You get the tracked races, one per line: id|office|state|district|rating|leader|reporting|title.
 Office is senate, house, governor, or measure. District is blank except for House seats (0 = at-large).
-Rating is the consensus forecaster rating (tossup, lean-d, lean-r, likely-d, likely-r), blank when not rated competitive.
+Rating comes live from prediction-market prices (or the polling average where no market trades): tossup, lean-d/r/i, likely-d/r/i; blank when the race isn't competitive.
 Leader is the current leader and their share, blank before votes. Reporting is percent of the expected vote counted.
 You also get the voter's dashboards as JSON and which one is open.
 

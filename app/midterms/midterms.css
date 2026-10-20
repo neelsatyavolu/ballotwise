@@ -78,7 +78,7 @@
 .mt-card-cands .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mt-card-cands .tag { color: var(--muted); font-size: 13px; }
 .mt-card-cands li.won { font-weight: 700; }
-.mt .check { color: var(--yes); font-weight: 700; }
+.mt-check { color: var(--yes); font-weight: 700; }
 .mt-stack { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--rule); }
 .mt-stack span { height: 100%; transition: width 0.5s ease; }
 .mt-card-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
@@ -92,7 +92,8 @@
 .mt-rating.r-tossup { color: var(--tossup); }
 .mt-rating.r-lean-d, .mt-rating.r-likely-d { color: var(--dem); }
 .mt-rating.r-lean-r, .mt-rating.r-likely-r { color: var(--rep); }
-.mt-rating.r-likely-d, .mt-rating.r-likely-r { border-style: dashed; }
+.mt-rating.r-lean-i, .mt-rating.r-likely-i { color: var(--oth); }
+.mt-rating.r-likely-d, .mt-rating.r-likely-r, .mt-rating.r-likely-i { border-style: dashed; }
 
 /* Maps */
 .mt-map { position: relative; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 8px; }
@@ -209,4 +210,52 @@
 @media (max-width: 520px) {
   .mt-chat { right: 8px; bottom: 70px; }
   .mt-chat-fab { right: 12px; bottom: 12px; }
+}
+
+/* Mode bar: overview plus one screen per office */
+.mt { --tossup-soft: color-mix(in srgb, var(--tossup) 35%, var(--sheet)); }
+.mt-modes { display: flex; gap: 4px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 2px; }
+.mt-modes a { white-space: nowrap; padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--muted); text-decoration: none; border: 1px solid transparent; }
+.mt-modes a:hover { color: var(--ink); border-color: var(--rule); }
+.mt-modes a[aria-current="page"] { background: var(--ink); color: var(--paper); }
+
+/* Election-night seat count */
+.mt-seats { margin-top: 10px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px 16px; display: grid; gap: 8px; }
+.mt-seats-nums { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.mt-seats-nums b { font-family: var(--serif); font-size: 34px; font-weight: 600; line-height: 1; }
+.mt-seats-nums em { font-style: normal; font-size: 14px; color: var(--muted); }
+.mt-seats-nums .d b { color: var(--dem); }
+.mt-seats-nums .r b { color: var(--rep); }
+.mt-seats-nums .yes b { color: var(--yes); }
+.mt-seats-nums .no b { color: var(--no); }
+.mt-seats-mid { font-size: 14px; color: var(--muted); text-align: center; }
+.mt-seats-bar { height: 18px; }
+.mt-seats > p { font-size: 12px; }
+
+/* Office screen: zoomable map beside a race panel */
+.mt-office { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 16px; margin-top: 14px; align-items: start; }
+.mt-panel { display: grid; gap: 10px; align-content: start; }
+.mt-panel .mt-rows-wrap { max-height: 520px; }
+.mt-grid.one { grid-template-columns: 1fr; margin: 0; }
+.mt-linkish { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; text-align: left; }
+.mt-linkish:hover { text-decoration: underline; }
+.mt-zoom { padding: 4px; }
+.mt-zoom svg { aspect-ratio: 975 / 610; }
+.mt-state { fill: color-mix(in srgb, var(--rule) 45%, var(--sheet)); stroke: var(--sheet); stroke-width: 1; transition: fill 0.4s, opacity 0.3s; }
+.mt-state.active { cursor: pointer; }
+.mt-state.active:hover { stroke: var(--ink); stroke-width: 1.5; }
+.mt-state.dim { opacity: 0.35; }
+.mt-state.focused { stroke: var(--ink); stroke-width: 2; }
+.mt-zoom-county { fill: color-mix(in srgb, var(--rule) 70%, var(--sheet)); stroke: var(--sheet); stroke-width: 0.8; transition: fill 0.4s; }
+.mt-zoom-county:hover { stroke: var(--ink); stroke-width: 1.5; }
+.mt-zoom-back { position: absolute; top: 10px; left: 10px; z-index: 2; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 4px 12px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--ink); }
+.mt-zoom-back:hover { border-color: var(--ink); }
+
+@media (max-width: 1000px) {
+  .mt-office { grid-template-columns: 1fr; }
+  .mt-panel .mt-rows-wrap { max-height: 380px; }
+}
+@media (max-width: 620px) {
+  .mt-seats-nums b { font-size: 26px; }
+  .mt-seats-mid { order: 3; flex-basis: 100%; text-align: left; }
 }

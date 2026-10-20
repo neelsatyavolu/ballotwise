@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Signal } from "./odds";
 import { partyOf } from "./view";
 
 export const ELECTION_DATE = "2026-11-03";
@@ -6,7 +7,8 @@ export const ELECTION_DATE = "2026-11-03";
 export const FIRST_POLLS_OPEN = Date.parse("2026-11-03T11:00:00Z");
 
 export type Office = "senate" | "house" | "governor" | "measure";
-export type Rating = "tossup" | "lean-d" | "lean-r" | "likely-d" | "likely-r";
+/** Lean and likely carry the favored side: d, r, or i (an independent, like Nebraska's Senate race). */
+export type Rating = "tossup" | "lean-d" | "lean-r" | "lean-i" | "likely-d" | "likely-r" | "likely-i";
 export type RatedRace = { office: Office; state: string; district?: number | null; rating: Rating; note?: string };
 
 export type Candidate = { name: string; party: string; votes: number; pct: number; winner: boolean; incumbent: boolean };
@@ -20,6 +22,8 @@ export type RaceSummary = {
   total: number;
   candidates: Candidate[];
   rating: Rating | null;
+  /** Market odds and polling behind the rating, attached by the overview; absent on bare catalog entries. */
+  signal?: Signal | null;
 };
 export type CountyResult = { fips: string | null; name: string; reporting: number; total: number; candidates: Omit<Candidate, "incumbent" | "winner">[]; baseline2024: number | null };
 export type RaceDetail = RaceSummary & { pollsClose: string | null; updated: string | null; counties: CountyResult[] };
@@ -180,4 +184,10 @@ export function balance(races: readonly RaceSummary[]) {
 /** The race as it stood before any results: no votes, no calls. */
 export function blankResults<T extends RaceSummary>(race: T): T {
   return { ...race, reporting: 0, total: 0, candidates: race.candidates.map((c) => ({ ...c, votes: 0, pct: 0, winner: false })) };
+}
+
+/** The races with each one's rating looked up afresh (null when unrated). */
+export function applyRatings<T extends RaceSummary>(races: readonly T[], ratings: readonly RatedRace[]): T[] {
+  const byKey = new Map(ratings.map((r) => [ratingKey(r.office, r.state, r.district), r.rating]));
+  return races.map((r) => ({ ...r, rating: byKey.get(ratingKey(r.office, r.state, r.district)) ?? null }));
 }

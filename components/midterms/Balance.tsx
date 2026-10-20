@@ -41,3 +41,36 @@ export function BalanceBar({ title, office, tally }: { title: string; office: ke
     </section>
   );
 }
+
+/** Election-night seat count: seats won (solid) and races led but not called (light), from each end toward the majority line. */
+export function SeatBar({ tally, ahead, office }: { tally: Tally; ahead: { D: number; R: number; other: number }; office: keyof typeof NOTE }) {
+  const share = (n: number) => `${(n / tally.total) * 100}%`;
+  const open = tally.total - tally.D - tally.R - tally.other - ahead.D - ahead.R - ahead.other;
+  return (
+    <section className="mt-seats">
+      <div className="mt-seats-nums">
+        <span className="d">
+          <b>{tally.D}</b> Dem{ahead.D > 0 && <em> +{ahead.D} leading</em>}
+        </span>
+        <span className="mt-seats-mid">
+          {office === "senate" ? "51 D · 50 R for control" : `${tally.majority} for control`}
+          {tally.other + ahead.other > 0 && ` · Other ${tally.other}${ahead.other ? ` +${ahead.other}` : ""}`}
+          {` · ${open} uncounted`}
+        </span>
+        <span className="r">
+          {ahead.R > 0 && <em>{ahead.R} leading + </em>}Rep <b>{tally.R}</b>
+        </span>
+      </div>
+      <div className="mt-balance-bar mt-seats-bar" role="img" aria-label={`Democrats ${tally.D} won and ${ahead.D} leading; Republicans ${tally.R} won and ${ahead.R} leading; ${open} uncounted`}>
+        <span style={{ width: share(tally.D), background: "var(--dem)" }} />
+        <span style={{ width: share(ahead.D), background: "color-mix(in srgb, var(--dem) 45%, var(--sheet))" }} />
+        <span style={{ width: share(tally.other + ahead.other), background: "var(--oth)" }} />
+        <span style={{ flex: 1 }} />
+        <span style={{ width: share(ahead.R), background: "color-mix(in srgb, var(--rep) 45%, var(--sheet))" }} />
+        <span style={{ width: share(tally.R), background: "var(--rep)" }} />
+        <i aria-hidden />
+      </div>
+      <p className="muted small">{NOTE[office]}</p>
+    </section>
+  );
+}

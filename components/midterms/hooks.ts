@@ -9,25 +9,34 @@ export const POLL_MS = 30_000;
 
 /**
  * Fetches `path` now and every POLL_MS while the tab is visible, keeping the last good data through errors.
+ * A null path fetches nothing.
  * `now` ticks with each poll so "updated X ago" labels stay current.
  */
-export function useLive<T>(path: string) {
-  const [data, setData] = useState<T | null>(null);
+export function useLive<T>(path: string | null) {
+  // Data is kept with the path it came from, so switching paths never shows the previous one's numbers.
+  const [state, setState] = useState<{ path: string; data: T } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const current = useRef(path);
 
   const load = useCallback(async () => {
+    if (!path) return;
     try {
-      setData(await api<T>(path));
+      const data = await api<T>(path);
+      // A slow answer for a path the page has moved on from is dropped.
+      if (current.current !== path) return;
+      setState({ path, data });
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't load results.");
+      if (current.current === path) setError(err instanceof ApiError ? err.message : "Couldn't load results.");
     } finally {
       setNow(Date.now());
     }
   }, [path]);
 
   useEffect(() => {
+    current.current = path;
+    if (!path) return;
     let timer: ReturnType<typeof setInterval> | null = null;
     const start = () => {
       if (timer) return;
@@ -45,9 +54,9 @@ export function useLive<T>(path: string) {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [load]);
+  }, [load, path]);
 
-  return { data, error, now };
+  return { data: state && state.path === path ? state.data : null, error, now };
 }
 
 /** The signed-in voter's starred races. `ids` is null when signed out. */

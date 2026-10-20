@@ -1,4 +1,4 @@
-import { blankResults, ELECTION_DATE, FIRST_POLLS_OPEN, raceDetail, summarize, type RaceDetail, type RaceSummary, type RatedRace } from "./races";
+import { applyRatings, blankResults, ELECTION_DATE, FIRST_POLLS_OPEN, raceDetail, summarize, type RaceDetail, type RaceSummary, type RatedRace } from "./races";
 
 // civicAPI (civicapi.org): free, keyless live results sourced from each Secretary of State. Its terms ask for attribution.
 const BASE = "https://civicapi.org/api/v2/";
@@ -22,13 +22,33 @@ async function civicOnce(path: string): Promise<unknown> {
   return res.json();
 }
 
-/** civicAPI occasionally answers 503 once under load, so each request gets one retry. */
+const RETRY_DELAYS_MS = [300, 1000];
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** civicAPI answers 503 now and then under load, so each request is retried twice after a short pause. */
 async function civic(path: string): Promise<unknown> {
-  try {
-    return await civicOnce(path);
-  } catch {
-    return civicOnce(path);
+  for (const delay of RETRY_DELAYS_MS) {
+    try {
+      return await civicOnce(path);
+    } catch {
+      await sleep(delay);
+    }
   }
+  return civicOnce(path);
+}
+
+/** Runs `work` over `items` with at most `limit` in flight, keeping results in order. */
+async function pooled<T, R>(items: readonly T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await work(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
+  return out;
 }
 
 // civicAPI ignores the date filter but lists newest elections first, so paging stops at the first page
@@ -58,20 +78,22 @@ export type Fetched<T> = T & { fetchedAt: number; stale: boolean };
 
 /** Every tracked race with its statewide (or districtwide) totals. */
 export async function fetchCatalog(now: number, ratings: readonly RatedRace[] = []): Promise<Fetched<{ races: RaceSummary[] }>> {
-  if (catalogMemo && now - catalogMemo.at < FRESH_MS) return { races: catalogMemo.value, fetchedAt: catalogMemo.at, stale: false };
+  // The memo holds races without ratings; each caller's ratings are attached on the way out.
+  if (catalogMemo && now - catalogMemo.at < FRESH_MS) return { races: applyRatings(catalogMemo.value, ratings), fetchedAt: catalogMemo.at, stale: false };
   try {
-    const pages = await Promise.all(TYPES.map(racesOfType));
+    // Two searches at a time: civicAPI answers 503 more often when hit with all six at once.
+    const pages = await pooled(TYPES, 2, racesOfType);
     // A race can appear under two type searches; keep the first.
     const byId = new Map<number, RaceSummary>();
     for (const raw of pages.flat()) {
-      const race = summarize(raw, ratings);
+      const race = summarize(raw, []);
       if (race && !byId.has(race.id)) byId.set(race.id, now < FIRST_POLLS_OPEN ? blankResults(race) : race);
     }
     const races = [...byId.values()];
     catalogMemo = { at: now, value: races };
-    return { races, fetchedAt: now, stale: false };
+    return { races: applyRatings(races, ratings), fetchedAt: now, stale: false };
   } catch (err) {
-    if (catalogMemo) return { races: catalogMemo.value, fetchedAt: catalogMemo.at, stale: true };
+    if (catalogMemo) return { races: applyRatings(catalogMemo.value, ratings), fetchedAt: catalogMemo.at, stale: true };
     throw err;
   }
 }
