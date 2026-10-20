@@ -31,6 +31,40 @@ function framed([x0, y0, x1, y1]: [number, number, number, number]): Box {
   return [x0 - pad, y0 - pad, w + pad * 2, h + pad * 2];
 }
 
+/** Bounds of SVG paths written as absolute x,y pairs, as d3-geo writes them. */
+function boundsOf(paths: string[]): [number, number, number, number] | null {
+  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const d of paths) {
+    for (const [, xs, ys] of d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)) {
+      const x = Number(xs);
+      const y = Number(ys);
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x);
+      y1 = Math.max(y1, y);
+    }
+  }
+  return x0 === Infinity ? null : [x0, y0, x1, y1];
+}
+
+/**
+ * Where to zoom for a race inside a state. A district that covers only part of a big state gets its own closer
+ * view; a statewide race, or a district that fills most of its state, keeps the state view.
+ */
+function raceBounds(state: [number, number, number, number], race: [number, number, number, number]): [number, number, number, number] {
+  const area = (b: number[]) => (b[2] - b[0]) * (b[3] - b[1]);
+  if (area(race) > area(state) * 0.4) return state;
+  // Keep some of the state around a one-county district, so it doesn't fill the map with no context.
+  const min = Math.max(state[2] - state[0], state[3] - state[1]) * 0.22;
+  const grow = (lo: number, hi: number): [number, number] => {
+    const extra = Math.max(0, min - (hi - lo)) / 2;
+    return [lo - extra, hi + extra];
+  };
+  const [x0, x1] = grow(race[0], race[2]);
+  const [y0, y1] = grow(race[1], race[3]);
+  return [x0, y0, x1, y1];
+}
+
 /** Animates between two view boxes; the SVG letterboxes to keep the aspect. */
 function useTween(target: Box): Box {
   const [box, setBox] = useState<Box>(target);
@@ -61,7 +95,8 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, label }: {
   fills: Map<string, Fill>;
   focus: string | null;
   onFocus: (state: string | null) => void;
-  countyFills: Map<string, Fill> | null;
+  /** Undefined while the picked race is still loading: the map holds its view instead of zooming out and back. */
+  countyFills: Map<string, Fill> | null | undefined;
   label: string;
 }) {
   const [nation, setNation] = useState<Nation | null | "error">(null);
@@ -86,10 +121,18 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, label }: {
     };
   }, [focus]);
 
-  const target = useMemo<Box>(() => {
-    const focused = nation && nation !== "error" ? nation.states.find((s) => s.state === focus) : undefined;
-    return focused ? framed(focused.box) : FULL;
-  }, [nation, focus]);
+  const counties = focus && layer?.state === focus ? layer.data.counties : null;
+  // Null while the picked race loads; the last view is held so the map doesn't zoom out and back.
+  const focused = nation && nation !== "error" ? nation.states.find((s) => s.state === focus) : undefined;
+  const live = useMemo<Box | null>(() => {
+    if (!focused) return FULL;
+    if (countyFills === undefined) return null;
+    const inRace = counties && countyFills ? boundsOf(counties.filter((c) => countyFills.has(c.fips)).map((c) => c.d)) : null;
+    return framed(inRace ? raceBounds(focused.box, inRace) : focused.box);
+  }, [focused, counties, countyFills]);
+  const [kept, setKept] = useState<{ focus: string | null; box: Box }>({ focus, box: live ?? FULL });
+  if (live && (kept.box !== live || kept.focus !== focus)) setKept({ focus, box: live });
+  const target = live ?? (kept.focus === focus ? kept.box : framed(focused!.box));
   const box = useTween(target);
 
   if (nation === "error") return <p className="muted small">The map couldn&apos;t load. The list has every race.</p>;
@@ -99,8 +142,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, label }: {
     const r = wrap.current!.getBoundingClientRect();
     setTip({ x: e.clientX - r.left, y: e.clientY - r.top, content });
   };
-  const counties = focus && layer?.state === focus ? layer.data.counties : null;
-  const focusedPath = focus ? nation.states.find((s) => s.state === focus)?.d : undefined;
+  const focusedPath = focused?.d;
 
   return (
     <div className="mt-map mt-zoom" ref={wrap}>
