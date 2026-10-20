@@ -4,14 +4,15 @@ import { colorOf, fmt, lead, marginLabel, pct, shade } from "@/lib/midterms/view
 
 export type Mode = "results" | "reporting" | "2024";
 
+/** Fill for a county in the race on show. Before it has votes, a county still gets the "in this race" tint, so picking a race highlights where it is. */
 export function fillFor(county: CountyResult, mode: Mode): string {
-  if (mode === "reporting") return `color-mix(in srgb, var(--accent) ${Math.round(county.reporting * 0.9)}%, var(--sheet))`;
+  if (mode === "reporting") return county.reporting > 0 ? `color-mix(in srgb, var(--accent) ${Math.round(15 + county.reporting * 0.75)}%, var(--sheet))` : "var(--in-race)";
   if (mode === "2024") {
     const m = county.baseline2024;
     return m === null ? "var(--rule)" : shade(m > 0 ? "var(--dem)" : "var(--rep)", Math.abs(m));
   }
   const ahead = lead(county.candidates);
-  return ahead ? shade(colorOf(ahead.leader), ahead.margin) : "var(--rule)";
+  return ahead ? shade(colorOf(ahead.leader), ahead.margin) : "var(--in-race)";
 }
 
 export function CountyTip({ county }: { county: CountyResult }) {

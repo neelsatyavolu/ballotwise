@@ -184,7 +184,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                     </button>
                   </div>
                   {inState.length > 1 && (
-                    <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} />
+                    <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} selectedId={shownId} />
                   )}
                   {shown ? (
                     <>

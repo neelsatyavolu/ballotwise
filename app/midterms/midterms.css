@@ -213,7 +213,11 @@
 }
 
 /* Mode bar: overview plus one screen per office */
-.mt { --tossup-soft: color-mix(in srgb, var(--tossup) 35%, var(--sheet)); }
+.mt {
+  --tossup-soft: color-mix(in srgb, var(--tossup) 35%, var(--sheet));
+  /* Counties in the race on show, before they report any votes. */
+  --in-race: color-mix(in srgb, var(--ink) 32%, var(--sheet));
+}
 .mt-modes { display: flex; gap: 4px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 2px; }
 .mt-modes a { white-space: nowrap; padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--muted); text-decoration: none; border: 1px solid transparent; }
 .mt-modes a:hover { color: var(--ink); border-color: var(--rule); }

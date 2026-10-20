@@ -6,7 +6,7 @@ import { RatingTag } from "./RaceCard";
 export type Star = { ids: number[] | null; toggle: (id: number) => void };
 
 /** The key races as dense one-line rows: who leads, by how much, and how much is counted. */
-export function RaceRows({ races, star, onPick }: { races: RaceSummary[]; star: Star; onPick?: (race: RaceSummary) => void }) {
+export function RaceRows({ races, star, onPick, selectedId }: { races: RaceSummary[]; star: Star; onPick?: (race: RaceSummary) => void; selectedId?: number | null }) {
   return (
     <div className="mt-rows-wrap">
       <table className="mt-table mt-rows">
@@ -25,7 +25,7 @@ export function RaceRows({ races, star, onPick }: { races: RaceSummary[]; star: 
             const ahead = lead(r.candidates);
             const winner = r.candidates.find((c) => c.winner);
             return (
-              <tr key={r.id}>
+              <tr key={r.id} className={r.id === selectedId ? "selected" : undefined} aria-current={r.id === selectedId ? "true" : undefined}>
                 <td>
                   {onPick ? (
                     <button type="button" className="mt-linkish" onClick={() => onPick(r)}>{raceLabel(r)}</button>
