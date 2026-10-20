@@ -207,6 +207,18 @@ describe("refreshOdds", () => {
     expect(evidenceAt(hoursLater)).toBe(NOW + 4 * 60 * 60 * 1000);
   });
 
+  it("waits out a Kalshi rate limit and retries", async () => {
+    const db = testDb();
+    let limited = 1;
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.includes("kalshi") && url.includes("tickers=") && limited-- > 0) return new Response("slow down", { status: 429 });
+      if (url.includes("kalshi")) return Response.json({ markets: url.includes("tickers=") ? [kalshi("SENATEGA-26-D", 0.55, 0.57), kalshi("SENATEGA-26-R", 0.43, 0.45)] : [] });
+      return Response.json([]);
+    });
+    const snap = await refreshOdds(db, races, NOW);
+    expect(snap.signals["senate:GA:"].market?.sources).toEqual(["Kalshi"]);
+  }, 15_000);
+
   it("never lets an older run overwrite a newer snapshot", async () => {
     const db = testDb();
     stub();

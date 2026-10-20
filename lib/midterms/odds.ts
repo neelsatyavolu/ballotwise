@@ -33,7 +33,10 @@ const POLLS_MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15_000;
 /** Polls older than this are left out of the average. */
 const POLL_WINDOW_MS = 45 * 24 * 60 * 60 * 1000;
-const TICKERS_PER_CALL = 60;
+const TICKERS_PER_CALL = 150;
+/** Kalshi rate-limits bursts: requests are spaced out, and a 429 is retried after these waits. */
+const KALSHI_GAP_MS = 400;
+const KALSHI_RETRY_MS = [2000, 6000];
 
 export const raceKey = (office: Office, state: string, district: number | null | undefined) => `${office}:${state}:${office === "house" ? (district ?? 0) : ""}`;
 const STATE_BY_NAME = new Map(Object.entries(STATE_NAMES).map(([postal, name]) => [name.toLowerCase(), postal]));
@@ -265,20 +268,29 @@ export function pollAverages(polls: readonly VoteHubPoll[], office: Office, race
 
 // ---------- Fetch and save ----------
 
-async function getJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`${new URL(url).hostname} returned ${res.status}`);
-  return res.json();
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function getJson(url: string, retryDelays: readonly number[] = []): Promise<unknown> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (res.status === 429 && attempt < retryDelays.length) {
+      await sleep(retryDelays[attempt]);
+      continue;
+    }
+    if (!res.ok) throw new Error(`${new URL(url).hostname} returned ${res.status}`);
+    return res.json();
+  }
 }
 
 async function fetchKalshi(races: readonly RaceSummary[], independents: ReadonlySet<string>): Promise<Book> {
-  const house = ((await getJson(`${KALSHI}?series_ticker=KXHOUSERACE&status=open&limit=1000`)) as { markets?: KalshiMarket[] }).markets ?? [];
+  const house = ((await getJson(`${KALSHI}?series_ticker=KXHOUSERACE&status=open&limit=1000`, KALSHI_RETRY_MS)) as { markets?: KalshiMarket[] }).markets ?? [];
   const covered = new Set([...parseKalshi(house).keys()]);
   const tickers = kalshiTickers(races, covered);
   const all = [...house];
   for (let i = 0; i < tickers.length; i += TICKERS_PER_CALL) {
+    await sleep(KALSHI_GAP_MS);
     const batch = tickers.slice(i, i + TICKERS_PER_CALL).join(",");
-    all.push(...(((await getJson(`${KALSHI}?tickers=${batch}&limit=1000`)) as { markets?: KalshiMarket[] }).markets ?? []));
+    all.push(...(((await getJson(`${KALSHI}?tickers=${batch}&limit=1000`, KALSHI_RETRY_MS)) as { markets?: KalshiMarket[] }).markets ?? []));
   }
   return Object.fromEntries(parseKalshi(all, independents));
 }
@@ -314,7 +326,17 @@ async function freshOrKept<T extends { at: number }>(work: Promise<Omit<T, "at">
  * Fetches markets (and polls, when due) and saves a new snapshot. A source that fails keeps its last good data
  * for a while, so one outage doesn't wipe ratings, and very old data is dropped rather than shown as current.
  */
-export async function refreshOdds(db: Db, races: readonly RaceSummary[], now: number): Promise<OddsSnapshot> {
+let running: Promise<OddsSnapshot> | null = null;
+
+export function refreshOdds(db: Db, races: readonly RaceSummary[], now: number): Promise<OddsSnapshot> {
+  // One refresh at a time per isolate: the cron and a stale page load arriving together share it.
+  running ??= rebuild(db, races, now).finally(() => {
+    running = null;
+  });
+  return running;
+}
+
+async function rebuild(db: Db, races: readonly RaceSummary[], now: number): Promise<OddsSnapshot> {
   const previous = await readOdds(db, now);
   const independents = new Set(races.filter((r) => r.candidates.some((c) => /^independent/i.test(c.party))).map((r) => raceKey(r.office, r.state, r.district)));
   const pollsDue = !previous?.polls || now - previous.polls.at >= POLLS_EVERY_MS;
