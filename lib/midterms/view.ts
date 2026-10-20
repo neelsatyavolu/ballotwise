@@ -78,7 +78,8 @@ export function raceLabel(r: Pick<RaceSummary, "office" | "state" | "district" |
   if (r.office === "senate") return `${state} Senate${/special/i.test(r.title) ? " (special)" : ""}`;
   if (r.office === "governor") return `${state} Governor`;
   if (r.office === "house") return r.district === 0 ? `${r.state} at-large` : `${r.state}-${r.district}`;
-  return r.title.replace(new RegExp(`^${state}\\s+`), "");
+  // Some measure names carry a description after " - "; that shows separately as the measure's summary.
+  return r.title.split(" - ")[0].replace(new RegExp(`^${state}\\s+`), "").trim();
 }
 
 /** Sort key: rated races by competitiveness, then by state and district. */

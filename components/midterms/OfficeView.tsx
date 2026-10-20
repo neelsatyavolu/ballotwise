@@ -121,7 +121,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
   const fills = useMemo(() => stateFills(office, races), [office, races]);
-  const inState = useMemo(() => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title)), [races, focus]);
+  const inState = useMemo(() => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title, undefined, { numeric: true })), [races, focus]);
   const statewide = office === "senate" || office === "governor";
   const shownId = focus ? (picked && inState.some((r) => r.id === picked) ? picked : statewide ? (inState[0]?.id ?? null) : null) : null;
   const shown = inState.find((r) => r.id === shownId) ?? null;
@@ -204,7 +204,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
             </aside>
           </div>
           <p className="muted small mt-source">
-            Live results from <a href="https://civicapi.org">civicAPI</a>, collected from state and county election offices. Winners are marked only when civicAPI&apos;s decision desk calls a race; &ldquo;leading&rdquo; counts uncalled races by who is ahead. Ratings come from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades.
+            Live results from <a href="https://civicapi.org">civicAPI</a>, collected from state and county election offices. Winners are marked only when civicAPI&apos;s decision desk calls a race; &ldquo;leading&rdquo; counts uncalled races by who is ahead. Ratings come from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades.{office === "measure" && <> Measure summaries come from <a href="https://ballotpedia.org/2026_ballot_measures">Ballotpedia</a>.</>}
           </p>
         </>
       )}

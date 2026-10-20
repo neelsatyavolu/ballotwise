@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MEASURES } from "./data";
 import type { Signal } from "./odds";
 import { partyOf } from "./view";
 
@@ -22,6 +23,8 @@ export type RaceSummary = {
   total: number;
   candidates: Candidate[];
   rating: Rating | null;
+  /** What a ballot measure does, with a link to its source when there is one. */
+  about?: { text: string; url: string | null };
   /** Market odds and polling behind the rating, attached by the overview; absent on bare catalog entries. */
   signal?: Signal | null;
 };
@@ -119,7 +122,16 @@ export function summarize(input: unknown, ratings: readonly RatedRace[]): RaceSu
     total: list.reduce((sum, c) => sum + c.votes, 0),
     candidates: list,
     rating: ratings.find((r) => ratingKey(r.office, r.state, r.district) === key)?.rating ?? null,
+    ...(office === "measure" && { about: aboutMeasure(race.election_name) }),
   };
+}
+
+/** Ballotpedia's summary, or failing that the description civicAPI sometimes puts after " - " in the name. */
+function aboutMeasure(name: string): RaceSummary["about"] {
+  const known = MEASURES[name.trim()];
+  if (known) return { text: known.summary, url: known.url };
+  const [, tail] = name.split(" - ");
+  return tail ? { text: tail.trim(), url: null } : undefined;
 }
 
 /**

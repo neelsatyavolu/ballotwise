@@ -32,6 +32,7 @@ export function RaceRows({ races, star, onPick, selectedId }: { races: RaceSumma
                   ) : (
                     <Link href={`/midterms/${r.id}`}>{raceLabel(r)}</Link>
                   )}
+                  {r.about && <span className="mt-row-about" title={r.about.text}>{r.about.text}</span>}
                 </td>
                 <td><RatingTag rating={r.rating} signal={r.signal} /></td>
                 <td className="mt-leader">

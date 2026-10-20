@@ -5,6 +5,7 @@ import { applyAction, chatTurn, createDashboard, listDashboards, MAX_DASHBOARDS,
 import { addFavorite, listFavorites, removeFavorite } from "../lib/midterms/favorites";
 import { balance, raceDetail, summarize, type RaceSummary } from "../lib/midterms/races";
 import { fetchCatalog, resetCivicMemo } from "../lib/midterms/civic";
+import { raceLabel } from "../lib/midterms/view";
 import { testDb } from "./sqlite-db";
 
 const NOW = 1_800_000_000_000; // 2027, after the polls opened
@@ -72,6 +73,16 @@ describe("summarize", () => {
     const ratings = [{ office: "house" as const, state: "PA", district: 7, rating: "tossup" as const }];
     expect(summarize(raw({ type: "House of Representatives", election_name: "Pennsylvania US House 7", district: "PA-07" }), ratings)?.rating).toBe("tossup");
     expect(summarize(raw({ type: "House of Representatives", election_name: "Pennsylvania US House 8", district: "PA-08" }), ratings)?.rating).toBeNull();
+  });
+
+  it("describes ballot measures from Ballotpedia, or from the name's own description", () => {
+    const sheriffs = summarize(raw({ type: "Referendum", province: "MO", election_name: "Missouri Amendment 8" }), [])!;
+    expect(sheriffs.about).toEqual({ text: "Require the election of county sheriffs", url: expect.stringContaining("ballotpedia.org/Missouri_Amendment_8") });
+    const unknown = summarize(raw({ type: "Proposition", province: "ZZ", election_name: "Nowhere Proposition 9 - Rename the state bird" }), [])!;
+    expect(unknown.about).toEqual({ text: "Rename the state bird", url: null });
+    expect(raceLabel({ ...unknown, state: "AZ", title: "Arizona Proposition 142 - Prohibit DEI Preferences" })).toBe("Proposition 142");
+    expect(summarize(raw({ type: "Referendum", election_name: "Nowhere Amendment 1" }), [])!.about).toBeUndefined();
+    expect(summarize(raw({}), [])!.about).toBeUndefined();
   });
 });
 

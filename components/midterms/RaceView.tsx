@@ -52,7 +52,17 @@ export function RaceView({ id }: { id: number }) {
           <RatingTag rating={race.rating} signal={race.signal} />
           {favorites.ids !== null && <StarButton starred={favorites.ids.includes(race.id)} label={label} onToggle={() => favorites.toggle(race.id)} />}
         </div>
-        {race.office === "measure" && <p className="muted">{race.title}</p>}
+        {race.about && (
+          <p className="mt-race-about">
+            {race.about.text}.{" "}
+            {race.about.url && (
+              <a href={race.about.url} className="small">
+                Summary from Ballotpedia
+              </a>
+            )}
+          </p>
+        )}
+        {race.office === "measure" && <p className="muted small">{race.title}</p>}
         {signalLine(race.signal) && (
           <p className="mt-meta small">
             <span>

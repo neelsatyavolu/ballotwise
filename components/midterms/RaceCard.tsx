@@ -34,6 +34,7 @@ export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred
         <RatingTag rating={race.rating} signal={race.signal} />
         {starred !== null && <StarButton starred={starred} label={label} onToggle={() => onStar(race.id)} />}
       </div>
+      {race.about && <p className="mt-card-about" title={race.about.text}>{race.about.text}</p>}
       <ul className="mt-card-cands">
         {top.map((c) => (
           <li key={c.name} className={c.winner ? "won" : undefined}>
