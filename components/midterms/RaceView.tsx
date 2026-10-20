@@ -1,0 +1,171 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import type { CountyResult, RaceDetail } from "@/lib/midterms/races";
+import { colorOf, fmt, lead, marginLabel, OFFICE_LABEL, partyTag, pct, raceLabel, shade, STATE_NAMES, timeAgo } from "@/lib/midterms/view";
+import { CountyTable } from "./CountyTable";
+import { useFavorites, useLive } from "./hooks";
+import { CountyMap, type CountyFill } from "./maps";
+import { RatingTag, StarButton } from "./RaceCard";
+
+type Fetched = { race: RaceDetail; fetchedAt: number; stale: boolean };
+type Mode = "results" | "reporting" | "2024";
+
+function fillFor(county: CountyResult, mode: Mode): string {
+  if (mode === "reporting") return `color-mix(in srgb, var(--accent) ${Math.round(county.reporting * 0.9)}%, var(--sheet))`;
+  if (mode === "2024") {
+    const m = county.baseline2024;
+    return m === null ? "var(--rule)" : shade(m > 0 ? "var(--dem)" : "var(--rep)", Math.abs(m));
+  }
+  const ahead = lead(county.candidates);
+  return ahead ? shade(colorOf(ahead.leader), ahead.margin) : "var(--rule)";
+}
+
+function CountyTip({ county }: { county: CountyResult }) {
+  return (
+    <>
+      <b>{county.name}</b>
+      <table>
+        <tbody>
+          {county.candidates.slice(0, 4).map((c) => (
+            <tr key={c.name}>
+              <td>
+                <span className="swatch" style={{ background: colorOf(c) }} /> {c.name}
+              </td>
+              <td className="num">{fmt(c.votes)}</td>
+              <td className="num">{pct(c.pct)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <span className="muted">
+        {Math.round(county.reporting)}% reporting{county.baseline2024 !== null && ` · 2024: ${marginLabel(county.baseline2024)}`}
+      </span>
+    </>
+  );
+}
+
+export function RaceView({ id }: { id: number }) {
+  const { data, error, now } = useLive<Fetched>(`/api/midterms/race/${id}`);
+  const favorites = useFavorites();
+  const [mode, setMode] = useState<Mode>("results");
+  const [selected, setSelected] = useState<string | null>(null);
+  const race = data?.race;
+
+  const fills = useMemo(() => {
+    const out = new Map<string, CountyFill>();
+    for (const c of race?.counties ?? []) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} />, active: true });
+    return out;
+  }, [race, mode]);
+
+  if (!race) {
+    return (
+      <div className="wrap mt">
+        {error ? <p className="error">{error}</p> : <p className="muted">Loading results…</p>}
+      </div>
+    );
+  }
+
+  const label = raceLabel(race);
+  const mapped = race.counties.some((c) => c.fips);
+  const called = race.candidates.find((c) => c.winner);
+  const close = race.pollsClose ? new Date(race.pollsClose) : null;
+
+  return (
+    <div className="wrap mt">
+      <nav className="mt-crumbs small" aria-label="Breadcrumb">
+        <Link href="/midterms">Midterms 2026</Link> › <Link href={`/midterms?state=${race.state}`}>{STATE_NAMES[race.state] ?? race.state}</Link> › {OFFICE_LABEL[race.office]}
+      </nav>
+      <header className="mt-race-head">
+        <div className="mt-race-title">
+          <h1>{label}</h1>
+          <RatingTag rating={race.rating} />
+          {favorites.ids !== null && <StarButton starred={favorites.ids.includes(race.id)} label={label} onToggle={() => favorites.toggle(race.id)} />}
+        </div>
+        {race.office === "measure" && <p className="muted">{race.title}</p>}
+        <p className="mt-meta small">
+          <span>{race.reporting > 0 ? `${Math.round(race.reporting)}% reporting` : "No results yet"}</span>
+          {close && <span>Polls close {close.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}</span>}
+          <span>
+            Checked {timeAgo(data.fetchedAt, now)}
+            {data.stale && " (results source is slow; showing the last good count)"}
+          </span>
+        </p>
+        {error && <p className="error small">{error} Showing the last results we got.</p>}
+        {favorites.error && <p className="error small">{favorites.error}</p>}
+      </header>
+
+      <div className="mt-race-grid">
+        <section aria-labelledby="cands">
+          <h2 id="cands">Candidates</h2>
+          <table className="mt-table mt-cands">
+            <thead>
+              <tr>
+                <th>Candidate</th>
+                <th>Party</th>
+                <th className="num">Votes</th>
+                <th className="num">Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              {race.candidates.map((c) => (
+                <tr key={c.name} className={c.winner ? "won" : undefined}>
+                  <td style={{ boxShadow: `inset 4px 0 0 ${colorOf(c)}` }}>
+                    {c.name}
+                    {c.incumbent && <span title="Incumbent">*</span>}
+                    {c.winner && <span className="check"> ✓ Winner</span>}
+                  </td>
+                  <td>{partyTag(c.party) || c.party || "—"}</td>
+                  <td className="num">{fmt(c.votes)}</td>
+                  <td className="num">
+                    <span className="mt-share">
+                      <span style={{ width: `${c.pct}%`, background: colorOf(c) }} />
+                    </span>
+                    {pct(c.pct)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2}>Total</td>
+                <td className="num">{fmt(race.total)}</td>
+                <td className="num">{Math.round(race.reporting)}% in</td>
+              </tr>
+            </tfoot>
+          </table>
+          <p className="muted small mt-source">
+            {called ? `${called.name} was declared the winner by civicAPI's decision desk. ` : "No winner declared yet. "}
+            Results from <a href="https://civicapi.org">civicAPI</a>, which collects them from state and county election offices. * Incumbent.
+          </p>
+        </section>
+
+        <section aria-labelledby="map">
+          <div className="mt-section-head">
+            <h2 id="map">Counties</h2>
+            {mapped && (
+              <div className="mt-seg" role="group" aria-label="Map shows">
+                {(["results", "reporting", "2024"] as const).map((m) => (
+                  <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}>
+                    {m === "results" ? "Leader" : m === "reporting" ? "Reporting" : "2024 president"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {mapped ? (
+            <CountyMap state={race.state} fills={fills} selected={selected} onSelect={setSelected} />
+          ) : (
+            <p className="muted small">
+              {race.counties.length > 1 ? `${STATE_NAMES[race.state] ?? race.state} reports by town, so there's no county map. Every town is in the table below.` : "This state reports one statewide total, so there's no county map."}
+            </p>
+          )}
+          {mapped && race.office === "house" && <p className="muted small">Shaded counties are all or partly in this district.</p>}
+        </section>
+      </div>
+
+      {race.counties.length > 1 && <CountyTable race={race} selected={selected} onSelect={setSelected} />}
+    </div>
+  );
+}

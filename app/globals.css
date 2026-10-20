@@ -334,6 +334,14 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
   .panel { padding: 18px; }
   button.oval { width: 30px; height: 20px; }
 }
+@media (max-width: 420px) {
+  .site-header .wrap { gap: 10px; }
+  .brand { font-size: 17px; gap: 7px; }
+  .nav { gap: 10px; }
+}
+@media (max-width: 370px) {
+  .brand { font-size: 15px; }
+}
 
 /* Ballot dashboard */
 .ballot-head { display: grid; gap: 8px; }

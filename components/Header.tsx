@@ -23,6 +23,7 @@ export function Header() {
           Ballotwise
         </Link>
         <nav className="nav" aria-label="Main">
+          <Link href="/midterms">Midterms</Link>
           <Link href="/method" className="wide-only">How it works</Link>
           {loading ? null : user ? (
             <>
