@@ -28,7 +28,18 @@ export type RaceSummary = {
   /** Market odds and polling behind the rating, attached by the overview; absent on bare catalog entries. */
   signal?: Signal | null;
 };
-export type CountyResult = { fips: string | null; name: string; reporting: number; total: number; candidates: Omit<Candidate, "incumbent" | "winner">[]; baseline2024: number | null };
+/** A county's 2024 presidential vote. */
+export type Pres2024 = { harris: number; trump: number; total: number };
+export type CountyResult = {
+  fips: string | null;
+  name: string;
+  reporting: number;
+  total: number;
+  candidates: Omit<Candidate, "incumbent" | "winner">[];
+  /** 2024 presidential margin, Harris minus Trump, in points. */
+  baseline2024: number | null;
+  pres2024: Pres2024 | null;
+};
 export type RaceDetail = RaceSummary & { pollsClose: string | null; updated: string | null; counties: CountyResult[] };
 
 // civicAPI fields are loosely typed and sometimes missing, so every field falls back to a safe default.
@@ -137,20 +148,22 @@ function aboutMeasure(name: string): RaceSummary["about"] {
 /**
  * One race with its county (or town) breakdown. The detail endpoint doesn't say which office a race is for,
  * so that comes from the race's catalog `summary`; votes come from the fresher detail.
- * `baseline` maps county FIPS to the 2024 presidential margin.
+ * `baseline` maps county FIPS to the 2024 presidential vote as [Harris, Trump, total].
  */
-export function raceDetail(summary: RaceSummary, input: unknown, baseline: Readonly<Record<string, number>>): RaceDetail {
+export function raceDetail(summary: RaceSummary, input: unknown, baseline: Readonly<Record<string, readonly [number, number, number]>>): RaceDetail {
   const race = civicDetail.parse(input);
   const list = candidates(race.candidates);
   const counties = Object.values(race.region_results ?? {}).map((region) => {
     const list = candidates(region.candidates);
+    const pres = region.fips ? baseline[region.fips] : undefined;
     return {
       fips: region.fips ?? null,
       name: region.name,
       reporting: region.percent_reporting ?? 0,
       total: list.reduce((sum, c) => sum + c.votes, 0),
       candidates: list.map(({ name, party, votes, pct }) => ({ name, party, votes, pct })),
-      baseline2024: region.fips ? (baseline[region.fips] ?? null) : null,
+      baseline2024: pres ? Math.round(((pres[0] - pres[1]) / pres[2]) * 1000) / 10 : null,
+      pres2024: pres ? { harris: pres[0], trump: pres[1], total: pres[2] } : null,
     };
   });
   return {

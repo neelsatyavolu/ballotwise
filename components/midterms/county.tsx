@@ -15,7 +15,33 @@ export function fillFor(county: CountyResult, mode: Mode): string {
   return ahead ? shade(colorOf(ahead.leader), ahead.margin) : "var(--in-race)";
 }
 
-export function CountyTip({ county }: { county: CountyResult }) {
+/** Hover card for a county: this race's count, or in "2024" mode the 2024 presidential vote. */
+export function CountyTip({ county, mode = "results" }: { county: CountyResult; mode?: Mode }) {
+  const p = county.pres2024;
+  if (mode === "2024") {
+    const rows = p ? [{ name: "Kamala Harris", color: "var(--dem)", votes: p.harris }, { name: "Donald Trump", color: "var(--rep)", votes: p.trump }] : [];
+    return (
+      <>
+        <b>{county.name}</b>
+        {p ? (
+          <table>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.name}>
+                  <td>
+                    <span className="swatch" style={{ background: c.color }} /> {c.name}
+                  </td>
+                  <td className="num">{fmt(c.votes)}</td>
+                  <td className="num">{pct((c.votes / p.total) * 100)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+        <span className="muted">{county.baseline2024 !== null ? `2024 president: ${marginLabel(county.baseline2024)}` : "No 2024 county result"}</span>
+      </>
+    );
+  }
   return (
     <>
       <b>{county.name}</b>

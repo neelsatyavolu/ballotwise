@@ -23,7 +23,7 @@ export function RaceView({ id }: { id: number }) {
 
   const fills = useMemo(() => {
     const out = new Map<string, CountyFill>();
-    for (const c of race?.counties ?? []) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} />, active: true });
+    for (const c of race?.counties ?? []) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} mode={mode} />, active: true });
     return out;
   }, [race, mode]);
 

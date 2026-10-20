@@ -89,12 +89,13 @@ describe("summarize", () => {
 describe("raceDetail", () => {
   it("turns region results into counties with their 2024 margin", () => {
     const summary = summarize(raw({ id: 87000, type: "House of Representatives", election_name: "Pennsylvania US House 5", district: "PA-05" }), [])!;
-    const detail = raceDetail(summary, fixture("civic-race-pa05.json"), { "42029": 14.5 });
+    const detail = raceDetail(summary, fixture("civic-race-pa05.json"), { "42029": [300, 155, 460] });
     expect(detail.office).toBe("house");
     expect(detail.district).toBe(5);
     const chester = detail.counties.find((c) => c.name === "Chester")!;
     expect(chester.fips).toBe("42029");
-    expect(chester.baseline2024).toBe(14.5);
+    expect(chester.baseline2024).toBe(31.5);
+    expect(chester.pres2024).toEqual({ harris: 300, trump: 155, total: 460 });
     expect(detail.counties.length).toBeGreaterThan(0);
     expect(detail.pollsClose).toMatch(/^2026-11-0/);
     expect(detail.candidates.map((c) => c.name)).toContain("Mary Gay Scanlon");
@@ -102,7 +103,7 @@ describe("raceDetail", () => {
 
   it("keeps town-level regions without a FIPS code", () => {
     const detail = raceDetail(summarize(raw({}), [])!, { ...raw({}), region_results: { abbot: { name: "Abbot", type: "Township", percent_reporting: 0, candidates: [] } } }, {});
-    expect(detail.counties[0]).toMatchObject({ name: "Abbot", fips: null, baseline2024: null });
+    expect(detail.counties[0]).toMatchObject({ name: "Abbot", fips: null, baseline2024: null, pres2024: null });
   });
 });
 

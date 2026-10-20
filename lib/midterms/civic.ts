@@ -99,7 +99,7 @@ export async function fetchCatalog(now: number, ratings: readonly RatedRace[] = 
 }
 
 /** One tracked race (from the catalog) with county results. */
-export async function fetchRace(summary: RaceSummary, now: number, baseline: Readonly<Record<string, number>>): Promise<Fetched<{ race: RaceDetail }>> {
+export async function fetchRace(summary: RaceSummary, now: number, baseline: Readonly<Record<string, readonly [number, number, number]>>): Promise<Fetched<{ race: RaceDetail }>> {
   const memo = raceMemo.get(summary.id);
   if (memo && now - memo.at < FRESH_MS) return { race: memo.value, fetchedAt: memo.at, stale: false };
   try {
