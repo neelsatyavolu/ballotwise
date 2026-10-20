@@ -264,3 +264,9 @@
 .mt-line.hover { stroke-width: 1.6; }
 .mt-line.selected { stroke-width: 2.4; }
 .mt-line.focus { stroke-width: 1.4; }
+
+/* The tracker is wider than the rest of the site; widen the header and footer on its pages so everything lines up. */
+body:has(.wrap.mt) .site-header .wrap,
+body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
+/* Pull the mode pills out by their padding so their text lines up with the page title. */
+.mt-modes { margin-left: -14px; }
