@@ -123,10 +123,18 @@ describe("Polymarket", () => {
       },
       { title: "New Hampshire Governor Election Winner", markets: [{ question: "Will the Democrats win?", outcomePrices: '["0.3","0.7"]' }, { question: "Will the Republicans win?", outcomePrices: '["0.7","0.3"]' }] },
       { title: "Which party will win the Senate in 2026?", markets: [] },
+      // Polymarket's own title, trailing spaces and all.
+      { title: "Montana Senate Election Winner   ", markets: [{ groupItemTitle: "Steve Daines (R)", outcomePrices: '["0.9","0.1"]' }, { groupItemTitle: "Democrat", outcomePrices: '["0.1","0.9"]' }] },
+      { title: "CA-22 House Election Winner", volume: 50, markets: [{ groupItemTitle: "David Valadao (R)", question: "Will the Republican Party win the CA-22 House seat?", outcomePrices: '["0.095","0.905"]' }, { groupItemTitle: "Randy Villegas (D)", outcomePrices: '["0.915","0.085"]' }] },
+      { title: "WY-AL House Election Winner", markets: [{ question: "Will the Republican Party win the WY-AL House seat?", outcomePrices: '["0.97","0.03"]' }] },
+      { title: "CA-22 Margin of Victory", markets: [{ groupItemTitle: "D by 5+", outcomePrices: '["0.3","0.7"]' }] },
     ]);
     expect(odds.get("senate:NE:")).toEqual({ R: 0.6, I: 0.4 });
     expect(odds.get("governor:NH:")).toEqual({ D: 0.3, R: 0.7 });
-    expect(odds.size).toBe(2);
+    expect(odds.get("senate:MT:")).toEqual({ R: 0.9, D: 0.1 });
+    expect(odds.get("house:CA:22")!.D).toBeCloseTo(0.906, 2);
+    expect(odds.get("house:WY:0")).toEqual({ R: expect.closeTo(0.97, 3), D: expect.closeTo(0.03, 3) });
+    expect(odds.size).toBe(5);
   });
 
   it("averages markets across both sources and names them", () => {

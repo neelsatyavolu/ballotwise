@@ -129,10 +129,16 @@ function normalize(entries: readonly { side: Side; price: number }[], hasIndepen
   const total = entries.reduce((s, e) => s + e.price, 0);
   if (!total) return {};
   const priced = new Set(entries.map((e) => e.side));
-  const short = total < 0.9 ? 1 - total : 0;
+  let short = 0;
   let missingSide: Side | null = null;
-  if (short && priced.has("D") !== priced.has("R")) missingSide = priced.has("D") ? "R" : "D";
-  else if (short && hasIndependent && !priced.has("I")) missingSide = "I";
+  if (priced.has("D") !== priced.has("R") && total < 1) {
+    // Only one major party has a price: the other gets whatever is left.
+    missingSide = priced.has("D") ? "R" : "D";
+    short = 1 - total;
+  } else if (total < 0.9 && hasIndependent && !priced.has("I")) {
+    missingSide = "I";
+    short = 1 - total;
+  }
   const scale = missingSide ? 1 : total;
   const out: Partial<Record<Side, number>> = {};
   for (const e of entries) out[e.side] = (out[e.side] ?? 0) + e.price / scale;
@@ -156,7 +162,7 @@ export function kalshiTickers(races: readonly RaceSummary[], houseCovered: Reado
 
 // ---------- Polymarket ----------
 
-type PolyEvent = { title?: string; markets?: { question?: string; groupItemTitle?: string; outcomePrices?: string; active?: boolean; closed?: boolean }[] };
+type PolyEvent = { title?: string; volume?: number | string; markets?: { question?: string; groupItemTitle?: string; outcomePrices?: string; active?: boolean; closed?: boolean }[] };
 
 function polySide(text: string): Side | null {
   const tag = text.match(/\((D|R|I)\)/);
@@ -167,13 +173,24 @@ function polySide(text: string): Side | null {
   return null;
 }
 
-/** Normalized win chances per Senate and Governor race from Polymarket's "{State} {Office} Election Winner" events. */
+/** The race a Polymarket winner event is about: "{State} Senate|Governor Election Winner" or "PA-07 House Election Winner". */
+function polyRace(title: string | undefined): string | null {
+  const t = title?.trim() ?? "";
+  const statewide = t.match(/^(.+?) (Senate|Governor) Election Winner$/);
+  if (statewide) {
+    const state = STATE_BY_NAME.get(statewide[1].toLowerCase());
+    return state ? raceKey(statewide[2] === "Senate" ? "senate" : "governor", state, null) : null;
+  }
+  const house = t.match(/^([A-Z]{2})-(\d+|AL) House Election Winner$/);
+  return house ? raceKey("house", house[1], house[2] === "AL" ? 0 : Number(house[2])) : null;
+}
+
+/** Normalized win chances per race from Polymarket's winner events. When a race appears twice, the busier event wins. */
 export function parsePolymarket(events: readonly PolyEvent[]): Map<string, Partial<Record<Side, number>>> {
-  const out = new Map<string, Partial<Record<Side, number>>>();
+  const best = new Map<string, { volume: number; odds: Partial<Record<Side, number>> }>();
   for (const e of events) {
-    const m = e.title?.match(/^(.+?) (Senate|Governor) Election Winner$/);
-    const state = m ? STATE_BY_NAME.get(m[1].toLowerCase()) : undefined;
-    if (!m || !state) continue;
+    const key = polyRace(e.title);
+    if (!key) continue;
     const entries: { side: Side; price: number }[] = [];
     for (const mk of e.markets ?? []) {
       if (mk.active === false || mk.closed || !mk.outcomePrices) continue;
@@ -186,9 +203,10 @@ export function parsePolymarket(events: readonly PolyEvent[]): Map<string, Parti
       }
       if (side && Number.isFinite(yes)) entries.push({ side, price: yes });
     }
-    if (entries.length) out.set(raceKey(m[2] === "Senate" ? "senate" : "governor", state, null), normalize(entries));
+    const volume = Number(e.volume) || 0;
+    if (entries.length && (!best.has(key) || volume > best.get(key)!.volume)) best.set(key, { volume, odds: normalize(entries) });
   }
-  return out;
+  return new Map([...best].map(([key, v]) => [key, v.odds]));
 }
 
 /** Averages each race's chances across the markets that price it. */
@@ -302,9 +320,24 @@ async function fetchKalshi(races: readonly RaceSummary[], independents: Readonly
   return Object.fromEntries(parseKalshi(all, independents));
 }
 
+const POLY_PAGE = 100;
+/** House events come about 3.5 MB per page of 100; this caps the pages read per refresh (about 900 events today). */
+const POLY_HOUSE_MAX_PAGES = 12;
+
+const pageOf = (p: unknown) => (Array.isArray(p) ? (p as PolyEvent[]) : []);
+
+/** Senate and Governor in one page each, then House district pages one at a time, parsed as they arrive to keep memory low. */
 async function fetchPolymarket(): Promise<Book> {
-  const pages = await Promise.all(["senate-midterms", "governor-midterms"].map((tag) => getJson(`${POLYMARKET}?closed=false&limit=100&tag_slug=${tag}`)));
-  return Object.fromEntries(parsePolymarket(pages.flatMap((p) => (Array.isArray(p) ? (p as PolyEvent[]) : []))));
+  const book: Book = {};
+  // Senate and Governor pages and each House page are parsed separately; a race appears in only one of them.
+  for (const tag of ["senate-midterms", "governor-midterms"]) Object.assign(book, Object.fromEntries(parsePolymarket(pageOf(await getJson(`${POLYMARKET}?closed=false&limit=${POLY_PAGE}&tag_slug=${tag}`)))));
+  const house = new Map<string, Partial<Record<Side, number>>>();
+  for (let page = 0; page < POLY_HOUSE_MAX_PAGES; page++) {
+    const events = pageOf(await getJson(`${POLYMARKET}?closed=false&limit=${POLY_PAGE}&offset=${page * POLY_PAGE}&tag_slug=house-elections&order=id&ascending=true`));
+    for (const [key, odds] of parsePolymarket(events)) if (!house.has(key)) house.set(key, odds);
+    if (events.length < POLY_PAGE) break;
+  }
+  return { ...book, ...Object.fromEntries(house) };
 }
 
 async function fetchPolls(races: readonly RaceSummary[], now: number): Promise<Record<string, Polls>> {
