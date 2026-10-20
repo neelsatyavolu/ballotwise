@@ -1,5 +1,6 @@
 // Rendered inside the tracker's client components.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { atLeast, boundsOf, framed, useTween, type Box } from "./zoom";
 
 export type City = { name: string; at: [number, number] };
 type StateMap = { state: string; name: string; viewBox: string; outline: string; counties: { fips: string; name: string; d: string }[]; cities?: City[] };
@@ -30,13 +31,15 @@ function useMap<T>(name: string): T | null | "error" {
 type Tip = { x: number; y: number; content: ReactNode } | null;
 
 /** `outlines` are drawn above every shape, so neighbors can't cover part of a hovered or selected border. */
-function MapFrame({ viewBox, children, tip, label, outlines }: { viewBox: string; children: ReactNode; tip: Tip; label: string; outlines: { d: string; kind: "hover" | "selected" }[] }) {
+/** `aspect` holds the map's shape while its view box zooms. */
+function MapFrame({ viewBox, children, tip, label, outlines, back, aspect }: { viewBox: string; children: ReactNode; tip: Tip; label: string; outlines: { d: string; kind: "hover" | "selected" }[]; back?: ReactNode; aspect?: string }) {
   return (
     <div className="mt-map">
-      <svg viewBox={viewBox} role="img" aria-label={label}>
+      {back}
+      <svg viewBox={viewBox} role="img" aria-label={label} style={aspect ? { aspectRatio: aspect } : undefined}>
         {children}
         {outlines.map((o) => (
-          <path key={o.kind} d={o.d} className={`mt-line ${o.kind}`} />
+          <path key={o.kind} d={o.d} className={`mt-line ${o.kind}`} vectorEffect="non-scaling-stroke" />
         ))}
       </svg>
       {tip && (
@@ -74,7 +77,7 @@ function placeCities(cities: readonly City[], unit: number, [vx, vy, vw, vh]: re
     if (placed.some((p) => Math.hypot(p.at[0] - x, p.at[1] - y) < DOT_GAP * unit)) continue;
     // Semibold 11px averages about 6.4px a character; a few pixels of gap keep neighbors readable.
     const w = (c.name.length * 6.4 + 8) * unit;
-    const h = (LABEL_PX / 2 + 0.5) * unit;
+    const h = (LABEL_PX / 2 + 1.5) * unit;
     const right = [x - 3 * unit, y - h, x + w, y + h];
     const left = [x - w, y - h, x + 3 * unit, y + h];
     const side = free(right) ? right : free(left) ? left : null;
@@ -118,24 +121,45 @@ export function CityLabels({ cities, view }: { cities: readonly City[]; view: re
 
 export type CountyFill = { fill: string; tip: ReactNode; active: boolean };
 
-/** A state's counties. Counties without a fill (outside a House district, say) are drawn faint. */
+/** A state's counties. Counties without a fill (outside a House district, say) are drawn faint. The selected county is zoomed to. */
 export function CountyMap({ state, fills, selected, onSelect }: { state: string; fills: Map<string, CountyFill>; selected: string | null; onSelect: (fips: string | null) => void }) {
   const map = useMap<StateMap>(state);
   const [tip, setTip] = useState<Tip>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const ready = map && map !== "error" ? map : null;
+  const selectedPath = ready?.counties.find((c) => c.fips === selected)?.d;
+  const full = useMemo(() => (ready?.viewBox ?? "0 0 640 440").split(" ").map(Number) as Box, [ready]);
+  const target = useMemo<Box>(() => {
+    const b = selectedPath && boundsOf([selectedPath]);
+    return b ? framed(atLeast(b, [full[0], full[1], full[0] + full[2], full[1] + full[3]], 0.2)) : full;
+  }, [full, selectedPath]);
+  const box = useTween(target);
   if (map === "error") return <p className="muted small">The map couldn&apos;t load. The table below has every county.</p>;
   if (!map) return <div className="mt-map mt-map-loading" aria-busy />;
-  const selectedPath = map.counties.find((c) => c.fips === selected)?.d;
   const outlines = [...(selectedPath ? [{ d: selectedPath, kind: "selected" as const }] : []), ...(hover ? [{ d: hover, kind: "hover" as const }] : [])];
   return (
-    <MapFrame viewBox={map.viewBox} tip={tip} label={`County map of ${map.name}`} outlines={outlines}>
-      <path d={map.outline} className="mt-outline" />
+    <MapFrame
+      viewBox={box.join(" ")}
+      tip={tip}
+      label={`County map of ${map.name}`}
+      outlines={outlines}
+      aspect={`${full[2]} / ${full[3]}`}
+      back={
+        selectedPath && (
+          <button type="button" className="mt-zoom-back" onClick={() => onSelect(null)}>
+            ← All of {map.name}
+          </button>
+        )
+      }
+    >
+      <path d={map.outline} className="mt-outline" vectorEffect="non-scaling-stroke" />
       {map.counties.map((c) => {
         const f = fills.get(c.fips);
         return (
           <path
             key={c.fips}
             d={c.d}
+            vectorEffect="non-scaling-stroke"
             className={`mt-county${f?.active ? " active" : ""}`}
             style={{ fill: f?.fill }}
             onPointerMove={(e) => {
@@ -151,7 +175,7 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
           />
         );
       })}
-      {map.cities && <CityLabels cities={map.cities} view={map.viewBox.split(" ").map(Number)} />}
+      {map.cities && <CityLabels cities={map.cities} view={target} />}
     </MapFrame>
   );
 }

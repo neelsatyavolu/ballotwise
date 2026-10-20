@@ -249,7 +249,7 @@
 .mt-state { fill: color-mix(in srgb, var(--rule) 45%, var(--sheet)); stroke: var(--sheet); stroke-width: 1; transition: fill 0.4s, opacity 0.3s; }
 .mt-state.active { cursor: pointer; }
 .mt-state.dim { opacity: 0.35; }
-.mt-zoom-county { fill: color-mix(in srgb, var(--rule) 70%, var(--sheet)); stroke: var(--sheet); stroke-width: 0.8; transition: fill 0.4s; }
+.mt-zoom-county { fill: color-mix(in srgb, var(--rule) 70%, var(--sheet)); stroke: var(--sheet); stroke-width: 0.8; transition: fill 0.4s; cursor: pointer; }
 .mt-zoom-back { position: absolute; top: 10px; left: 10px; z-index: 2; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 4px 12px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--ink); }
 .mt-zoom-back:hover { border-color: var(--ink); }
 
