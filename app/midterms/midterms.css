@@ -267,6 +267,9 @@
 .mt-line.hover { stroke-width: 1.6; }
 .mt-line.selected { stroke-width: 2.4; }
 .mt-line.focus { stroke-width: 1.4; }
+.mt-cities { pointer-events: none; font-weight: 600; }
+.mt-cities circle { fill: var(--ink); stroke: var(--sheet); }
+.mt-cities text { fill: var(--ink); stroke: color-mix(in srgb, var(--sheet) 85%, transparent); stroke-linejoin: round; paint-order: stroke; }
 
 /* The tracker is wider than the rest of the site; widen the header and footer on its pages so everything lines up. */
 body:has(.wrap.mt) .site-header .wrap,

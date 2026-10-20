@@ -1,8 +1,9 @@
 // Rendered inside OfficeView.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CityLabels, type City } from "./maps";
 
 type Nation = { viewBox: string; borders: string; states: { state: string; name: string; d: string; box: [number, number, number, number] }[] };
-type Layer = { counties: { fips: string; name: string; d: string }[] };
+type Layer = { counties: { fips: string; name: string; d: string }[]; cities?: City[] };
 type Box = [number, number, number, number]; // x, y, width, height
 export type Fill = { fill: string; tip: ReactNode };
 
@@ -143,6 +144,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, label }: {
     setTip({ x: e.clientX - r.left, y: e.clientY - r.top, content });
   };
   const focusedPath = focused?.d;
+  const cities = focus && layer?.state === focus ? layer.data.cities : undefined;
 
   return (
     <div className="mt-map mt-zoom" ref={wrap}>
@@ -198,6 +200,8 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, label }: {
         })}
         {focusedPath && <path d={focusedPath} className="mt-line focus" vectorEffect="non-scaling-stroke" />}
         {hover && <path d={hover} className="mt-line hover" vectorEffect="non-scaling-stroke" />}
+        {/* Laid out for where the zoom is heading, so labels don't reshuffle on every frame. */}
+        {cities && <CityLabels cities={cities} view={target} />}
       </svg>
       {tip && (
         <div className="mt-tip" style={{ left: tip.x, top: tip.y }} role="status">
