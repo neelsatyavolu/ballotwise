@@ -67,6 +67,8 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, label }: {
   const [nation, setNation] = useState<Nation | null | "error">(null);
   const [layer, setLayer] = useState<{ state: string; data: Layer } | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; content: ReactNode } | null>(null);
+  // Outlines are drawn in a layer above every shape, so neighbors can't cover part of them.
+  const [hover, setHover] = useState<string | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -98,6 +100,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, label }: {
     setTip({ x: e.clientX - r.left, y: e.clientY - r.top, content });
   };
   const counties = focus && layer?.state === focus ? layer.data.counties : null;
+  const focusedPath = focus ? nation.states.find((s) => s.state === focus)?.d : undefined;
 
   return (
     <div className="mt-map mt-zoom" ref={wrap}>
@@ -115,10 +118,17 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, label }: {
               key={s.state}
               d={s.d}
               vectorEffect="non-scaling-stroke"
-              className={`mt-state${f ? " active" : ""}${dim ? " dim" : ""}${s.state === focus ? " focused" : ""}`}
+              className={`mt-state${f ? " active" : ""}${dim ? " dim" : ""}`}
               style={{ fill: f?.fill }}
-              onPointerMove={(e) => !counties && showTip(e, f?.tip ?? <b>{s.name}</b>)}
-              onPointerLeave={() => setTip(null)}
+              onPointerMove={(e) => {
+                if (counties) return;
+                showTip(e, f?.tip ?? <b>{s.name}</b>);
+                setHover(f ? s.d : null);
+              }}
+              onPointerLeave={() => {
+                setTip(null);
+                setHover(null);
+              }}
               onClick={() => f && onFocus(s.state === focus ? null : s.state)}
             />
           );
@@ -133,11 +143,19 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, label }: {
               vectorEffect="non-scaling-stroke"
               className={`mt-zoom-county${f ? " active" : ""}`}
               style={{ fill: f?.fill }}
-              onPointerMove={(e) => showTip(e, f?.tip ?? <b>{c.name}</b>)}
-              onPointerLeave={() => setTip(null)}
+              onPointerMove={(e) => {
+                showTip(e, f?.tip ?? <b>{c.name}</b>);
+                setHover(c.d);
+              }}
+              onPointerLeave={() => {
+                setTip(null);
+                setHover(null);
+              }}
             />
           );
         })}
+        {focusedPath && <path d={focusedPath} className="mt-line focus" vectorEffect="non-scaling-stroke" />}
+        {hover && <path d={hover} className="mt-line hover" vectorEffect="non-scaling-stroke" />}
       </svg>
       {tip && (
         <div className="mt-tip" style={{ left: tip.x, top: tip.y }} role="status">

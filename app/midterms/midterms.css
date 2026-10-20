@@ -103,8 +103,6 @@
 .mt-outline { fill: none; stroke: var(--rule-strong); stroke-width: 1; }
 .mt-county { fill: color-mix(in srgb, var(--rule) 45%, var(--sheet)); stroke: var(--sheet); stroke-width: 0.6; transition: fill 0.4s; }
 .mt-county.active { cursor: pointer; }
-.mt-county.active:hover { stroke: var(--ink); stroke-width: 1.4; }
-.mt-county.selected { stroke: var(--ink); stroke-width: 2; }
 .mt-borders { fill: none; stroke: var(--sheet); stroke-width: 1; pointer-events: none; }
 .mt-tip { position: absolute; z-index: 5; transform: translate(12px, 12px); pointer-events: none; min-width: 180px; max-width: 280px; padding: 8px 10px; background: var(--sheet); border: 1px solid var(--ink); border-radius: var(--radius); font-size: 13px; display: grid; gap: 4px; }
 .mt-tip table { border-collapse: collapse; width: 100%; }
@@ -247,11 +245,8 @@
 .mt-zoom svg { aspect-ratio: 975 / 610; }
 .mt-state { fill: color-mix(in srgb, var(--rule) 45%, var(--sheet)); stroke: var(--sheet); stroke-width: 1; transition: fill 0.4s, opacity 0.3s; }
 .mt-state.active { cursor: pointer; }
-.mt-state.active:hover { stroke: var(--ink); stroke-width: 1.5; }
 .mt-state.dim { opacity: 0.35; }
-.mt-state.focused { stroke: var(--ink); stroke-width: 2; }
 .mt-zoom-county { fill: color-mix(in srgb, var(--rule) 70%, var(--sheet)); stroke: var(--sheet); stroke-width: 0.8; transition: fill 0.4s; }
-.mt-zoom-county:hover { stroke: var(--ink); stroke-width: 1.5; }
 .mt-zoom-back { position: absolute; top: 10px; left: 10px; z-index: 2; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 4px 12px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--ink); }
 .mt-zoom-back:hover { border-color: var(--ink); }
 
@@ -263,3 +258,9 @@
   .mt-seats-nums b { font-size: 26px; }
   .mt-seats-mid { order: 3; flex-basis: 100%; text-align: left; }
 }
+
+/* Hover, selection and focus outlines, drawn above all shapes so every edge is the same width. */
+.mt-line { fill: none; pointer-events: none; stroke: var(--ink); stroke-linejoin: round; }
+.mt-line.hover { stroke-width: 1.6; }
+.mt-line.selected { stroke-width: 2.4; }
+.mt-line.focus { stroke-width: 1.4; }

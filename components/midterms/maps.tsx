@@ -28,11 +28,15 @@ function useMap<T>(name: string): T | null | "error" {
 
 type Tip = { x: number; y: number; content: ReactNode } | null;
 
-function MapFrame({ viewBox, children, tip, label }: { viewBox: string; children: ReactNode; tip: Tip; label: string }) {
+/** `outlines` are drawn above every shape, so neighbors can't cover part of a hovered or selected border. */
+function MapFrame({ viewBox, children, tip, label, outlines }: { viewBox: string; children: ReactNode; tip: Tip; label: string; outlines: { d: string; kind: "hover" | "selected" }[] }) {
   return (
     <div className="mt-map">
       <svg viewBox={viewBox} role="img" aria-label={label}>
         {children}
+        {outlines.map((o) => (
+          <path key={o.kind} d={o.d} className={`mt-line ${o.kind}`} />
+        ))}
       </svg>
       {tip && (
         <div className="mt-tip" style={{ left: tip.x, top: tip.y }} role="status">
@@ -55,10 +59,13 @@ export type CountyFill = { fill: string; tip: ReactNode; active: boolean };
 export function CountyMap({ state, fills, selected, onSelect }: { state: string; fills: Map<string, CountyFill>; selected: string | null; onSelect: (fips: string | null) => void }) {
   const map = useMap<StateMap>(state);
   const [tip, setTip] = useState<Tip>(null);
+  const [hover, setHover] = useState<string | null>(null);
   if (map === "error") return <p className="muted small">The map couldn&apos;t load. The table below has every county.</p>;
   if (!map) return <div className="mt-map mt-map-loading" aria-busy />;
+  const selectedPath = map.counties.find((c) => c.fips === selected)?.d;
+  const outlines = [...(selectedPath ? [{ d: selectedPath, kind: "selected" as const }] : []), ...(hover ? [{ d: hover, kind: "hover" as const }] : [])];
   return (
-    <MapFrame viewBox={map.viewBox} tip={tip} label={`County map of ${map.name}`}>
+    <MapFrame viewBox={map.viewBox} tip={tip} label={`County map of ${map.name}`} outlines={outlines}>
       <path d={map.outline} className="mt-outline" />
       {map.counties.map((c) => {
         const f = fills.get(c.fips);
@@ -66,10 +73,17 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
           <path
             key={c.fips}
             d={c.d}
-            className={`mt-county${f?.active ? " active" : ""}${selected === c.fips ? " selected" : ""}`}
+            className={`mt-county${f?.active ? " active" : ""}`}
             style={{ fill: f?.fill }}
-            onPointerMove={(e) => f && setTip({ ...tipAt(e), content: f.tip })}
-            onPointerLeave={() => setTip(null)}
+            onPointerMove={(e) => {
+              if (!f) return;
+              setTip({ ...tipAt(e), content: f.tip });
+              setHover(c.d);
+            }}
+            onPointerLeave={() => {
+              setTip(null);
+              setHover(null);
+            }}
             onClick={() => f?.active && onSelect(selected === c.fips ? null : c.fips)}
           />
         );
@@ -82,10 +96,11 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
 export function NationMap({ fills, onPick, label }: { fills: Map<string, { fill: string; tip: ReactNode }>; onPick: (state: string) => void; label: string }) {
   const map = useMap<NationMap>("US");
   const [tip, setTip] = useState<Tip>(null);
+  const [hover, setHover] = useState<string | null>(null);
   if (map === "error") return null;
   if (!map) return <div className="mt-map mt-map-loading nation" aria-busy />;
   return (
-    <MapFrame viewBox={map.viewBox} tip={tip} label={label}>
+    <MapFrame viewBox={map.viewBox} tip={tip} label={label} outlines={hover ? [{ d: hover, kind: "hover" }] : []}>
       {map.states.map((s) => {
         const f = fills.get(s.state);
         return (
@@ -94,8 +109,14 @@ export function NationMap({ fills, onPick, label }: { fills: Map<string, { fill:
             d={s.d}
             className={`mt-county${f ? " active" : ""}`}
             style={{ fill: f?.fill }}
-            onPointerMove={(e) => setTip({ ...tipAt(e), content: f?.tip ?? <b>{s.name}</b> })}
-            onPointerLeave={() => setTip(null)}
+            onPointerMove={(e) => {
+              setTip({ ...tipAt(e), content: f?.tip ?? <b>{s.name}</b> });
+              setHover(f ? s.d : null);
+            }}
+            onPointerLeave={() => {
+              setTip(null);
+              setHover(null);
+            }}
             onClick={() => f && onPick(s.state)}
           />
         );
