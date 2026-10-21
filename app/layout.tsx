@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Script from "next/script";
 import { Public_Sans, Source_Serif_4 } from "next/font/google";
 import { AccountProvider } from "@/components/AccountProvider";
 import { Header } from "@/components/Header";
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             </div>
           </footer>
         </AccountProvider>
+        <Script src="https://analytics.n3el.dev/p.js" strategy="afterInteractive" />
       </body>
     </html>
   );

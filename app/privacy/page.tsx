@@ -23,7 +23,8 @@ export default function Privacy() {
         <li><strong>Your ballot and guides:</strong> the races we find for you, races you search for, your answers on each race&apos;s issues, and which races you have marked as voted.</li>
         <li><strong>Grok connection:</strong> the sign-in tokens that let us use your Grok account for you. They are encrypted before they are stored. We never see your Grok password.</li>
         <li><strong>Security records:</strong> failed sign-ins and password reset requests, stored only as a one-way hash of your email so we can slow down password guessing. They are deleted within an hour.</li>
-        <li><strong>One cookie:</strong> a sign-in cookie that keeps you signed in for up to 30 days. We use no advertising, analytics or tracking cookies, and no tracking scripts.</li>
+        <li><strong>One cookie:</strong> a sign-in cookie that keeps you signed in for up to 30 days. We use no advertising, analytics or tracking cookies.</li>
+        <li><strong>Page views:</strong> a cookieless counter records the page you open (without anything after the &ldquo;?&rdquo; and with ids blanked out), the site that sent you, your country, and your browser and device type. It stores no IP address or account details and can&apos;t link your visits from one day to the next.</li>
       </ul>
 
       <h2>How we use it</h2>
