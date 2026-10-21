@@ -1,7 +1,7 @@
 import type { ZodType } from "zod";
 import { extractJson } from "../json";
 import { normalizeUrl } from "../url";
-import { GROK_API_BASE, grokModel, type GrokTokens } from "./oauth";
+import { CODEX_RESPONSES_URL, GROK_API_BASE, grokModel, PROVIDER_LABEL, type GrokTokens } from "./oauth";
 
 const TIMEOUT_MS = 280_000;
 
@@ -45,26 +45,61 @@ async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<Stre
   }
 }
 
-async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onProgress: (p: Progress) => void): Promise<GrokReply> {
-  let res: Response;
-  try {
-    res = await fetch(`${GROK_API_BASE}/responses`, {
+type InputMessage = { role: string; content: string };
+
+/** The Responses request for the account's provider. ChatGPT's backend takes the system prompt as `instructions` and typed content parts. */
+async function request(tokens: GrokTokens, body: Record<string, unknown>): Promise<[string, RequestInit]> {
+  // Low effort keeps a full candidate profile near one minute instead of three, with the same search depth.
+  const common = { model: await grokModel(tokens.provider), reasoning: { effort: "low" }, store: false, stream: true };
+  const signal = AbortSignal.timeout(TIMEOUT_MS);
+  if (tokens.provider === "grok") {
+    return [`${GROK_API_BASE}/responses`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${tokens.accessToken}` },
-      // Low effort keeps a full candidate profile near one minute instead of three, with the same search depth.
-      body: JSON.stringify({ model: await grokModel(), reasoning: { effort: "low" }, store: false, stream: true, ...body }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+      body: JSON.stringify({ ...common, ...body }),
+      signal,
+    }];
+  }
+  const input = (body.input as InputMessage[]) ?? [];
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    accept: "text/event-stream",
+    authorization: `Bearer ${tokens.accessToken}`,
+    originator: "codex_cli_rs",
+    "OpenAI-Beta": "responses=v1",
+  };
+  if (tokens.accountId) headers["chatgpt-account-id"] = tokens.accountId;
+  return [CODEX_RESPONSES_URL, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      ...common,
+      ...body,
+      instructions: input.filter((m) => m.role === "system").map((m) => m.content).join("\n\n"),
+      input: input.filter((m) => m.role !== "system").map((m) => ({
+        role: m.role,
+        content: [{ type: m.role === "assistant" ? "output_text" : "input_text", text: m.content }],
+      })),
+    }),
+    signal,
+  }];
+}
+
+async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onProgress: (p: Progress) => void): Promise<GrokReply> {
+  const name = PROVIDER_LABEL[tokens.provider];
+  let res: Response;
+  try {
+    res = await fetch(...(await request(tokens, body)));
   } catch {
-    throw new ResearchError("Could not reach Grok. Check your connection and try again.");
+    throw new ResearchError(`Could not reach ${name}. Check your connection and try again.`);
   }
 
-  if (res.status === 401 || res.status === 403) throw new ResearchError("Grok rejected this session. Reconnect Grok.", 401);
-  if (res.status === 429) throw new ResearchError("Your Grok account hit its usage limit. Wait a bit and try again.", 429);
+  if (res.status === 401 || res.status === 403) throw new ResearchError(`${name} rejected this session. Reconnect ${name}.`, 401);
+  if (res.status === 429) throw new ResearchError(`Your ${name} account hit its usage limit. Wait a bit and try again.`, 429);
   if (!res.ok || !res.body) {
     const detail = await res.text().catch(() => "");
-    console.error(`grok responses failed (${res.status}): ${detail.slice(0, 300)}`);
-    throw new ResearchError(`Grok returned an error (${res.status}). Try again.`, 502);
+    console.error(`${tokens.provider} responses failed (${res.status}): ${detail.slice(0, 300)}`);
+    throw new ResearchError(`${name} returned an error (${res.status}). Try again.`, 502);
   }
 
   const retrieved = new Set<string>();
@@ -90,18 +125,18 @@ async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onPro
           .join("\n")
           .trim();
       } else if (ev.type === "response.failed" || ev.type === "error") {
-        throw new ResearchError("Grok stopped partway through. Try again.", 502);
+        throw new ResearchError(`${name} stopped partway through. Try again.`, 502);
       }
     }
   } catch (err) {
     if (err instanceof ResearchError) throw err;
-    throw new ResearchError("Grok took too long or the connection dropped. Try again.", 504);
+    throw new ResearchError(`${name} took too long or the connection dropped. Try again.`, 504);
   }
-  if (!text) throw new ResearchError("Grok returned an empty answer. Try again.", 502);
+  if (!text) throw new ResearchError(`${name} returned an empty answer. Try again.`, 502);
   return { text, retrieved };
 }
 
-/** A Grok request without web search, for conversation and reasoning over text the app already has. */
+/** A request (Grok or ChatGPT) without web search, for conversation and reasoning over text the app already has. */
 export async function ask<T>(tokens: GrokTokens, instructions: string, messages: { role: "user" | "assistant"; content: string }[], schema: ZodType<T>): Promise<T> {
   const base = [{ role: "system", content: instructions }, ...messages];
   const first = await callGrok(tokens, { input: base }, () => {});
@@ -121,7 +156,7 @@ export async function ask<T>(tokens: GrokTokens, instructions: string, messages:
   const reparsed = parse(repair.text, schema);
   if (reparsed.ok) return reparsed.value;
   console.error("grok JSON invalid after repair:", reparsed.error);
-  throw new ResearchError("Grok's answer was not in a usable format. Try again.", 502);
+  throw new ResearchError(`${PROVIDER_LABEL[tokens.provider]}'s answer was not in a usable format. Try again.`, 502);
 }
 
 /**
@@ -158,7 +193,7 @@ export async function research<T>(
   const reparsed = parse(repair.text, schema);
   if (reparsed.ok) return { data: reparsed.value, retrieved: first.retrieved };
   console.error("grok JSON invalid after repair:", reparsed.error);
-  throw new ResearchError("Grok's answer was not in a usable format. Try again.", 502);
+  throw new ResearchError(`${PROVIDER_LABEL[tokens.provider]}'s answer was not in a usable format. Try again.`, 502);
 }
 
 function parse<T>(reply: string, schema: ZodType<T>): { ok: true; value: T } | { ok: false; error: string } {

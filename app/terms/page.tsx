@@ -40,7 +40,7 @@ export default function Terms() {
       <p>
         Research runs on your own Grok account, which you connect. That account is governed by xAI&apos;s terms, and any usage limits or
         charges on it are between you and xAI. You can disconnect it by deleting your Ballotwise account or by revoking access in your
-        Grok settings.
+        Grok settings. If you connect a ChatGPT account instead, the same applies to OpenAI and its terms.
       </p>
 
       <h2>Your information</h2>

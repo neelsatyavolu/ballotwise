@@ -63,7 +63,7 @@ afterEach(() => vi.unstubAllGlobals());
 async function setup() {
   const db = testDb();
   const { user } = await signUp(db, "a@example.com", "a long password", 1);
-  await storeGrokTokens(db, KEY, user.id, { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 }, 1);
+  await storeGrokTokens(db, KEY, user.id, { provider: "grok" as const, accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 }, 1);
   await saveBallot(db, user.id, "200 N Spring St, LA", "200 N SPRING ST, LOS ANGELES, CA", districts, 1);
   const queued: Job[] = [];
   const deps: JobDeps = { db, tokenKey: KEY, enqueue: async (jobs) => void queued.push(...jobs) };
@@ -148,7 +148,7 @@ describe("background research", () => {
     await drain(deps, queued);
 
     const { user: second } = await signUp(db, "b@example.com", "a long password", 1);
-    await storeGrokTokens(db, KEY, second.id, { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 }, 1);
+    await storeGrokTokens(db, KEY, second.id, { provider: "grok" as const, accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 }, 1);
     await saveBallot(db, second.id, "201 N Spring St, LA", "201 N SPRING ST, LOS ANGELES, CA", districts, 1);
     const prompts: string[] = [];
     vi.stubGlobal("fetch", async (_url: string | URL, init?: RequestInit) => {
@@ -177,7 +177,7 @@ describe("background research", () => {
     await db.prepare("DELETE FROM research_cache WHERE key = ?").bind(bob).run();
 
     const { user: second } = await signUp(db, "b@example.com", "a long password", 1);
-    await storeGrokTokens(db, KEY, second.id, { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 }, 1);
+    await storeGrokTokens(db, KEY, second.id, { provider: "grok" as const, accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 }, 1);
     await saveBallot(db, second.id, "201 N Spring St, LA", "201 N SPRING ST, LOS ANGELES, CA", districts, 1);
     const candidates: string[] = [];
     vi.stubGlobal("fetch", async (_url: string | URL, init?: RequestInit) => {
@@ -276,7 +276,7 @@ describe("values interview", () => {
   it("asks a question, then summarizes when asked to finish", async () => {
     stubInterview();
     const { nextTurn } = await import("../lib/values");
-    const tokens = { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 };
+    const tokens = { provider: "grok" as const, accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 };
     expect(await nextTurn(tokens, [], false)).toMatchObject({ role: "interviewer", suggestions: ["Costs", "Safety"] });
     expect(await nextTurn(tokens, [{ role: "voter", text: "rent" }], true)).toMatchObject({ overview: "You want lower rents." });
   });
@@ -295,7 +295,7 @@ describe("values interview", () => {
       prompts.push(String(init?.body));
       return sse(JSON.stringify({ done: false, message: "What matters most?", suggestions: [], progress: 0.1 }));
     });
-    const tokens = { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 };
+    const tokens = { provider: "grok" as const, accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 };
     await nextTurn(tokens, [], false, topics);
     expect(prompts[0]).toContain("transit?");
     expect(prompts[0]).not.toMatch(/\bAnn\b|\bBob\b/);
@@ -304,7 +304,7 @@ describe("values interview", () => {
   it("records an issue the interview doesn't bear on as uncovered, so it isn't mapped again", async () => {
     vi.stubGlobal("fetch", async () => sse(JSON.stringify({ answers: [{ issueId: "housing", stance: null, weight: 1, why: "Nothing you said is about housing." }] })));
     const { alignToIssues } = await import("../lib/values");
-    const tokens = { accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 };
+    const tokens = { provider: "grok" as const, accessToken: "t", refreshToken: "r", expiresAt: Date.now() + 3_600_000 };
     const issue = { id: "housing", title: "Housing", question: "housing?", sideA: "less", sideB: "more" };
     expect(await alignToIssues(tokens, summary as never, "Mayor", [issue])).toEqual({ housing: { stance: null, weight: 1, why: "Nothing you said is about housing.", inferred: false } });
   });

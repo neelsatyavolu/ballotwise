@@ -6,10 +6,11 @@ import { api } from "@/lib/client";
 type Grok = "connected" | "disconnected" | "refresh-failed";
 type Values = "none" | "in-progress" | "done";
 type Terms = "accepted" | "needed";
-type Me = { user: { id: string; email: string } | null; grok: Grok; values: Values; terms: Terms };
+type Provider = "grok" | "codex";
+type Me = { user: { id: string; email: string } | null; grok: Grok; provider: Provider | null; values: Values; terms: Terms };
 type Account = Me & { loading: boolean; refresh: () => Promise<void> };
 
-const SIGNED_OUT: Me = { user: null, grok: "disconnected", values: "none", terms: "accepted" };
+const SIGNED_OUT: Me = { user: null, grok: "disconnected", provider: null, values: "none", terms: "accepted" };
 const AccountContext = createContext<Account>({ ...SIGNED_OUT, loading: true, refresh: async () => {} });
 
 export function AccountProvider({ children }: { children: ReactNode }) {

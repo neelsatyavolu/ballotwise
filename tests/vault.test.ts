@@ -5,7 +5,7 @@ import { loadGrokTokens, seal, storeGrokTokens, unseal, usableGrokTokens } from 
 import { testDb } from "./sqlite-db";
 
 const KEY = randomBytes(32).toString("base64");
-const tokens = (expiresAt: number, tag = "a") => ({ accessToken: `access-${tag}`, refreshToken: `refresh-${tag}`, expiresAt });
+const tokens = (expiresAt: number, tag = "a") => ({ provider: "grok" as const, accessToken: `access-${tag}`, refreshToken: `refresh-${tag}`, expiresAt });
 
 describe("grok token vault", () => {
   it("round-trips and refuses another account's blob or a different key", async () => {
@@ -34,6 +34,12 @@ describe("grok token vault", () => {
       throw new Error("refresh token already used");
     }, 1000);
     expect(got?.accessToken).toBe("access-other");
+  });
+
+  it("reads connections sealed before ChatGPT support as Grok and keeps ChatGPT ones", async () => {
+    const legacy = { accessToken: "a", refreshToken: "r", expiresAt: 5 };
+    expect((await unseal(await seal(legacy as never, KEY, "user-1"), KEY, "user-1"))?.provider).toBe("grok");
+    expect((await unseal(await seal({ ...tokens(5), provider: "codex" }, KEY, "user-1"), KEY, "user-1"))?.provider).toBe("codex");
   });
 
   it("returns null when not connected", async () => {

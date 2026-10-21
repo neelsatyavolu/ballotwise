@@ -43,6 +43,11 @@ export default function Privacy() {
           race&apos;s issues. What xAI does with requests on your account is covered by{" "}
           <a href="https://x.ai/legal/privacy-policy" target="_blank" rel="noreferrer">xAI&apos;s privacy policy</a>.
         </li>
+        <li>
+          <strong>OpenAI (ChatGPT).</strong> If you connect a ChatGPT account instead of Grok, the same requests go to ChatGPT on your
+          account, covered by{" "}
+          <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noreferrer">OpenAI&apos;s privacy policy</a>.
+        </li>
         <li><strong>US Census Bureau geocoder.</strong> Receives the address you enter, to match it to your districts.</li>
         <li><strong>Photon (komoot).</strong> Receives what you type in the address box, to suggest matching addresses.</li>
         <li><strong>Resend.</strong> Receives your email address when you ask for a password reset, to send the email.</li>

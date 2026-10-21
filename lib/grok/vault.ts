@@ -2,7 +2,7 @@ import type { Db } from "../auth/accounts";
 import type { GrokTokens } from "./oauth";
 
 /**
- * Grok tokens per account, sealed with AES-GCM under GROK_TOKEN_KEY (32 random bytes, base64).
+ * The account's AI tokens (Grok or ChatGPT; one connection per account, kept in grok_connections), sealed with AES-GCM under GROK_TOKEN_KEY (32 random bytes, base64).
  * Server-side storage is what lets queued research run after the person closes the tab.
  */
 async function importKey(keyB64: string): Promise<CryptoKey> {
@@ -26,7 +26,9 @@ export async function unseal(sealed: string, keyB64: string, userId: string): Pr
     const params = { name: "AES-GCM", iv: Buffer.from(iv, "base64url"), additionalData: new TextEncoder().encode(userId) };
     const plain = await crypto.subtle.decrypt(params, await importKey(keyB64), Buffer.from(cipher, "base64url"));
     const parsed = JSON.parse(new TextDecoder().decode(plain));
-    return typeof parsed.accessToken === "string" && typeof parsed.refreshToken === "string" && typeof parsed.expiresAt === "number" ? parsed : null;
+    if (typeof parsed.accessToken !== "string" || typeof parsed.refreshToken !== "string" || typeof parsed.expiresAt !== "number") return null;
+    // Connections sealed before ChatGPT support carry no provider; they are all Grok.
+    return { ...parsed, provider: parsed.provider === "codex" ? "codex" : "grok" };
   } catch {
     return null;
   }
