@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { colorOf, compareRaces, lead, OFFICE_LABEL, pct, raceLabel, ratingFill, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { colorOf, compareRaces, lead, OFFICE_LABEL, pct, projected, raceLabel, ratingFill, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { AiDashboards } from "./AiDashboard";
 import { BalanceBar } from "./Balance";
 import { ChatDock, type ChatHandle } from "./ChatDock";
@@ -170,9 +170,9 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       {data && races && (
         <>
           <div className="mt-balances">
-            <BalanceBar title="Senate" office="senate" tally={data.balance.senate} />
-            <BalanceBar title="House" office="house" tally={data.balance.house} />
-            <BalanceBar title="Governors" office="governor" tally={data.balance.governor} />
+            <BalanceBar title="Senate" office="senate" tally={data.balance.senate} projected={projected(races, "senate")} />
+            <BalanceBar title="House" office="house" tally={data.balance.house} projected={projected(races, "house")} />
+            <BalanceBar title="Governors" office="governor" tally={data.balance.governor} projected={projected(races, "governor")} />
           </div>
 
           <div className="tabs" role="tablist">

@@ -3,7 +3,7 @@ import type { Signal } from "./odds";
 import type { Candidate, Office, Party, RaceSummary, Rating, Tally } from "./races";
 import states from "./states.json";
 
-export type { Candidate, Office, RaceSummary, Rating, Signal, Tally };
+export type { Candidate, Office, Party, RaceSummary, Rating, Signal, Tally };
 export type Overview = {
   races: RaceSummary[];
   balance: { senate: Tally; house: Tally; governor: Tally };
@@ -114,6 +114,19 @@ export function leading(races: readonly RaceSummary[], office: Office): Record<P
     const ahead = lead(r.candidates);
     // A tie leads for nobody.
     if (ahead && ahead.margin > 0) out[partyOf(ahead.leader.party)] += 1;
+  }
+  return out;
+}
+
+/** Races of one office with no votes counted yet, by which party the prediction markets (Kalshi and Polymarket, averaged) favor. */
+export function projected(races: readonly RaceSummary[], office: Office): Record<Party, number> {
+  const out: Record<Party, number> = { D: 0, R: 0, other: 0 };
+  for (const r of races) {
+    if (r.office !== office || r.candidates.some((c) => c.winner) || lead(r.candidates)) continue;
+    const [first, second] = Object.entries(r.signal?.market?.odds ?? {}).sort((a, b) => b[1] - a[1]);
+    // An even market favors nobody.
+    if (!first || first[1] === second?.[1]) continue;
+    out[first[0] === "I" ? "other" : (first[0] as "D" | "R")] += 1;
   }
   return out;
 }

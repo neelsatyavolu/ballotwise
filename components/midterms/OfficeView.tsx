@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { colorOf, compareRaces, lead, leading, measureCount, pct, raceLabel, ratingFill, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { colorOf, compareRaces, lead, leading, measureCount, pct, projected, raceLabel, ratingFill, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
 import { useFavorites, useLive } from "./hooks";
@@ -109,7 +109,7 @@ function SeatHeader({ office, data }: { office: Office; data: Overview }) {
     );
   }
   const tally = office === "senate" ? data.balance.senate : office === "house" ? data.balance.house : data.balance.governor;
-  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} />;
+  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} projected={projected(data.races, office)} />;
 }
 
 export function OfficeView({ office, initialState }: { office: Office; initialState: string | null }) {

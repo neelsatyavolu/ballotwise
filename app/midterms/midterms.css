@@ -48,6 +48,7 @@
 .mt-balance-nums .r b { color: var(--rep); }
 .mt-balance-nums .o b { color: var(--oth); font-size: 20px; }
 .mt-balance-nums .u { color: var(--muted); font-size: 13px; }
+.mt-balance-nums em { font-style: normal; font-size: 13px; color: var(--muted); }
 .mt-balance-bar { position: relative; display: flex; height: 12px; border-radius: 3px; overflow: hidden; background: var(--rule); }
 .mt-balance-bar span { display: block; height: 100%; transition: width 0.5s ease; }
 .mt-balance-bar i { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--ink); }
