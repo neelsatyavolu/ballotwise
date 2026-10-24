@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { MEASURES } from "./data";
 import type { Signal } from "./odds";
-import { partyOf } from "./view";
+import { partyOf, STATE_NAMES } from "./view";
 
 export const ELECTION_DATE = "2026-11-03";
 /** The first polls open at 6 a.m. Eastern. civicAPI has shown test counts before then, so earlier numbers are ignored. */
@@ -23,10 +23,35 @@ export type RaceSummary = {
   total: number;
   candidates: Candidate[];
   rating: Rating | null;
+  /** Set when civicAPI has votes but no reporting figure, so `reporting` (0) shouldn't be shown as a share. */
+  reportingUnknown?: true;
+  /** civicAPI left this race out of its latest answer; the numbers are the last we saw. */
+  missing?: true;
+  /** When civicAPI last included this race; set on missing races. */
+  lastSeen?: number;
   /** What a ballot measure does, with a link to its source when there is one. */
   about?: { text: string; url: string | null };
   /** Market odds and polling behind the rating, attached by the overview; absent on bare catalog entries. */
   signal?: Signal | null;
+  /**
+   * When our server first saw civicAPI's current call, since civicAPI gives no call time. `id` is the call event's
+   * database id and `winner` the called candidate. `replaced` names the previous, different winner when the call
+   * changed. A withdrawn call keeps its race here with `withdrawn: true`, `winner: null`, the time the withdrawal was
+   * seen, and the withdrawn winner in `replaced`. Null when the race was never called.
+   */
+  call?:
+    | { id: number; at: number; winner: string; replaced: string | null; withdrawn: false }
+    | { id: number; at: number; winner: null; replaced: string; withdrawn: true }
+    | null;
+  /** Set when our recorded call disagrees with this race's current results, so `call` is held back (null) until they agree. */
+  callPending?: true;
+  /**
+   * How the count moved over about the last 15 minutes, from our own observations. `baselineAt` (and `since`, the
+   * same time) is the observation compared against: the race's numbers as of 15 minutes ago, or its oldest
+   * observation when all are newer. `votesAdded` is this race's current total minus the baseline's, negative after a
+   * correction. `lastChange` is when the votes last changed. Null when there's no baseline or nothing changed since it.
+   */
+  trend?: { since: number; baselineAt: number; votesAdded: number; prevMargin: number | null; prevLeader: string | null; lastChange: number } | null;
 };
 /** A county's 2024 presidential vote. */
 export type Pres2024 = { harris: number; trump: number; total: number };
@@ -75,7 +100,8 @@ function officeOf(race: z.output<typeof civicRace>): Office | null {
   if (!race.election_date.startsWith(ELECTION_DATE) || /Primary|Runoff/i.test(race.election_name)) return null;
   if (race.type === "US Senate") return race.province && race.province !== "US" ? "senate" : null;
   if (race.type === "House of Representatives") return /US House/.test(race.election_name) ? "house" : null;
-  if (race.type === "Governor") return race.election_type === "Statewide" ? "governor" : null;
+  // Territories (civicAPI lists Guam's governor) don't count toward the 50.
+  if (race.type === "Governor") return race.election_type === "Statewide" && !!race.province && race.province !== "DC" && race.province in STATE_NAMES ? "governor" : null;
   if (race.type && MEASURE_TYPES.has(race.type)) return race.election_type === "Statewide" ? "measure" : null;
   return null;
 }
@@ -130,6 +156,7 @@ export function summarize(input: unknown, ratings: readonly RatedRace[]): RaceSu
     district,
     title: race.election_name,
     reporting: race.percent_reporting ?? 0,
+    ...(race.percent_reporting == null && list.some((c) => c.votes > 0) && { reportingUnknown: true as const }),
     total: list.reduce((sum, c) => sum + c.votes, 0),
     candidates: list,
     rating: ratings.find((r) => ratingKey(r.office, r.state, r.district) === key)?.rating ?? null,

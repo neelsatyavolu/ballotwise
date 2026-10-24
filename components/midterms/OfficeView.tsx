@@ -6,7 +6,7 @@ import type { RaceDetail } from "@/lib/midterms/races";
 import { colorOf, compareRaces, lead, leading, measureCount, pct, projected, raceLabel, ratingFill, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
-import { useFavorites, useLive } from "./hooks";
+import { useLive, useStars } from "./hooks";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
 import { RaceRows } from "./RaceRows";
@@ -19,7 +19,7 @@ const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "
 const regularFirst = (a: RaceSummary, b: RaceSummary) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title));
 
 /** Closest counted races first; before any votes, the most competitive by rating. */
-function byCloseness(a: RaceSummary, b: RaceSummary) {
+export function byCloseness(a: RaceSummary, b: RaceSummary) {
   const la = lead(a.candidates);
   const lb = lead(b.candidates);
   if (la && lb) return la.margin - lb.margin;
@@ -43,7 +43,7 @@ function raceTip(r: RaceSummary) {
 }
 
 /** How each state looks on this office's national map. */
-function stateFills(office: Office, races: RaceSummary[]): Map<string, Fill> {
+export function stateFills(office: Office, races: RaceSummary[]): Map<string, Fill> {
   const byState = new Map<string, RaceSummary[]>();
   for (const r of races) byState.set(r.state, [...(byState.get(r.state) ?? []), r]);
   const out = new Map<string, Fill>();
@@ -52,7 +52,7 @@ function stateFills(office: Office, races: RaceSummary[]): Map<string, Fill> {
     if (office === "senate" || office === "governor") {
       const r = [...list].sort(regularFirst)[0];
       const ahead = lead(r.candidates);
-      out.set(state, { fill: ahead ? shade(colorOf(ahead.leader), ahead.margin) : ratingFill(r.rating), tip: raceTip(r) });
+      out.set(state, { fill: ahead ? shade(colorOf(ahead.leader), ahead.margin, r.reporting) : ratingFill(r.rating), tip: raceTip(r) });
     } else if (office === "house") {
       const ahead = leading(list, "house");
       const won = { D: 0, R: 0 };
@@ -95,7 +95,7 @@ function stateFills(office: Office, races: RaceSummary[]): Map<string, Fill> {
   return out;
 }
 
-function SeatHeader({ office, data }: { office: Office; data: Overview }) {
+export function SeatHeader({ office, data }: { office: Office; data: Overview }) {
   if (office === "measure") {
     const c = measureCount(data.races);
     return (
@@ -114,7 +114,7 @@ function SeatHeader({ office, data }: { office: Office; data: Overview }) {
 
 export function OfficeView({ office, initialState }: { office: Office; initialState: string | null }) {
   const { data, error, now } = useLive<Overview>("/api/midterms");
-  const favorites = useFavorites();
+  const favorites = useStars();
   const [focus, setFocus] = useState<string | null>(initialState);
   const [picked, setPicked] = useState<number | null>(null);
   const [query, setQuery] = useState("");

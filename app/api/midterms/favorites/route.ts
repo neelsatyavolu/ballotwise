@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   let known: Set<number>;
   try {
-    known = await trackedIds(Date.now());
+    known = await trackedIds(Date.now(), db());
   } catch {
     return NextResponse.json({ error: UNAVAILABLE }, { status: 503 });
   }

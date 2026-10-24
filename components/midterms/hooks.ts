@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useAccount } from "@/components/AccountProvider";
 import { api, ApiError } from "@/lib/client";
+import { clockNow } from "@/lib/midterms/clock";
 
 /** How often an open tracker page asks for new results. */
 export const POLL_MS = 30_000;
@@ -18,17 +19,19 @@ export function useLive<T>(path: string | null) {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const current = useRef(path);
+  const latest = useRef(0);
 
   const load = useCallback(async () => {
     if (!path) return;
+    const call = ++latest.current;
     try {
       const data = await api<T>(path);
-      // A slow answer for a path the page has moved on from is dropped.
-      if (current.current !== path) return;
+      // A slow answer for a path the page has moved on from, or one overtaken by a newer request, is dropped.
+      if (current.current !== path || call !== latest.current) return;
       setState({ path, data });
       setError(null);
     } catch (err) {
-      if (current.current === path) setError(err instanceof ApiError ? err.message : "Couldn't load results.");
+      if (current.current === path && call === latest.current) setError(err instanceof ApiError ? err.message : "Couldn't load results.");
     } finally {
       setNow(Date.now());
     }
@@ -79,17 +82,22 @@ export function useFavorites() {
     setIds((prev) => optimistic(prev ?? []));
     setError(null);
     // Writes go one at a time, in tap order, so a quick star-unstar can't land in the wrong order on the server.
-    queue.current = queue.current.then(async () => {
+    // The returned promise says whether this write was saved.
+    const step = queue.current.then(async () => {
       try {
         const r = await api<{ raceIds: number[] }>("/api/midterms/favorites", { method, body });
         // Only the latest tap's answer is shown, so quick taps don't flicker.
         if (call === pending.current) setIds(r.raceIds);
+        return true;
       } catch (err) {
         setError(err instanceof ApiError ? err.message : "Couldn't save that star.");
         const r = await api<{ raceIds: number[] }>("/api/midterms/favorites").catch(() => null);
         if (r) setIds(r.raceIds);
+        return false;
       }
     });
+    queue.current = step.then(() => undefined);
+    return step;
   }, []);
 
   const toggle = useCallback(
@@ -100,7 +108,7 @@ export function useFavorites() {
     [ids, send],
   );
 
-  const addMany = useCallback((add: number[]) => void send("POST", { raceIds: add }, (prev) => [...add.filter((id) => !prev.includes(id)), ...prev]), [send]);
+  const addMany = useCallback((add: number[]) => send("POST", { raceIds: add }, (prev) => [...add.filter((id) => !prev.includes(id)), ...prev]), [send]);
 
   // Signed out, there's no list at all (null), not an empty one.
   return { ids: user ? ids : null, signedIn: !!user, loading: loading || (!!user && ids === null), error, toggle, addMany };
@@ -146,4 +154,99 @@ export function useDashboards() {
   }, []);
 
   return { list: user ? list : null, openId, setOpenId, error, rename, remove, applyChat };
+}
+
+/** The current time, ticking every `ms` (every second by default) for countdowns and "polls close" labels. */
+export function useClock(ms = 1000) {
+  const [now, setNow] = useState(clockNow);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(clockNow()), ms);
+    return () => clearInterval(timer);
+  }, [ms]);
+  return now;
+}
+
+const GUEST_KEY = "mt-guest-stars";
+const GUEST_CHANGED = "mt-guest-stars";
+
+function readGuest(): string {
+  try {
+    return localStorage.getItem(GUEST_KEY) ?? "[]";
+  } catch {
+    return "[]";
+  }
+}
+
+function subscribeGuest(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(GUEST_CHANGED, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(GUEST_CHANGED, onChange);
+  };
+}
+
+/**
+ * Starred races for everyone: the account's list when signed in, otherwise one kept in this browser.
+ * `guest` says which, so the page can offer to sign in and keep stars on every device.
+ */
+export function useStars() {
+  const favorites = useFavorites();
+  const raw = useSyncExternalStore(subscribeGuest, readGuest, () => "[]");
+  const guestIds = useMemo(() => parseIds(raw), [raw]);
+  const guest = !favorites.signedIn && !favorites.loading;
+  const toggleGuest = useCallback(
+    (id: number) => {
+      const next = guestIds.includes(id) ? guestIds.filter((x) => x !== id) : [id, ...guestIds];
+      try {
+        localStorage.setItem(GUEST_KEY, JSON.stringify(next));
+      } catch {
+        // Storage can be off in a private window; the star then won't stick.
+      }
+      window.dispatchEvent(new Event(GUEST_CHANGED));
+    },
+    [guestIds],
+  );
+  // Stars made before signing in move into the account once; the browser's list is cleared only after the account saved them.
+  const { signedIn, addMany } = favorites;
+  const moving = useRef(false);
+  useEffect(() => {
+    if (!signedIn || !guestIds.length || moving.current) return;
+    moving.current = true;
+    void addMany(guestIds).then((saved) => {
+      moving.current = false;
+      if (!saved) return;
+      try {
+        localStorage.removeItem(GUEST_KEY);
+      } catch {
+        // Nothing to clear if storage is off.
+      }
+      window.dispatchEvent(new Event(GUEST_CHANGED));
+    });
+  }, [signedIn, guestIds, addMany]);
+  const addGuest = useCallback(
+    async (add: number[]) => {
+      try {
+        localStorage.setItem(GUEST_KEY, JSON.stringify([...add.filter((id) => !guestIds.includes(id)), ...guestIds]));
+      } catch {
+        // Storage can be off in a private window.
+        return false;
+      }
+      window.dispatchEvent(new Event(GUEST_CHANGED));
+      return true;
+    },
+    [guestIds],
+  );
+  if (guest) return { ids: guestIds, toggle: toggleGuest, addMany: addGuest, guest, loading: false, error: null };
+  return { ids: favorites.ids, toggle: favorites.toggle, addMany: favorites.addMany, guest, loading: favorites.loading, error: favorites.error };
+}
+
+function parseIds(raw: string): number[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is number => Number.isInteger(x)) : [];
+  } catch {
+    // A corrupt list starts over empty.
+    return [];
+  }
 }

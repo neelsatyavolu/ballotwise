@@ -2,21 +2,24 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { stampET, stateFinal } from "@/lib/midterms/polls";
+import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { colorOf, fmt, OFFICE_LABEL, partyTag, pct, raceLabel, signalLine, STATE_NAMES, timeAgo } from "@/lib/midterms/view";
 import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
-import { useFavorites, useLive } from "./hooks";
+import { useLive, useStars } from "./hooks";
 import { CountyMap, type CountyFill } from "./maps";
 import { ModeNav } from "./ModeNav";
 import { RatingTag, StarButton } from "./RaceCard";
+import { CountingContext, RaceStatus, VoteUpdates } from "./RaceContext";
 
-type Fetched = { race: RaceDetail; fetchedAt: number; stale: boolean };
+type Fetched = { race: RaceDetail; fetchedAt: number; stale: boolean; history?: Observation[]; callPending?: boolean };
 const SCREEN = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
 
 export function RaceView({ id }: { id: number }) {
   const { data, error, now } = useLive<Fetched>(`/api/midterms/race/${id}`);
-  const favorites = useFavorites();
+  const favorites = useStars();
   const [mode, setMode] = useState<Mode>("results");
   const [selected, setSelected] = useState<string | null>(null);
   const race = data?.race;
@@ -72,9 +75,11 @@ export function RaceView({ id }: { id: number }) {
             </span>
           </p>
         )}
+        <RaceStatus race={race} now={now} />
+        {data.callPending && <p className="muted small">The call status is catching up with the latest count; it will settle on the next update.</p>}
         <p className="mt-meta small">
-          <span>{race.reporting > 0 ? `${Math.round(race.reporting)}% reporting` : "No results yet"}</span>
-          {close && <span>Polls close {close.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}</span>}
+          <span>{race.total > 0 ? (race.reportingUnknown ? "Reporting unknown" : `${Math.round(race.reporting)}% reporting`) : "No results yet"}</span>
+          {close && close.getTime() !== stateFinal(race.state) && <span title="civicAPI's closing time for this race, which differs from the state's last scheduled closing">civicAPI lists polls closing {stampET(close.getTime())} ET</span>}
           <span>
             Checked {timeAgo(data.fetchedAt, now)}
             {data.stale && " (results source is slow; showing the last good count)"}
@@ -119,14 +124,16 @@ export function RaceView({ id }: { id: number }) {
               <tr>
                 <td colSpan={2}>Total</td>
                 <td className="num">{fmt(race.total)}</td>
-                <td className="num">{Math.round(race.reporting)}% in</td>
+                <td className="num">{race.reportingUnknown ? "Reporting unknown" : `${Math.round(race.reporting)}% reporting`}</td>
               </tr>
             </tfoot>
           </table>
           <p className="muted small mt-source">
-            {called ? `${called.name} was declared the winner by civicAPI's decision desk. ` : "No winner declared yet. "}
+            {called ? `${called.name} was declared the winner by civicAPI's decision desk, not AP or Decision Desk HQ. ` : "No winner declared yet. "}
             Results from <a href="https://civicapi.org">civicAPI</a>, which collects them from state and county election offices. * Incumbent.
           </p>
+          {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
+          {data.history && <VoteUpdates history={data.history} />}
         </section>
 
         <section aria-labelledby="map">

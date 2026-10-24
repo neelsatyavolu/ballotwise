@@ -1,6 +1,6 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
-import { colorOf, lead, raceLabel, type RaceSummary } from "@/lib/midterms/view";
+import { colorOf, lead, partyTag, raceLabel, type RaceSummary } from "@/lib/midterms/view";
 import { RatingTag } from "./RaceCard";
 
 export type Star = { ids: number[] | null; toggle: (id: number) => void };
@@ -16,7 +16,7 @@ export function RaceRows({ races, star, onPick, selectedId }: { races: RaceSumma
             <th>Rating</th>
             <th>Leader</th>
             <th className="num">Lead</th>
-            <th className="num">In</th>
+            <th className="num" title="Precincts or ballot batches reported (civicAPI), not the share of the expected vote">Reporting</th>
             {star.ids && <th aria-label="Star" />}
           </tr>
         </thead>
@@ -39,6 +39,7 @@ export function RaceRows({ races, star, onPick, selectedId }: { races: RaceSumma
                   {ahead ? (
                     <>
                       <span className="swatch" style={{ background: colorOf(ahead.leader) }} aria-hidden /> {ahead.leader.name.split(" ").at(-1)}
+                      {partyTag(ahead.leader.party) && <span className="muted"> {partyTag(ahead.leader.party)}</span>}
                       {winner && <span className="mt-check"> ✓</span>}
                     </>
                   ) : (

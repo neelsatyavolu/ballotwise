@@ -7,11 +7,13 @@ import { colorOf, compareRaces, lead, OFFICE_LABEL, pct, projected, raceLabel, r
 import { AiDashboards } from "./AiDashboard";
 import { BalanceBar } from "./Balance";
 import { ChatDock, type ChatHandle } from "./ChatDock";
-import { useDashboards, useFavorites, useLive } from "./hooks";
+import { ElectionMode, ElectionToggle, useElectionMode } from "./ElectionMode";
+import { useDashboards, useLive, useStars } from "./hooks";
 import { NationMap } from "./maps";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
 import { RaceRows, type Star } from "./RaceRows";
+import { useSimulation } from "./useSimulation";
 
 type Tab = "key" | "mine" | "ai" | "all";
 const TABS: { id: Tab; label: string }[] = [
@@ -57,7 +59,7 @@ function RaceMap({ races }: { races: RaceSummary[] }) {
     for (const r of races.filter((x) => x.office === office).sort((a, b) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title)))) {
       if (out.has(r.state)) continue;
       const ahead = lead(r.candidates);
-      out.set(r.state, { fill: ahead ? shade(colorOf(ahead.leader), ahead.margin) : ratingFill(r.rating), tip: mapTip(r) });
+      out.set(r.state, { fill: ahead ? shade(colorOf(ahead.leader), ahead.margin, r.reporting) : ratingFill(r.rating), tip: mapTip(r) });
     }
     return out;
   }, [races, office]);
@@ -80,7 +82,7 @@ function RaceMap({ races }: { races: RaceSummary[] }) {
         <span><i style={{ background: "var(--dem)" }} /> Dem</span>
         <span><i style={{ background: "var(--rep)" }} /> Rep</span>
         <span><i style={{ background: "var(--tossup)" }} /> Toss-up</span>
-        <span><i style={{ background: "var(--rule-strong)" }} /> Not competitive</span>
+        <span><i style={{ background: "var(--rule-strong)" }} /> No rating (safe, or no market or polls)</span>
         <span>Before votes: market/poll rating, paler = less certain. After: who leads, darker = wider lead.</span>
       </p>
     </section>
@@ -132,15 +134,19 @@ function AllRaces({ races, star, initialState }: { races: RaceSummary[]; star: S
 }
 
 export function MidtermsHome({ initialState }: { initialState: string | null }) {
-  const { data, error, now } = useLive<Overview>("/api/midterms");
-  const favorites = useFavorites();
+  const live = useLive<Overview>("/api/midterms");
+  const { error, now } = live;
+  const data = useSimulation(live.data);
+  const favorites = useStars();
   const dashboards = useDashboards();
   const [tab, setTab] = useState<Tab>(initialState ? "all" : "key");
   const [chatOpen, setChatOpen] = useState(false);
+  const election = useElectionMode();
   const chat = useRef<ChatHandle>(null);
   const star: Star = { ids: favorites.ids, toggle: favorites.toggle };
 
   const races = data?.races;
+  const counting = !!races?.some((r) => r.total > 0);
   const key = useMemo(() => (races ?? []).filter((r) => r.rating).sort(compareRaces), [races]);
   const mine = useMemo(() => {
     const byId = new Map((races ?? []).map((r) => [r.id, r]));
@@ -152,22 +158,29 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
   const ask = (text: string, fresh: boolean) => chat.current?.ask(text, fresh);
 
   return (
-    <div className="wrap mt">
+    <div className={`wrap mt${election.on ? " mt-el-on" : ""}`}>
       <ModeNav current="/midterms" />
       <header className="mt-hero">
         <h1>Midterms 2026</h1>
-        <span className="mt-kicker">Tuesday, Nov 3 · live results, every 30 seconds</span>
+        <span className="mt-kicker">{counting ? "Live results, updated every 30 seconds" : "Tuesday, Nov 3 · first polls close at 6:00 PM ET"}</span>
         {data && (
           <span className="mt-updated small">
-            <span className={`mt-dot${data.stale ? " stale" : ""}`} aria-hidden /> Checked {timeAgo(data.fetchedAt, now)}
+            <span className={`mt-dot${data.stale ? " stale" : ""}${counting ? "" : " idle"}`} aria-hidden /> {counting ? "" : "No votes counted yet · "}Checked {timeAgo(data.fetchedAt, now)}
             {data.stale && " · source is slow"}
           </span>
         )}
+        {election.on && (
+          <button type="button" className="btn secondary small mt-ask" onClick={() => setChatOpen(true)}>
+            <span aria-hidden>✦</span> Ask Grok
+          </button>
+        )}
+        <ElectionToggle on={election.on} onChange={election.set} />
       </header>
       {error && <p className="error">{data ? `${error} Showing the last results we got.` : error}</p>}
       {!data && !error && <p className="muted">Loading every race…</p>}
 
-      {data && races && (
+      {data && races && election.on && <ElectionMode data={data} stars={favorites} />}
+      {data && races && !election.on && (
         <>
           <div className="mt-balances">
             <BalanceBar title="Senate" office="senate" tally={data.balance.senate} projected={projected(races, "senate")} />
@@ -237,6 +250,11 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
                 </div>
               ) : (
                 <Grid races={mine} star={star} />
+              )}
+              {favorites.guest && (
+                <p className="muted small">
+                  Your stars are saved in this browser. <Link href="/signin?next=/midterms">Sign in</Link> to keep them on every device; they&apos;ll move into your account.
+                </p>
               )}
             </div>
           )}

@@ -1,9 +1,11 @@
 // Display helpers shared by the tracker's client components. Type-only imports keep zod out of the bundle.
+import type { CallEvent } from "./calls";
+import type { Coverage } from "./coverage";
 import type { Signal } from "./odds";
 import type { Candidate, Office, Party, RaceSummary, Rating, Tally } from "./races";
 import states from "./states.json";
 
-export type { Candidate, Office, Party, RaceSummary, Rating, Signal, Tally };
+export type { CallEvent, Candidate, Office, Party, RaceSummary, Rating, Signal, Tally };
 export type Overview = {
   races: RaceSummary[];
   balance: { senate: Tally; house: Tally; governor: Tally };
@@ -11,6 +13,12 @@ export type Overview = {
   stale: boolean;
   /** When market and poll ratings were last refreshed; null before the first refresh. */
   ratings: { updatedAt: number | null };
+  /** The latest call changes across every race, newest first: calls, changed calls and withdrawals (winner null). */
+  callEvents?: CallEvent[];
+  /** Every call change per office, so the feed can say how many there are beyond the latest window. */
+  callEventCounts?: Record<Office, number>;
+  /** Races listed per office against how many there should be, and how many civicAPI left out of its latest answer. */
+  coverage?: Coverage;
 };
 
 export const STATE_NAMES: Record<string, string> = Object.fromEntries(states.map(([, postal, name]) => [postal, name]));
@@ -51,9 +59,12 @@ export function partyTag(party: string): string {
   return party.length <= 4 ? party : party.slice(0, 3);
 }
 
-/** A map/table fill for a leader winning by `margin` points; stronger the wider the lead. */
-export function shade(color: string, margin: number): string {
-  const strength = margin >= 20 ? 92 : margin >= 10 ? 70 : margin >= 5 ? 50 : 32;
+/**
+ * A map/table fill for a leader winning by `margin` points; stronger the wider the lead.
+ * Under 15% reporting a lead says little, so it stays at the palest step whatever its size.
+ */
+export function shade(color: string, margin: number, reporting = 100): string {
+  const strength = reporting < 15 ? 32 : margin >= 20 ? 92 : margin >= 10 ? 70 : margin >= 5 ? 50 : 32;
   return `color-mix(in srgb, ${color} ${strength}%, var(--sheet))`;
 }
 
@@ -70,7 +81,9 @@ export const pct = (n: number) => `${n.toFixed(1)}%`;
 export function lead(candidates: readonly { name: string; party: string; votes: number; pct: number }[]) {
   const [first, second] = candidates;
   if (!first || first.votes === 0) return null;
-  return { leader: first, margin: first.pct - (second?.pct ?? 0) };
+  // From raw votes, so a one-vote lead isn't rounded into a tie.
+  const total = candidates.reduce((sum, c) => sum + c.votes, 0);
+  return { leader: first, margin: ((first.votes - (second?.votes ?? 0)) / total) * 100 };
 }
 
 export function raceLabel(r: Pick<RaceSummary, "office" | "state" | "district" | "title">): string {

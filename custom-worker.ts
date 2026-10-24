@@ -5,7 +5,7 @@
 import { default as nextHandler } from "./.open-next/worker.js";
 import type { Db } from "./lib/auth/accounts";
 import { failJob, jobSchema, PermanentJobError, readableError, runJob, type Job, type JobDeps } from "./lib/ballot/jobs";
-import { bareRaces } from "./lib/midterms/catalog";
+import { bareRaces, recordResults } from "./lib/midterms/catalog";
 import { refreshOdds } from "./lib/midterms/odds";
 
 type Env = CloudflareEnv & { GROK_TOKEN_KEY?: string };
@@ -38,12 +38,19 @@ export default {
     await Promise.all(batch.messages.map((message) => handle(message, d)));
   },
 
-  /** Every 5 minutes (wrangler.jsonc): re-rate the midterm races from current market prices and polls. */
+  /**
+   * Every 5 minutes (wrangler.jsonc): record race calls and vote history from the current results, so they don't
+   * depend on page views, then re-rate the midterm races from current market prices and polls. Recording goes first
+   * so both share one civicAPI fetch.
+   */
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const now = Date.now();
+    const db = env.DB as unknown as Db;
     ctx.waitUntil(
-      bareRaces(now)
-        .then((races) => refreshOdds(env.DB as unknown as Db, races, now))
+      recordResults(db, now)
+        .catch((err) => console.error("midterms results recording failed:", err instanceof Error ? err.message : err))
+        .then(() => bareRaces(now, db))
+        .then((races) => refreshOdds(db, races, now))
         .catch((err) => console.error("midterms odds refresh failed:", err instanceof Error ? err.message : err)),
     );
   },

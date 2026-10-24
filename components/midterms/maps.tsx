@@ -38,8 +38,8 @@ function MapFrame({ viewBox, children, tip, label, outlines, back, aspect }: { v
       {back}
       <svg viewBox={viewBox} role="img" aria-label={label} style={aspect ? { aspectRatio: aspect } : undefined}>
         {children}
-        {outlines.map((o) => (
-          <path key={o.kind} d={o.d} className={`mt-line ${o.kind}`} vectorEffect="non-scaling-stroke" />
+        {outlines.map((o, i) => (
+          <path key={`${o.kind}${i}`} d={o.d} className={`mt-line ${o.kind}`} vectorEffect="non-scaling-stroke" />
         ))}
       </svg>
       {tip && (
@@ -180,15 +180,22 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
   );
 }
 
-/** The nation by state, for Senate and Governor overviews. Clicking a state opens its race. */
-export function NationMap({ fills, onPick, label }: { fills: Map<string, { fill: string; tip: ReactNode }>; onPick: (state: string) => void; label: string }) {
+/**
+ * The nation by state, for Senate and Governor overviews. Clicking a state, or focusing it and pressing Enter, picks it.
+ * `label` on a fill names the state's status for screen readers; `selected` states get a heavier outline.
+ */
+export function NationMap({ fills, onPick, label, selected = [] }: { fills: Map<string, { fill: string; tip: ReactNode; label?: string }>; onPick: (state: string) => void; label: string; selected?: readonly string[] }) {
   const map = useMap<NationMap>("US");
   const [tip, setTip] = useState<Tip>(null);
   const [hover, setHover] = useState<string | null>(null);
   if (map === "error") return null;
   if (!map) return <div className="mt-map mt-map-loading nation" aria-busy />;
+  const outlines = [
+    ...map.states.filter((s) => selected.includes(s.state)).map((s) => ({ d: s.d, kind: "selected" as const })),
+    ...(hover ? [{ d: hover, kind: "hover" as const }] : []),
+  ];
   return (
-    <MapFrame viewBox={map.viewBox} tip={tip} label={label} outlines={hover ? [{ d: hover, kind: "hover" }] : []}>
+    <MapFrame viewBox={map.viewBox} tip={tip} label={label} outlines={outlines}>
       {map.states.map((s) => {
         const f = fills.get(s.state);
         return (
@@ -197,6 +204,10 @@ export function NationMap({ fills, onPick, label }: { fills: Map<string, { fill:
             d={s.d}
             className={`mt-county${f ? " active" : ""}`}
             style={{ fill: f?.fill }}
+            tabIndex={f ? 0 : undefined}
+            role={f ? "button" : undefined}
+            aria-label={f ? `${s.name}${f.label ? `: ${f.label}` : ""}` : undefined}
+            aria-pressed={f ? selected.includes(s.state) : undefined}
             onPointerMove={(e) => {
               setTip({ ...tipAt(e), content: f?.tip ?? <b>{s.name}</b> });
               setHover(f ? s.d : null);
@@ -204,6 +215,14 @@ export function NationMap({ fills, onPick, label }: { fills: Map<string, { fill:
             onPointerLeave={() => {
               setTip(null);
               setHover(null);
+            }}
+            onFocus={() => setHover(f ? s.d : null)}
+            onBlur={() => setHover(null)}
+            onKeyDown={(e) => {
+              if (f && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                onPick(s.state);
+              }
             }}
             onClick={() => f && onPick(s.state)}
           />

@@ -6,6 +6,12 @@ const NOTE = {
   governor: "Includes the 14 governors not up this year.",
 } as const;
 
+/** Where control sits. Governors aren't a chamber, so there's no line for them. */
+const CONTROL = { senate: "51 D · 50 R for control", house: "218 for control", governor: "No majority to win" } as const;
+
+/** The majority line, drawn at the seat that gives Democrats control (counted from the left); none for governors. */
+const tick = (office: keyof typeof NOTE, tally: Tally) => (office === "governor" ? null : <i aria-hidden style={{ left: `${(tally.majority / tally.total) * 100}%` }} />);
+
 const PROJECTED_NOTE = "Striped: the Kalshi and Polymarket favorite (odds averaged) until votes come in.";
 
 type Seats = Record<Party, number>;
@@ -22,7 +28,7 @@ export function BalanceBar({ title, office, tally, projected = NONE }: { title: 
     <section className="mt-balance">
       <div className="mt-balance-head">
         <h2>{title}</h2>
-        <span className="muted small">{office === "senate" ? "51 D · 50 R for control" : `${tally.majority} for control`}</span>
+        <span className="muted small">{CONTROL[office]}</span>
       </div>
       <div className="mt-balance-nums">
         <span className="d">
@@ -38,7 +44,7 @@ export function BalanceBar({ title, office, tally, projected = NONE }: { title: 
           {projected.R > 0 && <em>+{projected.R} </em>}Rep <b>{tally.R}</b>
         </span>
       </div>
-      <div className="mt-balance-bar" role="img" aria-label={`${tally.D} Democratic and ${projected.D} projected, ${tally.R} Republican and ${projected.R} projected, ${tally.other} other and ${projected.other} projected, ${open} undecided`}>
+      <div className="mt-balance-bar" role="img" aria-label={`${tally.D} Democratic and ${projected.D} favored by markets, ${tally.R} Republican and ${projected.R} favored by markets, ${tally.other} other and ${projected.other} favored by markets, ${open} undecided`}>
         <span style={{ width: share(tally.D), background: "var(--dem)" }} />
         <span style={{ width: share(projected.D), background: stripes("var(--dem)") }} />
         <span style={{ width: share(tally.other), background: "var(--oth)" }} />
@@ -46,7 +52,7 @@ export function BalanceBar({ title, office, tally, projected = NONE }: { title: 
         <span style={{ flex: 1 }} />
         <span style={{ width: share(projected.R), background: stripes("var(--rep)") }} />
         <span style={{ width: share(tally.R), background: "var(--rep)" }} />
-        <i aria-hidden />
+        {tick(office, tally)}
       </div>
       <p className="muted small">
         {NOTE[office]}
@@ -61,7 +67,7 @@ export function SeatBar({ tally, ahead, projected = NONE, office }: { tally: Tal
   const share = (n: number) => `${(n / tally.total) * 100}%`;
   const open = tally.total - tally.D - tally.R - tally.other - ahead.D - ahead.R - ahead.other - projected.D - projected.R - projected.other;
   const anyProjected = projected.D + projected.R + projected.other > 0;
-  const extra = (lead: number, proj: number) => [lead > 0 && `${lead} leading`, proj > 0 && `${proj} projected`].filter(Boolean).join(", ");
+  const extra = (lead: number, proj: number) => [lead > 0 && `${lead} leading`, proj > 0 && `${proj} market favorites`].filter(Boolean).join(", ");
   return (
     <section className="mt-seats">
       <div className="mt-seats-nums">
@@ -69,7 +75,7 @@ export function SeatBar({ tally, ahead, projected = NONE, office }: { tally: Tal
           <b>{tally.D}</b> Dem{ahead.D + projected.D > 0 && <em> +{extra(ahead.D, projected.D)}</em>}
         </span>
         <span className="mt-seats-mid">
-          {office === "senate" ? "51 D · 50 R for control" : `${tally.majority} for control`}
+          {CONTROL[office]}
           {tally.other + ahead.other + projected.other > 0 && ` · Other ${tally.other}${ahead.other + projected.other ? ` +${ahead.other + projected.other}` : ""}`}
           {` · ${open} ${anyProjected ? "uncounted, no market" : "uncounted"}`}
         </span>
@@ -77,7 +83,7 @@ export function SeatBar({ tally, ahead, projected = NONE, office }: { tally: Tal
           {ahead.R + projected.R > 0 && <em>{extra(ahead.R, projected.R)} + </em>}Rep <b>{tally.R}</b>
         </span>
       </div>
-      <div className="mt-balance-bar mt-seats-bar" role="img" aria-label={`Democrats ${tally.D} won, ${ahead.D} leading and ${projected.D} projected; Republicans ${tally.R} won, ${ahead.R} leading and ${projected.R} projected; ${open} uncounted`}>
+      <div className="mt-balance-bar mt-seats-bar" role="img" aria-label={`Democrats ${tally.D} won, ${ahead.D} leading and ${projected.D} favored by markets; Republicans ${tally.R} won, ${ahead.R} leading and ${projected.R} favored by markets; ${open} uncounted`}>
         <span style={{ width: share(tally.D), background: "var(--dem)" }} />
         <span style={{ width: share(ahead.D), background: "color-mix(in srgb, var(--dem) 45%, var(--sheet))" }} />
         <span style={{ width: share(projected.D), background: stripes("var(--dem)") }} />
@@ -87,7 +93,7 @@ export function SeatBar({ tally, ahead, projected = NONE, office }: { tally: Tal
         <span style={{ width: share(projected.R), background: stripes("var(--rep)") }} />
         <span style={{ width: share(ahead.R), background: "color-mix(in srgb, var(--rep) 45%, var(--sheet))" }} />
         <span style={{ width: share(tally.R), background: "var(--rep)" }} />
-        <i aria-hidden />
+        {tick(office, tally)}
       </div>
       <p className="muted small">
         {NOTE[office]}
