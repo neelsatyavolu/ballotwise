@@ -74,6 +74,7 @@ function AddressForm({ initial, onSaved, onCancel }: { initial: string; onSaved:
 }
 
 function MatchBlock({ guide, values, waitedMs, onRetry }: { guide: GuideSummary; values: string; waitedMs: number; onRetry: () => void }) {
+  if (guide.kind === "judicial") return <p className="card-note">Judges aren&apos;t matched. See their record.</p>;
   const phase = interviewMatchPhase({
     hasMatch: Boolean(guide.match),
     fromInterview: guide.fromInterview,
@@ -198,6 +199,28 @@ function ValuesPrompt({ values, researching }: { values: string; researching: bo
   );
 }
 
+/** A one-time offer, for a ballot found before judges were covered, to look for its judges alone. */
+function JudgesOffer({ onFind, onDismiss }: { onFind: () => void; onDismiss: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+  return (
+    <dialog ref={ref} className="offer" aria-labelledby="judges-offer-title" onCancel={onDismiss}>
+      <h2 id="judges-offer-title">Judges are on your ballot too</h2>
+      <p>
+        Ballotwise now looks up the judges you vote on, including yes-or-no retention votes. Your ballot was built before that, so
+        they&apos;re missing. We can look for just the judges. Your other races and answers stay as they are.
+      </p>
+      <div className="offer-actions">
+        <button type="button" className="btn" onClick={onFind}>Find my judges</button>
+        <button type="button" className="btn secondary" onClick={onDismiss}>Not now</button>
+      </div>
+    </dialog>
+  );
+}
+
 export function BallotView() {
   const router = useRouter();
   const { user, loading, grok, values } = useAccount();
@@ -263,6 +286,17 @@ export function BallotView() {
     void load();
   }
 
+  async function findJudges() {
+    setState((s) => (s?.ballot ? { ...s, ballot: { ...s.ballot, judgesChecked: true } } : s));
+    await api("/api/ballot/judges", { method: "POST" }).catch(() => {});
+    void load();
+  }
+
+  async function skipJudges() {
+    setState((s) => (s?.ballot ? { ...s, ballot: { ...s.ballot, judgesChecked: true } } : s));
+    await api("/api/ballot/judges", { method: "DELETE" }).catch(() => {});
+  }
+
   async function retry(id: string) {
     await api(`/api/guides/${id}/retry`, { method: "POST" }).catch(() => {});
     void load();
@@ -321,6 +355,7 @@ export function BallotView() {
 
       {ballot && !editing && (
         <>
+          {ballot.status === "ready" && !ballot.judgesChecked && grok === "connected" && <JudgesOffer onFind={findJudges} onDismiss={skipJudges} />}
           <BallotProgress ballot={ballot} guides={guides} />
           <ValuesPrompt values={values} researching={ballot.status === "finding" || guides.some((g) => g.status !== "ready" && g.status !== "failed")} />
           <div className="ballot-status">

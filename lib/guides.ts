@@ -3,7 +3,7 @@ import type { Db } from "./auth/accounts";
 import { getCached, putCached } from "./cache";
 import { needsEstimate } from "./estimate";
 import { effectiveAnswers, headlineMatch, type MatchHeadline } from "./match";
-import { isMeasure, profileSchema, profileStances, raceSchema, seatsOf, type ContestKind, type ContestLevel, type Profile, type Race } from "./schema";
+import { isMeasure, profileSchema, profileStances, raceKindOf, raceSchema, seatsOf, type ContestLevel, type Profile, type Race, type RaceKind } from "./schema";
 import { ALIGN_STALE_MS, type Suggested } from "./values";
 
 const MAX_GUIDE_BYTES = 400_000;
@@ -38,7 +38,7 @@ export type GuideSummary = {
   fromInterview: boolean;
   /** Set when mapping the interview onto this ready race failed. Null while that work is still in progress. */
   matchError: string | null;
-  kind: ContestKind;
+  kind: RaceKind;
   /** Null for guides found before levels were recorded, and for searched guides. */
   level: ContestLevel | null;
 };
@@ -69,7 +69,7 @@ type GuideRow = {
   candidateCount: number | null;
   candidatesDone: number;
   finishedAt: number | null;
-  kind: ContestKind;
+  kind: RaceKind;
   level: ContestLevel | null;
   data: string;
   suggested: string | null;
@@ -155,7 +155,7 @@ export async function saveGuide(db: Db, userId: string, id: string, data: GuideD
        ON CONFLICT(id) DO UPDATE SET title = excluded.title, election_date = excluded.election_date, data = excluded.data, updated_at = excluded.updated_at,
          kind = excluded.kind`,
     )
-    .bind(id, userId, data.race.title, data.race.date, json, now, data.query, isMeasure(data.race) ? "measure" : "office")
+    .bind(id, userId, data.race.title, data.race.date, json, now, data.query, raceKindOf(data.race))
     .run();
   return true;
 }
@@ -182,12 +182,15 @@ export async function noteGuideActivity(db: Db, id: string, activity: string): P
   await db.prepare("UPDATE guides SET activity = ? WHERE id = ? AND status IN ('queued', 'researching')").bind(activity, id).run();
 }
 
-export async function guideForJob(db: Db, id: string): Promise<{ userId: string; query: string; data: GuideData | null; status: GuideStatus } | null> {
+export async function guideForJob(
+  db: Db,
+  id: string,
+): Promise<{ userId: string; query: string; data: GuideData | null; status: GuideStatus; level: ContestLevel | null } | null> {
   const row = await db
-    .prepare("SELECT user_id AS userId, query, data, status FROM guides WHERE id = ?")
+    .prepare("SELECT user_id AS userId, query, data, status, level FROM guides WHERE id = ?")
     .bind(id)
-    .first<{ userId: string; query: string; data: string; status: GuideStatus }>();
-  return row ? { userId: row.userId, query: row.query, data: JSON.parse(row.data) as GuideData | null, status: row.status } : null;
+    .first<{ userId: string; query: string; data: string; status: GuideStatus; level: ContestLevel | null }>();
+  return row ? { userId: row.userId, query: row.query, data: JSON.parse(row.data) as GuideData | null, status: row.status, level: row.level } : null;
 }
 
 /**
@@ -225,8 +228,8 @@ export async function saveRaceForGuide(db: Db, id: string, query: string, race: 
         race.date,
         now,
         race.candidates.length,
-        isMeasure(race) ? "Researching both sides" : `Researching ${race.candidates.length} candidates`,
-        isMeasure(race) ? "measure" : "office",
+        isMeasure(race) ? "Researching both sides" : `Researching ${race.candidates.length} candidate${race.candidates.length === 1 ? "" : "s"}`,
+        raceKindOf(race),
         id,
       ),
   ]);

@@ -31,6 +31,7 @@ export function keepRetrievedSources(profile: Profile, retrieved: ReadonlySet<st
     record: claims(profile.record),
     endorsements: claims(profile.endorsements),
     funding,
+    ...(profile.evaluations && { evaluations: claims(profile.evaluations) }),
     positions: profile.positions.map((p) => ({ ...p, sources: p.sources.filter(ok) })),
   };
 }

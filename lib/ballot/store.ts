@@ -15,16 +15,18 @@ export type Ballot = {
   activity: string | null;
   searches: number;
   startedAt: number | null;
+  /** False for a ballot found before judges were covered, until its judges are looked for or the offer is declined. */
+  judgesChecked: boolean;
 };
 
 export async function saveBallot(db: Db, userId: string, address: string, matchedAddress: string, districts: Districts, now: number): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO ballots (user_id, address, matched_address, districts, status, error, updated_at, activity, searches, started_at)
-       VALUES (?, ?, ?, ?, 'finding', NULL, ?, NULL, 0, ?)
+      `INSERT INTO ballots (user_id, address, matched_address, districts, status, error, updated_at, activity, searches, started_at, judges_checked)
+       VALUES (?, ?, ?, ?, 'finding', NULL, ?, NULL, 0, ?, 1)
        ON CONFLICT(user_id) DO UPDATE SET address = excluded.address, matched_address = excluded.matched_address,
          districts = excluded.districts, status = 'finding', error = NULL, updated_at = excluded.updated_at,
-         activity = NULL, searches = 0, started_at = excluded.started_at`,
+         activity = NULL, searches = 0, started_at = excluded.started_at, judges_checked = 1`,
     )
     .bind(userId, address, matchedAddress, JSON.stringify(districts), now, now)
     .run();
@@ -34,11 +36,11 @@ export async function getBallot(db: Db, userId: string): Promise<Ballot | null> 
   const row = await db
     .prepare(
       `SELECT address, matched_address AS matchedAddress, districts, status, error, updated_at AS updatedAt,
-         activity, searches, started_at AS startedAt FROM ballots WHERE user_id = ?`,
+         activity, searches, started_at AS startedAt, judges_checked AS judgesChecked FROM ballots WHERE user_id = ?`,
     )
     .bind(userId)
-    .first<Omit<Ballot, "districts"> & { districts: string }>();
-  return row ? { ...row, districts: JSON.parse(row.districts) as Districts } : null;
+    .first<Omit<Ballot, "districts" | "judgesChecked"> & { districts: string; judgesChecked: number }>();
+  return row ? { ...row, districts: JSON.parse(row.districts) as Districts, judgesChecked: row.judgesChecked === 1 } : null;
 }
 
 export async function setBallotStatus(db: Db, userId: string, status: BallotStatus, error: string | null, now: number): Promise<void> {
@@ -46,6 +48,11 @@ export async function setBallotStatus(db: Db, userId: string, status: BallotStat
   const reset = status === "finding" ? ", activity = NULL, searches = 0, started_at = ?" : ", activity = NULL";
   const values = status === "finding" ? [status, error, now, now, userId] : [status, error, now, userId];
   await db.prepare(`UPDATE ballots SET status = ?, error = ?, updated_at = ?${reset} WHERE user_id = ?`).bind(...values).run();
+}
+
+/** Records that this ballot's judges were looked for, or that the voter declined. */
+export async function setJudgesChecked(db: Db, userId: string): Promise<void> {
+  await db.prepare("UPDATE ballots SET judges_checked = 1 WHERE user_id = ?").bind(userId).run();
 }
 
 export async function noteBallotActivity(db: Db, userId: string, activity: string, newSearches: number): Promise<void> {

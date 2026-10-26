@@ -254,6 +254,67 @@ describe("background research", () => {
     await db.prepare("DELETE FROM grok_connections").run();
     await expect(runJob({ type: "ballot", userId: user.id }, deps)).rejects.toThrow(/Grok isn't connected/);
   });
+
+  it("researches a judge's record without issues and never matches it to the interview", async () => {
+    const judgeContests = { elections: [{ name: "General Election", date: "2026-11-03", contests: [
+      { label: "California Supreme Court: Kelli Evans retention", query: "Kelli Evans retention California November 3 2026", level: "judicial" },
+    ] }] };
+    // Grok lays the retention vote out like an office with issues; a judicial contest drops them anyway.
+    const judgeRace = { kind: "race", race: { ...race.race, title: "California Supreme Court: Kelli Evans", candidates: [{ id: "kelli-evans", name: "Kelli Evans", party: null, ballotDesignation: null, incumbent: true }] } };
+    const judgeProfile = { ...profile, positions: [], evaluations: [{ text: "Rated well qualified.", sources: [SRC] }] };
+    const prompts: string[] = [];
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      if (!String(url).includes("api.x.ai")) return new Response("no", { status: 404 });
+      const prompt = String(init?.body);
+      prompts.push(prompt);
+      if (prompt.includes("Voter address")) return sse(JSON.stringify(judgeContests));
+      if (prompt.includes("The person searched for")) return sse(JSON.stringify(judgeRace));
+      return sse(JSON.stringify(judgeProfile));
+    });
+    const { saveValues } = await import("../lib/values");
+    const { db, user, deps, queued } = await setup();
+    await saveValues(db, user.id, [], { overview: "o", priorities: [], dealbreakers: [], leadership: null } as never, 1);
+    queued.push({ type: "ballot", userId: user.id });
+    await drain(deps, queued);
+
+    const [summary] = await listGuides(db, user.id, "ballot");
+    expect(summary).toMatchObject({ status: "ready", kind: "judicial", match: null, fromInterview: true });
+    const guide = await getGuide(db, user.id, summary.id);
+    expect(guide!.data!.race).toMatchObject({ kind: "judicial", issues: [] });
+    expect(guide!.data!.profiles["kelli-evans"].evaluations).toEqual([{ text: "Rated well qualified.", sources: [SRC] }]);
+    expect(prompts.some((p) => p.includes("Voter's interview summary"))).toBe(false);
+  });
+
+  it("looks for judges alone on a ballot found before judges were covered, leaving its other races as they are", async () => {
+    const found = { elections: [{ name: "General Election", date: "2026-11-03", contests: [
+      { label: "Mayor of Los Angeles", query: "LA mayor general 2026", level: "city" },
+      { label: "California Supreme Court: Kelli Evans retention", query: "Kelli Evans retention 2026", level: "judicial" },
+    ] }] };
+    const prompts: string[] = [];
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      if (!String(url).includes("api.x.ai")) return new Response("no", { status: 404 });
+      prompts.push(String(init?.body));
+      return sse(JSON.stringify(found));
+    });
+    const { db, user, deps, queued } = await setup();
+    // A ballot from before this change: its races are in, judges were never looked for.
+    await addContestGuides(db, user.id, contests as never, 1);
+    await db.prepare("UPDATE ballots SET status = 'ready', judges_checked = 0").run();
+    expect((await getBallot(db, user.id))?.judgesChecked).toBe(false);
+
+    await runJob({ type: "ballot", userId: user.id, only: "judges" }, deps);
+
+    expect(prompts[0]).toMatch(/only the judges/i);
+    const guides = await listGuides(db, user.id, "ballot");
+    expect(guides.map((g) => g.title).sort()).toEqual(["California Supreme Court: Kelli Evans retention", "Mayor of Los Angeles", "U.S. House, District 34"]);
+    expect(queued).toEqual([{ type: "race", guideId: guides.find((g) => g.level === "judicial")!.id }]);
+    expect(await getBallot(db, user.id)).toMatchObject({ status: "ready", judgesChecked: true });
+  });
+
+  it("counts a new ballot as already covering judges", async () => {
+    const { db, user } = await setup();
+    expect((await getBallot(db, user.id))?.judgesChecked).toBe(true);
+  });
 });
 
 describe("values interview", () => {

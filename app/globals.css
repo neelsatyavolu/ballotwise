@@ -348,6 +348,11 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 /* Ballot dashboard */
 .ballot-head { display: grid; gap: 8px; }
 .ballot-status { margin: 10px 0 0; }
+.offer { max-width: min(480px, calc(100vw - 32px)); margin: auto; padding: 24px; background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius); }
+.offer::backdrop { background: rgb(13 21 38 / 0.5); }
+.offer h2 { font-family: var(--serif); font-size: 22px; margin: 0 0 10px; }
+.offer p { margin: 0 0 20px; }
+.offer-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .ballot-status .progress-row { display: flex; gap: 12px; align-items: center; }
 .ballot-status .progress-row .spinner { margin-top: 0; }
 .election { margin-top: 24px; }

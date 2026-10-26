@@ -28,10 +28,12 @@ export const candidateRefSchema = z.object({
 });
 
 export const contestKinds = ["office", "measure"] as const;
+/** A judge is researched as a contest of its own kind: judges can't say how they'd rule, so it has no issues to match on. */
+export const raceKinds = [...contestKinds, "judicial"] as const;
 
 export const raceSchema = z.object({
   /** A ballot measure is stored as a race whose two "candidates" are its Yes and No sides. Absent on older races, which are offices. */
-  kind: z.enum(contestKinds).optional(),
+  kind: z.enum(raceKinds).optional(),
   /** Official measure titles run long, e.g. California's Proposition 41 at 134 characters. */
   title: text(200),
   election: text(160),
@@ -43,12 +45,16 @@ export const raceSchema = z.object({
   /** Seats filled; older saved races don't have it, see seatsOf. */
   seats: z.number().int().min(1).max(12).optional(),
   candidates: z.array(candidateRefSchema).min(1).max(12),
-  issues: z.array(issueSchema).min(3).max(7),
+  /** Empty for a judge; every other contest has 3 or more, which research is held to by raceResultSchema. */
+  issues: z.array(issueSchema).max(7),
   sources: z.array(url).min(1).max(12),
 });
 
 export const raceResultSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("race"), race: raceSchema }),
+  z.object({
+    kind: z.literal("race"),
+    race: raceSchema.refine((r) => isJudicial(r) || r.issues.length >= 3, { message: "needs at least 3 issues (only a judge's race has none)", path: ["issues"] }),
+  }),
   z.object({
     kind: z.literal("choose"),
     options: z.array(z.object({ label: text(140), query: text(200), date: z.string().trim().max(20).nullable() })).min(2).max(8),
@@ -66,7 +72,7 @@ export const ballotContestsSchema = z.object({
         date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
         contests: z
           .array(z.object({ label: text(140), query: text(220), level: z.enum(contestLevels), kind: z.enum(contestKinds).default("office") }))
-          .max(40),
+          .max(60),
       }),
     )
     .max(4),
@@ -90,6 +96,8 @@ export const profileSchema = z.object({
   funding: sourced.nullable(),
   endorsements: z.array(sourced).max(6),
   website: url.nullable(),
+  /** A judge's official performance evaluations and bar ratings. Absent for everyone else. */
+  evaluations: z.array(sourced).max(4).optional(),
 });
 
 const NUMBER_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 };
@@ -106,6 +114,20 @@ export function isMeasure(race: Pick<Race, "kind">): boolean {
   return race.kind === "measure";
 }
 
+export function isJudicial(race: Pick<Race, "kind">): boolean {
+  return race.kind === "judicial";
+}
+
+/** Races saved before kinds were recorded are offices. */
+export function raceKindOf(race: Pick<Race, "kind">): RaceKind {
+  return race.kind ?? "office";
+}
+
+/** A judge's contest: no issues, since judges can't say how they would rule. */
+export function asJudicial(race: Race): Race {
+  return { ...race, kind: "judicial", issues: [] };
+}
+
 /** The stance used for matching: the sourced one, else the labelled estimate. */
 export function stanceOf(position: Position): number | null {
   return position.stance ?? position.estimate?.stance ?? null;
@@ -120,6 +142,7 @@ export type Issue = z.infer<typeof issueSchema>;
 export type CandidateRef = z.infer<typeof candidateRefSchema>;
 export type Race = z.infer<typeof raceSchema>;
 export type ContestKind = (typeof contestKinds)[number];
+export type RaceKind = (typeof raceKinds)[number];
 export type ContestLevel = (typeof contestLevels)[number];
 export type RaceResult = z.infer<typeof raceResultSchema>;
 export type BallotContests = z.infer<typeof ballotContestsSchema>;

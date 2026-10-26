@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { categoryOf } from "../lib/categories";
-import { profilePrompt } from "../lib/prompts";
-import { ballotContestsSchema, raceSchema, type Race } from "../lib/schema";
+import { ballotPrompt, profilePrompt, racePrompt } from "../lib/prompts";
+import { ballotContestsSchema, raceResultSchema, raceSchema, type Race } from "../lib/schema";
 
 describe("categoryOf", () => {
   it("sorts offices by level", () => {
@@ -19,6 +19,9 @@ describe("categoryOf", () => {
   it("puts guides with no recorded level under Other", () => {
     expect(categoryOf("office", null)).toBe("other");
   });
+  it("files a researched judge under Judges even without a level", () => {
+    expect(categoryOf("judicial", null)).toBe("judges");
+  });
 });
 
 describe("ballot contests", () => {
@@ -30,6 +33,36 @@ describe("ballot contests", () => {
       ] }],
     });
     expect(parsed.elections[0].contests.map((c) => c.kind)).toEqual(["office", "measure"]);
+  });
+  it("fits a long ballot with a retention vote for every appellate justice", () => {
+    const contests = Array.from({ length: 55 }, (_, i) => ({ label: `Contest ${i}`, query: `contest ${i} 2026`, level: "judicial" as const }));
+    expect(ballotContestsSchema.safeParse({ elections: [{ name: "General", date: "2026-11-03", contests }] }).success).toBe(true);
+  });
+});
+
+describe("ballot search", () => {
+  const districts = { state: "California", county: "Santa Clara County", place: "San Jose", congressional: null, stateSenate: null, stateHouse: null, schoolDistrict: null };
+  it("asks for every judge, retention votes included", () => {
+    const prompt = ballotPrompt("1 Main St, San Jose, CA", districts);
+    expect(prompt).toMatch(/retention vote/i);
+    expect(prompt).not.toMatch(/leave out[^.\n]*retention/i);
+  });
+  it("lets only a judge's race go without issues", () => {
+    const base = { title: "Justice", election: "General", date: "2026-11-03", jurisdiction: "California", office: { text: "Hears appeals.", sources: ["https://example.gov/c"] },
+      votingRule: null, candidates: [{ id: "judge", name: "A Judge", party: null, ballotDesignation: null, incumbent: true }], issues: [], sources: ["https://example.gov/c"] };
+    expect(raceResultSchema.safeParse({ kind: "race", race: { ...base, kind: "judicial" } }).success).toBe(true);
+    expect(raceResultSchema.safeParse({ kind: "race", race: base }).success).toBe(false);
+  });
+  it("researches a judge's record and evaluations instead of issue stances", () => {
+    const judge: Race = { kind: "judicial", title: "California Supreme Court", election: "General", date: "2026-11-03", jurisdiction: "California",
+      office: { text: "Hears appeals.", sources: ["https://example.gov/c"] }, votingRule: null, seats: 1,
+      candidates: [{ id: "judge", name: "A Judge", party: null, ballotDesignation: null, incumbent: true }], issues: [], sources: ["https://example.gov/c"] };
+    const prompt = profilePrompt(judge, judge.candidates[0]);
+    expect(prompt).toContain('"evaluations"');
+    expect(prompt).not.toContain("scored from -2 to +2");
+  });
+  it("tells race research how to lay out a retention vote", () => {
+    expect(racePrompt("Justice Kelli Evans, California Supreme Court, November 3 2026")).toMatch(/retention vote[^\n]*only candidate/i);
   });
 });
 

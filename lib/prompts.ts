@@ -1,6 +1,6 @@
 import type { Districts } from "./ballot/census";
 import type { KnownContest } from "./cache";
-import { isMeasure, type CandidateRef, type Race } from "./schema";
+import { isJudicial, isMeasure, type CandidateRef, type Race } from "./schema";
 
 const NEUTRALITY = `You write for a nonpartisan voter guide. Rules that override everything else:
 - Report, don't judge. No adjectives that praise or criticize (e.g. "extreme", "common-sense", "radical", "bold", "controversial"). No predictions about who will win, no polling horse-race talk.
@@ -39,6 +39,7 @@ Search the web to identify the single contest they mean.
   "sources": ["urls you used to establish the candidate list"]
 }
 Candidate list: use the certified/qualified list for that contest. If the general election list isn't set yet, use the candidates who qualified for the next ballot and note the stage in "election". Include every qualified candidate, not only major-party ones.
+Judges: for any contest for a judge or justice, contested or not, set "kind": "judicial" and "issues": []. Judges can't say how they would rule, so these contests aren't compared on issues. "office" describes the court, what it decides and the term. For a retention vote ("Shall Justice ... be retained?") list the judge as the only candidate, with "seats": 1 and "votingRule": "Retention vote: yes keeps the judge in office, no removes them".
 Seats: the number of seats this contest fills, which is how many candidates each voter may vote for. It is 1 for most offices; at-large school boards and councils often fill 2-4 at once. Check the official sample ballot ("Vote for no more than 2").
 Issues: 4-6 issues that this specific office actually decides and that the candidates disagree on or have spoken about. Phrase each as one tradeoff on a single dimension where both sides are positions reasonable people hold, worded with equal care and similar length. Keep sideA and sideB to one short plain-language clause each (under 90 characters), not a bundle of several policies. Describe the policy choice, not any candidate's platform. Do not frame either side as obviously right. Do not use party or candidate names in issues.
 
@@ -63,6 +64,7 @@ function issueScale(race: Race): string {
 
 export function profilePrompt(race: Race, candidate: CandidateRef): string {
   if (isMeasure(race)) return measureSidePrompt(race, candidate);
+  if (isJudicial(race)) return judgePrompt(race, candidate);
   const issues = issueScale(race);
   return `Today is ${today()}.
 Contest: ${race.title} — ${race.election}${race.date ? ` (${race.date})` : ""}, ${race.jurisdiction}.
@@ -83,6 +85,27 @@ Issues, each scored from -2 to +2:
 ${issues}
 
 Scoring rules: 0 means a stated middle position, not "unknown". Use null when they haven't taken a public position you can source; never infer a stance from party. Include one entry per issue. Keep each list to the 3-5 most informative items. "record" is empty for candidates who have not held office.`;
+}
+
+/** A judge is described by record and evaluations, since judges can't say how they would rule on issues. */
+function judgePrompt(race: Race, judge: CandidateRef): string {
+  return `Today is ${today()}.
+Contest: ${race.title} — ${race.election}${race.date ? ` (${race.date})` : ""}, ${race.jurisdiction}.${race.votingRule ? `\n${race.votingRule}.` : ""}
+Judge: ${judge.name}${judge.party ? ` (${judge.party})` : ""}${judge.incumbent ? ", incumbent" : ""}.
+
+Search the web for this judge's official court biography, how and when they were appointed or elected, published judicial performance evaluations and bar association ratings, notable opinions they wrote or joined, and endorsements. Judges may not say how they would rule, so report what they have done, not what they believe. Then return:
+{
+  "summary": "Two neutral sentences: who they are and the seat on the ballot.",
+  "background": [{ "text": "A fact about their career, earlier courts, or who appointed or elected them and when", "sources": ["url"] }],
+  "positions": [],
+  "record": [{ "text": "A notable opinion they wrote or joined: the case, what the court decided, and their part in it", "sources": ["url"] }],
+  "evaluations": [{ "text": "An official judicial performance evaluation, bar association rating or nominee evaluation: who issued it, when, and the result", "sources": ["url"] }],
+  "funding": { "text": "Money raised for or against them, with the filing period", "sources": ["url"] } or null,
+  "endorsements": [{ "text": "Notable endorser or group of endorsers", "sources": ["url"] }],
+  "website": "campaign site URL, else their official court biography URL, or null"
+}
+
+Describe each ruling by what the court decided, never with labels such as liberal, conservative, activist or tough on crime. Never infer anything from the party of whoever appointed them. "evaluations" is empty when none has been published. Keep each list to the 3-5 most informative items.`;
 }
 
 /** One side of a ballot measure, researched with the same template as a candidate so the two sides are compared the same way. */
@@ -114,7 +137,8 @@ export const BALLOT_INSTRUCTIONS = `${NEUTRALITY}
 
 Your job: list the contests and ballot measures that will appear on one voter's ballot.`;
 
-export function ballotPrompt(matchedAddress: string, districts: Districts, known: readonly KnownContest[] = []): string {
+/** `judgesOnly` asks for judges alone, for a ballot whose other contests were found before judges were covered. */
+export function ballotPrompt(matchedAddress: string, districts: Districts, known: readonly KnownContest[] = [], judgesOnly = false): string {
   const lines = [
     `State: ${districts.state}`,
     districts.county && `County: ${districts.county}`,
@@ -131,10 +155,11 @@ export function ballotPrompt(matchedAddress: string, districts: Districts, known
 Districts from the US Census geocoder:
 ${lines.join("\n")}
 ${reuse}
-Search official sources (the county elections office and its sample ballot, the secretary of state's candidate and measure lists, Ballotpedia's sample ballot for this area) and list everything this address votes on in elections from today through the next 12 months: every contest between candidates and every ballot measure.
+Search official sources (the county elections office and its sample ballot, the secretary of state's candidate and measure lists, Ballotpedia's sample ballot for this area) and list ${judgesOnly ? "only the judges this address votes on in elections from today through the next 12 months: every contest for a judge or justice and every judicial retention vote. Leave out every other contest and measure" : "everything this address votes on in elections from today through the next 12 months: every contest between candidates and every ballot measure"}.
 - Include federal, statewide, state legislative, county, city, school board, judicial and special-district contests, but only the districts this address is in. For districts not listed above (city council ward, county supervisor district, judicial or special districts), find which one covers this address from an official source; if you can't confirm it, leave that contest out.
+- Include every judge on this ballot: state supreme court and appellate court seats, trial court seats (superior, circuit, district, county, probate, municipal court, justice of the peace), and every judicial retention vote ("Shall Justice ... be retained?"), uncontested ones included. Appellate court districts are made of whole counties, so the county above tells you which appellate district's justices are on this ballot. Each judge is its own contest with "level":"judicial" and "kind":"office".
 - Include ballot measures: statewide propositions, and county, city, school and special-district measures for districts this address is in. Mark these "kind":"measure"; contests between candidates are "kind":"office".
-- Leave out uncontested retention votes you can't confirm, elections whose candidate filing hasn't closed, and measures that haven't qualified for the ballot.
+- Leave out elections whose candidate filing hasn't closed, and measures that haven't qualified for the ballot.
 - Each item needs a short "label" (e.g. "U.S. House, California District 34" or "Proposition 33: Rent Control") and a "query" precise enough to identify only that contest or measure, including the election date (e.g. "California 34th congressional district general election November 3 2026").
 - "level" is who votes on it: a statewide proposition is "state", a city measure is "city", a school bond is "school".
 

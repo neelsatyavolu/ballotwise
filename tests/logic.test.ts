@@ -153,6 +153,11 @@ describe("keepRetrievedSources", () => {
     expect(alignPositions(out, issues).positions[0].stance).toBeNull();
   });
 
+  it("applies the same rule to a judge's evaluations", () => {
+    const judge = { ...profile, evaluations: [{ text: "real", sources: ["https://example.com/a"] }, { text: "invented", sources: ["https://made-up.org/e"] }] };
+    expect(keepRetrievedSources(judge, new Set([normalizeUrl("https://example.com/a")])).evaluations?.map((e) => e.text)).toEqual(["real"]);
+  });
+
   it("leaves the profile alone when no retrieval data is available", () => {
     expect(keepRetrievedSources(profile, new Set())).toBe(profile);
   });

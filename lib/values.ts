@@ -68,7 +68,7 @@ const MAX_TOPIC_RACES = 40;
 
 export async function ballotTopics(db: Db, userId: string): Promise<BallotTopic[]> {
   const { results } = await db
-    .prepare("SELECT data FROM guides WHERE user_id = ? AND origin = 'ballot' AND data != 'null' ORDER BY election_date ASC, title ASC LIMIT ?")
+    .prepare("SELECT data FROM guides WHERE user_id = ? AND origin = 'ballot' AND data != 'null' AND kind != 'judicial' ORDER BY election_date ASC, title ASC LIMIT ?")
     .bind(userId, MAX_TOPIC_RACES)
     .all<{ data: string }>();
   const topics = results.map((r) => {

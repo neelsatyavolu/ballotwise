@@ -8,12 +8,13 @@ import { estimateMissing, needsEstimate } from "../estimate";
 import { guideForJob, guideProfiles, noteGuideActivity, replaceCandidateProfile, saveCandidateResult, saveRaceForGuide, setGuideStatus } from "../guides";
 import { alignPositions, balanceSides, keepRetrievedRaceSources, keepRetrievedSources } from "../profile";
 import { BALLOT_INSTRUCTIONS, ballotPrompt, PROFILE_INSTRUCTIONS, profilePrompt, RACE_INSTRUCTIONS, racePrompt } from "../prompts";
-import { ballotContestsSchema, profileSchema, raceResultSchema, type CandidateRef, type Profile, type Race } from "../schema";
+import { asJudicial, ballotContestsSchema, isJudicial, profileSchema, raceResultSchema, type CandidateRef, type Profile, type Race } from "../schema";
 import { alignToIssues, getValues, releaseAlignment, saveSuggested, scheduleAlignment } from "../values";
-import { addContestGuides, getBallot, noteBallotActivity, setBallotStatus } from "./store";
+import { addContestGuides, getBallot, noteBallotActivity, setBallotStatus, setJudgesChecked } from "./store";
 
 export const jobSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("ballot"), userId: z.string() }),
+  // "judges" looks for judges alone, for a ballot found before they were covered.
+  z.object({ type: z.literal("ballot"), userId: z.string(), only: z.literal("judges").optional() }),
   z.object({ type: z.literal("race"), guideId: z.string() }),
   z.object({ type: z.literal("candidate"), guideId: z.string(), candidateId: z.string() }),
   z.object({ type: z.literal("align"), guideId: z.string() }),
@@ -94,13 +95,18 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
     const activity = activityReporter((text, n) => noteBallotActivity(deps.db, job.userId, text, n));
     const { state, county } = ballot.districts;
     const known = await knownContests(deps.db, state, county, now());
-    const { data } = await research(tokens, BALLOT_INSTRUCTIONS, ballotPrompt(ballot.matchedAddress, ballot.districts, known), ballotContestsSchema, activity.onProgress)
+    const judgesOnly = job.only === "judges";
+    const { data: answer } = await research(tokens, BALLOT_INSTRUCTIONS, ballotPrompt(ballot.matchedAddress, ballot.districts, known, judgesOnly), ballotContestsSchema, activity.onProgress)
       .catch(permanent)
       .finally(() => activity.flush());
+    // A judges-only search never adds anything else, so the ballot's other races stay exactly as they were.
+    const data = judgesOnly ? { elections: answer.elections.map((e) => ({ ...e, contests: e.contests.filter((c) => c.level === "judicial") })) } : answer;
     const found = data.elections.flatMap((e) => e.contests.map((c) => ({ label: c.label, query: c.query, date: e.date })));
     await rememberContests(deps.db, state, county, found, now());
     const added = await addContestGuides(deps.db, job.userId, data, now());
     await deps.enqueue(added.map((guideId) => ({ type: "race", guideId })));
+    // Every search now includes judges, so a finished one settles the offer to look for them.
+    await setJudgesChecked(deps.db, job.userId);
     await setBallotStatus(deps.db, job.userId, "ready", null, now());
     return;
   }
@@ -111,7 +117,9 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
 
   if (job.type === "race") {
     await setGuideStatus(deps.db, job.guideId, "researching", null, now());
-    const race = (await getCached<Race>(deps.db, raceKey(guide.query), now())) ?? (await researchRace(deps, tokens, job.guideId, guide.query, now));
+    const found = (await getCached<Race>(deps.db, raceKey(guide.query), now())) ?? (await researchRace(deps, tokens, job.guideId, guide.query, now));
+    // A contest the ballot search filed under judges is a judge's, even when the race lookup laid it out as an office.
+    const race = guide.level === "judicial" && !isJudicial(found) && found.kind !== "measure" ? asJudicial(found) : found;
     await saveRaceForGuide(deps.db, job.guideId, guide.query, race, now());
     // Shared profiles are reused only as a full set. If any candidate's is missing, all are researched
     // again, so no candidate is compared using older research than an opponent's.
@@ -135,6 +143,11 @@ export async function runJob(job: Job, deps: JobDeps): Promise<void> {
   }
 
   if (job.type === "align") {
+    // A judge has no issues to place the voter on. An empty mapping marks it done so it's never queued again.
+    if (guide.data && isJudicial(guide.data.race)) {
+      await saveSuggested(deps.db, job.guideId, {});
+      return;
+    }
     const values = await getValues(deps.db, guide.userId);
     // Research often finishes before the interview. Releasing the claim lets the
     // interview (or the next ballot load) queue this race again.

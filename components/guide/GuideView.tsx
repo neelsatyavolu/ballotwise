@@ -10,7 +10,7 @@ import type { Progress } from "@/lib/grok/research";
 import type { GuideData, GuideRecord, GuideStatus } from "@/lib/guides";
 import { effectiveAnswers, headlineMatch, interviewMatchPhase, joinNames, type Answer, type Answers, type Overrides } from "@/lib/match";
 import type { Suggested } from "@/lib/values";
-import { isMeasure, profileStances, seatsOf, type Profile, type Race, type RaceResult } from "@/lib/schema";
+import { isJudicial, isMeasure, profileStances, raceKindOf, seatsOf, type Profile, type Race, type RaceResult } from "@/lib/schema";
 import { Sources } from "./bits";
 import { Compare } from "./Compare";
 import { Interview } from "./Interview";
@@ -100,7 +100,8 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
         const result = await streamResearch<RaceResult>("/api/race", { query: q }, (p) => setTask("race", { detail: progressText(p) }));
         if (result.kind === "choose") return setPhase({ kind: "choose", options: result.options });
         if (result.kind === "none") return setPhase({ kind: "none", reason: result.reason });
-        setTask("race", { state: "done", detail: `${result.race.candidates.length} candidates, ${result.race.issues.length} issues` });
+        const found = result.race.candidates.length;
+        setTask("race", { state: "done", detail: isJudicial(result.race) ? `${found} ${found === 1 ? "judge" : "candidates"}` : `${found} candidates, ${result.race.issues.length} issues` });
         setRace(result.race);
         setPhase({ kind: "ready" });
         await researchAll(result.race);
@@ -161,7 +162,8 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
 
   // Ballot guides research on the server; check back until they finish.
   const researchDone = race !== null && race.candidates.every((c) => profiles[c.id] || background?.failed[c.id]);
-  const awaitingMatch = values === "done" && suggested === null && researchDone && !matchError;
+  // Judges have no issues, so there's nothing to match.
+  const awaitingMatch = values === "done" && suggested === null && researchDone && !matchError && !isJudicial(race);
   const pending = (origin === "ballot" && background !== null && (background.status === "queued" || background.status === "researching")) || awaitingMatch;
   useEffect(() => {
     if (!pending) return;
@@ -370,67 +372,79 @@ export function GuideView({ id, query }: { id: string; query: string | null }) {
         <p className="shuffle-note">
           {isMeasure(race)
             ? "Each side is described from its own campaign's materials and the official analysis."
-            : "Candidates are listed in random order. Party is shown the way it appears on the ballot."}
+            : isJudicial(race)
+              ? `Judges may not say how they would rule, so this race isn't matched to your answers. ${race.candidates.length > 1 ? "Candidates are listed in random order, each" : "The judge is"} described by their record and published evaluations.`
+              : "Candidates are listed in random order. Party is shown the way it appears on the ballot."}
         </p>
         {saveError && <p className="error small">{saveError}</p>}
       </header>
 
-      <MatchCard
-        headline={headline}
-        researchDone={allDone}
-        values={values}
-        fromInterview={suggested !== null}
-        matchError={matchError}
-        waitedMs={waitedMs}
-        onRetry={retryMatch}
-        onSeeWhy={() => {
-          setTab("match");
-          setEditing(false);
-          if (hasAnswers) setInterviewDone(true);
-        }}
-      />
+      {isJudicial(race) ? (
+        <>
+          {progress}
+          {backgroundPanel}
+          <Profiles candidates={order} profiles={profiles} kind="judicial" />
+        </>
+      ) : (
+        <>
+          <MatchCard
+            headline={headline}
+            researchDone={allDone}
+            values={values}
+            fromInterview={suggested !== null}
+            matchError={matchError}
+            waitedMs={waitedMs}
+            onRetry={retryMatch}
+            onSeeWhy={() => {
+              setTab("match");
+              setEditing(false);
+              if (hasAnswers) setInterviewDone(true);
+            }}
+          />
 
-      <div className="tabs" role="tablist">
-        {([["compare", "Compare"], ["profiles", isMeasure(race) ? "Each side" : "Candidates"], ["match", "Your match"]] as const).map(([key, label]) => (
-          <button key={key} type="button" role="tab" className="tab" aria-selected={tab === key} onClick={() => setTab(key)}>
-            {label}
-          </button>
-        ))}
-      </div>
+          <div className="tabs" role="tablist">
+            {([["compare", "Compare"], ["profiles", isMeasure(race) ? "Each side" : "Candidates"], ["match", "Your match"]] as const).map(([key, label]) => (
+              <button key={key} type="button" role="tab" className="tab" aria-selected={tab === key} onClick={() => setTab(key)}>
+                {label}
+              </button>
+            ))}
+          </div>
 
-      {progress}
-      {backgroundPanel}
+          {progress}
+          {backgroundPanel}
 
-      <div role="tabpanel">
-        {tab === "compare" && <Compare issues={race.issues} candidates={order} profiles={profiles} answers={effective} />}
-        {tab === "profiles" && <Profiles candidates={order} profiles={profiles} measure={isMeasure(race)} />}
-        {tab === "match" &&
-          (!allDone && !interviewDone ? (
-            <p className="muted read">Your match will show up once every candidate has been looked up, so they&apos;re all compared fairly.</p>
-          ) : showResults ? (
-            <Results
-              issues={race.issues}
-              candidates={order}
-              profiles={profiles}
-              answers={effective}
-              notes={notes}
-              overrides={overrides}
-              onOverride={onOverride}
-              guesses={guesses.length}
-              onCheckGuesses={() => { setChecking(guesses); setInterviewDone(false); setEditing(true); }}
-              onRetake={() => { setChecking(null); setInterviewDone(false); setEditing(true); }}
-            />
-          ) : (
-            <Interview
-              key={checking ? "checking" : "all"}
-              issues={checking ? race.issues.filter((i) => checking.includes(i.id)) : race.issues}
-              answers={effective}
-              notes={notes}
-              onAnswer={onAnswer}
-              onFinish={() => { setChecking(null); setInterviewDone(true); setEditing(false); }}
-            />
-          ))}
-      </div>
+          <div role="tabpanel">
+            {tab === "compare" && <Compare issues={race.issues} candidates={order} profiles={profiles} answers={effective} />}
+            {tab === "profiles" && <Profiles candidates={order} profiles={profiles} kind={raceKindOf(race)} />}
+            {tab === "match" &&
+              (!allDone && !interviewDone ? (
+                <p className="muted read">Your match will show up once every candidate has been looked up, so they&apos;re all compared fairly.</p>
+              ) : showResults ? (
+                <Results
+                  issues={race.issues}
+                  candidates={order}
+                  profiles={profiles}
+                  answers={effective}
+                  notes={notes}
+                  overrides={overrides}
+                  onOverride={onOverride}
+                  guesses={guesses.length}
+                  onCheckGuesses={() => { setChecking(guesses); setInterviewDone(false); setEditing(true); }}
+                  onRetake={() => { setChecking(null); setInterviewDone(false); setEditing(true); }}
+                />
+              ) : (
+                <Interview
+                  key={checking ? "checking" : "all"}
+                  issues={checking ? race.issues.filter((i) => checking.includes(i.id)) : race.issues}
+                  answers={effective}
+                  notes={notes}
+                  onAnswer={onAnswer}
+                  onFinish={() => { setChecking(null); setInterviewDone(true); setEditing(false); }}
+                />
+              ))}
+          </div>
+        </>
+      )}
 
       {race.sources.length > 0 && (
         <p className="small muted" style={{ marginTop: 40 }}>
