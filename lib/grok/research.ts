@@ -95,6 +95,10 @@ async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onPro
   }
 
   if (res.status === 401 || res.status === 403) throw new ResearchError(`${name} rejected this session. Reconnect ${name}.`, 401);
+  // xAI answers 402 when a Grok account has no subscription or credits left; retrying won't help.
+  if (res.status === 402 && tokens.provider === "grok") {
+    throw new ResearchError("Your Grok account needs a SuperGrok subscription or credits to run research. Add them at grok.com, or connect ChatGPT instead.", 402);
+  }
   if (res.status === 429) throw new ResearchError(`Your ${name} account hit its usage limit. Wait a bit and try again.`, 429);
   if (!res.ok || !res.body) {
     const detail = await res.text().catch(() => "");

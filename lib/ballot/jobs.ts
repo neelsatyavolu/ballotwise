@@ -81,8 +81,8 @@ async function tokensFor(deps: JobDeps, userId: string) {
 }
 
 function permanent(err: unknown): never {
-  // A rejected session won't recover by retrying; rate limits and timeouts might.
-  if (err instanceof ResearchError && err.status === 401) throw new PermanentJobError(err.message);
+  // A rejected session or an unpaid account won't recover by retrying; rate limits and timeouts might.
+  if (err instanceof ResearchError && (err.status === 401 || err.status === 402)) throw new PermanentJobError(err.message);
   throw err;
 }
 

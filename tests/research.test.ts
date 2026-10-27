@@ -41,4 +41,15 @@ describe("provider routing", () => {
     expect(urls[0]).toBe("https://api.x.ai/v1/responses");
     await expect(ask({ ...grok, provider: "codex" }, "x", [], z.object({}))).rejects.toThrow("ChatGPT rejected this session. Reconnect ChatGPT.");
   });
+
+  it("explains an account with no plan or credits instead of asking to try again", async () => {
+    vi.stubGlobal("fetch", async (url: string | URL) => {
+      if (String(url).includes("models.json")) return new Response("{}", { status: 404 });
+      return new Response('{"code":"personal-team-blocked:spending-limit"}', { status: 402 });
+    });
+    const grok = { provider: "grok" as const, accessToken: "t", refreshToken: "r", expiresAt: 0 };
+    await expect(ask(grok, "x", [], z.object({}))).rejects.toThrow(
+      new ResearchError("Your Grok account needs a SuperGrok subscription or credits to run research. Add them at grok.com, or connect ChatGPT instead.", 402),
+    );
+  });
 });
