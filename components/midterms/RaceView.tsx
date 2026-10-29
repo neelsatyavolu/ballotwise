@@ -5,7 +5,8 @@ import { useMemo, useState } from "react";
 import { stampET, stateFinal } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { colorOf, fmt, OFFICE_LABEL, partyTag, pct, raceLabel, signalLine, STATE_NAMES, timeAgo } from "@/lib/midterms/view";
+import { fmt, OFFICE_LABEL, partyTag, pct, raceLabel, signalLine, STATE_NAMES, timeAgo } from "@/lib/midterms/view";
+import { partyColor } from "./party";
 import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
 import { useLive, useStars } from "./hooks";
@@ -104,7 +105,7 @@ export function RaceView({ id }: { id: number }) {
             <tbody>
               {race.candidates.map((c) => (
                 <tr key={c.name} className={c.winner ? "won" : undefined}>
-                  <td style={{ boxShadow: `inset 4px 0 0 ${colorOf(c)}` }}>
+                  <td style={{ boxShadow: `inset 4px 0 0 ${partyColor(c)}` }}>
                     {c.name}
                     {c.incumbent && <span title="Incumbent">*</span>}
                     {c.winner && <span className="mt-check"> ✓ Winner</span>}
@@ -113,7 +114,7 @@ export function RaceView({ id }: { id: number }) {
                   <td className="num">{fmt(c.votes)}</td>
                   <td className="num">
                     <span className="mt-share">
-                      <span style={{ width: `${c.pct}%`, background: colorOf(c) }} />
+                      <span style={{ width: `${c.pct}%`, background: partyColor(c) }} />
                     </span>
                     {pct(c.pct)}
                   </td>

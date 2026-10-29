@@ -1,10 +1,11 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
-import { useState } from "react";
-import { EARLY_REPORTING, favoredSide, groupOf, isEarly, statusOf, tierOf, type Group, type Sort } from "@/lib/midterms/explore";
+import { useState, type CSSProperties } from "react";
+import { EARLY_REPORTING, favoredSide, groupOf, isEarly, leaderOf, statusOf, tierOf, type Group, type Sort } from "@/lib/midterms/explore";
 import { leadingFlip, outcomeOf } from "@/lib/midterms/holders";
 import { stampET, stateFinal } from "@/lib/midterms/polls";
-import { colorOf, fmt, lead, partyTag, signalLine, type RaceSummary } from "@/lib/midterms/view";
+import { fmt, lead, partyTag, signalLine, type RaceSummary } from "@/lib/midterms/view";
+import { partyColor } from "./party";
 import { shortLabel } from "./PollClose";
 import { RatingTag } from "./RaceCard";
 
@@ -20,7 +21,10 @@ const GROUP_LABEL: Record<Group, string> = {
 
 export type Stars = { ids: number[] | null; toggle: (id: number) => void };
 
-const lastName = (name: string) => {
+/** Candidates shown on a card; the rest are a link away. */
+const CARD_CANDIDATES = 3;
+
+export const lastName = (name: string) => {
   const parts = name.replace(/,? (Jr|Sr|II|III|IV)\.?$/i, "").split(" ");
   // "de la Cruz", "Van Hollen": keep lowercase particles with the surname.
   let i = parts.length - 1;
@@ -51,37 +55,63 @@ function TrendLine({ race, now }: { race: RaceSummary; now: number }) {
   return <span className="mt-res-trend" title={title}>{parts.join(" · ")}</span>;
 }
 
+type Cand = RaceSummary["candidates"][number];
+
+/** Party as a results desk abbreviates it: DEM, GOP, LIB, GRE, IND, or the party's own short tag. */
+function partyCode(party: string): string {
+  if (/^Democrat/i.test(party)) return "DEM";
+  if (/^Republican/i.test(party)) return "GOP";
+  if (/libertarian/i.test(party)) return "LIB";
+  if (/green/i.test(party)) return "GRE";
+  if (/independent/i.test(party)) return "IND";
+  return partyTag(party).toUpperCase();
+}
+
+const initials = (name: string) => {
+  const parts = name.replace(/[^\p{L}\s'-]/gu, " ").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + lastName(name)[0]).toUpperCase();
+};
+
+/** The race's candidates as a small results table: party bar, initials, party, votes and share. */
 function Candidates({ race }: { race: RaceSummary }) {
-  const top = race.candidates.slice(0, 2);
-  if (!race.total) {
-    return (
-      <div className="mt-res-cands">
-        {top.map((c) => (
-          <span key={c.name} title={c.name}>
-            <span className="swatch" style={{ background: colorOf(c) }} aria-hidden /> {race.office === "measure" ? c.name : lastName(c.name)}
-            {partyTag(c.party) && <span className="muted"> {partyTag(c.party)}</span>}
-            {c.incumbent && <span className="muted" title="Incumbent">*</span>}
-          </span>
-        ))}
-        {signalLine(race.signal) && <span className="muted small">{signalLine(race.signal)}</span>}
-      </div>
-    );
-  }
+  const measure = race.office === "measure";
+  const shown = race.candidates.slice(0, CARD_CANDIDATES);
+  const hidden = race.candidates.length - shown.length;
+  const early = isEarly(race);
   return (
-    <div className="mt-res-cands">
-      {top.map((c) => (
-        <span key={c.name} title={c.name} className={c.winner ? "won" : undefined}>
-          <span className="swatch" style={{ background: colorOf(c) }} aria-hidden /> {race.office === "measure" ? c.name : lastName(c.name)}
-          {partyTag(c.party) && <span className="muted"> {partyTag(c.party)}</span>}
-          {c.incumbent && <span className="muted" title="Incumbent">*</span>}
-          <b className="num"> {c.pct.toFixed(1)}%</b>
-          {c.winner && <span className="mt-check" aria-label="winner"> ✓</span>}
-        </span>
-      ))}
-      <span className="mt-stack" aria-hidden>
-        {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: colorOf(c), opacity: isEarly(race) ? 0.55 : 1 }} />)}
-      </span>
-    </div>
+    <table className="mt-tile-table">
+      <thead>
+        <tr>
+          <th scope="col">{measure ? "Choice" : "Candidate"}</th>
+          {!measure && <th scope="col">Party</th>}
+          <th scope="col" className="num">Votes</th>
+          <th scope="col" className="num">Pct</th>
+        </tr>
+      </thead>
+      <tbody>
+        {shown.map((c: Cand) => (
+          <tr key={c.name} className={c.winner ? "won" : undefined} style={{ "--p": partyColor(c), opacity: early && !c.winner ? 0.85 : undefined } as CSSProperties}>
+            <td title={c.name}>
+              {!measure && <span className="mt-av" aria-hidden>{initials(c.name)}</span>}
+              <span className="mt-tile-name">{measure ? c.name : lastName(c.name)}</span>
+              {c.incumbent && <span title="Incumbent">*</span>}
+              {c.winner && <span className="mt-check" aria-label="winner"> ✓</span>}
+            </td>
+            {!measure && <td className="mt-tile-party">{partyCode(c.party)}</td>}
+            <td className="num">{fmt(c.votes)}</td>
+            <td className="num">{c.pct.toFixed(2)}%</td>
+          </tr>
+        ))}
+        {hidden > 0 && (
+          <tr className="mt-tile-more">
+            <td colSpan={measure ? 3 : 4}>
+              <Link href={`/midterms/${race.id}`}>+{hidden} more</Link>
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   );
 }
 
@@ -121,82 +151,106 @@ function StatusText({ race, now }: { race: RaceSummary; now: number }) {
   return <span className="mt-res-status muted" title="When the state's last scheduled polls close; some districts may close earlier">{final && final > now ? `Polls close ${stampET(final)} ET` : "Awaiting votes"}</span>;
 }
 
-function SortHead({ label, sort, by, onSort, className }: { label: string; sort: Sort; by: Sort; onSort: (s: Sort) => void; className?: string }) {
+const SORTS: { by: Sort; label: string }[] = [
+  { by: "state", label: "Race" },
+  { by: "close", label: "Lead" },
+  { by: "reporting", label: "Reporting" },
+  { by: "called", label: "Status" },
+];
+
+/** The lead as a solid party-colored badge ("+4.21% Smith") and the gap in votes. */
+function Lead({ race }: { race: RaceSummary }) {
+  const ahead = lead(race.candidates);
+  const second = race.candidates[1];
+  if (!ahead || ahead.margin <= 0) return null;
   return (
-    <span className={className} role="columnheader" aria-sort={sort !== by ? "none" : by === "state" ? "ascending" : by === "close" ? "other" : "descending"}>
-      <button type="button" onClick={() => onSort(by)} className={sort === by ? "on" : undefined}>
-        {label}
-        {sort === by && " ▾"}
-      </button>
+    <span className="mt-tile-lead">
+      <b className="mt-margin" style={{ background: partyColor(ahead.leader) }}>
+        +{ahead.margin.toFixed(2)}% {race.office === "measure" ? ahead.leader.name : lastName(ahead.leader.name)}
+      </b>
+      {second && <span className="muted">{fmt(ahead.leader.votes - second.votes)} votes</span>}
     </span>
   );
 }
 
-/** The filtered races as dense rows: rating, the top two with shares, the lead in points and votes, how much is in, and status. */
+/** How much of the count is in, as a percentage over a thin track. */
+function Reporting({ race }: { race: RaceSummary }) {
+  const unknown = race.total > 0 && race.reportingUnknown;
+  const pct = race.total > 0 && !unknown ? Math.min(100, race.reporting) : 0;
+  return (
+    <div className="mt-tile-in" title={unknown ? "civicAPI has votes for this race but no reporting figure" : "civicAPI's estimate of precincts or ballot batches reported. Not the share of the expected vote."}>
+      <span className="num">{unknown ? "Reporting unknown" : `${Math.round(pct)}%`}</span>
+      <span className="mt-tile-track" aria-hidden><span style={{ width: `${pct}%` }} /></span>
+    </div>
+  );
+}
+
+/** One race as a results card: name and rating, the candidates' table, then status, lead and how much is in. */
+function RaceTile({ race, starred, onStar, now }: { race: RaceSummary; starred: boolean; onStar: () => void; now: number }) {
+  const leader = leaderOf(race);
+  const sub = race.about?.text ?? (race.total ? null : signalLine(race.signal));
+  return (
+    <article className={`mt-tile s-${statusOf(race)}${leader ? ` p-${leader}` : ""}`} aria-label={shortLabel(race)}>
+      {race.total > 0 && (
+        <span className="mt-tile-share" aria-hidden>
+          {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c), opacity: isEarly(race) ? 0.55 : 1 }} />)}
+        </span>
+      )}
+      <header className="mt-tile-head">
+        <div className="mt-tile-title">
+          <Link href={`/midterms/${race.id}`}>{shortLabel(race)}</Link>
+          {sub && <span className="mt-tile-sub" title={sub}>{sub}</span>}
+        </div>
+        <Tier race={race} />
+        <button type="button" className={`mt-star sm${starred ? " on" : ""}`} aria-pressed={starred} aria-label={`Star ${shortLabel(race)}`} onClick={onStar}>
+          {starred ? "★" : "☆"}
+        </button>
+      </header>
+      <Candidates race={race} />
+      <footer className="mt-tile-foot">
+        <div className="mt-tile-status">
+          <Status race={race} now={now} />
+          <Lead race={race} />
+        </div>
+        <TrendLine race={race} now={now} />
+        <Reporting race={race} />
+      </footer>
+    </article>
+  );
+}
+
+/** The filtered races as results cards in a grid, grouped by count status when sorted by closeness. */
 export function ResultList({ races, stars, sort, onSort, now }: { races: RaceSummary[]; stars: Stars; sort: Sort; onSort: (s: Sort) => void; now: number }) {
   const [shown, setShown] = useState(PAGE);
   if (!races.length) return <p className="muted mt-res-empty">No races match these filters.</p>;
   const groupCounts = races.reduce((acc, r) => ({ ...acc, [groupOf(r)]: (acc[groupOf(r)] ?? 0) + 1 }), {} as Partial<Record<Group, number>>);
   return (
-    <div className="mt-res" role="table" aria-label="Races" aria-rowcount={races.length}>
-      <div className="mt-res-row mt-res-head" role="row">
-        <span role="columnheader" aria-label="Star" />
-        <SortHead label="Race" sort={sort} by="state" onSort={onSort} />
-        <span role="columnheader">Candidates</span>
-        <SortHead label="Lead" sort={sort} by="close" onSort={onSort} className="num" />
-        <SortHead label="Reporting" sort={sort} by="reporting" onSort={onSort} className="num" />
-        <SortHead label="Status" sort={sort} by="called" onSort={onSort} />
+    <div className="mt-res">
+      <div className="mt-res-sort" role="group" aria-label="Sort races by">
+        <span className="mt-res-sort-label">Sort</span>
+        {SORTS.map((s) => (
+          <button key={s.by} type="button" aria-pressed={sort === s.by} onClick={() => onSort(s.by)}>
+            {s.label}
+            {sort === s.by && " ▾"}
+          </button>
+        ))}
       </div>
-      {races.slice(0, shown).map((r, i) => {
-        const group = sort === "close" ? groupOf(r) : null;
-        const header = group && (i === 0 || groupOf(races[i - 1]) !== group) ? (
-          <div key={`g-${group}`} className="mt-res-group" role="row">
-            <span role="cell">{GROUP_LABEL[group]} · {groupCounts[group]}</span>
-          </div>
-        ) : null;
-        const ahead = lead(r.candidates);
-        const second = r.candidates[1];
-        const starred = !!stars.ids?.includes(r.id);
-        return (
-          [header, <div key={r.id} className={`mt-res-row s-${statusOf(r)}`} role="row">
-            <span role="cell">
-              <button type="button" className={`mt-star sm${starred ? " on" : ""}`} aria-pressed={starred} aria-label={`Star ${shortLabel(r)}`} onClick={() => stars.toggle(r.id)}>
-                {starred ? "★" : "☆"}
-              </button>
-            </span>
-            <span role="cell" className="mt-res-race">
-              <Link href={`/midterms/${r.id}`}>{shortLabel(r)}</Link>
-              <Tier race={r} />
-              {r.about && <span className="mt-row-about" title={r.about.text}>{r.about.text}</span>}
-            </span>
-            <span role="cell">
-              <Candidates race={r} />
-              <TrendLine race={r} now={now} />
-            </span>
-            <span role="cell" className="num mt-res-lead">
-              {ahead && ahead.margin > 0 ? (
-                <>
-                  <b style={{ color: colorOf(ahead.leader) }}>+{ahead.margin.toFixed(1)}</b>
-                  {second && <span className="muted small">{fmt(ahead.leader.votes - second.votes)} votes</span>}
-                </>
-              ) : (
-                <span className="muted">—</span>
-              )}
-            </span>
-            <span role="cell" className="num mt-res-in" title={r.reportingUnknown ? "civicAPI has votes for this race but no reporting figure" : "civicAPI's estimate of precincts or ballot batches reported. Not the share of the expected vote."}>
-              {r.total > 0 && !r.reportingUnknown ? (
-                <>
-                  {Math.round(r.reporting)}%<span className="mt-res-inlabel"> reporting</span>
-                  <span className="mt-res-inbar" aria-hidden><span style={{ width: `${Math.min(100, r.reporting)}%` }} /></span>
-                </>
-              ) : (
-                <span className="muted">{r.reportingUnknown ? "Unknown" : "—"}</span>
-              )}
-            </span>
-            <span role="cell"><Status race={r} now={now} /></span>
-          </div>]
-        );
-      })}
+      <ol className="mt-res-grid" aria-label="Races">
+        {races.slice(0, shown).map((r, i) => {
+          const group = sort === "close" ? groupOf(r) : null;
+          const header = group && (i === 0 || groupOf(races[i - 1]) !== group) ? (
+            <li key={`g-${group}`} className="mt-res-group">
+              {GROUP_LABEL[group]} · {groupCounts[group]}
+            </li>
+          ) : null;
+          return [
+            header,
+            <li key={r.id}>
+              <RaceTile race={r} starred={!!stars.ids?.includes(r.id)} onStar={() => stars.toggle(r.id)} now={now} />
+            </li>,
+          ];
+        })}
+      </ol>
       {races.length > shown && (
         <button type="button" className="btn secondary mt-res-more" onClick={() => setShown((n) => n + PAGE)}>
           Show {Math.min(PAGE, races.length - shown)} more of {races.length - shown}

@@ -1,5 +1,5 @@
 // Rendered inside the tracker's client components.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { atLeast, boundsOf, framed, useTween, type Box } from "./zoom";
 
 export type City = { name: string; at: [number, number] };
@@ -8,19 +8,29 @@ type NationMap = { viewBox: string; borders: string; states: { state: string; na
 
 const loaded = new Map<string, Promise<unknown>>();
 
-/** Loads a pre-projected map from public/midterms/maps (built by scripts/build-maps.mjs), once per page. */
+/** A pre-projected map from public/midterms/maps (built by scripts/build-maps.mjs), fetched once per page. */
+function loadMap<T>(name: string): Promise<T> {
+  if (!loaded.has(name)) {
+    loaded.set(
+      name,
+      fetch(`/midterms/maps/${name}.json`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+        .catch((err) => {
+          loaded.delete(name);
+          throw err;
+        }),
+    );
+  }
+  return loaded.get(name) as Promise<T>;
+}
+
 function useMap<T>(name: string): T | null | "error" {
   const [map, setMap] = useState<T | null | "error">(null);
   useEffect(() => {
     let live = true;
-    if (!loaded.has(name)) loaded.set(name, fetch(`/midterms/maps/${name}.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))));
-    loaded
-      .get(name)!
-      .then((m) => live && setMap(m as T))
-      .catch(() => {
-        loaded.delete(name);
-        if (live) setMap("error");
-      });
+    loadMap<T>(name)
+      .then((m) => live && setMap(m))
+      .catch(() => live && setMap("error"));
     return () => {
       live = false;
     };
@@ -28,7 +38,8 @@ function useMap<T>(name: string): T | null | "error" {
   return map;
 }
 
-type Tip = { x: number; y: number; content: ReactNode } | null;
+/** `right` says the pointer is in the map's right half, so a stylesheet can open the card toward the middle. */
+type Tip = { x: number; y: number; right?: boolean; content: ReactNode } | null;
 
 /** `outlines` are drawn above every shape, so neighbors can't cover part of a hovered or selected border. */
 /** `aspect` holds the map's shape while its view box zooms. */
@@ -43,7 +54,7 @@ function MapFrame({ viewBox, children, tip, label, outlines, back, aspect }: { v
         ))}
       </svg>
       {tip && (
-        <div className="mt-tip" style={{ left: tip.x, top: tip.y }} role="status">
+        <div className="mt-tip" style={{ left: tip.x, top: tip.y }} data-right={tip.right || undefined} role="status">
           {tip.content}
         </div>
       )}
@@ -54,7 +65,7 @@ function MapFrame({ viewBox, children, tip, label, outlines, back, aspect }: { v
 /** Tooltip position relative to the map box, from a pointer event on one of its shapes. */
 function tipAt(e: React.PointerEvent<SVGElement>) {
   const box = (e.currentTarget.ownerSVGElement ?? e.currentTarget).parentElement!.getBoundingClientRect();
-  return { x: e.clientX - box.left, y: e.clientY - box.top };
+  return { x: e.clientX - box.left, y: e.clientY - box.top, right: e.clientX - box.left > box.width / 2 };
 }
 
 const MAX_LABELS = 8;
@@ -180,34 +191,77 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
   );
 }
 
+/** A pattern of diagonal stripes, laid over shapes projected to change party; `size` is one stripe pair in map units. */
+export function FlipStripes({ id, size }: { id: string; size: number }) {
+  return (
+    <defs>
+      <pattern id={id} width={size} height={size} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width={size / 2} height={size} className="mt-flip-band" />
+      </pattern>
+    </defs>
+  );
+}
+
+/** An id safe to use in `url(#…)`. */
+export const usePatternId = () => `flip${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+
+type Shape = { key: string; name: string; d: string };
+
+/** Every House district in the given states, in the nation map's coordinates; null until all have loaded. */
+function useDistrictShapes(states: readonly string[] | null): Shape[] | null {
+  const [shapes, setShapes] = useState<{ for: string; list: Shape[] } | null>(null);
+  const wanted = states?.join(",") ?? null;
+  useEffect(() => {
+    if (!wanted) return;
+    let live = true;
+    Promise.allSettled(
+      wanted.split(",").map((st) =>
+        loadMap<{ districts: { district: number; d: string }[] }>(`districts/${st}`).then((m) => m.districts.map((x) => ({ key: `${st}-${x.district}`, name: `${st}-${x.district || "AL"}`, d: x.d }))),
+      ),
+    ).then((results) => live && setShapes({ for: wanted, list: results.flatMap((r) => (r.status === "fulfilled" ? r.value : [])) }));
+    return () => {
+      live = false;
+    };
+  }, [wanted]);
+  return shapes && shapes.for === wanted ? shapes.list : null;
+}
+
+export type NationFill = { fill: string; tip: ReactNode; label?: string; flip?: boolean };
+
 /**
- * The nation by state, for Senate and Governor overviews. Clicking a state, or focusing it and pressing Enter, picks it.
- * `label` on a fill names the state's status for screen readers; `selected` states get a heavier outline.
+ * The nation by state, for Senate and Governor overviews, or by House district with `districts` (fills keyed
+ * "PA-7", at-large seats "WY-0"). Clicking a shape, or focusing it and pressing Enter, picks it.
+ * `label` on a fill names the shape's status for screen readers; `flip` stripes it; `selected` states get a heavier outline.
  */
-export function NationMap({ fills, onPick, label, selected = [] }: { fills: Map<string, { fill: string; tip: ReactNode; label?: string }>; onPick: (state: string) => void; label: string; selected?: readonly string[] }) {
+export function NationMap({ fills, onPick, label, selected = [], districts = false }: { fills: Map<string, NationFill>; onPick: (key: string) => void; label: string; selected?: readonly string[]; districts?: boolean }) {
   const map = useMap<NationMap>("US");
   const [tip, setTip] = useState<Tip>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const patternId = usePatternId();
+  const districtStates = useMemo(() => (districts ? [...new Set([...fills.keys()].map((k) => k.split("-")[0]))].sort() : null), [districts, fills]);
+  const districtShapes = useDistrictShapes(districtStates);
   if (map === "error") return null;
-  if (!map) return <div className="mt-map mt-map-loading nation" aria-busy />;
+  const shapes: Shape[] | null = districts ? districtShapes : map ? map.states.map((s) => ({ key: s.state, name: s.name, d: s.d })) : null;
+  if (!map || !shapes) return <div className="mt-map mt-map-loading nation" aria-busy />;
   const outlines = [
     ...map.states.filter((s) => selected.includes(s.state)).map((s) => ({ d: s.d, kind: "selected" as const })),
     ...(hover ? [{ d: hover, kind: "hover" as const }] : []),
   ];
   return (
     <MapFrame viewBox={map.viewBox} tip={tip} label={label} outlines={outlines}>
-      {map.states.map((s) => {
-        const f = fills.get(s.state);
+      <FlipStripes id={patternId} size={7} />
+      {shapes.map((s) => {
+        const f = fills.get(s.key);
         return (
           <path
-            key={s.state}
+            key={s.key}
             d={s.d}
             className={`mt-county${f ? " active" : ""}`}
             style={{ fill: f?.fill }}
             tabIndex={f ? 0 : undefined}
             role={f ? "button" : undefined}
-            aria-label={f ? `${s.name}${f.label ? `: ${f.label}` : ""}` : undefined}
-            aria-pressed={f ? selected.includes(s.state) : undefined}
+            aria-label={f ? `${s.name}${f.label ? `: ${f.label}` : ""}${f.flip ? ", projected to change party" : ""}` : undefined}
+            aria-pressed={f ? selected.includes(s.key) : undefined}
             onPointerMove={(e) => {
               setTip({ ...tipAt(e), content: f?.tip ?? <b>{s.name}</b> });
               setHover(f ? s.d : null);
@@ -221,13 +275,14 @@ export function NationMap({ fills, onPick, label, selected = [] }: { fills: Map<
             onKeyDown={(e) => {
               if (f && (e.key === "Enter" || e.key === " ")) {
                 e.preventDefault();
-                onPick(s.state);
+                onPick(s.key);
               }
             }}
-            onClick={() => f && onPick(s.state)}
+            onClick={() => f && onPick(s.key)}
           />
         );
       })}
+      {shapes.map((s) => fills.get(s.key)?.flip && <path key={`flip-${s.key}`} d={s.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
       <path d={map.borders} className="mt-borders" />
     </MapFrame>
   );

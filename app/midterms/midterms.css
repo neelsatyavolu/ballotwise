@@ -1,23 +1,26 @@
-/* Midterms tracker. Unlike the voter guide, results use party colors: they report counted votes, not recommendations. */
+/*
+ * Midterms tracker. Unlike the voter guide, results use party colors: they report counted votes, not recommendations.
+ * The tracker follows Decision Desk HQ's dark results terminal on every screen, whatever the site theme: the page
+ * palette is set on body:has(.wrap.mt) further down, and party hues here (values from DDHQ Votes, Oct 2026).
+ */
 .mt {
-  --dem: #2264c4;
-  --rep: #cc2b3b;
-  --oth: #7b63b5;
-  --yes: #1f8a5b;
-  --no: #c4691d;
-  --tossup: #c9a227;
-  --rule-strong: #b7c0cf;
-}
-@media (prefers-color-scheme: dark) {
-  .mt {
-    --dem: #4f8ff0;
-    --rep: #ef5b68;
-    --oth: #a48fe0;
-    --yes: #3fbf86;
-    --no: #e88c3f;
-    --tossup: #d9b53c;
-    --rule-strong: #3a4966;
-  }
+  --dem: #0059c2;
+  --rep: #cd332e;
+  --oth: #8b5cf6;
+  --lib: #bb9d0d;
+  --gre: #008f5d;
+  --yes: #00bb7f;
+  --no: #f99c00;
+  --tossup: #d9a520;
+  --rule-strong: #333333;
+  /* Party colors bright enough for text on the dark tiles. */
+  --dem-ink: #4c8dff;
+  --rep-ink: #ff5a52;
+  --el-raised: #262626;
+  --el-line: #434343;
+  --el-hover: #1f1f1f;
+  --el-track: #262626;
+  --el-reported: #3fae5a;
 }
 
 .wrap.mt { max-width: 1440px; }
@@ -105,6 +108,10 @@
 .mt-county { fill: color-mix(in srgb, var(--rule) 45%, var(--sheet)); stroke: var(--sheet); stroke-width: 0.6; transition: fill 0.4s; }
 .mt-county.active { cursor: pointer; }
 .mt-borders { fill: none; stroke: var(--sheet); stroke-width: 1; pointer-events: none; }
+/* Stripes over a state or district projected to change party. */
+.mt-flip { stroke: none; pointer-events: none; }
+.mt-flip-band { fill: var(--sheet); fill-opacity: 0.6; }
+.mt-legend i.flip { background: repeating-linear-gradient(-45deg, var(--muted) 0 2px, var(--sheet) 2px 4px); }
 .mt-tip { position: absolute; z-index: 5; transform: translate(12px, 12px); pointer-events: none; min-width: 180px; max-width: 280px; padding: 8px 10px; background: var(--sheet); border: 1px solid var(--ink); border-radius: var(--radius); font-size: 13px; display: grid; gap: 4px; }
 .mt-tip table { border-collapse: collapse; width: 100%; }
 .mt-tip td { padding: 1px 0; }
@@ -193,12 +200,12 @@
 .mt-chat-fab { position: fixed; right: 20px; bottom: 20px; z-index: 40; display: inline-flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--navy); color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 6px 20px rgb(10 49 97 / 0.3); }
 .mt-chat-fab span { color: #ff8da1; }
 .mt-chat-fab:hover { filter: brightness(1.15); }
-.mt-chat { position: fixed; right: 20px; bottom: 78px; z-index: 40; width: min(400px, calc(100vw - 32px)); height: min(560px, calc(100dvh - 120px)); display: flex; flex-direction: column; background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; box-shadow: 0 16px 48px rgb(10 49 97 / 0.25); overflow: hidden; }
+.mt-chat { position: fixed; right: 20px; bottom: 78px; z-index: 40; width: min(400px, calc(100vw - 32px)); max-height: min(560px, calc(100dvh - 120px)); display: flex; flex-direction: column; background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; box-shadow: 0 16px 48px rgb(10 49 97 / 0.25); overflow: hidden; }
 .mt-chat header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
 .mt-chat-actions { display: flex; align-items: center; gap: 10px; }
 .mt-chat-actions .btn.quiet { font-size: 13px; }
 .mt-chat-close { border: 0; background: none; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 2px; }
-.mt-chat-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px; display: grid; align-content: start; gap: 10px; }
+.mt-chat-body { flex: 1; min-height: 96px; overflow-y: auto; padding: 12px 14px; display: grid; align-content: start; gap: 10px; }
 .mt-chat-body .msg { max-width: 90%; font-size: 15px; }
 .mt-chat-body .msg.interviewer { font-family: var(--sans); font-size: 15px; }
 .mt-chat-form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--rule); }
@@ -286,6 +293,8 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .mt-dot.idle { background: var(--muted); animation: none; }
 .mt-el-on .mt-chat-fab { display: none; }
+/* No button under the panel in election mode, so it sits at the corner. */
+.mt-el-on .mt-chat { bottom: 20px; }
 .mt-ask { min-height: 34px; padding: 0 12px; font-size: 14px; }
 .mt-ask span { color: var(--red); }
 
@@ -327,6 +336,8 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-el-gains { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .mt-cs-sub span:last-child { text-align: right; }
 .mt-cs-foot { margin: 0; color: var(--muted); }
+/* The 8 PM wave alone names over 20 states: two lines, the full list on hover. */
+.mt-cs-places { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .mt-cs-next { border-left: 4px solid var(--red); }
 .mt-cs-clock { font-family: var(--serif); font-size: 28px; font-weight: 600; line-height: 1.05; color: var(--red); font-variant-numeric: tabular-nums; }
 .mt-cs-clock.done { color: var(--ink); font-size: 22px; }
@@ -367,37 +378,12 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-fx-count { margin: 0; }
 
 /* Result rows */
-.mt-res { border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); }
-.mt-res-row { display: grid; grid-template-columns: 30px minmax(0, 1.2fr) minmax(0, 1.4fr) 104px 84px minmax(0, 0.9fr); gap: 4px 10px; align-items: center; padding: 7px 10px; font-size: 14px; }
-.mt-res-row + .mt-res-row { border-top: 1px solid var(--rule); }
-.mt-res-head { background: var(--sheet); padding-top: 6px; padding-bottom: 6px; border-radius: var(--radius) var(--radius) 0 0; }
-.mt-res-head button { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
-.mt-res-head button.on, .mt-res-head button:hover { color: var(--ink); }
-.mt-res-row.s-called { background: color-mix(in srgb, var(--yes) 4%, var(--sheet)); }
-.mt-res-race { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
-.mt-res-race a { color: var(--ink); font-weight: 700; text-decoration: none; }
-.mt-res-race a:hover { text-decoration: underline; }
-.mt-res-race .mt-row-about { flex-basis: 100%; }
-.mt-res-cands { display: grid; gap: 2px; min-width: 0; }
-.mt-res-cands > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mt-res-cands > span.won { font-weight: 700; }
-.mt-res-cands .mt-stack { height: 4px; margin-top: 2px; }
-.mt-res-lead { display: grid; justify-items: end; line-height: 1.2; }
-.mt-res-lead b { font-size: 16px; font-variant-numeric: tabular-nums; }
-.mt-res-in { display: grid; justify-items: end; gap: 3px; font-variant-numeric: tabular-nums; }
-.mt-res-inbar { width: 60px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
-.mt-res-inbar span { display: block; height: 100%; background: var(--accent); }
 .mt-res-status { display: inline-flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; font-size: 13px; }
 .mt-res-status.called { color: var(--yes); font-weight: 700; }
 .mt-res-status.warn, .mt-el-call-who.warn { color: var(--no); font-weight: 700; }
-.mt-res-group { padding: 6px 10px; border-top: 1px solid var(--rule); background: color-mix(in srgb, var(--ink) 5%, var(--sheet)); font-size: 13px; font-weight: 700; color: var(--muted); }
-.mt-res-head + .mt-res-group { border-top: 1px solid var(--rule); }
-.mt-res-inlabel { display: none; }
-.mt-res-more { margin: 8px; }
 .mt-res-empty { padding: 16px; border: 1px dashed var(--rule); border-radius: var(--radius); }
 .mt-rating.r-safe { color: var(--muted); border-style: dotted; }
 .mt-rating.r-none { color: var(--muted); border-color: transparent; padding-left: 0; font-weight: 600; }
-.mt-res-race .mt-rating { font-size: 11px; padding: 0 6px; }
 .mt-flag { font-size: 11px; font-weight: 700; color: var(--muted); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
 .mt-flag.gain { color: var(--no); }
 .mt-flag.gain.p-D, .mt-flag.lead.p-D { color: var(--dem); }
@@ -475,15 +461,6 @@ a.mt-flag { text-decoration: none; }
   .mt-cs { position: static; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 8px; margin: 0 -16px; padding: 6px 16px; align-items: flex-start; }
   .mt-cs-card { flex: 0 0 82%; scroll-snap-align: start; }
   .mt-fx-views { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
-  .mt-res-head { display: none; }
-  .mt-res-inlabel { display: inline; color: var(--muted); font-size: 12px; }
-  .mt-res-row { grid-template-columns: 26px minmax(0, 1fr) auto; grid-template-areas: "star race status" ". cands cands" ". lead in"; }
-  .mt-res-row > :nth-child(1) { grid-area: star; }
-  .mt-res-row > :nth-child(2) { grid-area: race; }
-  .mt-res-row > :nth-child(3) { grid-area: cands; }
-  .mt-res-row > :nth-child(4) { grid-area: lead; justify-items: start; display: flex; gap: 8px; align-items: baseline; }
-  .mt-res-row > :nth-child(5) { grid-area: in; display: flex; gap: 6px; align-items: center; justify-self: end; }
-  .mt-res-row > :nth-child(6) { grid-area: status; justify-self: end; }
   .mt-fx-sep { display: none; }
   .mt-fx-bar .mt-search { flex-basis: 100%; }
   .mt-chip { min-height: 36px; }
@@ -505,3 +482,262 @@ a.mt-flag { text-decoration: none; }
 .mt-updates { font-size: 14px; margin-top: 6px; }
 .mt-updates td { padding: 5px 8px; }
 .mt-cs-gap { color: var(--no); }
+
+/*
+ * Decision Desk HQ's dark results terminal on every midterms screen (values from DDHQ Votes and Decision View,
+ * Oct 2026): always dark whatever the site theme, set in Inter, uppercase grey table headers, tiles with a header
+ * rule, party bars, and bordered dark segmented controls. Layouts and behavior are unchanged. Pages outside the
+ * tracker are untouched: the palette applies only to a page holding .wrap.mt.
+ */
+body:has(.wrap.mt) {
+  --paper: #121212;
+  --sheet: #171717;
+  --ink: #fafafa;
+  --muted: #a1a1a1;
+  --rule: #2a2a2a;
+  --accent: #ffcc00;
+  --accent-ink: #121212;
+  --red: #ff6568;
+  --danger: #ff6568;
+  --mark: #262626;
+  --navy: #121212;
+  --radius: 8px;
+  --sans: var(--font-inter), system-ui, sans-serif;
+  --serif: var(--sans);
+  color-scheme: dark;
+}
+/* The site header keeps the site's face, so its width on phones matches every other page. */
+body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans-serif; }
+.mt .mt-hero h1 { font-weight: 700; letter-spacing: -0.02em; }
+.mt .mt-rating.r-lean-d, .mt .mt-rating.r-likely-d, .mt .mt-flag.p-D { color: var(--dem-ink); }
+.mt .mt-rating.r-lean-r, .mt .mt-rating.r-likely-r, .mt .mt-flag.p-R { color: var(--rep-ink); }
+.mt .mt-rating, .mt .mt-flag { border-radius: 4px; }
+
+/* Block labels: small, bold, uppercase, grey. */
+.mt .mt-section-head h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt .mt-section-head { margin-bottom: 8px; }
+.mt .mt-legend { font-size: 12px; color: var(--muted); }
+
+/* Buttons and fields: dark fills with hairline borders; primary actions and links take the yellow accent. */
+.mt .btn.secondary { background: var(--sheet); border-color: var(--rule); color: var(--ink); }
+.mt .btn.secondary:hover { border-color: var(--el-line); background: var(--el-hover); filter: none; }
+.mt .input { background: var(--sheet); border-color: var(--rule); color: var(--ink); }
+.mt .input:hover { border-color: var(--el-line); }
+.mt-el .mt-fx-bar .btn.small, .mt-el .mt-fx-panel .btn.small { min-height: 34px; font-size: 13px; font-weight: 500; }
+.mt-el .mt-fx-bar .mt-search, .mt-el .mt-fx .mt-select { min-height: 34px; padding: 6px 10px; font-size: 14px; }
+.mt-el .mt-fx-bar .btn.has { border-color: var(--accent); color: var(--accent); }
+
+/* Segmented groups: a bordered dark container; the selected item lighter with white text, the rest grey. */
+.mt .mt-seg, .mt-el .mt-el-offices { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+.mt .mt-seg button, .mt-el .mt-el-offices .tab { border: 0; border-radius: 6px; padding: 4px 10px; font-size: 13px; font-weight: 500; color: var(--muted); background: none; }
+.mt .mt-seg button + button { border-left: 0; }
+.mt .mt-seg button:hover, .mt-el .mt-el-offices .tab:hover { color: var(--ink); }
+.mt .mt-seg button[aria-pressed="true"], .mt-el .mt-el-offices .tab[aria-selected="true"] { background: var(--el-raised); color: var(--ink); }
+.mt-el .mt-el-offices { justify-self: start; max-width: 100%; }
+.mt-el .mt-el-offices .tab { padding: 6px 12px; font-size: 14px; }
+.mt-el .mt-el-offices .tab-count { color: var(--muted); font-weight: 500; }
+
+/* Filter toggles: ghost buttons, lighter when on. */
+.mt .mt-chip { min-height: 28px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); color: var(--muted); font-size: 13px; font-weight: 500; }
+.mt .mt-chip:hover { color: var(--ink); border-color: var(--el-line); background: var(--el-hover); }
+.mt .mt-chip.on { background: var(--el-raised); border-color: var(--el-line); color: var(--ink); }
+.mt .mt-chip.ghost:hover { background: var(--sheet); border-color: var(--rule); color: var(--muted); }
+.mt .mt-chip-n { opacity: 1; color: var(--muted); }
+.mt .mt-chip.status.s-called:not(.on) { border-color: var(--rule); }
+.mt-el .mt-fx-panel { background: var(--sheet); border-color: var(--rule); }
+.mt-el .mt-fx-group legend { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.mt-el .mt-fx-count { font-size: 12px; color: var(--muted); }
+
+/* Control strip: tiles with a header row (bold title, grey subtitle) over a hairline. */
+.mt-el .mt-cs-card { padding: 0 0 10px; gap: 8px; background: var(--sheet); border-color: var(--rule); border-radius: 8px; }
+.mt-el .mt-cs-card > * { margin-left: 12px; margin-right: 12px; }
+.mt-el .mt-cs-head { margin: 0; padding: 8px 12px; min-height: 36px; align-items: center; border-bottom: 1px solid var(--rule); }
+.mt-el .mt-cs-head h2 { font-size: 14px; font-weight: 600; letter-spacing: 0; color: var(--ink); }
+.mt-el .mt-cs-head span { font-size: 12px; }
+.mt-el .mt-cs-nums { font-size: 12px; }
+.mt-el .mt-cs-nums b { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+.mt-el .mt-cs-nums .d b { color: var(--dem-ink); }
+.mt-el .mt-cs-nums .r b { color: var(--rep-ink); }
+.mt-el .mt-cs-nums .o b { font-size: 22px; }
+.mt-el .mt-cs-bar { height: 8px; border-radius: 0; background: var(--el-track); }
+.mt-el .mt-cs-bar i { background: var(--ink); }
+.mt-el .mt-cs-need { font-size: 12px; font-weight: 600; }
+.mt-el .mt-cs-sub, .mt-el .mt-cs-foot, .mt-el .mt-cs-more summary { font-size: 12px; }
+.mt-el .mt-cs-next { border-left-width: 1px; box-shadow: inset 4px 0 0 var(--red); }
+.mt-el .mt-cs-clock { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+.mt-el .mt-cs-clock.done { font-size: 22px; }
+.mt-el .mt-cs-mini .d { color: var(--dem-ink); }
+.mt-el .mt-cs-mini .r { color: var(--rep-ink); }
+
+/* Workspace: a hairline rule splits the race list from the side rail, and rules split the rail's sections. */
+@media (min-width: 1001px) {
+  .mt-el .mt-el-grid { column-gap: 0; row-gap: 0; }
+  .mt-el .mt-el-list { align-self: stretch; padding-right: 18px; border-right: 1px solid var(--rule); }
+  .mt-el .mt-el-mapbox, .mt-el .mt-el-callbox, .mt-el .mt-el-schedbox { padding: 0 0 18px 18px; }
+  .mt-el .mt-el-callbox, .mt-el .mt-el-schedbox { padding-top: 14px; border-top: 1px solid var(--rule); }
+}
+
+/* Race list: a sort bar over a grid of results cards. */
+.mt-el .mt-res-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 10px; }
+.mt-el .mt-res-sort-label { margin-right: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt-el .mt-res-sort button { border: 1px solid transparent; border-radius: 6px; background: none; padding: 3px 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.mt-el .mt-res-sort button:hover { color: var(--ink); background: var(--el-hover); }
+.mt-el .mt-res-sort button[aria-pressed="true"] { color: var(--ink); background: var(--el-raised); border-color: var(--el-line); }
+.mt-el .mt-res-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.mt-el .mt-res-grid > li { min-width: 0; }
+.mt-el .mt-res-group { grid-column: 1 / -1; padding-top: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt-el .mt-res-grid > .mt-res-group:first-child { padding-top: 0; }
+.mt-el .mt-res-more { width: 100%; min-height: 36px; margin-top: 10px; font-size: 13px; }
+.mt-el .mt-res-empty { border-color: var(--rule); }
+
+/* A results card: header, the candidates' table, then status, lead and reporting. */
+.mt-el .mt-tile { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; font-size: 12px; line-height: 1.35; }
+.mt-el .mt-tile:hover { border-color: var(--el-line); }
+.mt-el .mt-tile-share { display: flex; height: 4px; background: var(--el-track); }
+.mt-el .mt-tile-share span { display: block; height: 100%; }
+.mt-el .mt-tile-head { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--rule); }
+.mt-el .mt-tile-title { flex: 1; min-width: 0; display: grid; }
+.mt-el .mt-tile-title a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; }
+.mt-el .mt-tile-title a:hover { text-decoration: underline; }
+.mt-el .mt-tile-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.mt-el .mt-tile-head .mt-rating { font-size: 11px; padding: 0 6px; }
+.mt-el .mt-tile-head .mt-star { font-size: 17px; }
+.mt-el .mt-tile-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.mt-el .mt-tile-table th { padding: 5px 4px; border-bottom: 1px solid var(--rule); font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); text-align: left; }
+.mt-el .mt-tile-table th.num { text-align: right; }
+.mt-el .mt-tile-table td { height: 29px; padding: 0 4px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.mt-el .mt-tile-table th:first-child, .mt-el .mt-tile-table td:first-child { padding-left: 12px; }
+.mt-el .mt-tile-table th:last-child, .mt-el .mt-tile-table td:last-child { padding-right: 12px; }
+.mt-el .mt-tile-table td:first-child { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; box-shadow: inset 4px 0 0 var(--p, transparent); }
+.mt-el .mt-tile-table tbody tr:last-child td { border-bottom: 0; }
+.mt-el .mt-tile-table tr.won td { background: color-mix(in srgb, var(--p) 38%, transparent); font-weight: 600; }
+.mt-el .mt-tile-table .mt-check { color: var(--el-reported); }
+.mt-el .mt-av { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 7px; border-radius: 50%; background: var(--el-raised); box-shadow: inset 0 0 0 1.5px var(--p, var(--muted)); color: var(--ink); font-size: 8.5px; font-weight: 700; letter-spacing: 0.02em; vertical-align: middle; }
+.mt-el .mt-tile-party { font-size: 11px; font-weight: 600; }
+.mt-el .mt-tile-more td { height: 26px; }
+.mt-el .mt-tile-more a { color: var(--muted); text-decoration: none; }
+.mt-el .mt-tile-more a:hover { color: var(--ink); }
+.mt-el .mt-tile-foot { margin-top: auto; display: grid; gap: 5px; padding: 8px 12px 10px; border-top: 1px solid var(--rule); }
+.mt-el .mt-tile-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; color: var(--muted); }
+.mt-el .mt-tile-status .mt-res-status { font-size: 12px; }
+.mt-el .mt-tile-lead { display: inline-flex; align-items: center; gap: 6px; }
+.mt-el .mt-margin { display: inline-block; padding: 1px 6px; border-radius: 4px; color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.mt-el .mt-tile-in { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.mt-el .mt-tile-in .num { min-width: 28px; text-align: left; }
+.mt-el .mt-tile-track { flex: 1; height: 8px; background: var(--el-track); overflow: hidden; }
+.mt-el .mt-tile-track span { display: block; height: 100%; background: var(--el-reported); transition: width 0.5s ease; }
+.mt-el .mt-res-trend { margin-top: 0; font-size: 12px; }
+
+/* Latest calls and poll closings: dark tiles of hairline-ruled rows. */
+.mt-el .mt-el-calllist, .mt-el .mt-el-sched ol { background: var(--sheet); border-color: var(--rule); border-radius: 8px; }
+.mt-el .mt-el-calllist li { padding: 8px 12px; gap: 10px; font-size: 13px; }
+.mt-el .mt-el-calllist li:hover, .mt-el .mt-el-sched li:hover { background: var(--el-hover); }
+.mt-el .mt-el-calllist li.new { background: color-mix(in srgb, var(--accent) 7%, var(--sheet)); box-shadow: inset 4px 0 0 var(--accent); }
+.mt-el .mt-el-calllist time, .mt-el .mt-el-call-who { font-size: 12px; color: var(--muted); }
+.mt-el .mt-el-calls > p, .mt-el .mt-el-sched > p { font-size: 12px; line-height: 1.45; color: var(--muted); }
+.mt-el .mt-el-sched li { padding: 8px 12px; }
+.mt-el .mt-el-sched li.next { box-shadow: inset 4px 0 0 var(--red); }
+.mt-el .mt-el-sched summary { font-size: 13px; }
+.mt-el .mt-el-sched summary b { font-weight: 700; color: var(--ink); }
+.mt-el .mt-el-sched li.closed summary b { color: var(--muted); }
+.mt-el .mt-el-sched-states, .mt-el .mt-el-sched-status { font-size: 12px; }
+.mt-el .mt-el-sched .mt-chip { min-height: 24px; padding: 0 8px; font-size: 12px; }
+
+/* Maps: dark grey on near-black with thin dark borders; the hover card is a compact results table. */
+.mt .mt-map { background: var(--paper); border-color: var(--rule); border-radius: 8px; }
+.mt .mt-borders { stroke: var(--paper); }
+.mt .mt-county { stroke: var(--paper); }
+.mt .mt-board-grid { background: var(--sheet); border-color: var(--rule); border-radius: 8px; }
+.mt .mt-tip { background: var(--sheet); border: 1px solid var(--el-line); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); font-size: 12px; }
+.mt-el .mt-tip { min-width: 240px; max-width: 300px; padding: 0; gap: 0; overflow: hidden; }
+.mt-el .mt-el-tip { display: grid; }
+.mt .mt-tip[data-right] { transform: translate(calc(-100% - 12px), 12px); }
+.mt-el .mt-el-tip + .mt-el-tip { border-top: 1px solid var(--el-line); }
+.mt-el .mt-el-tip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); font-size: 13px; }
+.mt-el .mt-el-tip table { width: 100%; border-collapse: collapse; }
+.mt-el .mt-el-tip td { height: 24px; padding: 0 10px 0 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.mt-el .mt-el-tip td:first-child { width: 100%; padding-left: 0; }
+.mt-el .mt-el-tip td i { display: inline-block; width: 4px; height: 24px; margin-right: 8px; vertical-align: middle; }
+.mt-el .mt-el-tip > .muted { padding: 5px 10px; font-size: 11.5px; }
+
+@media (max-width: 720px) {
+  .mt .mt-chip { min-height: 34px; }
+  .mt-el .mt-cs-nums b { font-size: 26px; }
+  .mt-el .mt-res-grid { grid-template-columns: minmax(0, 1fr); }
+  /* iOS zooms into fields under 16px on focus. */
+  .mt-el .mt-fx-bar .mt-search, .mt-el .mt-fx .mt-select { font-size: 16px; }
+}
+
+/* Every midterms screen: navigation, tiles, tables, maps, chat and dashboards in the same results-terminal style. */
+.mt-modes a { border-radius: 8px; font-weight: 500; }
+.mt-modes a:hover { border-color: transparent; background: var(--el-hover); }
+.mt-modes a[aria-current="page"] { background: var(--el-raised); color: var(--ink); }
+.mt .tabs { display: inline-flex; max-width: 100%; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+.mt .tab { border: 0; border-radius: 6px; padding: 6px 12px; font-size: 14px; font-weight: 500; }
+.mt .tab:hover { color: var(--ink); }
+.mt .tab[aria-selected="true"] { background: var(--el-raised); color: var(--ink); }
+.mt .tab-count { color: var(--muted); font-weight: 500; }
+
+/* Balance and seat tiles: a header row over a hairline, bold figures, square bars. */
+.mt .mt-balance { padding: 0 0 10px; gap: 8px; border-radius: 8px; }
+.mt .mt-balance > * { margin-left: 12px; margin-right: 12px; }
+.mt .mt-balance-head { margin: 0; padding: 8px 12px; min-height: 36px; align-items: center; border-bottom: 1px solid var(--rule); font-size: 12px; color: var(--muted); }
+.mt .mt-balance h2 { font-size: 14px; font-weight: 600; color: var(--ink); }
+.mt .mt-balance > p, .mt .mt-seats > p { font-size: 12px; color: var(--muted); }
+.mt .mt-seats { padding: 12px 0; border-radius: 8px; }
+.mt .mt-seats > * { margin-left: 14px; margin-right: 14px; }
+.mt .mt-balance-nums, .mt .mt-seats-nums { font-size: 12px; }
+.mt .mt-balance-nums b, .mt .mt-seats-nums b { font-family: var(--sans); font-weight: 700; letter-spacing: -0.02em; }
+.mt .mt-balance-nums b { font-size: 30px; }
+.mt .mt-balance-nums .d b, .mt .mt-seats-nums .d b { color: var(--dem-ink); }
+.mt .mt-balance-nums .r b, .mt .mt-seats-nums .r b { color: var(--rep-ink); }
+.mt .mt-balance-bar { height: 8px; border-radius: 0; background: var(--el-track); }
+.mt .mt-balance-bar.mt-seats-bar { height: 12px; }
+
+/* Race cards: a header row, then each candidate as a ruled row with a party bar on its left edge. */
+.mt .mt-card { grid-template-columns: minmax(0, 1fr); padding: 0 0 10px; gap: 0; border-radius: 8px; font-size: 12px; overflow: hidden; }
+.mt .mt-card:hover { border-color: var(--el-line); }
+.mt .mt-card-top { min-height: 40px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--rule); }
+.mt .mt-card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--sans); font-size: 14px; font-weight: 600; }
+.mt .mt-card-about { margin: 8px 12px 0; font-size: 12px; }
+.mt .mt-card-cands { gap: 0; font-size: 12px; }
+.mt .mt-card-cands li { grid-template-columns: 4px minmax(0, 1fr) auto; gap: 8px; min-height: 29px; padding-right: 12px; border-bottom: 1px solid var(--rule); }
+.mt .mt-card-cands .swatch { align-self: stretch; width: 4px; height: auto; min-height: 29px; border-radius: 0; }
+.mt .mt-card-cands .tag { font-size: 11px; font-weight: 600; color: var(--muted); }
+.mt .mt-card .mt-stack { margin: 8px 12px 0; height: 8px; border-radius: 0; background: var(--el-track); }
+.mt .mt-card-foot { margin: 8px 12px 0; font-size: 12px; }
+.mt .mt-star:hover, .mt .mt-star.on { color: var(--accent); }
+
+/* Tables: uppercase grey headers, ruled rows, tabular figures. */
+.mt .mt-table { font-size: 14px; }
+.mt .mt-table th { padding: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt .mt-table td { padding: 8px; }
+.mt .mt-table th button { text-transform: inherit; letter-spacing: inherit; }
+.mt .mt-rows td { padding: 6px 8px; }
+.mt .mt-rows-wrap, .mt .mt-scroll { border-radius: 8px; }
+.mt .mt-table tbody tr.selected td { background: var(--el-raised); }
+.mt .mt-rows tbody tr:hover td, .mt .mt-counties tbody tr:hover td { background: var(--el-hover); }
+.mt .mt-cands td:first-child { font-family: var(--sans); font-size: 14px; font-weight: 600; }
+.mt .mt-cands tbody tr.won td { background: color-mix(in srgb, var(--el-reported) 14%, transparent); }
+.mt .mt-share { height: 8px; border-radius: 0; background: var(--el-track); }
+.mt .mt-race-head { border-bottom-color: var(--rule); }
+.mt .mt-crumbs a { color: var(--accent); }
+
+/* Zoom map and its back button. */
+.mt .mt-zoom-back { border-color: var(--rule); border-radius: 8px; background: var(--sheet); font-weight: 500; }
+.mt .mt-zoom-back:hover { border-color: var(--el-line); background: var(--el-hover); }
+
+/* Grok chat and AI dashboards. */
+.mt .mt-chat-fab { background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 20px rgb(0 0 0 / 0.5); }
+.mt .mt-chat-fab span { color: var(--accent-ink); }
+.mt .mt-chat { border-radius: 8px; box-shadow: 0 16px 48px rgb(0 0 0 / 0.6); }
+.mt .mt-chat-body .msg.interviewer { background: var(--el-raised); border-color: var(--rule); }
+.mt .mt-dash-tabs button { border-radius: 8px; font-weight: 500; color: var(--muted); }
+.mt .mt-dash-tabs button:hover { color: var(--ink); border-color: var(--el-line); }
+.mt .mt-dash-tabs button[aria-selected="true"] { background: var(--el-raised); border-color: var(--el-line); color: var(--ink); }
+.mt .mt-dash-tabs .mt-dash-new { color: var(--accent); }
+.mt .chip { border-radius: 6px; }
+
+@media (max-width: 720px) {
+  .mt .mt-search { font-size: 16px; }
+}

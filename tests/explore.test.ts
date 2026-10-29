@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { activeCount, DEFAULT_FILTERS, explore, fromQuery, leaderOf, raceFill, safeSide, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
-import type { RaceSummary } from "../lib/midterms/view";
+import { activeCount, DEFAULT_FILTERS, explore, flipTo, fromQuery, leaderOf, raceFill, safeSide, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
+import { compareRaces, type RaceSummary } from "../lib/midterms/view";
 
 let nextId = 1;
 function race(over: Partial<RaceSummary> & { votes?: [number, number]; winner?: 0 | 1; incumbent?: 0 | 1 } = {}): RaceSummary {
@@ -102,5 +102,29 @@ describe("early counts", () => {
     const early = race({ votes: [501, 499], reporting: 10 });
     const full = race({ votes: [520, 480], reporting: 80 });
     expect(explore([early, full], f(), null)).toEqual([full, early]);
+  });
+});
+
+describe("projected flips", () => {
+  const market = (D: number) => ({ market: { odds: { D, R: 1 - D }, sources: ["Kalshi" as const] }, polls: null, rating: null });
+
+  it("flags a seat whose favorite or leader isn't the party holding it", () => {
+    // North Carolina's Senate seat is held by a Republican; Georgia's by a Democrat.
+    expect(flipTo(race({ state: "NC", title: "North Carolina US Senate", rating: "lean-d", signal: market(0.7) }))).toBe("D");
+    expect(flipTo(race({ state: "GA", rating: "lean-d", signal: market(0.7) }))).toBeNull();
+    // A toss-up favors nobody yet.
+    expect(flipTo(race({ state: "NC", title: "North Carolina US Senate", rating: "tossup", signal: market(0.55) }))).toBeNull();
+    // Once votes are in, the leader decides, then the winner.
+    expect(flipTo(race({ state: "GA", signal: market(0.9), votes: [400, 600] }))).toBe("R");
+    expect(flipTo(race({ state: "GA", signal: market(0.1), votes: [600, 400], winner: 0 }))).toBeNull();
+  });
+});
+
+describe("competitive order", () => {
+  it("puts the race closest to a coin flip first within a rating, and races with no evidence last", () => {
+    const district = (district: number, D: number | null) =>
+      race({ office: "house", state: "CA", district, title: `California US House ${district}`, signal: D === null ? null : { market: { odds: { D, R: 1 - D }, sources: ["Polymarket"] }, polls: null, rating: null } });
+    const order = [district(1, null), district(2, 0.99), district(3, 0.08), district(4, 0.96)].sort(compareRaces).map((r) => r.district);
+    expect(order).toEqual([3, 4, 2, 1]);
   });
 });

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { raceFill, safeSide } from "@/lib/midterms/explore";
+import { flipTo, raceFill, safeSide } from "@/lib/midterms/explore";
 import { colorOf, compareRaces, lead, leading, measureCount, pct, projected, raceLabel, RATING_LABEL, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
@@ -49,6 +49,7 @@ function districtFill(r: RaceSummary): Fill {
   const projection = r.rating ? RATING_LABEL[r.rating] : safe ? `Safe ${safe}` : "No projection";
   return {
     fill: raceFill(r),
+    flip: !!flipTo(r),
     tip: (
       <>
         {raceTip(r)}
@@ -67,7 +68,7 @@ export function stateFills(office: Office, races: RaceSummary[]): Map<string, Fi
     const name = STATE_NAMES[state] ?? state;
     if (office === "senate" || office === "governor") {
       const r = [...list].sort(regularFirst)[0];
-      out.set(state, { fill: raceFill(r), tip: raceTip(r) });
+      out.set(state, { fill: raceFill(r), tip: raceTip(r), flip: !!flipTo(r) });
     } else if (office === "house") {
       const ahead = leading(list, "house");
       const won = { D: 0, R: 0 };
@@ -136,7 +137,11 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
   const fills = useMemo(() => stateFills(office, races), [office, races]);
-  const inState = useMemo(() => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title, undefined, { numeric: true })), [races, focus]);
+  // House districts go closest to a toss-up first; other offices keep the regular race first, then ballot order.
+  const inState = useMemo(
+    () => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || (office === "house" ? byCloseness(a, b) : 0) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title, undefined, { numeric: true })),
+    [races, focus, office],
+  );
   const statewide = office === "senate" || office === "governor";
   const shownId = focus ? (picked && inState.some((r) => r.id === picked) ? picked : statewide ? (inState[0]?.id ?? null) : null) : null;
   const shown = inState.find((r) => r.id === shownId) ?? null;
@@ -205,9 +210,6 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                       ← All states
                     </button>
                   </div>
-                  {inState.length > 1 && (
-                    <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} selectedId={shownId} />
-                  )}
                   {shown ? (
                     <>
                       <ul className="mt-grid one">
@@ -219,7 +221,10 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
                     </>
                   ) : (
-                    <p className="muted small">{office === "house" ? "Tap a district on the map, or pick one here, to see its counties." : "Pick a measure to see its counties on the map."}</p>
+                    <p className="muted small">{office === "house" ? "Tap a district on the map, or pick one below, to see its counties." : "Pick a measure to see its counties on the map."}</p>
+                  )}
+                  {inState.length > 1 && (
+                    <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} selectedId={shownId} />
                   )}
                 </>
               )}

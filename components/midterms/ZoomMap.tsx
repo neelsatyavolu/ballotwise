@@ -1,12 +1,13 @@
 // Rendered inside OfficeView.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CityLabels, type City } from "./maps";
+import { CityLabels, FlipStripes, usePatternId, type City } from "./maps";
 import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zoom";
 
 type Nation = { viewBox: string; borders: string; states: { state: string; name: string; d: string; box: [number, number, number, number] }[] };
 type Layer = { counties: { fips: string; name: string; d: string }[]; cities?: City[] };
 type Districts = { districts: { district: number; d: string }[] };
-export type Fill = { fill: string; tip: ReactNode };
+/** `flip` stripes a state or district projected to change party. */
+export type Fill = { fill: string; tip: ReactNode; flip?: boolean };
 
 const cache = new Map<string, Promise<unknown>>();
 function load<T>(path: string): Promise<T> {
@@ -59,6 +60,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   const [layer, setLayer] = useState<{ state: string; data: Layer } | null>(null);
   const [lines, setLines] = useState<{ state: string; data: Districts } | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; content: ReactNode } | null>(null);
+  const patternId = usePatternId();
   // Outlines are drawn in a layer above every shape, so neighbors can't cover part of them.
   const [hover, setHover] = useState<string | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -140,6 +142,8 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
           </button>
         ))}
       <svg viewBox={box.join(" ")} role="img" aria-label={label}>
+        {/* Stripes keep the same width on screen as the map zooms. */}
+        <FlipStripes id={patternId} size={box[2] / 140} />
         {nation.states.map((s) => {
           const f = fills.get(s.state);
           const dim = focus && s.state !== focus;
@@ -163,6 +167,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
             />
           );
         })}
+        {nation.states.map((s) => fills.get(s.state)?.flip && <path key={`flip-${s.state}`} d={s.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
         <path d={nation.borders} className="mt-borders" vectorEffect="non-scaling-stroke" />
         {showDistricts?.map((d) => {
           const f = districtFills?.get(d.district);
@@ -185,6 +190,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
             />
           );
         })}
+        {showDistricts?.map((d) => districtFills?.get(d.district)?.flip && <path key={`flip-${d.district}`} d={d.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
         {!showDistricts && counties?.map((c) => {
           const f = countyFills?.get(c.fips);
           return (

@@ -1,7 +1,7 @@
 // Filtering and sorting for the election-night results explorer. Every choice round-trips through the URL.
-import { leadingFlip, outcomeOf } from "./holders";
+import { holderOf, leadingFlip, outcomeOf } from "./holders";
 import { closeWaves, stateFinal } from "./polls";
-import { colorOf, compareRaces, lead, partyOf, raceLabel, ratingFill, shade, STATE_NAMES, type Office, type RaceSummary } from "./view";
+import { chances, colorOf, compareRaces, lead, partyOf, raceLabel, ratingFill, shade, STATE_NAMES, type Office, type RaceSummary } from "./view";
 
 export type Status = "awaiting" | "counting" | "called";
 /** How competitive a race is: a rating tier, "safe" when markets or polls exist but no rating applies, "unrated" with no evidence at all. */
@@ -50,14 +50,13 @@ export function tierOf(r: RaceSummary): Tier {
 }
 
 /**
- * The side the pre-election evidence favors: the market favorite, else the polling leader, else the rating's side.
+ * The side the pre-election evidence favors: the market favorite (pulled toward the polls when thinly traded), else
+ * the polling leader, else the rating's side.
  * Never the party holding the seat; null when there's no evidence or it's even.
  */
 export function favoredSide(r: RaceSummary): "D" | "R" | "I" | null {
-  const odds = Object.entries(r.signal?.market?.odds ?? {}).sort((a, b) => b[1] - a[1]);
+  const odds = Object.entries(chances(r.signal) ?? {}).sort((a, b) => b[1] - a[1]);
   if (odds.length && odds[0][1] !== odds[1]?.[1]) return odds[0][0] as "D" | "R" | "I";
-  const m = r.signal?.polls?.margin;
-  if (m) return m > 0 ? "D" : "R";
   if (r.rating && r.rating !== "tossup") return r.rating.endsWith("-d") ? "D" : r.rating.endsWith("-r") ? "R" : "I";
   return null;
 }
@@ -65,6 +64,21 @@ export function favoredSide(r: RaceSummary): "D" | "R" | "I" | null {
 /** The favorite in a race the evidence calls safe (markets or polls, but no rating); null otherwise. */
 export function safeSide(r: RaceSummary): "D" | "R" | "I" | null {
   return tierOf(r) === "safe" ? favoredSide(r) : null;
+}
+
+/**
+ * The party a race is set to take from the one holding the seat: the winner or leader once votes are in, else the
+ * pre-election favorite. Null for a hold, a toss-up, no evidence, or a seat with no known holder.
+ */
+export function flipTo(r: RaceSummary): "D" | "R" | "I" | null {
+  const holder = holderOf(r);
+  if (!holder) return null;
+  const won = outcomeOf(r);
+  if (won) return won.gain ? won.side : null;
+  if (lead(r.candidates)) return leadingFlip(r);
+  if (r.rating === "tossup") return null;
+  const side = favoredSide(r);
+  return side && side !== holder ? side : null;
 }
 
 const SIDE_COLOR = { D: "var(--dem)", R: "var(--rep)", I: "var(--oth)" } as const;

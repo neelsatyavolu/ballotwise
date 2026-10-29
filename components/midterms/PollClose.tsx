@@ -11,9 +11,15 @@ const POLLS_OPEN = ELECTION_DAY_START + 6 * 3_600_000;
 
 const dayOf = (ms: number) => (ms < ELECTION_DAY_START + DAY ? "Nov 3" : "Nov 4");
 
-function placeName({ state, part }: CloseWave["states"][number]) {
-  const name = STATE_NAMES[state] ?? state;
-  return part === "all" ? name : `${name} (${part === "most" ? "most" : "rest"})`;
+const listed = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
+
+/** Where polls close at one time, in words: "Most of Indiana and Kentucky", or "Florida, Michigan and the rest of Kansas". */
+function closingPlaces(states: CloseWave["states"]) {
+  const names = (part: CloseWave["states"][number]["part"]) => states.filter((s) => s.part === part).map((s) => STATE_NAMES[s.state] ?? s.state);
+  const most = names("most");
+  const rest = names("rest");
+  const text = listed([...names("all"), ...(most.length ? [`most of ${listed(most)}`] : []), ...(rest.length ? [`the rest of ${listed(rest)}`] : [])]);
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** A race's name for lists that mix states: measures get their state in front, since many share names like "Amendment 1". */
@@ -56,14 +62,9 @@ export function NextClose({ races, onPick }: { races: readonly RaceSummary[]; on
         <span className="small"><strong>{formatET(next.at)}</strong> · {dayOf(next.at)}</span>
       </div>
       <b className="mt-cs-clock" role="timer" aria-live="off">{countdown(next.at - now)}</b>
-      <p className="mt-cs-foot small" title={next.states.map(placeName).join(", ")}>
-        {next.states.map((s) => (s.part === "all" ? s.state : `${s.state}*`)).join(" ")}
-        {closing.length > 0 && (
-          <>
-            {" · "}
-            <button type="button" className="mt-linkish" onClick={() => onPick(next.at)}>{officeCounts(closing)} →</button>
-          </>
-        )}
+      <p className="mt-cs-foot small">
+        <span className="mt-cs-places" title={closingPlaces(next.states)}>{closingPlaces(next.states)}</span>
+        {closing.length > 0 && <button type="button" className="mt-linkish" onClick={() => onPick(next.at)}>{officeCounts(closing)} →</button>}
       </p>
     </section>
   );
@@ -93,7 +94,7 @@ export function PollSchedule({ races, picked, onPick }: { races: readonly RaceSu
                   <span className="mt-el-sched-states">{w.states.map((s) => (s.part === "all" ? s.state : `${s.state}*`)).join(" ")}</span>
                   <span className="mt-el-sched-status">{closed ? "Closed" : isNext ? countdown(w.at - now) : dayOf(w.at)}</span>
                 </summary>
-                <p className="small">{w.states.map(placeName).join(", ")}.</p>
+                <p className="small">{closingPlaces(w.states)}.</p>
               </details>
               {filed.length > 0 ? (
                 <button type="button" className={`mt-chip${on ? " on" : ""}`} aria-pressed={on} aria-label={`${on ? "Stop showing" : "Show"} the ${filed.length} races filed under ${formatET(w.at)}`} onClick={() => onPick(w.at)}>

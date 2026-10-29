@@ -1,14 +1,50 @@
 // Rendered inside the tracker's client components.
 import { useMemo, type ReactNode } from "react";
 import { isCalled, statusOf } from "@/lib/midterms/explore";
-import { measureCount, OFFICE_LABEL, STATE_NAMES, type Office, type RaceSummary } from "@/lib/midterms/view";
+import { fmt, lead, measureCount, OFFICE_LABEL, raceLabel, STATE_NAMES, type Office, type RaceSummary } from "@/lib/midterms/view";
 import { NationMap } from "./maps";
+import { partyColor } from "./party";
+import { lastName } from "./ResultList";
 import { FillLegend, seatFill, seatSummary, type FillMode } from "./SeatBoard";
 
 type Fill = { fill: string; tip: ReactNode; label: string };
 
 /** Specials sort after a state's regular race, so the regular one colors the state. */
 const regularFirst = (a: RaceSummary, b: RaceSummary) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title));
+
+/** A race in the hover card: its candidates with party bars, votes and shares, and the leader's margin once votes are in. */
+function TipRace({ race }: { race: RaceSummary }) {
+  const ahead = lead(race.candidates);
+  const summary = seatSummary(race);
+  return (
+    <div className="mt-el-tip">
+      <div className="mt-el-tip-head">
+        <b>{raceLabel(race)}</b>
+        {ahead && ahead.margin > 0 && (
+          <span className="mt-margin" style={{ background: partyColor(ahead.leader) }}>
+            +{ahead.margin.toFixed(2)}% {lastName(ahead.leader.name)}
+          </span>
+        )}
+      </div>
+      <table>
+        <tbody>
+          {race.candidates.slice(0, 4).map((c) => (
+            <tr key={c.name}>
+              <td>
+                <i style={{ background: partyColor(c) }} aria-hidden />
+                {lastName(c.name)}
+                {c.winner && " ✓"}
+              </td>
+              <td className="num">{fmt(c.votes)}</td>
+              <td className="num">{c.pct.toFixed(2)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <span className="muted">{summary.slice(summary.indexOf(": ") + 2)}</span>
+    </div>
+  );
+}
 
 function statewideFills(races: RaceSummary[], mode: FillMode, counting: boolean): Map<string, Fill> {
   const byState = new Map<string, RaceSummary[]>();
@@ -17,7 +53,7 @@ function statewideFills(races: RaceSummary[], mode: FillMode, counting: boolean)
   for (const [state, list] of byState) {
     const sorted = [...list].sort(regularFirst);
     const lines = sorted.map(seatSummary);
-    out.set(state, { fill: seatFill(sorted[0], mode, counting, true), label: lines.join("; "), tip: <>{lines.map((l) => <div key={l}>{l}</div>)}</> });
+    out.set(state, { fill: seatFill(sorted[0], mode, counting, true), label: lines.join("; "), tip: <>{sorted.map((r) => <TipRace key={r.id} race={r} />)}</> });
   }
   return out;
 }

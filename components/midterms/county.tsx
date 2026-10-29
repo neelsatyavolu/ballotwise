@@ -1,6 +1,7 @@
 // County shading and hover cards shared by the race page and the zoomable office maps.
 import type { CountyResult } from "@/lib/midterms/races";
 import { colorOf, fmt, lead, marginLabel, pct, shade } from "@/lib/midterms/view";
+import { partyColor } from "./party";
 
 export type Mode = "results" | "reporting" | "2024";
 
@@ -50,7 +51,7 @@ export function CountyTip({ county, mode = "results" }: { county: CountyResult; 
           {county.candidates.slice(0, 4).map((c) => (
             <tr key={c.name}>
               <td>
-                <span className="swatch" style={{ background: colorOf(c) }} /> {c.name}
+                <span className="swatch" style={{ background: partyColor(c) }} /> {c.name}
               </td>
               <td className="num">{fmt(c.votes)}</td>
               <td className="num">{pct(c.pct)}</td>

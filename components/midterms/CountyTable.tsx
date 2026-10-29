@@ -1,7 +1,8 @@
 // Rendered inside RaceView.
 import { useMemo, useState } from "react";
 import type { CountyResult, RaceDetail } from "@/lib/midterms/races";
-import { colorOf, fmt, lead, marginLabel, pct, twoWay } from "@/lib/midterms/view";
+import { fmt, lead, marginLabel, pct, twoWay } from "@/lib/midterms/view";
+import { partyColor } from "./party";
 
 type Key = "name" | "leader" | "total" | "reporting" | "margin" | "baseline" | "shift";
 type Row = CountyResult & { margin: number | null; shift: number | null };
@@ -80,7 +81,7 @@ export function CountyTable({ race, selected, onSelect }: { race: RaceDetail; se
                   <td>
                     {ahead ? (
                       <>
-                        <span className="swatch" style={{ background: colorOf(ahead.leader) }} aria-hidden /> {ahead.leader.name} {pct(ahead.leader.pct)}
+                        <span className="swatch" style={{ background: partyColor(ahead.leader) }} aria-hidden /> {ahead.leader.name} {pct(ahead.leader.pct)}
                       </>
                     ) : (
                       "—"

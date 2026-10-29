@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { raceFill } from "@/lib/midterms/explore";
+import { flipTo, raceFill } from "@/lib/midterms/explore";
+import { holderOf } from "@/lib/midterms/holders";
 import { colorOf, compareRaces, OFFICE_LABEL, pct, projected, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { AiDashboards } from "./AiDashboard";
 import { BalanceBar } from "./Balance";
 import { ChatDock, type ChatHandle } from "./ChatDock";
 import { ElectionMode, ElectionToggle, useElectionMode } from "./ElectionMode";
 import { useDashboards, useLive, useStars } from "./hooks";
-import { NationMap } from "./maps";
+import { NationMap, type NationFill } from "./maps";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
 import { RaceRows, type Star } from "./RaceRows";
@@ -37,6 +38,8 @@ function Grid({ races, star }: { races: RaceSummary[]; star: Star }) {
 }
 
 function mapTip(r: RaceSummary) {
+  const flip = flipTo(r);
+  const holder = holderOf(r);
   return (
     <>
       <b>{raceLabel(r)}</b>
@@ -45,44 +48,52 @@ function mapTip(r: RaceSummary) {
           <span className="swatch" style={{ background: colorOf(c) }} /> {c.name} {r.total ? pct(c.pct) : ""}
         </div>
       ))}
+      {flip && holder && <div>Projected to flip {holder} → {flip}</div>}
       <span className="muted">{r.reporting ? `${Math.round(r.reporting)}% reporting` : "No results yet"}</span>
     </>
   );
 }
 
-/** Senate or governor races on a US map, each state shaded by who leads. */
+const MAP_OFFICES = ["senate", "governor", "house"] as const;
+const MAP_TITLE = { senate: "Senate map", governor: "Governor map", house: "House map" } as const;
+
+/** Where a race sits on the overview map: its state, or "PA-7" for a House district. */
+const mapKey = (r: RaceSummary) => (r.office === "house" ? `${r.state}-${r.district ?? 0}` : r.state);
+
+/** Senate, governor or House races on a US map, each state or district shaded by who leads, striped where it would change party. */
 function RaceMap({ races }: { races: RaceSummary[] }) {
   const router = useRouter();
-  const [office, setOffice] = useState<"senate" | "governor">("senate");
+  const [office, setOffice] = useState<(typeof MAP_OFFICES)[number]>("senate");
   const fills = useMemo(() => {
-    const out = new Map<string, { fill: string; tip: React.ReactNode }>();
+    const out = new Map<string, NationFill>();
     // Ohio and Florida hold Senate specials; a state's regular race, if any, sets its color.
     for (const r of races.filter((x) => x.office === office).sort((a, b) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title)))) {
-      if (out.has(r.state)) continue;
-      out.set(r.state, { fill: raceFill(r), tip: mapTip(r) });
+      if (out.has(mapKey(r))) continue;
+      out.set(mapKey(r), { fill: raceFill(r), tip: mapTip(r), flip: !!flipTo(r) });
     }
     return out;
   }, [races, office]);
-  const idByState = useMemo(() => new Map(races.filter((r) => r.office === office).map((r) => [r.state, r.id])), [races, office]);
+  const idByKey = useMemo(() => new Map(races.filter((r) => r.office === office).map((r) => [mapKey(r), r.id])), [races, office]);
 
   return (
     <section className="mt-nation">
       <div className="mt-section-head tight">
-        <h2>{office === "senate" ? "Senate map" : "Governor map"}</h2>
+        <h2>{MAP_TITLE[office]}</h2>
         <div className="mt-seg" role="group" aria-label="Map shows">
-          {(["senate", "governor"] as const).map((o) => (
+          {MAP_OFFICES.map((o) => (
             <button key={o} type="button" aria-pressed={office === o} onClick={() => setOffice(o)}>
               {OFFICE_LABEL[o]}
             </button>
           ))}
         </div>
       </div>
-      <NationMap fills={fills} label={`Map of 2026 ${office} races`} onPick={(state) => idByState.has(state) && router.push(`/midterms/${idByState.get(state)}`)} />
+      <NationMap fills={fills} districts={office === "house"} label={`Map of 2026 ${office} races`} onPick={(key) => idByKey.has(key) && router.push(`/midterms/${idByKey.get(key)}`)} />
       <p className="muted small mt-legend">
         <span><i style={{ background: "var(--dem)" }} /> Dem</span>
         <span><i style={{ background: "var(--rep)" }} /> Rep</span>
         <span><i style={{ background: "var(--tossup)" }} /> Toss-up</span>
         <span><i style={{ background: "var(--rule-strong)" }} /> No market or polls</span>
+        <span><i className="flip" /> Projected to change party</span>
         <span>Before votes: market/poll rating, paler = less certain, full color = safe. After: who leads, darker = wider lead.</span>
       </p>
     </section>
