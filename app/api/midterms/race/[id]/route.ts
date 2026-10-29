@@ -1,3 +1,4 @@
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/env";
@@ -9,7 +10,7 @@ export async function GET(_req: NextRequest, ctx: RouteContext<"/api/midterms/ra
   const id = idSchema.safeParse((await ctx.params).id);
   if (!id.success) return NextResponse.json({ error: "That race doesn't exist." }, { status: 404 });
   try {
-    const found = await race(db(), id.data, Date.now());
+    const found = await race(db(), id.data, Date.now(), (work) => getCloudflareContext().ctx.waitUntil(work));
     if (!found) return NextResponse.json({ error: "That race isn't one the tracker follows." }, { status: 404 });
     return NextResponse.json(found, { headers: { "cache-control": "public, max-age=15" } });
   } catch (err) {

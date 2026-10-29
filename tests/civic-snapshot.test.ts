@@ -318,3 +318,49 @@ describe("fetchCatalog's registry and coverage", () => {
     });
   });
 });
+
+describe("fetchCatalog serving a recent catalog while it refreshes", () => {
+  it("answers from memory at once and refreshes once in the background", async () => {
+    const db = testDb();
+    await at(0, FULL, db);
+    let calls = 0;
+    serve(withSenate(iowa));
+    const counted = globalThis.fetch;
+    vi.stubGlobal("fetch", (...args: Parameters<typeof fetch>) => (calls++, counted(...args)));
+    const work: Promise<unknown>[] = [];
+    const later = NOW + MINUTE;
+    const [a, b] = await Promise.all([fetchCatalog(later, [], db, (w) => work.push(w), true), fetchCatalog(later, [], db, (w) => work.push(w), true)]);
+    // Both get the minute-old catalog without waiting on civicAPI; only one refresh starts.
+    expect(a).toMatchObject({ fetchedAt: NOW, stale: false });
+    expect(b.races).toHaveLength(26);
+    await Promise.all(work);
+    const typesAsked = calls;
+    expect(typesAsked).toBeGreaterThan(0);
+    // The refresh is what the next view sees.
+    const next = await fetchCatalog(later + 1000, [], db, (w) => work.push(w), true);
+    expect(next).toMatchObject({ fetchedAt: later });
+    expect(next.races.some((r) => r.id === 3)).toBe(true);
+    expect(calls).toBe(typesAsked);
+  });
+
+  it("waits for civicAPI when the catalog is older than SERVE_STALE_MS, or the caller can't refresh later", async () => {
+    await at(0, FULL);
+    serve(withSenate(iowa));
+    expect(await fetchCatalog(NOW + 5 * MINUTE, [], undefined, () => {}, true)).toMatchObject({ fetchedAt: NOW + 5 * MINUTE });
+    serve(withSenate(iowa, texas));
+    expect(await fetchCatalog(NOW + 6 * MINUTE, [], undefined, undefined, true)).toMatchObject({ fetchedAt: NOW + 6 * MINUTE });
+  });
+
+  it("serves a fresh isolate D1's recent snapshots, then refreshes", async () => {
+    const db = testDb();
+    await at(0, FULL, db);
+    resetCivicMemo();
+    serve(withSenate(iowa));
+    const work: Promise<unknown>[] = [];
+    const first = await fetchCatalog(NOW + MINUTE, [], db, (w) => work.push(w), true);
+    expect(first).toMatchObject({ fetchedAt: NOW, stale: false });
+    expect(first.races).toHaveLength(26);
+    await Promise.all(work);
+    expect((await fetchCatalog(NOW + MINUTE + 1000, [], db)).races).toHaveLength(27);
+  });
+});

@@ -25,7 +25,7 @@ export async function overview(db: Db, now: number, background: (work: Promise<u
   if (!odds || now - odds.at > ODDS_STALE_MS) {
     background(bareRaces(now, db).then((races) => refreshOdds(db, races, now)).catch((err) => console.error("midterms odds refresh failed:", err)));
   }
-  const catalog = await fetchCatalog(now, ratedRaces(odds), db, background);
+  const catalog = await fetchCatalog(now, ratedRaces(odds), db, background, true);
   const { races, fetchedAt, stale, coverage } = catalog;
   // Both record only from a fresh catalog newer than the last one processed; a stale one just reads what's known.
   const [{ calls, events, counts }, trends] = await Promise.all([recordCalls(db, catalog, now), recordHistory(db, catalog, now)]);
@@ -42,9 +42,9 @@ export function withCall(race: RaceSummary, call: Call | null): RaceSummary {
 }
 
 /** One tracked race with county results and its rating signals, or null when the id isn't a tracked race. */
-export async function race(db: Db, id: number, now: number) {
+export async function race(db: Db, id: number, now: number, background?: (work: Promise<unknown>) => void) {
   const odds = await readOdds(db, now);
-  const catalog = await fetchCatalog(now, ratedRaces(odds), db);
+  const catalog = await fetchCatalog(now, ratedRaces(odds), db, background, true);
   const summary = catalog.races.find((r) => r.id === id);
   if (!summary) return null;
   const found = await fetchRace(summary, now, BASELINE_2024);

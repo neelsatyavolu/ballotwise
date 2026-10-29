@@ -1,0 +1,8 @@
+# https://developers.cloudflare.com/workers/static-assets/headers
+# Build chunks have content-hashed names, so they never change.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Map shapes keep their names across deploys but rarely change: served from cache, refreshed in the background.
+/midterms/maps/*
+  Cache-Control: public, max-age=3600, stale-while-revalidate=604800

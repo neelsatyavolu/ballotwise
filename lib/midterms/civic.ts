@@ -8,8 +8,16 @@ const BASE = "https://civicapi.org/api/v2/";
 const PAGE = 500;
 // The race types that hold Senate, House, Governor and statewide-measure races. Others are filtered out in summarize().
 const TYPES = ["US Senate", "House of Representatives", "Governor", "Referendum", "Proposition", "Ballot Measure"];
+// About 36 races each this year, ahead of years of older ones: a 100-race page holds them all and comes back in
+// half the time of a 500-race one.
+const SMALL_PAGE: Record<string, number> = { "US Senate": 100, Governor: 100 };
 /** How long a fetched catalog or race is reused before asking civicAPI again. civicAPI itself caches for 15s. */
 export const FRESH_MS = 30_000;
+/**
+ * A page view that can refresh in the background is served a catalog up to this old at once, rather than waiting
+ * the several seconds civicAPI takes; the next poll gets the refreshed one.
+ */
+export const SERVE_STALE_MS = 2 * 60_000;
 
 export class CivicError extends Error {}
 
@@ -58,11 +66,12 @@ async function pooled<T, R>(items: readonly T[], limit: number, work: (item: T) 
 // that reaches an earlier election.
 async function racesOfType(type: string): Promise<unknown[]> {
   const out: unknown[] = [];
-  for (let offset = 0; offset < 10 * PAGE; offset += PAGE) {
-    const page = (await civic(`race/search?country=US&election_date=${ELECTION_DATE}&type=${encodeURIComponent(type)}&limit=${PAGE}&offset=${offset}`)) as { races?: { election_date?: string }[] };
+  const size = SMALL_PAGE[type] ?? PAGE;
+  for (let offset = 0; offset < 10 * PAGE; offset += size) {
+    const page = (await civic(`race/search?country=US&election_date=${ELECTION_DATE}&type=${encodeURIComponent(type)}&limit=${size}&offset=${offset}`)) as { races?: { election_date?: string }[] };
     const races = page.races ?? [];
     out.push(...races);
-    if (races.length < PAGE || races.some((r) => !r.election_date?.startsWith(ELECTION_DATE))) break;
+    if (races.length < size || races.some((r) => !r.election_date?.startsWith(ELECTION_DATE))) break;
   }
   return out;
 }
@@ -72,6 +81,8 @@ type Memo<T> = { at: number; value: T };
 type Stored = Memo<RaceSummary[]>;
 // Per-isolate memory of the last served catalog, so a civicAPI outage shows slightly old results instead of none.
 let catalogMemo: Stored | null = null;
+/** The background refresh under way while an older catalog is served, so page views arriving together share it. */
+let refreshing: Promise<unknown> | null = null;
 const raceMemo = new Map<number, Memo<RaceDetail>>();
 
 // D1 keeps each race's latest numbers (midterm_race_snapshots) and every race ever seen (midterm_registry), so an
@@ -98,6 +109,7 @@ export const RETIRED_RACE_IDS: ReadonlySet<number> = new Set<number>();
 
 export function resetCivicMemo() {
   catalogMemo = null;
+  refreshing = null;
   raceMemo.clear();
   lastWriteAt = 0;
   written.clear();
@@ -230,20 +242,31 @@ const served = (memo: Stored, ratings: readonly RatedRace[], stale: boolean) => 
  * Every tracked race with its statewide (or districtwide) totals. Every race ever seen (in this isolate, in D1's
  * race snapshots or in the registry) stays listed; one civicAPI leaves out keeps its last numbers with `missing: true`.
  * When civicAPI doesn't answer at all, the last catalog (from memory, else from `db`) is served marked stale.
- * `background` lets the D1 writes finish after the response.
+ * `background` lets the D1 writes finish after the response. With `serveStale` as well, a catalog under
+ * SERVE_STALE_MS old (this isolate's, or D1's on a fresh isolate) is served at once and refreshed after the response.
  */
 export async function fetchCatalog(
   now: number,
   ratings: readonly RatedRace[] = [],
   db?: Db,
   background?: (work: Promise<unknown>) => void,
+  serveStale = false,
 ): Promise<Fetched<{ races: RaceSummary[]; coverage: Coverage }>> {
   // The memo holds races without ratings; each caller's ratings are attached on the way out.
   if (catalogMemo && now - catalogMemo.at < FRESH_MS) return served(catalogMemo, ratings, false);
+  const revalidate = serveStale && background ? background : null;
+  if (revalidate && catalogMemo && now - catalogMemo.at < SERVE_STALE_MS) return refreshAfter(catalogMemo, ratings, now, revalidate, db);
   // A fresh isolate has no memo, so D1 stands in for it; it and the registry are read while civicAPI is asked.
   const warm = catalogMemo;
   const snapshots = warm || !db ? Promise.resolve(null) : readRaceSnapshots(db);
   const registeredRaces = registry(db, now);
+  if (revalidate && !warm) {
+    const stored = fromSnapshots(await snapshots);
+    if (stored && now - stored.at < SERVE_STALE_MS) {
+      catalogMemo = { at: stored.at, value: stored.value.filter((r) => !RETIRED_RACE_IDS.has(r.id)) };
+      return refreshAfter(catalogMemo, ratings, now, revalidate, db);
+    }
+  }
   let fetched: RaceSummary[];
   try {
     fetched = await fetchRaces(now);
@@ -271,6 +294,19 @@ export async function fetchCatalog(
     if (write) await handOff(write, background);
   }
   return served(catalogMemo, ratings, false);
+}
+
+/** Serves `memo` now and starts one refresh from civicAPI after the response, unless one is already running. */
+function refreshAfter(memo: Stored, ratings: readonly RatedRace[], now: number, background: (work: Promise<unknown>) => void, db?: Db) {
+  if (!refreshing) {
+    refreshing = fetchCatalog(now, [], db, background)
+      .catch((err) => console.error("midterms catalog refresh failed:", err))
+      .finally(() => {
+        refreshing = null;
+      });
+    background(refreshing);
+  }
+  return served(memo, ratings, false);
 }
 
 /** One tracked race (from the catalog) with county results. */
