@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { colorOf, compareRaces, lead, leading, measureCount, pct, projected, raceLabel, ratingFill, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { raceFill, safeSide } from "@/lib/midterms/explore";
+import { colorOf, compareRaces, lead, leading, measureCount, pct, projected, raceLabel, RATING_LABEL, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
 import { useLive, useStars } from "./hooks";
@@ -42,6 +43,21 @@ function raceTip(r: RaceSummary) {
   );
 }
 
+/** How a district looks on a zoomed state map, with its projection in the hover card. */
+function districtFill(r: RaceSummary): Fill {
+  const safe = safeSide(r);
+  const projection = r.rating ? RATING_LABEL[r.rating] : safe ? `Safe ${safe}` : "No projection";
+  return {
+    fill: raceFill(r),
+    tip: (
+      <>
+        {raceTip(r)}
+        <div className="muted">Projection: {projection}</div>
+      </>
+    ),
+  };
+}
+
 /** How each state looks on this office's national map. */
 export function stateFills(office: Office, races: RaceSummary[]): Map<string, Fill> {
   const byState = new Map<string, RaceSummary[]>();
@@ -51,8 +67,7 @@ export function stateFills(office: Office, races: RaceSummary[]): Map<string, Fi
     const name = STATE_NAMES[state] ?? state;
     if (office === "senate" || office === "governor") {
       const r = [...list].sort(regularFirst)[0];
-      const ahead = lead(r.candidates);
-      out.set(state, { fill: ahead ? shade(colorOf(ahead.leader), ahead.margin, r.reporting) : ratingFill(r.rating), tip: raceTip(r) });
+      out.set(state, { fill: raceFill(r), tip: raceTip(r) });
     } else if (office === "house") {
       const ahead = leading(list, "house");
       const won = { D: 0, R: 0 };
@@ -126,6 +141,13 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const shownId = focus ? (picked && inState.some((r) => r.id === picked) ? picked : statewide ? (inState[0]?.id ?? null) : null) : null;
   const shown = inState.find((r) => r.id === shownId) ?? null;
   const detail = useLive<{ race: RaceDetail }>(shownId ? `/api/midterms/race/${shownId}` : null);
+  const districtFills = useMemo(() => {
+    if (office !== "house") return undefined;
+    const out = new Map<number, Fill>();
+    // inState lists a district's regular race before any special, so the regular one colors it.
+    for (const r of inState) if (r.district !== null && !out.has(r.district)) out.set(r.district, districtFill(r));
+    return out;
+  }, [office, inState]);
   const countyFills = useMemo(() => {
     if (!detail.data) return null;
     const out = new Map<string, Fill>();
@@ -163,7 +185,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
         <>
           <SeatHeader office={office} data={data} />
           <div className="mt-office">
-            <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (detail.data ? countyFills : undefined) : null} raceId={shownId} label={`Map of 2026 ${TITLE[office].toLowerCase()} races${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}`} />
+            <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (detail.data ? countyFills : undefined) : null} raceId={shownId} districtFills={districtFills} district={shown?.district ?? null} onPickDistrict={(d) => setPicked(shown?.district === d ? null : (inState.find((r) => r.district === d)?.id ?? null))} label={`Map of 2026 ${TITLE[office].toLowerCase()} races${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}`} />
 
             <aside className="mt-panel" aria-label={focus ? `${STATE_NAMES[focus]} races` : "All races"}>
               {!focus ? (
@@ -197,14 +219,14 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
                     </>
                   ) : (
-                    <p className="muted small">Pick a {office === "house" ? "district" : "measure"} to see its counties on the map.</p>
+                    <p className="muted small">{office === "house" ? "Tap a district on the map, or pick one here, to see its counties." : "Pick a measure to see its counties on the map."}</p>
                   )}
                 </>
               )}
             </aside>
           </div>
           <p className="muted small mt-source">
-            Live results from <a href="https://civicapi.org">civicAPI</a>, collected from state and county election offices. Winners are marked only when civicAPI&apos;s decision desk calls a race; &ldquo;leading&rdquo; counts uncalled races by who is ahead. Ratings come from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades.{office === "measure" && <> Measure summaries come from <a href="https://ballotpedia.org/2026_ballot_measures">Ballotpedia</a>.</>}
+            Live results from <a href="https://civicapi.org">civicAPI</a>, collected from state and county election offices. Winners are marked only when civicAPI&apos;s decision desk calls a race; &ldquo;leading&rdquo; counts uncalled races by who is ahead. Ratings come from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades.{office === "house" && <> District lines from the <a href="https://www.census.gov/programs-surveys/decennial-census/about/rdo/congressional-districts.html">Census Bureau</a>, as drawn for 2026.</>}{office === "measure" && <> Measure summaries come from <a href="https://ballotpedia.org/2026_ballot_measures">Ballotpedia</a>.</>}
           </p>
         </>
       )}

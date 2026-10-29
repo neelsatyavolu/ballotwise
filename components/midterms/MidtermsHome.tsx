@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { colorOf, compareRaces, lead, OFFICE_LABEL, pct, projected, raceLabel, ratingFill, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { raceFill } from "@/lib/midterms/explore";
+import { colorOf, compareRaces, OFFICE_LABEL, pct, projected, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { AiDashboards } from "./AiDashboard";
 import { BalanceBar } from "./Balance";
 import { ChatDock, type ChatHandle } from "./ChatDock";
@@ -58,8 +59,7 @@ function RaceMap({ races }: { races: RaceSummary[] }) {
     // Ohio and Florida hold Senate specials; a state's regular race, if any, sets its color.
     for (const r of races.filter((x) => x.office === office).sort((a, b) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title)))) {
       if (out.has(r.state)) continue;
-      const ahead = lead(r.candidates);
-      out.set(r.state, { fill: ahead ? shade(colorOf(ahead.leader), ahead.margin, r.reporting) : ratingFill(r.rating), tip: mapTip(r) });
+      out.set(r.state, { fill: raceFill(r), tip: mapTip(r) });
     }
     return out;
   }, [races, office]);
@@ -82,8 +82,8 @@ function RaceMap({ races }: { races: RaceSummary[] }) {
         <span><i style={{ background: "var(--dem)" }} /> Dem</span>
         <span><i style={{ background: "var(--rep)" }} /> Rep</span>
         <span><i style={{ background: "var(--tossup)" }} /> Toss-up</span>
-        <span><i style={{ background: "var(--rule-strong)" }} /> No rating (safe, or no market or polls)</span>
-        <span>Before votes: market/poll rating, paler = less certain. After: who leads, darker = wider lead.</span>
+        <span><i style={{ background: "var(--rule-strong)" }} /> No market or polls</span>
+        <span>Before votes: market/poll rating, paler = less certain, full color = safe. After: who leads, darker = wider lead.</span>
       </p>
     </section>
   );

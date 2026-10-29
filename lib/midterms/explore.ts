@@ -1,7 +1,7 @@
 // Filtering and sorting for the election-night results explorer. Every choice round-trips through the URL.
 import { leadingFlip, outcomeOf } from "./holders";
 import { closeWaves, stateFinal } from "./polls";
-import { compareRaces, lead, partyOf, raceLabel, STATE_NAMES, type Office, type RaceSummary } from "./view";
+import { colorOf, compareRaces, lead, partyOf, raceLabel, ratingFill, shade, STATE_NAMES, type Office, type RaceSummary } from "./view";
 
 export type Status = "awaiting" | "counting" | "called";
 /** How competitive a race is: a rating tier, "safe" when markets or polls exist but no rating applies, "unrated" with no evidence at all. */
@@ -60,6 +60,25 @@ export function favoredSide(r: RaceSummary): "D" | "R" | "I" | null {
   if (m) return m > 0 ? "D" : "R";
   if (r.rating && r.rating !== "tossup") return r.rating.endsWith("-d") ? "D" : r.rating.endsWith("-r") ? "R" : "I";
   return null;
+}
+
+/** The favorite in a race the evidence calls safe (markets or polls, but no rating); null otherwise. */
+export function safeSide(r: RaceSummary): "D" | "R" | "I" | null {
+  return tierOf(r) === "safe" ? favoredSide(r) : null;
+}
+
+const SIDE_COLOR = { D: "var(--dem)", R: "var(--rep)", I: "var(--oth)" } as const;
+
+/**
+ * A race's map fill: the leader once votes are in, else the projection. A race the evidence calls safe gets its
+ * favorite's full color; one with no market or polls stays blank.
+ */
+export function raceFill(r: RaceSummary): string {
+  const ahead = lead(r.candidates);
+  if (ahead) return shade(colorOf(ahead.leader), ahead.margin, r.reporting);
+  if (r.rating) return ratingFill(r.rating);
+  const safe = safeSide(r);
+  return safe ? shade(SIDE_COLOR[safe], 20) : ratingFill(null);
 }
 
 /** Who is ahead, or has won: a party, or Yes/No on a measure; null before votes and on a tie. */

@@ -5,6 +5,7 @@ import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zo
 
 type Nation = { viewBox: string; borders: string; states: { state: string; name: string; d: string; box: [number, number, number, number] }[] };
 type Layer = { counties: { fips: string; name: string; d: string }[]; cities?: City[] };
+type Districts = { districts: { district: number; d: string }[] };
 export type Fill = { fill: string; tip: ReactNode };
 
 const cache = new Map<string, Promise<unknown>>();
@@ -36,9 +37,10 @@ function raceBounds(state: Bounds, race: Bounds): Bounds {
 
 /**
  * The nation by state; picking a state zooms to it and draws its counties, shaded by `countyFills`.
- * States without a fill have no race of this kind and can't be picked.
+ * States without a fill have no race of this kind and can't be picked. Given `districtFills`, a state with no
+ * county results on show draws its congressional districts instead, and picking one calls `onPickDistrict`.
  */
-export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label }: {
+export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, districtFills, district, onPickDistrict }: {
   fills: Map<string, Fill>;
   focus: string | null;
   onFocus: (state: string | null) => void;
@@ -47,9 +49,15 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label }: {
   /** The race the counties belong to; a zoomed-in county lets go when it changes. */
   raceId: number | null;
   label: string;
+  /** House districts by number, for the zoomed state. */
+  districtFills?: Map<number, Fill>;
+  /** The picked district, outlined and zoomed to. */
+  district?: number | null;
+  onPickDistrict?: (district: number) => void;
 }) {
   const [nation, setNation] = useState<Nation | null | "error">(null);
   const [layer, setLayer] = useState<{ state: string; data: Layer } | null>(null);
+  const [lines, setLines] = useState<{ state: string; data: Districts } | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; content: ReactNode } | null>(null);
   // Outlines are drawn in a layer above every shape, so neighbors can't cover part of them.
   const [hover, setHover] = useState<string | null>(null);
@@ -71,16 +79,34 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label }: {
       live = false;
     };
   }, [focus]);
+  const wantsDistricts = !!districtFills;
+  useEffect(() => {
+    if (!focus || !wantsDistricts) return;
+    let live = true;
+    load<Districts>(`/midterms/maps/districts/${focus}.json`).then(
+      (data) => live && setLines({ state: focus, data }),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [focus, wantsDistricts]);
 
   const counties = focus && layer?.state === focus ? layer.data.counties : null;
+  const districts = districtFills && focus && lines?.state === focus ? lines.data.districts : null;
+  // County results take over once a district's counties come in; until then, and in states that report by town, districts show.
+  const showDistricts = districts && !countyFills?.size ? districts : null;
+  const pickedDistrict = district != null ? districts?.find((d) => d.district === district) : undefined;
   // Null while the picked race loads; the last view is held so the map doesn't zoom out and back.
   const focused = nation && nation !== "error" ? nation.states.find((s) => s.state === focus) : undefined;
   const live = useMemo<Box | null>(() => {
     if (!focused) return FULL;
+    const shape = pickedDistrict && boundsOf([pickedDistrict.d]);
+    if (shape) return framed(raceBounds(focused.box, shape));
     if (countyFills === undefined) return null;
     const inRace = counties && countyFills ? boundsOf(counties.filter((c) => countyFills.has(c.fips)).map((c) => c.d)) : null;
     return framed(inRace ? raceBounds(focused.box, inRace) : focused.box);
-  }, [focused, counties, countyFills]);
+  }, [focused, counties, countyFills, pickedDistrict]);
   const [kept, setKept] = useState<{ focus: string | null; box: Box }>({ focus, box: live ?? FULL });
   if (live && (kept.box !== live || kept.focus !== focus)) setKept({ focus, box: live });
   const county = zoomed && zoomed.focus === focus && zoomed.raceId === raceId ? counties?.find((c) => c.fips === zoomed.fips) : undefined;
@@ -125,7 +151,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label }: {
               className={`mt-state${f ? " active" : ""}${dim ? " dim" : ""}`}
               style={{ fill: f?.fill }}
               onPointerMove={(e) => {
-                if (counties) return;
+                if (counties || districts) return;
                 showTip(e, f?.tip ?? <b>{s.name}</b>);
                 setHover(f ? s.d : null);
               }}
@@ -138,7 +164,28 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label }: {
           );
         })}
         <path d={nation.borders} className="mt-borders" vectorEffect="non-scaling-stroke" />
-        {counties?.map((c) => {
+        {showDistricts?.map((d) => {
+          const f = districtFills?.get(d.district);
+          return (
+            <path
+              key={d.district}
+              d={d.d}
+              vectorEffect="non-scaling-stroke"
+              className={`mt-zoom-county${f ? " active" : ""}`}
+              style={{ fill: f?.fill }}
+              onPointerMove={(e) => {
+                showTip(e, f?.tip ?? <b>{focus}-{d.district || "AL"}</b>);
+                setHover(d.d);
+              }}
+              onPointerLeave={() => {
+                setTip(null);
+                setHover(null);
+              }}
+              onClick={() => f && onPickDistrict?.(d.district)}
+            />
+          );
+        })}
+        {!showDistricts && counties?.map((c) => {
           const f = countyFills?.get(c.fips);
           return (
             <path
@@ -160,6 +207,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label }: {
           );
         })}
         {county && <path d={county.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
+        {pickedDistrict && <path d={pickedDistrict.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
         {focusedPath && <path d={focusedPath} className="mt-line focus" vectorEffect="non-scaling-stroke" />}
         {hover && <path d={hover} className="mt-line hover" vectorEffect="non-scaling-stroke" />}
         {/* Laid out for where the zoom is heading, so labels don't reshuffle on every frame. */}

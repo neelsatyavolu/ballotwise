@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeCount, DEFAULT_FILTERS, explore, fromQuery, leaderOf, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
+import { activeCount, DEFAULT_FILTERS, explore, fromQuery, leaderOf, raceFill, safeSide, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
 import type { RaceSummary } from "../lib/midterms/view";
 
 let nextId = 1;
@@ -25,6 +25,17 @@ describe("race classification", () => {
     expect(tierOf(race({ rating: "lean-r" }))).toBe("lean");
     expect(tierOf(race({ signal: { market: { odds: { R: 0.97 }, sources: ["Kalshi"] }, polls: null, rating: null } }))).toBe("safe");
     expect(tierOf(race())).toBe("unrated");
+  });
+
+  it("colors a race by its leader, else its rating, else a safe favorite, else nothing", () => {
+    const safeR = { market: { odds: { R: 0.97, D: 0.03 }, sources: ["Kalshi" as const] }, polls: null, rating: null };
+    expect(safeSide(race({ signal: safeR }))).toBe("R");
+    expect(safeSide(race({ rating: "lean-r", signal: { ...safeR, rating: "lean-r" } }))).toBeNull();
+    expect(raceFill(race({ signal: safeR }))).toBe("color-mix(in srgb, var(--rep) 92%, var(--sheet))");
+    expect(raceFill(race({ rating: "lean-d" }))).toBe("color-mix(in srgb, var(--dem) 35%, var(--sheet))");
+    expect(raceFill(race())).toBe("var(--rule-strong)");
+    // Votes outrank the projection.
+    expect(raceFill(race({ signal: safeR, votes: [530, 470] }))).toBe("color-mix(in srgb, var(--dem) 50%, var(--sheet))");
   });
 
   it("names the leader by party, or Yes/No on a measure", () => {
