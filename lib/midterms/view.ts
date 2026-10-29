@@ -99,7 +99,48 @@ export function raceLabel(r: Pick<RaceSummary, "office" | "state" | "district" |
 export function compareRaces(a: RaceSummary, b: RaceSummary): number {
   const ra = a.rating ? RATING_ORDER.indexOf(a.rating) : 99;
   const rb = b.rating ? RATING_ORDER.indexOf(b.rating) : 99;
-  return ra - rb || a.state.localeCompare(b.state) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title);
+  return ra - rb || favoriteChance(a) - favoriteChance(b) || a.state.localeCompare(b.state) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title);
+}
+
+type Odds = Partial<Record<"D" | "R" | "I", number>>;
+
+/**
+ * How far a midterm polling average typically misses the final margin, in points (one standard deviation).
+ * Senate polls missed by about 5 points on average in 2018 and 2022 (AAPOR's 2024 task force report).
+ */
+const POLL_ERROR_SD = 6;
+/**
+ * Traded volume at which a market's price and a polling average count equally. Market calibration improves with
+ * volume (Kalshi's 2026 calibration study), and thin down-ballot markets did worse than poll-based models in 2024.
+ */
+const EVEN_VOLUME = 50_000;
+
+/** A polling margin (Democrat minus Republican) as each party's chance, given polling averages' usual miss. */
+export function pollOdds(margin: number): { D: number; R: number } {
+  // Logistic approximation of the normal distribution.
+  const d = 1 / (1 + Math.exp((-1.702 * margin) / POLL_ERROR_SD));
+  return { D: d, R: 1 - d };
+}
+
+/**
+ * Each side's chance from all the evidence: the market price, pulled toward the polling average as the market gets
+ * thinner, or the polls alone with no market. Polls join a market only with two or more pollsters, and not in a race
+ * with an independent, where a Democrat-minus-Republican margin can't be read as chances.
+ */
+export function chances(signal: Pick<Signal, "market" | "polls"> | null | undefined): Odds | null {
+  const market = signal?.market && Object.keys(signal.market.odds).length ? signal.market : null;
+  const polls = signal?.polls ?? null;
+  if (!market) return polls ? pollOdds(polls.margin) : null;
+  if (!polls || polls.count < 2 || market.odds.I || market.volume === undefined) return market.odds;
+  const w = market.volume / (market.volume + EVEN_VOLUME);
+  const p = pollOdds(polls.margin);
+  return { D: w * (market.odds.D ?? 0) + (1 - w) * p.D, R: w * (market.odds.R ?? 0) + (1 - w) * p.R };
+}
+
+/** The favorite's chance, 0.5 for a coin flip; 1 with no market or polls, so unrated races sort last. */
+export function favoriteChance(r: Pick<RaceSummary, "signal">): number {
+  const c = chances(r.signal);
+  return c ? Math.max(...Object.values(c)) : 1;
 }
 
 export function timeAgo(ms: number, now: number): string {
@@ -131,12 +172,12 @@ export function leading(races: readonly RaceSummary[], office: Office): Record<P
   return out;
 }
 
-/** Races of one office with no votes counted yet, by which party the prediction markets (Kalshi and Polymarket, averaged) favor. */
+/** Races of one office with no votes counted yet, by which party the prediction markets (Kalshi and Polymarket) favor, thin markets blended with polls. */
 export function projected(races: readonly RaceSummary[], office: Office): Record<Party, number> {
   const out: Record<Party, number> = { D: 0, R: 0, other: 0 };
   for (const r of races) {
     if (r.office !== office || r.candidates.some((c) => c.winner) || lead(r.candidates)) continue;
-    const [first, second] = Object.entries(r.signal?.market?.odds ?? {}).sort((a, b) => b[1] - a[1]);
+    const [first, second] = Object.entries((r.signal?.market && chances(r.signal)) ?? {}).sort((a, b) => b[1] - a[1]);
     // An even market favors nobody.
     if (!first || first[1] === second?.[1]) continue;
     out[first[0] === "I" ? "other" : (first[0] as "D" | "R")] += 1;

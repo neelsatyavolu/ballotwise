@@ -51,6 +51,16 @@ describe("rate", () => {
     expect(rate(null, { margin: 14, count: 3, latest: "2026-10-10" })).toBeNull();
     expect(rate(null, null)).toBeNull();
   });
+
+  it("pulls a thinly traded market toward the polls, but leaves a busy one alone", () => {
+    const polls = { margin: -6, count: 3, latest: "2026-10-10" };
+    // A $2k market at D 80% against polls at R+6: the polls dominate (R about 82%).
+    expect(rate({ odds: { D: 0.8, R: 0.2 }, sources: ["Polymarket"], volume: 2000 }, polls)).toBe("likely-r");
+    // The same price on $5M barely moves.
+    expect(rate({ odds: { D: 0.8, R: 0.2 }, sources: ["Kalshi"], volume: 5_000_000 }, polls)).toBe("likely-d");
+    // A single pollster isn't enough to move a market.
+    expect(rate({ odds: { D: 0.8, R: 0.2 }, sources: ["Polymarket"], volume: 2000 }, { ...polls, count: 1 })).toBe("likely-d");
+  });
 });
 
 describe("Kalshi", () => {
@@ -77,13 +87,13 @@ describe("Kalshi", () => {
       kalshi("KXHOUSERACE-PA07-26-D", 0.2, 0.22, { volume_fp: "5" }),
       kalshi("KXHOUSERACE-PA07-26-R", 0.78, 0.8, { volume_fp: "5" }),
     ]);
-    expect(odds.get("senate:GA:")!.D).toBeCloseTo(0.955, 3);
-    expect(odds.get("house:PA:7")!.D).toBeCloseTo(0.6, 3);
+    expect(odds.get("senate:GA:")!.odds.D).toBeCloseTo(0.955, 3);
+    expect(odds.get("house:PA:7")!.odds.D).toBeCloseTo(0.6, 3);
   });
 
   it("gives an unlisted independent the share the listed parties leave over", () => {
     // Nebraska: Kalshi lists only D and R; the independent's chance is what's left.
-    const ne = parseKalshi([kalshi("SENATENE-26-R", 0.73, 0.74), kalshi("SENATENE-26-D", 0, 0.001, { last_price_dollars: "0.001" })], new Set(["senate:NE:"])).get("senate:NE:")!;
+    const ne = parseKalshi([kalshi("SENATENE-26-R", 0.73, 0.74), kalshi("SENATENE-26-D", 0, 0.001, { last_price_dollars: "0.001" })], new Set(["senate:NE:"])).get("senate:NE:")!.odds;
     expect(ne.R).toBeCloseTo(0.735, 2);
     expect(ne.I).toBeCloseTo(0.264, 2);
     expect(rate({ odds: ne, sources: ["Kalshi"] }, null)).toBe("lean-r");
@@ -91,10 +101,10 @@ describe("Kalshi", () => {
 
   it("gives an unpriced major party the remainder, and only invents an independent where one runs", () => {
     const onlyD = [kalshi("HOUSEPA7-26-D", 0.34, 0.36), kalshi("HOUSEPA7-26-R", 0, 0, { last_price_dollars: "0" })];
-    expect(parseKalshi(onlyD).get("house:PA:7")).toEqual({ D: expect.closeTo(0.35, 3), R: expect.closeTo(0.65, 3) });
-    expect(parseKalshi(onlyD, new Set(["house:PA:7"])).get("house:PA:7")!.I).toBeUndefined();
+    expect(parseKalshi(onlyD).get("house:PA:7")!.odds).toEqual({ D: expect.closeTo(0.35, 3), R: expect.closeTo(0.65, 3) });
+    expect(parseKalshi(onlyD, new Set(["house:PA:7"])).get("house:PA:7")!.odds.I).toBeUndefined();
     // Both majors priced but short of 1 and no independent running: just rescale.
-    const short = parseKalshi([kalshi("SENATEGA-26-D", 0.5, 0.5), kalshi("SENATEGA-26-R", 0.3, 0.3)]).get("senate:GA:")!;
+    const short = parseKalshi([kalshi("SENATEGA-26-D", 0.5, 0.5), kalshi("SENATEGA-26-R", 0.3, 0.3)]).get("senate:GA:")!.odds;
     expect(short).toEqual({ D: expect.closeTo(0.625, 3), R: expect.closeTo(0.375, 3) });
   });
 
@@ -129,18 +139,24 @@ describe("Polymarket", () => {
       { title: "WY-AL House Election Winner", markets: [{ question: "Will the Republican Party win the WY-AL House seat?", outcomePrices: '["0.97","0.03"]' }] },
       { title: "CA-22 Margin of Victory", markets: [{ groupItemTitle: "D by 5+", outcomePrices: '["0.3","0.7"]' }] },
     ]);
-    expect(odds.get("senate:NE:")).toEqual({ R: 0.6, I: 0.4 });
-    expect(odds.get("governor:NH:")).toEqual({ D: 0.3, R: 0.7 });
-    expect(odds.get("senate:MT:")).toEqual({ R: 0.9, D: 0.1 });
-    expect(odds.get("house:CA:22")!.D).toBeCloseTo(0.906, 2);
-    expect(odds.get("house:WY:0")).toEqual({ R: expect.closeTo(0.97, 3), D: expect.closeTo(0.03, 3) });
+    expect(odds.get("senate:NE:")!.odds).toEqual({ R: 0.6, I: 0.4 });
+    expect(odds.get("governor:NH:")!.odds).toEqual({ D: 0.3, R: 0.7 });
+    expect(odds.get("senate:MT:")!.odds).toEqual({ R: 0.9, D: 0.1 });
+    expect(odds.get("house:CA:22")!.odds.D).toBeCloseTo(0.906, 2);
+    expect(odds.get("house:WY:0")!.odds).toEqual({ R: expect.closeTo(0.97, 3), D: expect.closeTo(0.03, 3) });
     expect(odds.size).toBe(5);
   });
 
   it("averages markets across both sources and names them", () => {
-    const merged = combineMarkets(new Map([["senate:GA:", { D: 0.9, R: 0.1 }]]), new Map([["senate:GA:", { D: 0.8, R: 0.2 }], ["senate:NE:", { R: 0.6, I: 0.4 }]]));
-    expect(merged.get("senate:GA:")).toEqual({ odds: { D: 0.85, R: 0.15 }, sources: ["Kalshi", "Polymarket"] });
+    const merged = combineMarkets(new Map([["senate:GA:", { odds: { D: 0.9, R: 0.1 }, volume: 1000 }]]), new Map([["senate:GA:", { odds: { D: 0.8, R: 0.2 }, volume: 1000 }], ["senate:NE:", { odds: { R: 0.6, I: 0.4 }, volume: 5 }]]));
+    expect(merged.get("senate:GA:")).toEqual({ odds: { D: 0.85, R: 0.15 }, sources: ["Kalshi", "Polymarket"], volume: 2000 });
     expect(merged.get("senate:NE:")!.sources).toEqual(["Polymarket"]);
+  });
+
+  it("leans toward the busier market, by the log of its volume", () => {
+    const merged = combineMarkets(new Map([["senate:GA:", { odds: { D: 0.9, R: 0.1 }, volume: 999_990 }]]), new Map([["senate:GA:", { odds: { D: 0.6, R: 0.4 }, volume: 990 }]]));
+    // Weights log10(1e6) = 6 and log10(1000) = 3: two thirds Kalshi.
+    expect(merged.get("senate:GA:")!.odds.D).toBeCloseTo(0.8, 3);
   });
 });
 

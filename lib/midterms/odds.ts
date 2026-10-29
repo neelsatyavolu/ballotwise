@@ -1,16 +1,19 @@
 import type { Db } from "../auth/accounts";
 import { getCached } from "../cache";
 import type { Office, RaceSummary, RatedRace, Rating } from "./races";
-import { partyOf, STATE_NAMES } from "./view";
+import { chances, partyOf, STATE_NAMES } from "./view";
 
 // Race ratings computed live from prediction markets (Kalshi, Polymarket) and polls (VoteHub, CC BY 4.0).
 // A scheduled job refreshes them every few minutes; pages read the saved result.
 
 export type Side = "D" | "R" | "I";
-export type Market = { odds: Partial<Record<Side, number>>; sources: ("Kalshi" | "Polymarket")[] };
+/** `volume` is the traded volume behind the price (Kalshi contracts plus Polymarket dollars); absent in older snapshots. */
+export type Market = { odds: Partial<Record<Side, number>>; sources: ("Kalshi" | "Polymarket")[]; volume?: number };
 export type Polls = { margin: number; count: number; latest: string };
 export type Signal = { market: Market | null; polls: Polls | null; rating: Rating | null };
-type Book = Record<string, Partial<Record<Side, number>>>;
+/** One source's price for a race, with the volume traded on it. */
+export type Quote = { odds: Partial<Record<Side, number>>; volume: number };
+type Book = Record<string, Quote>;
 /** Each source is kept with the time it was last fetched successfully, so one outage keeps the others' data. */
 export type OddsSnapshot = {
   at: number;
@@ -47,14 +50,15 @@ const level = (p: number) => (p < 0.6 ? "tossup" : p < 0.75 ? "lean" : p < 0.9 ?
 const levelFromMargin = (m: number) => (m < 3 ? "tossup" : m < 6 ? "lean" : m < 10 ? "likely" : null);
 
 /**
- * Markets decide when they exist: the favorite's chance under 60% is a toss-up, under 75% leans, under 90% is likely,
- * and above that the race is safe (no rating). Without a market, the polling margin does the same at 3 / 6 / 10 points.
+ * Markets decide when they exist, pulled toward the polls when thinly traded (see `chances`): the favorite's chance
+ * under 60% is a toss-up, under 75% leans, under 90% is likely, and above that the race is safe (no rating).
+ * Without a market, the polling margin does the same at 3 / 6 / 10 points.
  */
 export function rate(market: Market | null, polls: Polls | null): Rating | null {
   let side: Side;
   let tier: ReturnType<typeof level>;
   if (market && Object.keys(market.odds).length > 0) {
-    const [best, p] = (Object.entries(market.odds) as [Side, number][]).sort((a, b) => b[1] - a[1])[0];
+    const [best, p] = (Object.entries(chances({ market, polls })!) as [Side, number][]).sort((a, b) => b[1] - a[1])[0];
     side = best;
     tier = level(p);
   } else if (polls) {
@@ -95,10 +99,10 @@ export function kalshiRace(ticker: string): { key: string; side: Side } | null {
 }
 
 /**
- * Normalized win chances per race from Kalshi markets. When a race is listed twice, the busier market wins.
+ * Normalized win chances and volume per race from Kalshi markets. When a race is listed twice, the busier market wins.
  * `independents` names races with an independent candidate Kalshi may not list (see normalize).
  */
-export function parseKalshi(markets: readonly KalshiMarket[], independents: ReadonlySet<string> = new Set()): Map<string, Partial<Record<Side, number>>> {
+export function parseKalshi(markets: readonly KalshiMarket[], independents: ReadonlySet<string> = new Set()): Map<string, Quote> {
   const best = new Map<string, { side: Side; price: number; volume: number }[]>();
   const byEvent = new Map<string, { key: string; entries: { side: Side; price: number; volume: number }[] }>();
   for (const m of markets) {
@@ -111,12 +115,12 @@ export function parseKalshi(markets: readonly KalshiMarket[], independents: Read
     entry.entries.push({ side: race.side, price, volume: Number(m.volume_fp) || 0 });
     byEvent.set(event, entry);
   }
+  const volume = (list: { volume: number }[]) => list.reduce((s, e) => s + e.volume, 0);
   for (const { key, entries } of byEvent.values()) {
     const prev = best.get(key);
-    const volume = (list: { volume: number }[]) => list.reduce((s, e) => s + e.volume, 0);
     if (!prev || volume(entries) > volume(prev)) best.set(key, entries);
   }
-  return new Map([...best].map(([key, entries]) => [key, normalize(entries, independents.has(key))]));
+  return new Map([...best].map(([key, entries]) => [key, { odds: normalize(entries, independents.has(key)), volume: volume(entries) }]));
 }
 
 /**
@@ -185,9 +189,9 @@ function polyRace(title: string | undefined): string | null {
   return house ? raceKey("house", house[1], house[2] === "AL" ? 0 : Number(house[2])) : null;
 }
 
-/** Normalized win chances per race from Polymarket's winner events. When a race appears twice, the busier event wins. */
-export function parsePolymarket(events: readonly PolyEvent[]): Map<string, Partial<Record<Side, number>>> {
-  const best = new Map<string, { volume: number; odds: Partial<Record<Side, number>> }>();
+/** Normalized win chances and volume per race from Polymarket's winner events. When a race appears twice, the busier event wins. */
+export function parsePolymarket(events: readonly PolyEvent[]): Map<string, Quote> {
+  const best = new Map<string, Quote>();
   for (const e of events) {
     const key = polyRace(e.title);
     if (!key) continue;
@@ -206,24 +210,29 @@ export function parsePolymarket(events: readonly PolyEvent[]): Map<string, Parti
     const volume = Number(e.volume) || 0;
     if (entries.length && (!best.has(key) || volume > best.get(key)!.volume)) best.set(key, { volume, odds: normalize(entries) });
   }
-  return new Map([...best].map(([key, v]) => [key, v.odds]));
+  return best;
 }
 
-/** Averages each race's chances across the markets that price it. */
-export function combineMarkets(kalshi: Map<string, Partial<Record<Side, number>>>, poly: Map<string, Partial<Record<Side, number>>>): Map<string, Market> {
+/**
+ * Averages each race's chances across the markets that price it, the busier market counting more. Calibration
+ * improves with volume, but neither exchange has proven more accurate than the other once you account for the
+ * kinds of markets each lists (Clinton and Huang, 2025), so the weight grows only with the log of volume.
+ */
+export function combineMarkets(kalshi: Map<string, Quote>, poly: Map<string, Quote>): Map<string, Market> {
   const out = new Map<string, Market>();
   for (const key of new Set([...kalshi.keys(), ...poly.keys()])) {
-    const found = [kalshi.has(key) && { src: "Kalshi" as const, odds: kalshi.get(key)! }, poly.has(key) && { src: "Polymarket" as const, odds: poly.get(key)! }].filter(
-      (x): x is { src: "Kalshi" | "Polymarket"; odds: Partial<Record<Side, number>> } => !!x && Object.keys(x.odds).length > 0,
+    const found = [kalshi.has(key) && { src: "Kalshi" as const, ...kalshi.get(key)! }, poly.has(key) && { src: "Polymarket" as const, ...poly.get(key)! }].filter(
+      (x): x is { src: "Kalshi" | "Polymarket" } & Quote => !!x && Object.keys(x.odds).length > 0,
     );
     if (!found.length) continue;
+    const weights = found.map((f) => Math.log10(10 + f.volume));
+    const total = weights.reduce((s, w) => s + w, 0);
     const odds: Partial<Record<Side, number>> = {};
     for (const side of ["D", "R", "I"] as Side[]) {
-      const values = found.map((f) => f.odds[side] ?? 0);
-      const mean = values.reduce((s, v) => s + v, 0) / values.length;
+      const mean = found.reduce((s, f, i) => s + (f.odds[side] ?? 0) * weights[i], 0) / total;
       if (mean > 0) odds[side] = Math.round(mean * 1000) / 1000;
     }
-    out.set(key, { odds, sources: found.map((f) => f.src) });
+    out.set(key, { odds, sources: found.map((f) => f.src), volume: Math.round(found.reduce((s, f) => s + f.volume, 0)) });
   }
   return out;
 }
@@ -331,7 +340,7 @@ async function fetchPolymarket(): Promise<Book> {
   const book: Book = {};
   // Senate and Governor pages and each House page are parsed separately; a race appears in only one of them.
   for (const tag of ["senate-midterms", "governor-midterms"]) Object.assign(book, Object.fromEntries(parsePolymarket(pageOf(await getJson(`${POLYMARKET}?closed=false&limit=${POLY_PAGE}&tag_slug=${tag}`)))));
-  const house = new Map<string, Partial<Record<Side, number>>>();
+  const house = new Map<string, Quote>();
   for (let page = 0; page < POLY_HOUSE_MAX_PAGES; page++) {
     const events = pageOf(await getJson(`${POLYMARKET}?closed=false&limit=${POLY_PAGE}&offset=${page * POLY_PAGE}&tag_slug=house-elections&order=id&ascending=true`));
     for (const [key, odds] of parsePolymarket(events)) if (!house.has(key)) house.set(key, odds);
@@ -386,7 +395,9 @@ async function rebuild(db: Db, races: readonly RaceSummary[], now: number): Prom
     freshOrKept<{ at: number; averages: Record<string, Polls> }>(pollsDue ? fetchPolls(races, now).then((averages) => ({ averages })) : null, previous?.polls ?? null, POLLS_MAX_AGE_MS, now, "VoteHub"),
   ]);
 
-  const markets = combineMarkets(new Map(Object.entries(kalshi?.book ?? {})), new Map(Object.entries(polymarket?.book ?? {})));
+  // A snapshot saved before volumes were kept holds bare odds; those prices are left out rather than read as untraded.
+  const quotes = (book: Book | undefined) => new Map(Object.entries(book ?? {}).filter(([, q]) => typeof q.odds === "object"));
+  const markets = combineMarkets(quotes(kalshi?.book), quotes(polymarket?.book));
   const signals: Record<string, Signal> = {};
   for (const r of races) {
     if (r.office === "measure") continue;
