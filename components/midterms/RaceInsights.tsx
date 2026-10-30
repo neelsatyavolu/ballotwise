@@ -6,14 +6,13 @@ import type { RaceInsights as Insights } from "@/app/api/midterms/race/[id]/fore
 import type { Forecast } from "@/lib/midterms/forecast";
 import type { PollRow, RacePolls } from "@/lib/midterms/pollAverage";
 import type { RaceSummary } from "@/lib/midterms/races";
-import { marginLabel } from "@/lib/midterms/view";
+import { marginLabel, nomineeOf } from "@/lib/midterms/view";
 import { useLive } from "./hooks";
 import { LineChart } from "./LineChart";
 import { RatingTag } from "./RaceCard";
 
 /** Brighter party hues for 2px lines on the dark card, as on the market chart. */
 const LINE = { D: "var(--dem-ink)", R: "var(--rep-ink)", I: "var(--oth)" } as const;
-const PARTY = /^democrat/i;
 const day = (t: number) => new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const surname = (name: string) => name.replace(/["“][^"”]*["”]/g, " ").replace(/\b(Jr|Sr|II|III|IV)\.?$/i, "").trim().split(/\s+/).at(-1) ?? name;
 const POLL_ROWS = 5;
@@ -29,7 +28,7 @@ function favorite(f: Forecast, race: Pick<RaceSummary, "candidates">): { name: s
   const [top, second] = Object.entries(f.odds).sort((a, b) => b[1] - a[1]);
   if (!top || top[1] === second?.[1]) return null;
   const side = top[0];
-  const name = f.names ? (side === "R" ? f.names.right : f.names.left) : (race.candidates.find((c) => (side === "D" ? PARTY : side === "R" ? /^republican/i : /independent/i).test(c.party))?.name ?? side);
+  const name = f.names ? (side === "R" ? f.names.right : f.names.left) : (nomineeOf(race.candidates, side as "D" | "R" | "I")?.name ?? side);
   return { name, p: top[1] };
 }
 

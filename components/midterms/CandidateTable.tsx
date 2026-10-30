@@ -2,7 +2,7 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { isEarly } from "@/lib/midterms/explore";
-import { fmt, partyTag, type RaceSummary } from "@/lib/midterms/view";
+import { ballotOrder, fmt, partyTag, type RaceSummary } from "@/lib/midterms/view";
 import { Avatar } from "./Avatar";
 import { partyColor } from "./party";
 import { reportingText } from "./reporting";
@@ -55,7 +55,9 @@ function Reporting({ race }: { race: RaceSummary }) {
 export function CandidateTable({ race, status, limit, short = false, share = false, fill = false }: { race: RaceSummary; status: ReactNode; limit?: number; short?: boolean; share?: boolean; fill?: boolean }) {
   // A local race found by search is carried as a "measure", but a contest between candidates still gets their columns.
   const measure = race.office === "measure" && race.local?.kind !== "candidates";
-  const shown = limit ? race.candidates.slice(0, limit) : race.candidates;
+  // Before votes, the contenders lead (see ballotOrder), so a card's top rows aren't civicAPI's listing order.
+  const ordered = ballotOrder(race);
+  const shown = limit ? ordered.slice(0, limit) : ordered;
   const hidden = race.candidates.length - shown.length;
   const early = isEarly(race);
   const cols = measure ? 3 : 4;

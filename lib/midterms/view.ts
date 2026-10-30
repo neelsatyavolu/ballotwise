@@ -191,13 +191,40 @@ export function safeFill(side: "D" | "R" | "I"): string {
 }
 
 const SIDE_NAME = { D: "Dem", R: "Rep", I: "Ind" } as const;
+type ForecastSide = keyof typeof SIDE_NAME;
+const SIDE_PARTY: Record<ForecastSide, RegExp> = { D: /^democrat/i, R: /^republican/i, I: /independent/i };
+
+/**
+ * The candidate who carries `side`'s chance in a forecast. Where a party runs several (Alaska's top four lists a minor
+ * Republican ahead of the incumbent), that's the forecast's named nominee, else the party's incumbent, else whoever
+ * has the most votes, else the first listed. `names` and `left` are the forecast's, when it has them.
+ */
+export function nomineeOf<C extends Pick<Candidate, "name" | "party" | "incumbent" | "votes">>(candidates: readonly C[], side: ForecastSide, names?: { left: string; right: string } | null, left?: string): C | undefined {
+  const pool = candidates.filter((c) => SIDE_PARTY[side].test(c.party));
+  const named = names ? (side === "R" ? names.right : side === left ? names.left : null) : null;
+  return (named ? pool.find((c) => c.name === named) : undefined) ?? pool.find((c) => c.incumbent) ?? [...pool].sort((a, b) => b.votes - a.votes)[0];
+}
+
+/**
+ * A race's candidates in the order to list them. Once votes are in, that's the count's order. Before then, each side
+ * the forecast prices puts its nominee first, the favorite leading, ahead of everyone else as listed, so a card
+ * showing the top two or three shows the real contenders, not civicAPI's listing order.
+ */
+export function ballotOrder<R extends Pick<RaceSummary, "total" | "candidates" | "signal">>(race: R): R["candidates"] {
+  const f = race.signal?.forecast;
+  if (race.total > 0 || !f) return race.candidates;
+  const sides = (Object.entries(f.odds) as [ForecastSide, number][]).sort((a, b) => b[1] - a[1]);
+  const first = [...new Set(sides.map(([side]) => nomineeOf(race.candidates, side, f.names, f.left)).filter((c) => !!c))];
+  return [...first, ...race.candidates.filter((c) => !first.includes(c))] as R["candidates"];
+}
 
 /** The forecast favorite's last name and chance ("Talarico 64%"), or null without a forecast. */
 export function forecastLeader(race: Pick<RaceSummary, "signal" | "candidates">): string | null {
-  const odds = Object.entries(race.signal?.forecast?.odds ?? {}).sort((a, b) => b[1] - a[1]);
+  const f = race.signal?.forecast;
+  const odds = Object.entries(f?.odds ?? {}).sort((a, b) => b[1] - a[1]);
   if (!odds.length || odds[0][1] === odds[1]?.[1]) return null;
   const [side, p] = odds[0];
-  const who = race.candidates.find((c) => (side === "D" ? /^democrat/i : side === "R" ? /^republican/i : /independent/i).test(c.party));
+  const who = nomineeOf(race.candidates, side as ForecastSide, f?.names, f?.left);
   const name = who ? who.name.replace(/["“][^"”]*["”]/g, " ").replace(/\b(Jr|Sr|II|III|IV)\.?$/i, "").trim().split(/\s+/).at(-1) : SIDE_NAME[side as keyof typeof SIDE_NAME];
   return `${name} ${p >= 0.995 ? ">99" : Math.round(p * 100)}%`;
 }

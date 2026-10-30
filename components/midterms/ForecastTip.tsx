@@ -1,7 +1,7 @@
 // Rendered inside the tracker's map tooltips.
 import { flipTo, isWatch, safeSide } from "@/lib/midterms/explore";
 import { holderOf } from "@/lib/midterms/holders";
-import { chances, partyOf, RATING_LABEL, ratingFill, safeFill, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
+import { chances, nomineeOf, RATING_LABEL, ratingFill, safeFill, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { partyColor } from "./party";
 
 const ORDINAL = new Intl.PluralRules("en-US", { type: "ordinal" });
@@ -16,20 +16,15 @@ function forecastTitle(r: RaceSummary): string {
 }
 
 /**
- * Each candidate's win probability from the forecast. A side's chance goes to its first candidate only, so a race
- * with two Democrats (California's top two) doesn't show the party's chance twice.
+ * Each candidate's win probability from the forecast. A side's chance goes to its nominee only (see nomineeOf), so a
+ * race with two Republicans (Alaska's top four) gives it to the incumbent, not the first listed, and doesn't show it twice.
  */
 function candidateOdds(r: RaceSummary): { name: string; party: string; incumbent: boolean; p: number | null }[] {
   const odds = chances(r.signal) ?? {};
-  const used = new Set<string>();
+  const f = r.signal?.forecast;
+  const carriers = new Map((["D", "R", "I"] as const).map((side) => [nomineeOf(r.candidates, side, f?.names, f?.left), odds[side]] as const));
   return r.candidates
-    .map((c) => {
-      const p = partyOf(c.party);
-      const side = p === "other" ? "I" : p;
-      const chance = used.has(side) ? undefined : odds[side];
-      if (chance !== undefined) used.add(side);
-      return { name: c.name, party: c.party, incumbent: c.incumbent, p: chance ?? null };
-    })
+    .map((c) => ({ name: c.name, party: c.party, incumbent: c.incumbent, p: carriers.get(c) ?? null }))
     .sort((a, b) => (b.p ?? -1) - (a.p ?? -1));
 }
 
