@@ -7,7 +7,7 @@ import lean2026 from "./lean2026.json";
 import experts2026 from "./experts2026.json";
 import personal2026 from "./personal2026.json";
 import { aggregateMedian, fetchAggregates, type Aggregate } from "./genericAggregates";
-import { genericBallot, lastName, racePolls, RECENT_FULL, type RacePolls, type TrendPoint, type VoteHubPoll } from "./pollAverage";
+import { genericBallot, independentLeads, lastName, racePolls, RECENT_FULL, type RacePolls, type TrendPoint, type VoteHubPoll } from "./pollAverage";
 import type { Office, RaceSummary, RatedRace, Rating } from "./races";
 import { STATE_NAMES } from "./view";
 
@@ -18,7 +18,8 @@ import { STATE_NAMES } from "./view";
 export type { Side };
 /** `volume` is the traded volume behind the price (Kalshi contracts plus Polymarket dollars); absent in older snapshots. */
 export type Market = { odds: Partial<Record<Side, number>>; sources: ("Kalshi" | "Polymarket")[]; volume?: number };
-export type Polls = { margin: number; count: number; latest: string };
+/** `left` is the side the margin measures against the Republican; absent (the Democrat) in older snapshots. */
+export type Polls = { margin: number; count: number; latest: string; left?: "D" | "I" };
 /**
  * The generic ballot the forecast uses: our own average of VoteHub's polls, filled in from the median of public
  * aggregators in proportion to how few polls our feed has from the last two weeks (full trust at five). `recent`
@@ -128,7 +129,7 @@ export function expertsOf(r: Pick<RaceSummary, "office" | "state" | "district">)
 
 /** What the forecast of one race is computed from: who it's between, and its inputs. */
 export function raceInputs(r: RaceSummary, market: Market | null, polls: Polls | null, generic: number | null): { matchup: Matchup; inputs: Inputs } {
-  return { matchup: matchup(r, LEAN.incumbents[raceKey(r.office, r.state, r.district)]), inputs: { office: r.office, lean: leanOf(r), genericBallot: generic, incumbent: incumbentSide(r), personal: personalOf(r), fundraising: fundraisingOf(r), polls, market, experts: expertsOf(r) } };
+  return { matchup: matchup(r, LEAN.incumbents[raceKey(r.office, r.state, r.district)], polls?.left), inputs: { office: r.office, lean: leanOf(r), genericBallot: generic, incumbent: incumbentSide(r), personal: personalOf(r), fundraising: fundraisingOf(r), polls, market, experts: expertsOf(r) } };
 }
 
 /** One race's forecast from its market, polls and the generic ballot; null for measures and races nothing separates. */
@@ -331,8 +332,14 @@ export function officePolls(polls: readonly VoteHubPoll[], office: Office, races
   for (const r of races) {
     if (r.office !== office) continue;
     const key = raceKey(r.office, r.state, r.district);
-    const m = matchup(r, LEAN.incumbents[key]);
     const list = byKey.get(key);
+    const withDemocrat = matchup(r, LEAN.incumbents[key]);
+    const withIndependent = matchup(r, LEAN.incumbents[key], "I");
+    // A three-way race is forecast against whichever of the Democrat and the independent polls higher.
+    const m =
+      withDemocrat.kind === "contest" && withIndependent.kind === "contest" && withDemocrat.left !== withIndependent.left && independentLeads(list ?? [], withDemocrat.leftName, withIndependent.leftName, now)
+        ? withIndependent
+        : withDemocrat;
     if (m.kind !== "contest" || !list?.length) continue;
     out.set(key, racePolls(list, m, now));
   }
@@ -411,7 +418,7 @@ async function fetchPolls(races: readonly RaceSummary[], now: number): Promise<P
   for (const [office, type] of types) {
     for (const [key, polls] of officePolls(list(await getJson(`${VOTEHUB}?poll_type=${type}`)), office, races, now)) {
       detail[key] = polls;
-      if (polls.average) averages[key] = { margin: polls.average.margin, count: polls.average.count, latest: polls.average.latest };
+      if (polls.average) averages[key] = { margin: polls.average.margin, count: polls.average.count, latest: polls.average.latest, left: polls.left };
     }
   }
   const own = genericBallot(list(await getJson(`${VOTEHUB}?poll_type=generic-ballot`)), now);
@@ -532,7 +539,7 @@ function pollsOn(p: RacePolls | undefined, day: string): Polls | null {
   const point = p?.trend.find((t) => t[0] === Date.parse(`${day}T12:00:00Z`) / 1000);
   if (!p || !point) return null;
   const counted = p.rows.filter((r) => !r.excluded && r.end && r.end <= day);
-  return counted.length >= 2 ? { margin: Math.round((point[1] - point[2]) * 10) / 10, count: counted.length, latest: counted[0].end } : null;
+  return counted.length >= 2 ? { margin: Math.round((point[1] - point[2]) * 10) / 10, count: counted.length, latest: counted[0].end, left: p.left } : null;
 }
 
 /**

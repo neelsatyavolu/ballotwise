@@ -13,13 +13,15 @@
 //     "ratings": { "house": [Safe D, Likely D, Lean D, Toss-up, Lean R, Likely R, Safe R], ... },
 //     "races": { "<race key>": { "side": "D" | "R" | null, "p": favorite's chance }, ... } }
 //
-// The objective, in order of weight: the exact toss-up set per office, chamber control within the target range, the
-// rating of each listed race, the rating counts, then the gap in chances; ties go to settings whose matched ratings sit
-// furthest from a rating line and whose k is nearest the backtest's. A grid over the shared settings, each office
-// searched on its own within it, then a coordinate search at finer steps until nothing improves.
+// The objective, in order of weight: the exact toss-up set per office, chamber control within the target range, then
+// the rating of each listed race and the mean gap in their chances (a point of mean gap weighs as much as a race with
+// the wrong rating), then the rating counts; ties go to settings whose matched ratings sit furthest from a rating line
+// and whose k is nearest the backtest's. A grid over the shared settings, each office searched on its own within it,
+// then a coordinate search at finer steps until nothing improves.
 //
-// Run with `node scripts/tune-to-ddhq.mjs <benchmark.json> [--refresh] [--dry-run] [--evaluate]`; --evaluate reports on
-// the settings in tuning.json without searching. Inputs (prod races and market
+// Run with `node scripts/tune-to-ddhq.mjs <benchmark.json> [--refresh] [--dry-run] [--evaluate] [--office=senate]`;
+// --evaluate reports on the settings in tuning.json without searching, and --office searches only that office's own
+// settings, leaving the other offices and the shared settings as they are. Inputs (prod races and market
 // prices, VoteHub polls, the aggregators' generic ballot) are cached beside the benchmark; --refresh fetches them again.
 // It bundles the app's own forecast code with esbuild (installed with wrangler), so the search runs the real model.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -29,13 +31,17 @@ import { build } from "esbuild";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const [benchPath, ...flags] = process.argv.slice(2);
-if (!benchPath) throw new Error("usage: node scripts/tune-to-ddhq.mjs <benchmark.json> [--refresh] [--dry-run]");
+if (!benchPath) throw new Error("usage: node scripts/tune-to-ddhq.mjs <benchmark.json> [--refresh] [--dry-run] [--evaluate] [--office=senate]");
 const bench = JSON.parse(readFileSync(benchPath, "utf8"));
 const WORK = dirname(resolve(benchPath));
 const RACES_URL = process.env.RACES_URL ?? "https://ballotwise.xanom.co/api/midterms";
 const VOTEHUB = "https://api.votehub.com/polls";
 const HEADERS = { accept: "application/json", "user-agent": "Ballotwise/1.0 (+https://ballotwise.xanom.co/midterms)" };
 const OFFICES = ["house", "senate", "governor"];
+const ONLY = flags.find((f) => f.startsWith("--office="))?.slice("--office=".length) ?? null;
+if (ONLY && !OFFICES.includes(ONLY)) throw new Error(`--office must be one of ${OFFICES.join(", ")}`);
+/** The offices whose settings are searched. */
+const SEARCHED = ONLY ? [ONLY] : OFFICES;
 const BUCKETS = ["safeD", "likelyD", "leanD", "tossup", "leanR", "likelyR", "safeR"];
 
 // ---------- The app's forecast code ----------
@@ -65,7 +71,7 @@ async function fetchInputs() {
   const polls = {};
   for (const [office, type] of [["senate", "us-senator"], ["governor", "governor"], ["house", "us-representative"]]) {
     for (const [key, p] of M.officePolls(await json(`${VOTEHUB}?poll_type=${type}`), office, races, now)) {
-      if (p.average) polls[key] = { margin: p.average.margin, count: p.average.count, latest: p.average.latest };
+      if (p.average) polls[key] = { margin: p.average.margin, count: p.average.count, latest: p.average.latest, left: p.left };
     }
   }
   const own = M.genericBallot(await json(`${VOTEHUB}?poll_type=generic-ballot`), now);
@@ -147,12 +153,12 @@ function officeScore(office, forecasts, chamber, t) {
   // Matched toss-ups closer than 2 points to the 60 line would flip as data refreshes: 10 a point short of that.
   const edgeMiss = 1000 * Math.max(0, 0.02 - tossEdge);
   const tieBreak = 20 * (0.1 - Math.max(0, Math.min(edge, tossEdge))) + 3 * Math.abs(t.k[office] - BACKTEST_K[office]);
-  const total = 100 * tossMiss + 100 * tossSoft + 20 * controlMiss + edgeMiss + 5 * ratingMiss + countsMiss + (100 * gap) / Math.max(1, listed) / 10 + tieBreak;
+  const total = 100 * tossMiss + 100 * tossSoft + 20 * controlMiss + edgeMiss + 5 * ratingMiss + countsMiss + (5 * 100 * gap) / Math.max(1, listed) + tieBreak;
   return { total, tossMiss, controlMiss, ratingMiss, countsMiss, gap: (100 * gap) / Math.max(1, listed), listed, edge: tossEdge };
 }
 
 function score(t, runs = 2000) {
-  const parts = OFFICES.map((o) => {
+  const parts = SEARCHED.map((o) => {
     const f = forecastsOf(t, o);
     return officeScore(o, f, chamberOf(t, o, f, runs), t);
   });
@@ -213,7 +219,8 @@ const EVALUATE = flags.includes("--evaluate");
 let best = start;
 let bestTotal = Infinity;
 let tried = 0;
-for (const clip of EVALUATE ? [] : SHARED.clip) {
+if (ONLY && !EVALUATE) best = bestForOffice(start, ONLY).t;
+for (const clip of EVALUATE || ONLY ? [] : SHARED.clip) {
   for (const environment of SHARED.environment) {
     let t = { ...start, markets: { ...start.markets, clip }, environment };
     let total = 0;
@@ -233,7 +240,7 @@ for (const clip of EVALUATE ? [] : SHARED.clip) {
 
 /** Coordinate descent on every parameter at finer steps, with the full objective, until a pass changes nothing. */
 const FINE = [
-  ...OFFICES.flatMap((o) => [
+  ...SEARCHED.flatMap((o) => [
     [(t, v) => withOffice(t, o, { k: v }), range(0.5, 2.2, 0.02)],
     [(t, v) => withOffice(t, o, { max: v }), range(0, 0.5, 0.025)],
     [(t, v) => withOffice(t, o, { personal: v }), range(0, 2, 0.05)],
@@ -245,8 +252,12 @@ const FINE = [
     [(t, v) => withOffice(t, o, { pollFull: v }), [2, 3, 4, 5, 6, 8, 10, 15]],
     [(t, v) => withOffice(t, o, { nationalShare: v }), [null, 0, 0.25, 0.5, 0.75, 1]],
   ]),
-  [(t, v) => ({ ...t, markets: { ...t.markets, clip: v } }), range(0.03, 0.15, 0.01)],
-  [(t, v) => ({ ...t, environment: v }), range(0.8, 1.3, 0.025)],
+  ...(ONLY
+    ? []
+    : [
+        [(t, v) => ({ ...t, markets: { ...t.markets, clip: v } }), range(0.03, 0.15, 0.01)],
+        [(t, v) => ({ ...t, environment: v }), range(0.8, 1.3, 0.025)],
+      ]),
 ];
 let bestScore = score(best);
 for (let pass = 1; pass <= (EVALUATE ? 0 : 4); pass++) {

@@ -27,6 +27,14 @@ describe("matchup", () => {
     expect(matchup(ak, "Dan Sullivan")).toMatchObject({ kind: "contest", rightName: "Dan Sullivan" });
   });
 
+  it("pits the independent against the Republican in a three-way race when asked to", () => {
+    const mt = { state: "MT", candidates: [cand("Kurt Alme", "Republican"), cand("Alani Bankhead", "Democratic"), cand("Seth Bodnar", "Independent")] };
+    expect(matchup(mt)).toMatchObject({ kind: "contest", left: "D", leftName: "Alani Bankhead" });
+    expect(matchup(mt, null, "I")).toMatchObject({ kind: "contest", left: "I", leftName: "Seth Bodnar", rightName: "Kurt Alme" });
+    // Without an independent on the ballot the Democrat stays the challenger.
+    expect(matchup({ state: "GA", candidates: [cand("Jon Ossoff", "Democratic"), cand("Mike Collins", "Republican")] }, null, "I")).toMatchObject({ left: "D" });
+  });
+
   it("calls one-sided races uncontested and same-party or top-two races open", () => {
     expect(matchup({ state: "FL", candidates: [cand("Maxwell Frost", "Democratic")] })).toEqual({ kind: "uncontested", side: "D", alone: true });
     expect(matchup({ state: "MA", candidates: [cand("Richard Neal", "Democratic"), cand("N. Milleron", "Independent/Unenrolled")] })).toEqual({ kind: "uncontested", side: "D", alone: false });
@@ -56,7 +64,7 @@ describe("forecastRace", () => {
     const open = forecastRace(contest, inputs({ lean: 0, genericBallot: 0, personal: -17 }))!;
     const held = forecastRace(contest, inputs({ lean: 0, genericBallot: 0, incumbent: "R", personal: -17 }))!;
     expect(open.personal).toBeNull();
-    expect(held.personal).toBeCloseTo(TUNING.personal.senate * c.personal * -17, 1);
+    expect(held.personal).toBeCloseTo(TUNING.personal.senate * c.personal * Math.max(-TUNING.personalCap.senate, -17), 1);
     expect(held.fundamentals! - open.fundamentals!).toBeCloseTo(-TUNING.incumbency.senate * c.incumbent + held.personal!, 0);
   });
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { combineMarkets, evidenceAt, genericMargin, kalshiRace, kalshiTickers, officePolls, parseKalshi, parsePolymarket, personalOf, ratedRaces, readOdds, refreshOdds } from "../lib/midterms/odds";
+import { combineMarkets, evidenceAt, genericMargin, kalshiRace, kalshiTickers, officePolls, parseKalshi, parsePolymarket, personalOf, raceForecast, ratedRaces, readOdds, refreshOdds } from "../lib/midterms/odds";
 import { summarize, type RaceSummary } from "../lib/midterms/races";
 import { ratingOf } from "../lib/midterms/forecast";
 import { testDb } from "./sqlite-db";
@@ -156,6 +156,21 @@ describe("polls", () => {
     expect(ga.rows).toHaveLength(4);
     expect(ga.rows.find((r) => r.pollster === "D")!.excluded).toBe("No sample size disclosed");
     expect(ga.rows.find((r) => r.pollster === "C")!.partisan).toBe("R");
+  });
+
+  it("takes the independent as the challenger in a three-way race when they out-poll the Democrat", () => {
+    const mt = race({ id: 9, province: "MT", election_name: "Montana US Senate", candidates: [{ name: "Kurt Alme", party: "Republican" }, { name: "Alani Bankhead", party: "Democratic" }, { name: "Seth Bodnar", party: "Independent" }] });
+    const three = (pollster: string, bankhead: number, bodnar: number) => poll({ subject: "2026 Montana", pollster, answers: [{ choice: "Kurt Alme", pct: 44 }, { choice: "Alani Bankhead", pct: bankhead }, { choice: "Seth Bodnar", pct: bodnar }] });
+    const lead = officePolls([three("A", 20, 28), three("B", 24, 26)], "senate", [mt], NOW).get("senate:MT:")!;
+    expect(lead).toMatchObject({ left: "I", leftName: "Seth Bodnar" });
+    expect(lead.average!.margin).toBeCloseTo(-17, 0);
+    expect(officePolls([three("A", 28, 20), three("B", 26, 24)], "senate", [mt], NOW).get("senate:MT:")).toMatchObject({ left: "D", leftName: "Alani Bankhead" });
+  });
+
+  it("forecasts the side the polls measured", () => {
+    const mt = race({ id: 9, province: "MT", election_name: "Montana US Senate", candidates: [{ name: "Kurt Alme", party: "Republican" }, { name: "Alani Bankhead", party: "Democratic" }, { name: "Seth Bodnar", party: "Independent" }] });
+    expect(raceForecast(mt, null, { margin: -17, count: 4, latest: "2026-10-10", left: "I" }, 3)).toMatchObject({ left: "I", names: { left: "Seth Bodnar" } });
+    expect(raceForecast(mt, null, { margin: -17, count: 4, latest: "2026-10-10" }, 3)).toMatchObject({ left: "D" });
   });
 
   it("needs two polls for an average, and matches House polls by seat", () => {

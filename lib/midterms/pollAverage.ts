@@ -100,6 +100,22 @@ function shares(p: VoteHubPoll, m: Extract<Matchup, { kind: "contest" }>): { lef
   return left && right ? { left: left.pct, right: right.pct } : null;
 }
 
+/**
+ * In a race with both a Democrat and an independent against the Republican, whether the independent polls ahead of
+ * the Democrat on average, across the window's polls that ask about both.
+ */
+export function independentLeads(polls: readonly VoteHubPoll[], democrat: string, independent: string, now: number): boolean {
+  let lead = 0;
+  for (const p of polls) {
+    const end = p.end_date ? Date.parse(p.end_date) : NaN;
+    if (!Number.isFinite(end) || end > now || now - end > WINDOW_DAYS * DAY) continue;
+    const d = answerFor(p.answers ?? [], democrat);
+    const i = answerFor(p.answers ?? [], independent);
+    if (d && i) lead += i.pct - d.pct;
+  }
+  return lead > 0;
+}
+
 // ---------- Averaging ----------
 
 type Point = { t: number; left: number; right: number };

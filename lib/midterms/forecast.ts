@@ -143,13 +143,15 @@ const TOP_TWO = new Set(["CA", "WA"]);
 
 /**
  * `incumbent` names the seat's holder: when a party runs several candidates (Alaska's top four), the holder is that
- * party's nominee for the forecast, else the first listed.
+ * party's nominee for the forecast, else the first listed. `challenger` "I" makes an independent the Republican's
+ * opponent even with a Democrat on the ballot (Montana's three-way race, where the independent out-polls the Democrat).
  */
-export function matchup(r: Pick<RaceSummary, "state" | "candidates">, incumbent?: string | null): Matchup {
+export function matchup(r: Pick<RaceSummary, "state" | "candidates">, incumbent?: string | null, challenger: "D" | "I" = "D"): Matchup {
   const surname = (n: string) => n.toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, " ").trim().split(/\s+/).at(-1);
   const isHolder = (n: string) => !!incumbent && surname(n) === surname(incumbent);
   const by = (s: Side) => r.candidates.filter((c) => sideOf(c.party) === s).sort((a, b) => Number(isHolder(b.name)) - Number(isHolder(a.name)));
   const [d, rep, ind] = [by("D"), by("R"), by("I")];
+  if (challenger === "I" && rep.length === 1 && ind.length) return { kind: "contest", left: "I", leftName: ind[0].name, rightName: rep[0].name };
   if (d.length && rep.length) return { kind: "contest", left: "D", leftName: d[0].name, rightName: rep[0].name };
   if (rep.length === 1 && ind.length) return { kind: "contest", left: "I", leftName: ind[0].name, rightName: rep[0].name };
   if (d.length > 1 || rep.length > 1 || ind.length > 1) return { kind: "open" };
