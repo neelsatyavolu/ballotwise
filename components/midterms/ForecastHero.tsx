@@ -18,7 +18,7 @@ function useChartSize(): [(el: HTMLDivElement | null) => void, { w: number; h: n
     watch.observe(el);
     return () => watch.disconnect();
   }, [el]);
-  return [setEl, { w, h: Math.round(Math.min(280, Math.max(200, w * 0.36))) }];
+  return [setEl, { w, h: Math.round(Math.min(320, Math.max(200, w * 0.26))) }];
 }
 
 /** "Dem up 4 points this week"; nothing until the history reaches back a week or when it hasn't moved a point. */
@@ -29,8 +29,8 @@ function weekText(change: number | null): string {
   return ` · ${change > 0 ? "Dem" : "Rep"} up ${points} ${points === 1 ? "point" : "points"} this week`;
 }
 
-/** Two figures, Democrats on the left and Republicans on the right, over a bar split between them. */
-function Split({ d, r, dLabel, rLabel, label, caption }: { d: number; r: number; dLabel: string; rLabel: string; label: string; caption: string }) {
+/** Two figures, Democrats on the left and Republicans on the right, over a bar split between them; `middle` sits between the figures. */
+function Split({ d, r, dLabel, rLabel, label, caption, middle }: { d: number; r: number; dLabel: string; rLabel: string; label: string; caption: string; middle?: string }) {
   const total = Math.max(1, d + r);
   return (
     <div className="mt-fc-odds">
@@ -38,6 +38,7 @@ function Split({ d, r, dLabel, rLabel, label, caption }: { d: number; r: number;
         <span className="d">
           <b>{dLabel}</b> Dem
         </span>
+        {middle && <span className="mt-seats-mid">{middle}</span>}
         <span className="r">
           Rep <b>{rLabel}</b>
         </span>
@@ -53,9 +54,10 @@ function Split({ d, r, dLabel, rLabel, label, caption }: { d: number; r: number;
 }
 
 /** Both parties' chance of control over one split bar, with the week's move. */
-export function PartyOdds({ dControl, control }: { dControl: number; control: readonly ChartPoint[] }) {
+export function PartyOdds({ dControl, control, middle }: { dControl: number; control: readonly ChartPoint[]; middle?: string }) {
   return (
     <Split
+      middle={middle}
       d={dControl}
       r={1 - dControl}
       dLabel={whole(dControl)}
@@ -67,9 +69,10 @@ export function PartyOdds({ dControl, control }: { dControl: number; control: re
 }
 
 /** Expected seats for each party, for governorships and before the simulation has run. */
-function PartySeats({ view, office }: { view: ChamberView; office: ForecastOffice }) {
+function PartySeats({ view, office, middle }: { view: ChamberView; office: ForecastOffice; middle?: string }) {
   return (
     <Split
+      middle={middle}
       d={view.dSeats}
       r={view.rSeats}
       dLabel={`${view.dSeats}`}
@@ -81,33 +84,20 @@ function PartySeats({ view, office }: { view: ChamberView; office: ForecastOffic
 }
 
 /** An office's chance of control, or projected seats for governors and before the simulation has run. */
-export function ForecastOdds({ office, view, control }: { office: ForecastOffice; view: ChamberView; control: readonly ChartPoint[] }) {
-  return view.dControl !== null ? <PartyOdds dControl={view.dControl} control={control} /> : <PartySeats view={view} office={office} />;
+export function ForecastOdds({ office, view, control, middle }: { office: ForecastOffice; view: ChamberView; control: readonly ChartPoint[]; middle?: string }) {
+  return view.dControl !== null ? <PartyOdds dControl={view.dControl} control={control} middle={middle} /> : <PartySeats view={view} office={office} middle={middle} />;
 }
 
-/** The numbers under the odds: projected seats, the majority, and governors not up this year. */
-function Facts({ view, office }: { view: ChamberView; office: ForecastOffice }) {
-  const rows: [string, string][] = [
-    ...(view.dControl !== null ? [["Projected seats", `${view.dSeats} D · ${view.rSeats} R`] as [string, string]] : []),
-    ...(view.majority ? [["Needed for control", `${view.majority}`] as [string, string]] : []),
-    ...(office === "governor" ? [["Governors not up this year", `${view.notUp.D + view.notUp.R + view.notUp.other}`] as [string, string]] : []),
-  ];
-  if (!rows.length) return null;
-  return (
-    <dl className="mt-fc-parts">
-      {rows.map(([k, v]) => (
-        <div key={k}>
-          <dt>{k}</dt>
-          <dd>{v}</dd>
-        </div>
-      ))}
-    </dl>
-  );
+/** The line between the hero's figures: projected seats and the majority, or the governors not up this year. */
+function factLine(view: ChamberView, office: ForecastOffice): string {
+  if (office === "governor") return `Includes the ${view.notUp.D + view.notUp.R + view.notUp.other} governors not up this year`;
+  const parts = [view.dControl !== null ? `Projected ${view.dSeats} D · ${view.rSeats} R` : null, view.majority ? `${view.majority} for control` : null];
+  return parts.filter(Boolean).join(" · ");
 }
 
 /**
- * The top of a forecast page: the headline, each party's chance (or projected seats for governors) beside a chart
- * that switches between chance of control and seat count over time.
+ * The top of a forecast page, one wide panel: the headline, each party's chance (or projected seats for governors)
+ * across the full width, and under it a chart that switches between chance of control and seat count over time.
  */
 export function ForecastHero({ office, view, control, seats, controls, action, marker }: {
   office: ForecastOffice;
@@ -118,7 +108,7 @@ export function ForecastHero({ office, view, control, seats, controls, action, m
   seats: { D: readonly ChartPoint[]; R: readonly ChartPoint[] };
   /** Controls at the right of the headline (the overview's chamber switch). */
   controls?: ReactNode;
-  /** A link under the numbers (the overview's "Full forecast"). */
+  /** A link beside those controls (the overview's "Full forecast"). */
   action?: ReactNode;
   /** A day to mark on the chart, such as when prediction markets joined the forecast. */
   marker?: { t: number; label: string } | null;
@@ -141,13 +131,16 @@ export function ForecastHero({ office, view, control, seats, controls, action, m
             </span>
           ))}
         </h2>
-        {controls}
+        {(action || controls) && (
+          <div className="mt-fc-hero-tools">
+            {action}
+            {controls}
+          </div>
+        )}
       </div>
       <div className="mt-fc-hero-body">
-        <div className="mt-fc-hero-side">
-          <ForecastOdds office={office} view={view} control={control} />
-          <Facts view={view} office={office} />
-          {action}
+        <div className="mt-fc-hero-top">
+          <ForecastOdds office={office} view={view} control={control} middle={factLine(view, office) || undefined} />
         </div>
         <div className="mt-fc-hero-chart" ref={chartBox}>
           <div className="mt-section-head tight">

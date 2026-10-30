@@ -971,17 +971,17 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-fc-head { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; color: var(--ink); }
 .mt-fc-head .t-d { color: var(--dem-ink); }
 .mt-fc-head .t-r { color: var(--rep-ink); }
-/* The projection is the lead: its column takes about two-fifths of the panel, with the history chart beside it. */
-.mt-fc-hero-body { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); }
-.mt-fc-hero-side { display: grid; gap: 20px; align-content: center; padding: 20px 24px; border-right: 1px solid var(--rule); }
-.mt-fc-hero-chart { min-width: 0; padding: 12px 14px; }
-.mt-fc-hero .mt-fc-odds { gap: 12px; }
+/* One wide panel: the projection across the full width, and the history chart under it. */
+.mt-fc-hero-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.mt-fc-hero-top { padding: 18px 20px 16px; border-bottom: 1px solid var(--rule); }
+.mt-fc-hero-chart { min-width: 0; padding: 12px 20px 14px; }
+.mt-fc-hero .mt-fc-odds { gap: 10px; }
 .mt-fc-hero .mt-seats-nums { font-size: 15px; }
-.mt .mt-fc-hero .mt-seats-nums b { font-size: clamp(44px, 4.6vw, 64px); }
-.mt .mt-fc-hero .mt-balance-bar.mt-seats-bar { height: 20px; }
-.mt-fc-hero .mt-fc-sub { font-size: 14px; }
-.mt-fc-hero .mt-fc-parts { margin: 0; font-size: 15px; }
-.mt-fc-full { justify-self: start; font-size: 14px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.mt .mt-fc-hero .mt-seats-nums b { font-size: clamp(40px, 4.4vw, 60px); }
+.mt-fc-hero .mt-seats-mid { font-size: 15px; color: var(--ink); }
+.mt .mt-fc-hero .mt-balance-bar.mt-seats-bar { height: 16px; }
+.mt-fc-hero .mt-fc-sub { font-size: 13px; }
+.mt-fc-full { font-size: 14px; font-weight: 600; color: var(--accent); text-decoration: none; }
 .mt-fc-full:hover { text-decoration: underline; }
 .mt-fc-odds { display: grid; gap: 8px; }
 .mt-fc-sub { margin: 0; font-size: 12px; color: var(--muted); }
@@ -1039,12 +1039,10 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 /* The race page's forecast split (components/midterms/RaceInsights.tsx). */
 .mt-fc-split { grid-column: 1 / -1; border-radius: 6px; background: var(--rate-safe-r); }
 
-@media (max-width: 860px) {
-  .mt-fc-hero-body { grid-template-columns: minmax(0, 1fr); }
-  .mt-fc-hero-side { border-right: 0; border-bottom: 1px solid var(--rule); }
-}
 @media (max-width: 720px) {
   .mt-fc-head { font-size: 18px; }
+  .mt-fc-hero-top { padding: 14px; }
+  .mt-fc-hero-chart { padding: 12px 14px; }
   .mt-fc-filters input { font-size: 16px; }
 }
 @media (max-width: 420px) {
