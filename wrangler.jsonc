@@ -20,8 +20,11 @@
     // rather than waiting on the queue to scale up. 4 x 6 caps parallel races to stay clear of Grok's rate limits.
     "consumers": [{ "queue": "ballotwise-research", "max_batch_size": 4, "max_batch_timeout": 1, "max_concurrency": 6, "max_retries": 3 }]
   },
+  // Registrations for the iOS app's push alerts, per client address (app/api/push/route.ts).
+  "ratelimits": [{ "name": "PUSH_LIMITER", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } }],
   // Re-rates the midterm races from market prices and polls (custom-worker.ts `scheduled`).
   "triggers": { "crons": ["*/5 * * * *"] },
-  "vars": { "APP_URL": "https://ballotwise.xanom.co" },
+  // APNS_TOPIC is the iOS app's bundle id; APNS_KEY (the .p8 contents), APNS_KEY_ID and APNS_TEAM_ID are secrets.
+  "vars": { "APP_URL": "https://ballotwise.xanom.co", "APNS_TOPIC": "co.xanom.ballotwise" },
   "observability": { "enabled": true }
 }

@@ -97,10 +97,14 @@ export async function otherRace(id: number, now: number) {
   return found && { ...found, race: { ...found.race, signal: null, call: null }, callPending: false as const };
 }
 
-/** Records race calls and vote history from the current catalog, for the cron job, so recording doesn't wait on page views. */
-export async function recordResults(db: Db, now: number): Promise<void> {
+/**
+ * Records race calls and vote history from the current catalog, for the cron job, so recording doesn't wait on page
+ * views. Returns the catalog's races for the push alerts that follow.
+ */
+export async function recordResults(db: Db, now: number): Promise<RaceSummary[]> {
   const catalog = await fetchCatalog(now, [], db);
   await Promise.all([recordCalls(db, catalog, now), recordHistory(db, catalog, now)]);
+  return catalog.races;
 }
 
 export async function trackedIds(now: number, db?: Db): Promise<Set<number>> {

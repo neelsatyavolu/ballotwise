@@ -184,6 +184,12 @@ export async function listCallEvents(db: Db, { office, before, limit }: { office
   return results.map(toEvent);
 }
 
+/** Call events stored after event `afterId`, oldest first, for push notifications. */
+export async function callEventsAfter(db: Db, afterId: number, limit: number): Promise<CallEvent[]> {
+  const { results } = await db.prepare(`SELECT ${COLUMNS} FROM midterm_call_events WHERE id > ? ORDER BY id LIMIT ?`).bind(afterId, limit).all<Stored>();
+  return results.map(toEvent);
+}
+
 /** A race's call events, oldest first, for the race page. Falls back to this isolate's memory when the database fails. */
 export async function callHistory(db: Db, raceId: number): Promise<CallEvent[]> {
   try {

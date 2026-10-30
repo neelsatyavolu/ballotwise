@@ -7,8 +7,9 @@ import type { Db } from "./lib/auth/accounts";
 import { failJob, jobSchema, PermanentJobError, readableError, runJob, type Job, type JobDeps } from "./lib/ballot/jobs";
 import { bareRaces, recordResults } from "./lib/midterms/catalog";
 import { refreshOdds } from "./lib/midterms/odds";
+import { apnsConfig, dispatchPushes } from "./lib/push/dispatch";
 
-type Env = CloudflareEnv & { GROK_TOKEN_KEY?: string };
+type Env = CloudflareEnv & { GROK_TOKEN_KEY?: string; APNS_KEY?: string; APNS_KEY_ID?: string; APNS_TEAM_ID?: string; APNS_TOPIC?: string };
 const MAX_ATTEMPTS = 3;
 const OLD_HOST = "ballotwise.n3el.dev";
 const NEW_ORIGIN = "https://ballotwise.xanom.co";
@@ -40,14 +41,16 @@ export default {
 
   /**
    * Every 5 minutes (wrangler.jsonc): record race calls and vote history from the current results, so they don't
-   * depend on page views, then re-rate the midterm races from current market prices and polls. Recording goes first
-   * so both share one civicAPI fetch.
+   * depend on page views, send the iOS app's push alerts for what changed, then re-rate the midterm races from
+   * current market prices and polls. Recording goes first so all three share one civicAPI fetch.
    */
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const now = Date.now();
     const db = env.DB as unknown as Db;
+    const apns = apnsConfig(env);
     ctx.waitUntil(
       recordResults(db, now)
+        .then((races) => (apns ? dispatchPushes(db, apns, races, now).catch((err) => console.error("push alerts failed:", err instanceof Error ? err.message : err)) : undefined))
         .catch((err) => console.error("midterms results recording failed:", err instanceof Error ? err.message : err))
         .then(() => bareRaces(now, db))
         .then((races) => refreshOdds(db, races, now))
