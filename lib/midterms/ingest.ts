@@ -3,8 +3,11 @@ import type { RaceSummary } from "./races";
 
 /** The recorders that turn civicAPI catalogs into rows, each with its own processed-through time in midterm_ingest. */
 export type IngestKey = "calls" | "history";
-/** The catalog as fetchCatalog serves it. Only fresh catalogs newer than the last one processed are recorded. */
-export type Catalog = { races: readonly RaceSummary[]; fetchedAt: number; stale: boolean };
+/**
+ * The catalog as fetchCatalog serves it. Only fresh catalogs newer than the last one processed are recorded; one
+ * pieced together from D1's per-race snapshots (`stored`) isn't a single observation, so it's never recorded.
+ */
+export type Catalog = { races: readonly RaceSummary[]; fetchedAt: number; stale: boolean; stored?: true };
 
 /**
  * SQL condition for an insert's WHERE: true while the recorder (first bind) hasn't processed a catalog fetched at or after
@@ -17,8 +20,8 @@ export function markProcessed(db: Db, key: IngestKey, at: number): Statement {
   return db.prepare("INSERT INTO midterm_ingest (key, at) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET at = excluded.at WHERE excluded.at > midterm_ingest.at").bind(key, at);
 }
 
-/** Whether a catalog should be recorded: fresh from civicAPI, and fetched after the last one this isolate processed. */
-export const isNew = (catalog: Catalog, processed: number) => !catalog.stale && catalog.fetchedAt > processed;
+/** Whether a catalog should be recorded: one fresh civicAPI answer, fetched after the last one this isolate processed. */
+export const isNew = (catalog: Catalog, processed: number) => !catalog.stale && !catalog.stored && catalog.fetchedAt > processed;
 
 /** The races a catalog actually observed: a `missing` race only repeats numbers from an older answer. */
 export const observed = (catalog: Catalog) => catalog.races.filter((r) => !r.missing);

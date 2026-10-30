@@ -4,9 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useAccount } from "@/components/AccountProvider";
 import { api, ApiError } from "@/lib/client";
 import { clockNow } from "@/lib/midterms/clock";
+import { isNewer } from "@/lib/midterms/live";
+import { electionModeDefault } from "@/lib/midterms/polls";
 
 /** How often an open tracker page asks for new results. */
 export const POLL_MS = 30_000;
+/** From election day on, results move fast and the server's copy is refreshed every 30 seconds, so pages ask twice as often. */
+export const ELECTION_POLL_MS = 15_000;
 
 /**
  * Fetches `path` now and every POLL_MS while the tab is visible, keeping the last good data through errors.
@@ -28,7 +32,7 @@ export function useLive<T>(path: string | null) {
       const data = await api<T>(path);
       // A slow answer for a path the page has moved on from, or one overtaken by a newer request, is dropped.
       if (current.current !== path || call !== latest.current) return;
-      setState({ path, data });
+      setState((prev) => (prev && prev.path === path && !isNewer(prev.data, data) ? prev : { path, data }));
       setError(null);
     } catch (err) {
       if (current.current === path && call === latest.current) setError(err instanceof ApiError ? err.message : "Couldn't load results.");
@@ -44,7 +48,7 @@ export function useLive<T>(path: string | null) {
     const start = () => {
       if (timer) return;
       void load();
-      timer = setInterval(() => void load(), POLL_MS);
+      timer = setInterval(() => void load(), electionModeDefault(clockNow()) ? ELECTION_POLL_MS : POLL_MS);
     };
     const stop = () => {
       if (timer) clearInterval(timer);

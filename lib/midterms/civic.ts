@@ -18,6 +18,18 @@ export const FRESH_MS = 30_000;
  * the several seconds civicAPI takes; the next poll gets the refreshed one.
  */
 export const SERVE_STALE_MS = 2 * 60_000;
+/**
+ * How long a page view waits on civicAPI when it has an older catalog to fall back on. Past this it gets that
+ * catalog marked stale, and the fetch finishes after the response for the next view.
+ */
+export const WAIT_MS = 8_000;
+/** One civicAPI request is given up after this long, so a hung connection can't hold a response or a refresh. */
+const REQUEST_TIMEOUT_MS = 15_000;
+/**
+ * A fetch still unsettled after this long is presumed cut off (Workers end background work 30 seconds after the
+ * response), so a new one may start.
+ */
+const STUCK_MS = 45_000;
 
 export class CivicError extends Error {}
 
@@ -25,7 +37,7 @@ async function civicOnce(path: string): Promise<unknown> {
   let res: Response;
   try {
     // On Cloudflare, `cf.cacheTtl` shares one fetch per data center among every visitor polling at once.
-    res = await fetch(BASE + path, { cf: { cacheTtl: 20, cacheEverything: true } } as RequestInit);
+    res = await fetch(BASE + path, { cf: { cacheTtl: 20, cacheEverything: true }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) } as RequestInit);
   } catch {
     throw new CivicError("Couldn't reach civicAPI.");
   }
@@ -77,12 +89,15 @@ async function racesOfType(type: string): Promise<unknown[]> {
 }
 
 type Memo<T> = { at: number; value: T };
-/** A catalog as of `at`. Races without `missing` were in civicAPI's answer at `at`; missing ones carry `lastSeen`. */
-type Stored = Memo<RaceSummary[]>;
+/**
+ * A catalog as of `at`. Races without `missing` were in civicAPI's answer at `at`; missing ones carry `lastSeen`.
+ * `fromStore` marks one pieced together from D1's per-race snapshots rather than a single civicAPI answer.
+ */
+type Stored = Memo<RaceSummary[]> & { fromStore?: true };
 // Per-isolate memory of the last served catalog, so a civicAPI outage shows slightly old results instead of none.
 let catalogMemo: Stored | null = null;
-/** The background refresh under way while an older catalog is served, so page views arriving together share it. */
-let refreshing: Promise<unknown> | null = null;
+/** The civicAPI fetch under way, so page views and background refreshes arriving together share one. */
+let inFlight: { since: number; work: Promise<Stored> } | null = null;
 const raceMemo = new Map<number, Memo<RaceDetail>>();
 
 // D1 keeps each race's latest numbers (midterm_race_snapshots) and every race ever seen (midterm_registry), so an
@@ -109,14 +124,15 @@ export const RETIRED_RACE_IDS: ReadonlySet<number> = new Set<number>();
 
 export function resetCivicMemo() {
   catalogMemo = null;
-  refreshing = null;
+  inFlight = null;
   raceMemo.clear();
   lastWriteAt = 0;
   written.clear();
   registryMemo = null;
 }
 
-export type Fetched<T> = T & { fetchedAt: number; stale: boolean };
+/** `stored` marks a catalog pieced together from D1's snapshots: shown to viewers, but not recorded as an observation. */
+export type Fetched<T> = T & { fetchedAt: number; stale: boolean; stored?: true };
 
 /** Every race's stored numbers, with `seen` set to when they were written. Null when D1 can't be read. */
 async function readRaceSnapshots(db: Db): Promise<Known | null> {
@@ -198,7 +214,7 @@ function newer(a: Known, b: Known): Known {
 function fromSnapshots(known: Known | null): Stored | null {
   if (!known || known.size === 0) return null;
   const entries = [...known.values()];
-  return { at: Math.max(...entries.map((e) => e.seen)), value: entries.map((e) => e.race) };
+  return { at: Math.max(...entries.map((e) => e.seen)), value: entries.map((e) => e.race).filter((r) => !RETIRED_RACE_IDS.has(r.id)), fromStore: true };
 }
 
 /** Stand-in for a registered race no snapshot has numbers for. */
@@ -236,14 +252,21 @@ async function fetchRaces(now: number): Promise<RaceSummary[]> {
   return [...byId.values()];
 }
 
-const served = (memo: Stored, ratings: readonly RatedRace[], stale: boolean) => ({ races: applyRatings(memo.value, ratings), coverage: coverageOf(memo.value), fetchedAt: memo.at, stale });
+const served = (memo: Stored, ratings: readonly RatedRace[], stale: boolean) => ({
+  races: applyRatings(memo.value, ratings),
+  coverage: coverageOf(memo.value),
+  fetchedAt: memo.at,
+  stale,
+  ...(memo.fromStore ? { stored: true as const } : {}),
+});
 
 /**
  * Every tracked race with its statewide (or districtwide) totals. Every race ever seen (in this isolate, in D1's
  * race snapshots or in the registry) stays listed; one civicAPI leaves out keeps its last numbers with `missing: true`.
  * When civicAPI doesn't answer at all, the last catalog (from memory, else from `db`) is served marked stale.
  * `background` lets the D1 writes finish after the response. With `serveStale` as well, a catalog under
- * SERVE_STALE_MS old (this isolate's, or D1's on a fresh isolate) is served at once and refreshed after the response.
+ * SERVE_STALE_MS old (this isolate's, or D1's on a fresh isolate) is served at once and refreshed after the response,
+ * and an older one is served marked stale when civicAPI takes longer than WAIT_MS.
  */
 export async function fetchCatalog(
   now: number,
@@ -256,26 +279,48 @@ export async function fetchCatalog(
   if (catalogMemo && now - catalogMemo.at < FRESH_MS) return served(catalogMemo, ratings, false);
   const revalidate = serveStale && background ? background : null;
   if (revalidate && catalogMemo && now - catalogMemo.at < SERVE_STALE_MS) return refreshAfter(catalogMemo, ratings, now, revalidate, db);
-  // A fresh isolate has no memo, so D1 stands in for it; it and the registry are read while civicAPI is asked.
+  // A fresh isolate has no memo, so D1 stands in for it; it's read while civicAPI is asked.
   const warm = catalogMemo;
   const snapshots = warm || !db ? Promise.resolve(null) : readRaceSnapshots(db);
-  const registeredRaces = registry(db, now);
   if (revalidate && !warm) {
     const stored = fromSnapshots(await snapshots);
     if (stored && now - stored.at < SERVE_STALE_MS) {
-      catalogMemo = { at: stored.at, value: stored.value.filter((r) => !RETIRED_RACE_IDS.has(r.id)) };
-      return refreshAfter(catalogMemo, ratings, now, revalidate, db);
+      catalogMemo = stored;
+      return refreshAfter(stored, ratings, now, revalidate, db);
     }
   }
-  let fetched: RaceSummary[];
-  try {
-    fetched = await fetchRaces(now);
-  } catch (err) {
-    const last = warm ?? fromSnapshots(await snapshots);
-    if (!last) throw err;
-    catalogMemo = { at: last.at, value: last.value.filter((r) => !RETIRED_RACE_IDS.has(r.id)) };
-    return served(catalogMemo, ratings, true);
+  const outcome = latest(now, db, background, warm, snapshots).then(
+    (memo) => ({ memo }),
+    (err: unknown) => ({ err }),
+  );
+  // With an older catalog to fall back on, a page view waits only so long for civicAPI.
+  const fallback = revalidate ? (warm ?? fromSnapshots(await snapshots)) : null;
+  const result = fallback ? await Promise.race([outcome, sleep(WAIT_MS).then(() => null)]) : await outcome;
+  if (result === null) {
+    revalidate!(outcome);
+    return served(fallback!, ratings, true);
   }
+  if ("memo" in result) return served(result.memo, ratings, false);
+  const last = warm ?? fromSnapshots(await snapshots);
+  if (!last) throw result.err;
+  catalogMemo = { ...last, value: last.value.filter((r) => !RETIRED_RACE_IDS.has(r.id)) };
+  return served(catalogMemo, ratings, true);
+}
+
+/** The civicAPI fetch under way, or a new one when there's none (or the last one looks cut off). */
+function latest(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Known | null>): Promise<Stored> {
+  if (inFlight && now - inFlight.since < STUCK_MS) return inFlight.work;
+  const work: Promise<Stored> = load(now, db, background, warm, snapshots).finally(() => {
+    if (inFlight?.work === work) inFlight = null;
+  });
+  inFlight = { since: now, work };
+  return work;
+}
+
+/** Asks civicAPI for every race, keeps the ones it left out, saves the result to memory and D1. Throws on CivicError. */
+async function load(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Known | null>): Promise<Stored> {
+  const registeredRaces = registry(db, now);
+  const fetched = await fetchRaces(now);
   let known = warm ? knownFrom(warm) : ((await snapshots) ?? new Map());
   const registered = await registeredRaces;
   const listed = new Set(fetched.map((r) => r.id));
@@ -287,24 +332,21 @@ export async function fetchCatalog(
   const races = assemble(fetched, known, registered);
   const missing = missingByOffice(races);
   if (missing) console.error(`midterms: civicAPI left out races (${missing}); showing their last known numbers`);
-  catalogMemo = { at: now, value: races };
+  const memo: Stored = { at: now, value: races };
+  // A slower fetch that started earlier never replaces a newer catalog.
+  if (!catalogMemo || catalogMemo.at <= now) catalogMemo = memo;
   if (db) {
     const newcomers = registered ? fetched.filter((r) => !registered.has(r.id)) : [];
     const write = saveRaces(db, fetched, newcomers, now, fetched.some((r) => !known.has(r.id)));
     if (write) await handOff(write, background);
   }
-  return served(catalogMemo, ratings, false);
+  return memo;
 }
 
 /** Serves `memo` now and starts one refresh from civicAPI after the response, unless one is already running. */
 function refreshAfter(memo: Stored, ratings: readonly RatedRace[], now: number, background: (work: Promise<unknown>) => void, db?: Db) {
-  if (!refreshing) {
-    refreshing = fetchCatalog(now, [], db, background)
-      .catch((err) => console.error("midterms catalog refresh failed:", err))
-      .finally(() => {
-        refreshing = null;
-      });
-    background(refreshing);
+  if (!inFlight || now - inFlight.since >= STUCK_MS) {
+    background(latest(now, db, background, memo, Promise.resolve(null)).catch((err) => console.error("midterms catalog refresh failed:", err)));
   }
   return served(memo, ratings, false);
 }
