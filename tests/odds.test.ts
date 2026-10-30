@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { combineMarkets, evidenceAt, kalshiRace, kalshiTickers, parseKalshi, parsePolymarket, pollAverages, rate, ratedRaces, readOdds, refreshOdds } from "../lib/midterms/odds";
+import { combineMarkets, evidenceAt, kalshiRace, kalshiTickers, officePolls, parseKalshi, parsePolymarket, ratedRaces, readOdds, refreshOdds } from "../lib/midterms/odds";
 import { summarize, type RaceSummary } from "../lib/midterms/races";
 import { testDb } from "./sqlite-db";
 
@@ -36,33 +36,6 @@ const kalshi = (ticker: string, bid: number, ask: number, extra: Record<string, 
   ...extra,
 });
 
-describe("rate", () => {
-  it("rates by the favorite's market chance, with polls as the fallback", () => {
-    expect(rate({ odds: { D: 0.55, R: 0.45 }, sources: ["Kalshi"] }, null)).toBe("tossup");
-    expect(rate({ odds: { D: 0.3, R: 0.7 }, sources: ["Kalshi"] }, null)).toBe("lean-r");
-    expect(rate({ odds: { D: 0.8, R: 0.2 }, sources: ["Kalshi"] }, null)).toBe("likely-d");
-    expect(rate({ odds: { D: 0.95, R: 0.05 }, sources: ["Kalshi"] }, null)).toBeNull();
-    expect(rate({ odds: { R: 0.3, I: 0.7 }, sources: ["Polymarket"] }, null)).toBe("lean-i");
-    // Markets win over polls when both exist.
-    expect(rate({ odds: { D: 0.95, R: 0.05 }, sources: ["Kalshi"] }, { margin: 1, count: 3, latest: "2026-10-10" })).toBeNull();
-    expect(rate(null, { margin: -2.4, count: 3, latest: "2026-10-10" })).toBe("tossup");
-    expect(rate(null, { margin: 4, count: 3, latest: "2026-10-10" })).toBe("lean-d");
-    expect(rate(null, { margin: -8, count: 3, latest: "2026-10-10" })).toBe("likely-r");
-    expect(rate(null, { margin: 14, count: 3, latest: "2026-10-10" })).toBeNull();
-    expect(rate(null, null)).toBeNull();
-  });
-
-  it("pulls a thinly traded market toward the polls, but leaves a busy one alone", () => {
-    const polls = { margin: -6, count: 3, latest: "2026-10-10" };
-    // A $2k market at D 80% against polls at R+6: the polls dominate (R about 82%).
-    expect(rate({ odds: { D: 0.8, R: 0.2 }, sources: ["Polymarket"], volume: 2000 }, polls)).toBe("likely-r");
-    // The same price on $5M barely moves.
-    expect(rate({ odds: { D: 0.8, R: 0.2 }, sources: ["Kalshi"], volume: 5_000_000 }, polls)).toBe("likely-d");
-    // A single pollster isn't enough to move a market.
-    expect(rate({ odds: { D: 0.8, R: 0.2 }, sources: ["Polymarket"], volume: 2000 }, { ...polls, count: 1 })).toBe("likely-d");
-  });
-});
-
 describe("Kalshi", () => {
   it("reads the race and party from every 2026 ticker pattern", () => {
     expect(kalshiRace("SENATEGA-26-D")).toEqual({ key: "senate:GA:", side: "D" });
@@ -96,7 +69,6 @@ describe("Kalshi", () => {
     const ne = parseKalshi([kalshi("SENATENE-26-R", 0.73, 0.74), kalshi("SENATENE-26-D", 0, 0.001, { last_price_dollars: "0.001" })], new Set(["senate:NE:"])).get("senate:NE:")!.odds;
     expect(ne.R).toBeCloseTo(0.735, 2);
     expect(ne.I).toBeCloseTo(0.264, 2);
-    expect(rate({ odds: ne, sources: ["Kalshi"] }, null)).toBe("lean-r");
   });
 
   it("gives an unpriced major party the remainder, and only invents an independent where one runs", () => {
@@ -162,29 +134,33 @@ describe("Polymarket", () => {
 
 describe("polls", () => {
   const races = [race({}), race({ id: 5, type: "House of Representatives", election_name: "Pennsylvania US House 7", province: "PA", district: "PA-07", candidates: [{ name: "Bob Brooks", party: "Democratic" }, { name: "Ryan Mackenzie", party: "Republican" }] })];
-  const poll = (over: Record<string, unknown>) => ({ subject: "2026 Georgia", pollster: "A", end_date: "2026-10-10", answers: [{ choice: "Ossoff", pct: 50 }, { choice: "Collins", pct: 44 }], ...over });
+  const poll = (over: Record<string, unknown>) => ({ subject: "2026 Georgia", pollster: "A", start_date: "2026-10-06", end_date: "2026-10-10", sample_size: 800, population: "lv", answers: [{ choice: "Ossoff", pct: 50 }, { choice: "Collins", pct: 44 }], ...over });
 
-  it("averages each pollster's newest nonpartisan general-election poll from the last 45 days", () => {
-    const avg = pollAverages(
+  it("counts every disclosed general-election poll, partisan sponsors included, and lists the rest with a reason", () => {
+    const ga = officePolls(
       [
         poll({}),
-        poll({ end_date: "2026-09-30", answers: [{ choice: "Jon Ossoff", pct: 40 }, { choice: "Mike Collins", pct: 50 }] }), // older, same pollster
         poll({ pollster: "B", answers: [{ choice: "Jon Ossoff", pct: 48 }, { choice: "Mike Collins", pct: 46 }] }),
-        poll({ pollster: "C", partisan: "REP", answers: [{ choice: "Ossoff", pct: 40 }, { choice: "Collins", pct: 55 }] }),
-        poll({ pollster: "D", end_date: "2026-07-01" }),
-        poll({ pollster: "E", end_date: "2026-10-27" }), // ends in the future
-        poll({ pollster: "F", subject: "2026 Georgia Republican" }), // a primary
+        poll({ pollster: "C", partisan: "REP", answers: [{ choice: "Ossoff", pct: 45 }, { choice: "Collins", pct: 47 }] }),
+        poll({ pollster: "D", sample_size: null }), // no sample size: listed, not counted
+        poll({ pollster: "E", end_date: "2026-10-27" }), // ends in the future: not listed
+        poll({ pollster: "F", subject: "2026 Georgia Republican" }), // a primary: another race
       ],
       "senate",
       races,
       NOW,
-    );
-    expect(avg.get("senate:GA:")).toEqual({ margin: 4, count: 2, latest: "2026-10-10" });
+    ).get("senate:GA:")!;
+    expect(ga.average).toMatchObject({ count: 3, latest: "2026-10-10" });
+    expect(ga.average!.margin).toBeCloseTo(2, 1);
+    expect(ga.rows).toHaveLength(4);
+    expect(ga.rows.find((r) => r.pollster === "D")!.excluded).toBe("No sample size disclosed");
+    expect(ga.rows.find((r) => r.pollster === "C")!.partisan).toBe("R");
   });
 
-  it("matches House polls by seat", () => {
-    const avg = pollAverages([{ subject: "2026 PA-07", seat_name: "PA-07", pollster: "X", end_date: "2026-10-01", answers: [{ choice: "Brooks", pct: 47 }, { choice: "Mackenzie", pct: 45 }] }], "house", races, NOW);
-    expect(avg.get("house:PA:7")!.margin).toBe(2);
+  it("needs two polls for an average, and matches House polls by seat", () => {
+    const pa = officePolls([{ subject: "2026 PA-07", seat_name: "PA-07", pollster: "X", start_date: "2026-09-28", end_date: "2026-10-01", sample_size: 400, answers: [{ choice: "Brooks", pct: 47 }, { choice: "Mackenzie", pct: 45 }] }], "house", races, NOW).get("house:PA:7")!;
+    expect(pa.average).toBeNull();
+    expect(pa.rows[0].margin).toBe(2);
   });
 });
 
@@ -197,22 +173,28 @@ describe("refreshOdds", () => {
       const host = new URL(url).hostname;
       if (fail.some((f) => host.includes(f))) return new Response("down", { status: 503 });
       if (host.includes("kalshi")) return Response.json({ markets: url.includes("tickers=") ? [kalshi("SENATEGA-26-D", 0.55, 0.57), kalshi("SENATEGA-26-R", 0.43, 0.45)] : [] });
-      if (host.includes("polymarket")) return Response.json(url.includes("senate") ? [{ title: "Nebraska Senate Election Winner", markets: [{ groupItemTitle: "Pete Ricketts (R)", outcomePrices: '["0.7","0.3"]' }, { groupItemTitle: "Dan Osborn (I)", outcomePrices: '["0.3","0.7"]' }] }] : []);
-      if (host.includes("votehub")) return Response.json(url.includes("us-senator") ? [{ subject: "2026 Georgia", pollster: "A", end_date: "2026-10-10", answers: [{ choice: "Ossoff", pct: 49 }, { choice: "Collins", pct: 47 }] }] : []);
+      if (host.includes("polymarket")) return Response.json(url.includes("senate") ? [{ title: "Nebraska Senate Election Winner", volume: 2_000_000, markets: [{ groupItemTitle: "Pete Ricketts (R)", outcomePrices: '["0.7","0.3"]' }, { groupItemTitle: "Dan Osborn (I)", outcomePrices: '["0.3","0.7"]' }] }] : []);
+      if (host.includes("votehub")) {
+        const ga = (pollster: string) => ({ subject: "2026 Georgia", pollster, start_date: "2026-10-06", end_date: "2026-10-10", sample_size: 900, answers: [{ choice: "Ossoff", pct: 49 }, { choice: "Collins", pct: 47 }] });
+        return Response.json(url.includes("us-senator") ? [ga("A"), ga("B")] : []);
+      }
       return new Response("?", { status: 404 });
     });
   }
 
-  it("saves ratings from markets and polls, read back as rated races", async () => {
+  it("saves forecast ratings, read back as rated races", async () => {
     const db = testDb();
     stub();
     const snap = await refreshOdds(db, races, NOW);
-    expect(snap.signals["senate:GA:"]).toMatchObject({ rating: "tossup", polls: { margin: 2 } });
-    expect(snap.signals["senate:NE:"].rating).toBe("lean-r");
+    expect(snap.signals["senate:GA:"]).toMatchObject({ rating: "likely-d", polls: { margin: 2 } });
+    // Ossoff's incumbency carries Georgia to Likely D on the fitted fundamentals (no generic ballot in this stub).
+    // Nebraska's 2024 lean makes Osborn a long shot on fundamentals; the busy market (30%) pulls him up to Likely R.
+    expect(snap.signals["senate:NE:"].rating).toBe("likely-r");
+    expect(snap.signals["senate:NE:"].forecast?.left).toBe("I");
     expect(ratedRaces(await readOdds(db, NOW))).toEqual(
       expect.arrayContaining([
-        { office: "senate", state: "GA", district: null, rating: "tossup" },
-        { office: "senate", state: "NE", district: null, rating: "lean-r" },
+        { office: "senate", state: "GA", district: null, rating: "likely-d" },
+        { office: "senate", state: "NE", district: null, rating: "likely-r" },
       ]),
     );
   });
@@ -257,7 +239,7 @@ describe("refreshOdds", () => {
     await refreshOdds(db, races, NOW);
     stub(["kalshi", "polymarket", "votehub"]);
     const later = await refreshOdds(db, races, NOW + 60 * 60 * 1000);
-    expect(later.signals["senate:GA:"]).toMatchObject({ rating: "tossup", polls: { margin: 2 } });
+    expect(later.signals["senate:GA:"]).toMatchObject({ rating: "likely-d", polls: { margin: 2 } });
     expect(later.signals["senate:NE:"].market?.sources).toEqual(["Polymarket"]);
   });
 });

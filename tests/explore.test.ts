@@ -3,6 +3,13 @@ import { activeCount, DEFAULT_FILTERS, explore, flipTo, fromQuery, leaderOf, rac
 import { compareRaces, type RaceSummary } from "../lib/midterms/view";
 
 let nextId = 1;
+/** A forecast signal with these odds, as the scheduled refresh would save it. */
+const forecast = (odds: Partial<Record<"D" | "R" | "I", number>>) => ({
+  market: null,
+  polls: null,
+  rating: null,
+  forecast: { odds, left: "D" as const, names: null, margin: null, lean: null, incumbency: 0, fundamentals: null, environment: null, pollWeight: 0, pollMargin: null, marketWeight: 0, market: null },
+});
 function race(over: Partial<RaceSummary> & { votes?: [number, number]; winner?: 0 | 1; incumbent?: 0 | 1 } = {}): RaceSummary {
   const [d, r] = over.votes ?? [0, 0];
   const total = d + r;
@@ -23,19 +30,24 @@ describe("race classification", () => {
 
   it("separates safe races (evidence, no rating) from unrated ones (no evidence)", () => {
     expect(tierOf(race({ rating: "lean-r" }))).toBe("lean");
-    expect(tierOf(race({ signal: { market: { odds: { R: 0.97 }, sources: ["Kalshi"] }, polls: null, rating: null } }))).toBe("safe");
+    expect(tierOf(race({ signal: forecast({ R: 0.97, D: 0.03 }) }))).toBe("safe");
     expect(tierOf(race())).toBe("unrated");
   });
 
   it("colors a race by its leader, else its rating, else a safe favorite, else nothing", () => {
-    const safeR = { market: { odds: { R: 0.97, D: 0.03 }, sources: ["Kalshi" as const] }, polls: null, rating: null };
+    const safeR = forecast({ R: 0.97, D: 0.03 });
     expect(safeSide(race({ signal: safeR }))).toBe("R");
     expect(safeSide(race({ rating: "lean-r", signal: { ...safeR, rating: "lean-r" } }))).toBeNull();
-    expect(raceFill(race({ signal: safeR }))).toBe("color-mix(in srgb, var(--rep) 92%, var(--sheet))");
-    expect(raceFill(race({ rating: "lean-d" }))).toBe("color-mix(in srgb, var(--dem) 35%, var(--sheet))");
+    expect(raceFill(race({ signal: safeR }))).toBe("var(--rate-safe-r)");
+    expect(raceFill(race({ rating: "lean-d" }))).toBe("var(--rate-lean-d)");
     expect(raceFill(race())).toBe("var(--rule-strong)");
     // Votes outrank the projection.
-    expect(raceFill(race({ signal: safeR, votes: [530, 470] }))).toBe("color-mix(in srgb, var(--dem) 50%, var(--sheet))");
+    expect(raceFill(race({ signal: safeR, votes: [530, 470] }))).toBe("color-mix(in srgb, var(--dem) 45%, var(--sheet))");
+    // A call takes the winner's full color; a lead never gets that strong.
+    expect(raceFill(race({ votes: [900, 100], winner: 0 }))).toBe("var(--rate-safe-d)");
+    expect(raceFill(race({ votes: [900, 100] }))).toBe("color-mix(in srgb, var(--dem) 60%, var(--sheet))");
+    // From election day on, a race with no votes is plain grey whatever its forecast.
+    expect(raceFill(race({ rating: "lean-d" }), true)).toBe("var(--rule-strong)");
   });
 
   it("names the leader by party, or Yes/No on a measure", () => {
@@ -106,7 +118,7 @@ describe("early counts", () => {
 });
 
 describe("projected flips", () => {
-  const market = (D: number) => ({ market: { odds: { D, R: 1 - D }, sources: ["Kalshi" as const] }, polls: null, rating: null });
+  const market = (D: number) => forecast({ D, R: 1 - D });
 
   it("flags a seat whose favorite or leader isn't the party holding it", () => {
     // North Carolina's Senate seat is held by a Republican; Georgia's by a Democrat.
@@ -123,7 +135,7 @@ describe("projected flips", () => {
 describe("competitive order", () => {
   it("puts the race closest to a coin flip first within a rating, and races with no evidence last", () => {
     const district = (district: number, D: number | null) =>
-      race({ office: "house", state: "CA", district, title: `California US House ${district}`, signal: D === null ? null : { market: { odds: { D, R: 1 - D }, sources: ["Polymarket"] }, polls: null, rating: null } });
+      race({ office: "house", state: "CA", district, title: `California US House ${district}`, signal: D === null ? null : forecast({ D, R: 1 - D }) });
     const order = [district(1, null), district(2, 0.99), district(3, 0.08), district(4, 0.96)].sort(compareRaces).map((r) => r.district);
     expect(order).toEqual([3, 4, 2, 1]);
   });

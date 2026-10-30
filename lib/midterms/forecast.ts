@@ -1,0 +1,389 @@
+// Ballotwise's race forecast, built the way Decision Desk HQ describes its own (votes-docs.decisiondeskhq.com/forecast-methodology):
+// a fundamentals margin from the seat's partisan lean, the national environment, incumbency and fundraising, blended
+// with the polling average, turned into a win probability, then blended with prediction market prices.
+// The fundamentals are a regression fit on the 2018-2024 House and Senate races (scripts/fit-forecast.mjs, which
+// writes fit.json); DDHQ fits an ensemble on the same kind of data. Pure functions: odds.ts runs them on its
+// scheduled refresh.
+import fitJson from "./fit.json";
+import { HOLDOVER, type Office, type RaceSummary, type Rating } from "./races";
+
+export type Side = "D" | "R" | "I";
+type Odds = Partial<Record<Side, number>>;
+
+type Terms = { intercept: number; lean: number; environment: number; incumbent: number; fundraising?: number };
+type Model = { coefficients: Terms; standardErrors: Terms; sigma: number; backtest: Record<string, { races: number; rmse: number; mae: number; bias: number; wrongWinner: number }>; races: number };
+export const FIT = fitJson as unknown as {
+  fitted: string;
+  /** Errors shared within a census division, and within a partisan-lean bucket, in a cycle (points), from the backtest. */
+  correlation: { region: number; bucket: number; regionGroups: number; bucketGroups: number; leanEdges: number[] };
+  national: { house: Record<string, number>; president: Record<string, number> };
+  house: Model;
+  houseNoFundraising: Model;
+  senate: Model;
+  senateNoFundraising: Model;
+};
+
+export const PARAMS = {
+  /** Polls count up to `max` of the margin, reaching it at `full` polls (DDHQ: a well-polled race is "nearly half" polls). */
+  polls: { max: 0.5, full: 10 },
+  /**
+   * Markets count up to `max` of the probability, from `min` traded to `full`, on a log scale; prices are kept within
+   * `clip` of 0 and 1. Half at most: markets called the 2024 presidency well but trailed poll-based models down the
+   * ballot, and no 2024 race-level price history could be backtested here.
+   */
+  markets: { max: 0.5, min: 10_000, full: 1_000_000, clip: 0.03 },
+  /** Harris minus Trump nationally in 2024: the leans are measured against it. */
+  national2024: FIT.national.president["2024"],
+  /**
+   * How far a final generic-ballot average typically misses the national House vote, in points. The fit uses the
+   * actual vote; the forecast only has the polls, so this miss is added to every race's uncertainty and shared by all
+   * of them in the chamber simulations.
+   */
+  genericBallotError: 2.5,
+} as const;
+
+/** The fitted model for an office: governors borrow the Senate's statewide fit without fundraising (MEDSL has no governor returns). */
+export function modelFor(office: Office, withFundraising: boolean): Model {
+  if (office === "house") return withFundraising ? FIT.house : FIT.houseNoFundraising;
+  return withFundraising && office === "senate" ? FIT.senate : FIT.senateNoFundraising;
+}
+
+/** A race's total uncertainty in points: the model's out-of-sample miss plus the generic ballot's own polling miss. */
+export const sigmaOf = (m: Model) => Math.sqrt(m.sigma ** 2 + (m.coefficients.environment * PARAMS.genericBallotError) ** 2);
+
+/**
+ * The national part of that uncertainty, in points, which moves every race together: the generic ballot's polling
+ * miss, plus how far a whole cycle ran from the model in the backtest (the root mean square of the held-out cycles'
+ * average errors), which no single race's error captures.
+ */
+export function nationalError(m: Model): number {
+  const biases = Object.values(m.backtest).map((b) => b.bias);
+  const cycle = Math.sqrt(biases.reduce((s, b) => s + b * b, 0) / Math.max(1, biases.length));
+  return Math.sqrt((m.coefficients.environment * PARAMS.genericBallotError) ** 2 + cycle ** 2);
+}
+/** The lean bucket (relative to the nation) a seat falls in: races in one bucket share part of their error, like a demographic wave. */
+export const leanBucket = (relativeLean: number) => FIT.correlation.leanEdges.filter((edge) => relativeLean >= edge).length;
+
+/**
+ * How a race's error splits into a national part, a part shared with its census division, a part shared with its lean
+ * bucket, and its own, as weights on standard normal draws that add up to its whole uncertainty.
+ */
+function errorParts(m: Model, grouped: boolean) {
+  const sigma = sigmaOf(m);
+  const national = nationalError(m);
+  const region = grouped ? FIT.correlation.region : 0;
+  const bucket = grouped ? FIT.correlation.bucket : 0;
+  // At least a quarter of the variance stays the race's own.
+  const own = Math.sqrt(Math.max(sigma ** 2 - national ** 2 - region ** 2 - bucket ** 2, 0.25 * sigma ** 2));
+  const total = Math.sqrt(national ** 2 + region ** 2 + bucket ** 2 + own ** 2);
+  return { national: national / total, region: region / total, bucket: bucket / total, own: own / total };
+}
+
+/** Who the forecast is between: a two-sided contest against the Republican, a seat with no real opposition, or neither. */
+export type Matchup =
+  | { kind: "contest"; left: "D" | "I"; leftName: string; rightName: string }
+  | { kind: "uncontested"; side: Side; alone: boolean }
+  /** Two candidates of one party, or a top-two race with no Republican: partisanship can't separate them. */
+  | { kind: "open" };
+
+const sideOf = (party: string): Side | null => (/^democrat/i.test(party) ? "D" : /^republican/i.test(party) ? "R" : /independent/i.test(party) ? "I" : null);
+/** States whose general elections are top-two runoffs, where a race can lack a Republican without being one-sided. */
+const TOP_TWO = new Set(["CA", "WA"]);
+
+/**
+ * `incumbent` names the seat's holder: when a party runs several candidates (Alaska's top four), the holder is that
+ * party's nominee for the forecast, else the first listed.
+ */
+export function matchup(r: Pick<RaceSummary, "state" | "candidates">, incumbent?: string | null): Matchup {
+  const surname = (n: string) => n.toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, " ").trim().split(/\s+/).at(-1);
+  const isHolder = (n: string) => !!incumbent && surname(n) === surname(incumbent);
+  const by = (s: Side) => r.candidates.filter((c) => sideOf(c.party) === s).sort((a, b) => Number(isHolder(b.name)) - Number(isHolder(a.name)));
+  const [d, rep, ind] = [by("D"), by("R"), by("I")];
+  if (d.length && rep.length) return { kind: "contest", left: "D", leftName: d[0].name, rightName: rep[0].name };
+  if (rep.length === 1 && ind.length) return { kind: "contest", left: "I", leftName: ind[0].name, rightName: rep[0].name };
+  if (d.length > 1 || rep.length > 1 || ind.length > 1) return { kind: "open" };
+  if (TOP_TWO.has(r.state) && r.candidates.length > 1) return { kind: "open" };
+  const only = d[0] ?? rep[0];
+  if (only) return { kind: "uncontested", side: sideOf(only.party)!, alone: r.candidates.length === 1 };
+  return { kind: "open" };
+}
+
+export type Inputs = {
+  office: Office;
+  /** ln(Democrat's receipts / Republican's), capped at ±3; null when FEC lacks either side. */
+  fundraising?: number | null;
+  /** 2024 presidential margin, Harris minus Trump, in points; null when unknown. */
+  lean: number | null;
+  /** Generic ballot average, Democrats minus Republicans, in points; null when unknown. */
+  genericBallot: number | null;
+  /** The side whose incumbent is on the ballot, if any. */
+  incumbent: Side | null;
+  /** Polling average as the left side minus the Republican. */
+  polls: { margin: number; count: number } | null;
+  market: { odds: Odds; volume?: number } | null;
+};
+
+export type Forecast = {
+  /** Each side's chance of winning. */
+  odds: Odds;
+  /** The side opposing the Republican in a contest (D, or an independent), else the favorite. */
+  left: Side;
+  /** The two nominees the forecast is between, in a contest. */
+  names: { left: string; right: string } | null;
+  /** Expected margin (left minus Republican) before markets; null outside a two-sided contest. */
+  margin: number | null;
+  /** The seat's 2024 presidential margin (Harris minus Trump). */
+  lean: number | null;
+  /** Points added for an incumbent on the ballot, signed toward the left side. */
+  incumbency: number;
+  /** Points from the fundraising gap, signed toward the left side; null when it isn't part of the model. */
+  fundraising?: number | null;
+  /** The forecast's uncertainty in points, for the chamber simulations. */
+  sigma?: number;
+  fundamentals: number | null;
+  /** The national shift applied to the 2024 lean. */
+  environment: number | null;
+  pollWeight: number;
+  pollMargin: number | null;
+  marketWeight: number;
+  /** The market's chance for the left side, after clipping; null without a usable market. */
+  market: number | null;
+};
+
+/** Standard normal CDF (Abramowitz and Stegun 26.2.17, accurate to 1e-7). */
+export function phi(z: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp((-z * z) / 2);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
+}
+
+/** Inverse of `phi` (Acklam's rational approximation), for turning a chance back into a margin. */
+export function phiInverse(p: number): number {
+  const q = Math.min(1 - 1e-9, Math.max(1e-9, p));
+  const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+  const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+  const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  const tail = (x: number) => (((((c[0] * x + c[1]) * x + c[2]) * x + c[3]) * x + c[4]) * x + c[5]) / ((((d[0] * x + d[1]) * x + d[2]) * x + d[3]) * x + 1);
+  if (q < 0.02425) return tail(Math.sqrt(-2 * Math.log(q)));
+  if (q > 1 - 0.02425) return -tail(Math.sqrt(-2 * Math.log(1 - q)));
+  const r = q - 0.5;
+  const s = r * r;
+  return ((((((a[0] * s + a[1]) * s + a[2]) * s + a[3]) * s + a[4]) * s + a[5]) * r) / (((((b[0] * s + b[1]) * s + b[2]) * s + b[3]) * s + b[4]) * s + 1);
+}
+
+export const pollWeight = (count: number) => (count >= 2 ? PARAMS.polls.max * Math.min(1, count / PARAMS.polls.full) : 0);
+
+export function marketWeight(volume: number | undefined): number {
+  const { max, min, full } = PARAMS.markets;
+  if (!volume || volume < min) return 0;
+  return max * Math.min(1, Math.log(volume / min) / Math.log(full / min));
+}
+
+const clip = (p: number) => Math.min(1 - PARAMS.markets.clip, Math.max(PARAMS.markets.clip, p));
+
+/** The market's chance for `left` against the Republican, from whichever of the two it prices. */
+function marketChance(odds: Odds, left: Side): number | null {
+  const l = odds[left];
+  const r = odds.R;
+  if (l === undefined && r === undefined) return null;
+  const share = l !== undefined && r !== undefined ? l / Math.max(1e-9, l + r) : l !== undefined ? l : 1 - r!;
+  return clip(share);
+}
+
+/** The forecast for one race, or null when nothing separates the candidates (an open race with no market). */
+export function forecastRace(m: Matchup, x: Inputs): Forecast | null {
+  const empty = { names: null, margin: null, lean: null, incumbency: 0, fundamentals: null, environment: null, pollWeight: 0, pollMargin: null, marketWeight: 0, market: null };
+  if (m.kind === "open") {
+    const priced = Object.entries(x.market?.odds ?? {}).filter(([, p]) => p > 0);
+    if (priced.length < 2) return null;
+    const [top] = priced.sort((a, b) => b[1] - a[1]);
+    return { ...empty, odds: Object.fromEntries(priced), left: top[0] as Side, marketWeight: 1 };
+  }
+  if (m.kind === "uncontested") {
+    // Minor-party opposition only: a market that gives the challenger real odds is believed; otherwise the seat is all but certain.
+    const challenger = x.market ? 1 - (x.market.odds[m.side] ?? 1) : 0;
+    if (!m.alone && challenger > 0.1) return { ...empty, odds: { ...x.market!.odds }, left: m.side, marketWeight: 1 };
+    return { ...empty, odds: { [m.side]: m.alone ? 1 : 0.99 }, left: m.side };
+  }
+  const hasFund = x.fundraising !== undefined && x.fundraising !== null && m.left === "D";
+  const model = modelFor(x.office, hasFund);
+  const c = model.coefficients;
+  const sigma = sigmaOf(model);
+  const environment = x.genericBallot === null ? 0 : c.environment * x.genericBallot;
+  const incumbency = x.incumbent === null ? 0 : (x.incumbent === "R" ? -1 : x.incumbent === m.left ? 1 : 0) * c.incumbent;
+  const fundraising = hasFund ? (c.fundraising ?? 0) * x.fundraising! : null;
+  const fundamentals = x.lean === null ? null : c.intercept + c.lean * (x.lean - PARAMS.national2024) + environment + incumbency + (fundraising ?? 0);
+  const wPoll = x.polls ? pollWeight(x.polls.count) : 0;
+  // Without a lean the polls stand alone; without either there is nothing to model, and the market (if any) decides.
+  const margin = fundamentals === null ? (x.polls && x.polls.count >= 2 ? x.polls.margin : null) : (1 - wPoll) * fundamentals + wPoll * (x.polls?.margin ?? 0);
+  const base = margin === null ? null : phi(margin / sigma);
+  const market = x.market ? marketChance(x.market.odds, m.left) : null;
+  const wMarket = market === null ? 0 : base === null ? 1 : marketWeight(x.market?.volume);
+  if (base === null && market === null) return null;
+  const p = base === null ? market! : (1 - wMarket) * base + wMarket * (market ?? base);
+  return {
+    odds: { [m.left]: round3(p), R: round3(1 - p) },
+    left: m.left,
+    names: { left: m.leftName, right: m.rightName },
+    margin: margin === null ? null : round1(margin),
+    lean: x.lean,
+    incumbency: round1(incumbency),
+    fundraising: fundraising === null ? null : round1(fundraising),
+    sigma: round1(sigma),
+    fundamentals: fundamentals === null ? null : round1(fundamentals),
+    environment: round1(environment),
+    pollWeight: round3(fundamentals === null && margin !== null ? 1 : wPoll),
+    pollMargin: x.polls && x.polls.count >= 2 ? x.polls.margin : null,
+    marketWeight: round3(wMarket),
+    market: market === null ? null : round3(market),
+  };
+}
+
+const round1 = (x: number) => Math.round(x * 10) / 10;
+const round3 = (x: number) => Math.round(x * 1000) / 1000;
+
+/** The favorite and their chance. */
+export function favorite(f: Pick<Forecast, "odds">): { side: Side; p: number } | null {
+  const [top, second] = (Object.entries(f.odds) as [Side, number][]).sort((a, b) => b[1] - a[1]);
+  if (!top || top[1] === second?.[1]) return null;
+  return { side: top[0], p: top[1] };
+}
+
+/** DDHQ's rating scale: Safe at 95% or more (no rating), Likely at 75%, Lean above 60%, otherwise a toss-up. */
+export function ratingOf(f: Pick<Forecast, "odds"> | null): Rating | null {
+  if (!f) return null;
+  const fav = favorite(f);
+  if (!fav) return "tossup";
+  if (fav.p >= 0.95) return null;
+  if (fav.p >= 0.75) return `likely-${fav.side.toLowerCase()}` as Rating;
+  if (fav.p > 0.6) return `lean-${fav.side.toLowerCase()}` as Rating;
+  return "tossup";
+}
+
+// ---------- Chambers ----------
+
+/** A seeded random number generator (mulberry32), so a refresh with the same inputs gives the same chamber odds. */
+function rng(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const gauss = (next: () => number) => Math.sqrt(-2 * Math.log(Math.max(1e-12, next()))) * Math.cos(2 * Math.PI * next());
+
+export type RatingCounts = { safeD: number; likelyD: number; leanD: number; tossup: number; leanR: number; likelyR: number; safeR: number; other: number };
+export type ChamberView = {
+  /** Chance Democrats control the chamber (for governors: hold a majority of the 50 governorships). */
+  dControl: number;
+  /** Simulated mean seats, including seats not up this year. */
+  dSeats: number;
+  rSeats: number;
+  /** Races up this year by forecast rating. */
+  ratings: RatingCounts;
+  /** Democratic seat totals across the simulations. */
+  distribution: { seats: number; p: number }[];
+  notUp: { D: number; R: number; other: number };
+  majority: number;
+};
+export type Chambers = { house: ChamberView; senate: ChamberView; governor: ChamberView };
+type Body = "house" | "senate" | "governor";
+
+const BODIES: Record<Body, { notUp: { D: number; R: number; other: number }; majority: number }> = {
+  house: { notUp: { D: 0, R: 0, other: 0 }, majority: 218 },
+  // The vice president breaks a 50-50 Senate tie for Republicans, so Democrats need 51.
+  senate: { notUp: HOLDOVER.senate, majority: 51 },
+  governor: { notUp: HOLDOVER.governor, majority: 26 },
+};
+
+/** A race's rating bucket from its forecast; "other" for an independent favorite or no forecast. */
+function bucket(odds: Odds | null): keyof RatingCounts {
+  if (!odds) return "other";
+  const fav = favorite({ odds });
+  if (!fav) return "tossup";
+  if (fav.side === "I") return "other";
+  const r = ratingOf({ odds });
+  if (!r) return fav.side === "D" ? "safeD" : "safeR";
+  if (r === "tossup") return "tossup";
+  return `${r.startsWith("lean") ? "lean" : "likely"}${fav.side}` as keyof RatingCounts;
+}
+
+/**
+ * Chamber control from simulated elections. Each race's chance becomes a margin in units of its own error; one
+ * national miss per simulation (the generic ballot's polling error and the backtest's cycle-wide bias, as a share of
+ * each race's uncertainty) moves every race in every chamber together, so seats aren't independent coin flips.
+ * Democrats control the House at 218 and the Senate at 51; a governors' majority is 26 of 50. Independents who win
+ * count toward neither party.
+ */
+export function chamberViews(races: readonly { office: Office; forecast: Pick<Forecast, "odds"> | null; region?: string; bucket?: number }[], runs = 10_000): Chambers {
+  const next = rng(2026);
+  const regionIds = new Map<string, number>();
+  const rows = races
+    .filter((r): r is { office: Body; forecast: Pick<Forecast, "odds"> | null; region?: string; bucket?: number } => r.office !== "measure")
+    .map((r) => {
+      const odds = r.forecast?.odds ?? null;
+      const ranked = (Object.entries(odds ?? {}) as [Side, number][]).sort((a, b) => b[1] - a[1]);
+      // The side facing the Republican (or the favorite when there's no Republican) and its chance.
+      const left = (ranked.find(([s]) => s !== "R") ?? ranked[0])?.[0] ?? null;
+      const p = left ? (odds![left] ?? 0) : 0;
+      const loser: Side | null = left === null ? null : ranked.find(([s]) => s !== left)?.[0] ?? (left === "R" ? "D" : "R");
+      const grouped = r.region !== undefined && r.bucket !== undefined;
+      if (grouped && !regionIds.has(r.region!)) regionIds.set(r.region!, regionIds.size);
+      return {
+        office: r.office,
+        left,
+        loser,
+        z: phiInverse(Math.min(1, Math.max(0, p))),
+        certain: p >= 1 ? true : p <= 0 ? false : null,
+        parts: errorParts(modelFor(r.office, r.office !== "governor"), grouped),
+        region: grouped ? regionIds.get(r.region!)! : -1,
+        leanBucket: grouped ? r.bucket! : -1,
+        bucket: bucket(odds),
+      };
+    });
+  const buckets = FIT.correlation.leanEdges.length + 1;
+  const bodies = Object.keys(BODIES) as Body[];
+  const seats = Object.fromEntries(bodies.map((b) => [b, { d: 0, r: 0, wins: 0, hist: new Map<number, number>() }])) as Record<Body, { d: number; r: number; wins: number; hist: Map<number, number> }>;
+  for (let i = 0; i < runs; i++) {
+    const national = gauss(next);
+    // One draw per census division and per lean bucket, shared by every race in it across all three chambers.
+    const regional = Array.from({ length: regionIds.size }, () => gauss(next));
+    const waves = Array.from({ length: buckets }, () => gauss(next));
+    const tally = Object.fromEntries(bodies.map((b) => [b, { D: BODIES[b].notUp.D, R: BODIES[b].notUp.R }])) as Record<Body, { D: number; R: number }>;
+    for (const r of rows) {
+      if (!r.left) continue;
+      const shared = r.parts.national * national + (r.region >= 0 ? r.parts.region * regional[r.region] + r.parts.bucket * waves[r.leanBucket] : 0);
+      const leftWins = r.certain ?? r.z + shared + r.parts.own * gauss(next) > 0;
+      const winner = leftWins ? r.left : r.loser;
+      if (winner === "D") tally[r.office].D += 1;
+      else if (winner === "R") tally[r.office].R += 1;
+    }
+    for (const b of bodies) {
+      const s = seats[b];
+      s.d += tally[b].D;
+      s.r += tally[b].R;
+      if (tally[b].D >= BODIES[b].majority) s.wins += 1;
+      s.hist.set(tally[b].D, (s.hist.get(tally[b].D) ?? 0) + 1);
+    }
+  }
+  const view = (b: Body): ChamberView => {
+    const ratings: RatingCounts = { safeD: 0, likelyD: 0, leanD: 0, tossup: 0, leanR: 0, likelyR: 0, safeR: 0, other: 0 };
+    for (const r of rows) if (r.office === b) ratings[r.bucket] += 1;
+    const s = seats[b];
+    return {
+      dControl: round3(s.wins / runs),
+      dSeats: Math.round(s.d / runs),
+      rSeats: Math.round(s.r / runs),
+      ratings,
+      distribution: [...s.hist].sort((x, y) => x[0] - y[0]).map(([n, c]) => ({ seats: n, p: Math.round((c / runs) * 10_000) / 10_000 })),
+      notUp: { ...BODIES[b].notUp },
+      majority: BODIES[b].majority,
+    };
+  };
+  return { house: view("house"), senate: view("senate"), governor: view("governor") };
+}

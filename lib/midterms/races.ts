@@ -12,7 +12,8 @@ export type Office = "senate" | "house" | "governor" | "measure";
 export type Rating = "tossup" | "lean-d" | "lean-r" | "lean-i" | "likely-d" | "likely-r" | "likely-i";
 export type RatedRace = { office: Office; state: string; district?: number | null; rating: Rating; note?: string };
 
-export type Candidate = { name: string; party: string; votes: number; pct: number; winner: boolean; incumbent: boolean };
+/** `color` is civicAPI's own color for a candidate, set only in races outside the tracked offices, where most run without a party. */
+export type Candidate = { name: string; party: string; votes: number; pct: number; winner: boolean; incumbent: boolean; color?: string };
 export type RaceSummary = {
   id: number;
   office: Office;
@@ -31,6 +32,12 @@ export type RaceSummary = {
   lastSeen?: number;
   /** What a ballot measure does, with a link to its source when there is one. */
   about?: { text: string; url: string | null };
+  /**
+   * Set on a race outside the tracked offices, found by search: a mayor, a school board seat, a local question.
+   * Such a race is carried as office "measure" (so ratings, markets and seat holders stay out of it); `kind` says
+   * whether it's a contest between candidates or a yes/no question, `type` is civicAPI's race type, `date` its election day.
+   */
+  local?: { kind: "candidates" | "question"; type: string; date: string };
   /** Market odds and polling behind the rating, attached by the overview; absent on bare catalog entries. */
   signal?: Signal | null;
   /**
@@ -164,6 +171,44 @@ export function summarize(input: unknown, ratings: readonly RatedRace[]): RaceSu
   };
 }
 
+const civicOther = civicRace.extend({
+  country: z.string().nullish(),
+  candidates: z.array(civicCandidate.extend({ color: z.string().nullish() })).default([]),
+});
+/** Race types that are yes/no questions rather than contests between candidates. */
+const QUESTION_TYPE = /referendum|proposition|measure|question|amendment|initiative|bond|levy/i;
+/** civicAPI's candidate colors are only used when they're plain hex, so nothing else reaches a style attribute. */
+const HEX = /^#[0-9a-f]{3,8}$/i;
+
+/**
+ * Any US race on civicAPI outside the tracked offices, for a race found by search: carried as a "measure" with
+ * `local` set (see RaceSummary). Null for races outside the US or that don't parse.
+ */
+export function summarizeOther(input: unknown): RaceSummary | null {
+  const parsed = civicOther.safeParse(input);
+  if (!parsed.success) return null;
+  const race = parsed.data;
+  if (race.country && race.country !== "US") return null;
+  const list = candidates(race.candidates);
+  // Search answers name the race type in `type`; the race detail puts it in `election_type` ("School Board", "County").
+  const type = race.type ?? race.election_type ?? "";
+  const question = QUESTION_TYPE.test(type) || (list.length > 0 && list.every((c) => /^(yes|no|for|against)\b/i.test(c.name)));
+  const colors = new Map(race.candidates.map((c) => [c.name.replace(/\s+/g, " ").trim(), c.color && HEX.test(c.color) ? c.color : undefined]));
+  return {
+    id: (input as { id?: number }).id ?? 0,
+    office: "measure",
+    state: race.province ?? "",
+    district: null,
+    title: race.election_name.trim(),
+    reporting: race.percent_reporting ?? 0,
+    ...(race.percent_reporting == null && list.some((c) => c.votes > 0) && { reportingUnknown: true as const }),
+    total: list.reduce((sum, c) => sum + c.votes, 0),
+    candidates: question ? list : list.map((c) => (colors.get(c.name) ? { ...c, color: colors.get(c.name) } : c)),
+    rating: null,
+    local: { kind: question ? "question" : "candidates", type, date: race.election_date.slice(0, 10) },
+  };
+}
+
 /** Ballotpedia's summary, or failing that the description civicAPI sometimes puts after " - " in the name. */
 function aboutMeasure(name: string): RaceSummary["about"] {
   const known = MEASURES[name.trim()];
@@ -208,7 +253,8 @@ export type Party = "D" | "R" | "other";
 
 // Seats not on the ballot this year. Senate: 53 R – 47 D (with independents) going in; 22 R and 13 D seats
 // are up (33 regular plus the Ohio and Florida specials). Governors: 14 states don't elect one in 2026.
-const HOLDOVER = { senate: { D: 34, R: 31, other: 0 }, governor: { D: 6, R: 8, other: 0 } } as const;
+/** Seats not up this year: 65 senators and 14 governors. */
+export const HOLDOVER = { senate: { D: 34, R: 31, other: 0 }, governor: { D: 6, R: 8, other: 0 } } as const;
 
 export type Tally = { D: number; R: number; other: number; total: number; majority: number; uncalled: number };
 

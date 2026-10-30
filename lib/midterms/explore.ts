@@ -1,7 +1,7 @@
 // Filtering and sorting for the election-night results explorer. Every choice round-trips through the URL.
 import { holderOf, leadingFlip, outcomeOf } from "./holders";
 import { closeWaves, stateFinal } from "./polls";
-import { chances, colorOf, compareRaces, lead, partyOf, raceLabel, ratingFill, shade, STATE_NAMES, type Office, type RaceSummary } from "./view";
+import { colorOf, compareRaces, lead, partyOf, raceLabel, ratingFill, safeFill, STATE_NAMES, type Office, type RaceSummary } from "./view";
 
 export type Status = "awaiting" | "counting" | "called";
 /** How competitive a race is: a rating tier, "safe" when markets or polls exist but no rating applies, "unrated" with no evidence at all. */
@@ -46,16 +46,15 @@ export function statusOf(r: RaceSummary): Status {
 
 export function tierOf(r: RaceSummary): Tier {
   if (r.rating) return r.rating === "tossup" ? "tossup" : r.rating.startsWith("lean") ? "lean" : "likely";
-  return r.signal && (r.signal.market || r.signal.polls) ? "safe" : "unrated";
+  return r.signal?.forecast ? "safe" : "unrated";
 }
 
 /**
- * The side the pre-election evidence favors: the market favorite (pulled toward the polls when thinly traded), else
- * the polling leader, else the rating's side.
- * Never the party holding the seat; null when there's no evidence or it's even.
+ * The side the forecast favors, else the rating's side. Never the party holding the seat; null when there's no
+ * forecast or it's even.
  */
 export function favoredSide(r: RaceSummary): "D" | "R" | "I" | null {
-  const odds = Object.entries(chances(r.signal) ?? {}).sort((a, b) => b[1] - a[1]);
+  const odds = Object.entries(r.signal?.forecast?.odds ?? {}).sort((a, b) => b[1] - a[1]);
   if (odds.length && odds[0][1] !== odds[1]?.[1]) return odds[0][0] as "D" | "R" | "I";
   if (r.rating && r.rating !== "tossup") return r.rating.endsWith("-d") ? "D" : r.rating.endsWith("-r") ? "R" : "I";
   return null;
@@ -81,18 +80,29 @@ export function flipTo(r: RaceSummary): "D" | "R" | "I" | null {
   return side && side !== holder ? side : null;
 }
 
-const SIDE_COLOR = { D: "var(--dem)", R: "var(--rep)", I: "var(--oth)" } as const;
+/** The strongest a leader's color gets before a call, so a called race always stands apart. */
+const LEAD_CAP = 60;
 
 /**
- * A race's map fill: the leader once votes are in, else the projection. A race the evidence calls safe gets its
- * favorite's full color; one with no market or polls stays blank.
+ * A race's map fill. A called race takes its winner's full color; a count under way, the leader's color by margin,
+ * capped lighter than a call. Before votes it shows the forecast rating, or with `results` (from election day on)
+ * plain grey, so the map fills in only as results arrive.
  */
-export function raceFill(r: RaceSummary): string {
+export function raceFill(r: RaceSummary, results = false): string {
+  const won = r.candidates.find((c) => c.winner);
+  if (won) {
+    const p = partyOf(won.party);
+    return p === "other" ? colorOf(won) : safeFill(p);
+  }
   const ahead = lead(r.candidates);
-  if (ahead) return shade(colorOf(ahead.leader), ahead.margin, r.reporting);
+  if (ahead) {
+    const strength = r.reporting < 15 ? 25 : Math.min(LEAD_CAP, ahead.margin >= 10 ? 60 : ahead.margin >= 5 ? 45 : 32);
+    return `color-mix(in srgb, ${colorOf(ahead.leader)} ${strength}%, var(--sheet))`;
+  }
+  if (results) return ratingFill(null);
   if (r.rating) return ratingFill(r.rating);
   const safe = safeSide(r);
-  return safe ? shade(SIDE_COLOR[safe], 20) : ratingFill(null);
+  return safe ? safeFill(safe) : ratingFill(null);
 }
 
 /** Who is ahead, or has won: a party, or Yes/No on a measure; null before votes and on a tie. */

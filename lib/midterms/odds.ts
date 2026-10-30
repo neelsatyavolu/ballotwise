@@ -1,16 +1,29 @@
 import type { Db } from "../auth/accounts";
-import { getCached } from "../cache";
+import { getCached, putCached } from "../cache";
+import { chamberViews, forecastRace, leanBucket, matchup, PARAMS, ratingOf, type Chambers, type Forecast, type Side } from "./forecast";
+import divisions from "./divisions.json";
+import fec2026 from "./fec2026.json";
+import lean2026 from "./lean2026.json";
+import { aggregateMedian, fetchAggregates, type Aggregate } from "./genericAggregates";
+import { genericBallot, lastName, racePolls, RECENT_FULL, type RacePolls, type TrendPoint, type VoteHubPoll } from "./pollAverage";
 import type { Office, RaceSummary, RatedRace, Rating } from "./races";
-import { chances, partyOf, STATE_NAMES } from "./view";
+import { STATE_NAMES } from "./view";
 
-// Race ratings computed live from prediction markets (Kalshi, Polymarket) and polls (VoteHub, CC BY 4.0).
-// A scheduled job refreshes them every few minutes; pages read the saved result.
+// Race forecasts and ratings (lib/midterms/forecast.ts) computed live from the 2024 presidential lean, the generic
+// ballot, polls (VoteHub, CC BY 4.0) and prediction markets (Kalshi, Polymarket). A scheduled job refreshes them
+// every few minutes; pages read the saved result.
 
-export type Side = "D" | "R" | "I";
+export type { Side };
 /** `volume` is the traded volume behind the price (Kalshi contracts plus Polymarket dollars); absent in older snapshots. */
 export type Market = { odds: Partial<Record<Side, number>>; sources: ("Kalshi" | "Polymarket")[]; volume?: number };
 export type Polls = { margin: number; count: number; latest: string };
-export type Signal = { market: Market | null; polls: Polls | null; rating: Rating | null };
+/**
+ * The generic ballot the forecast uses: our own average of VoteHub's polls, filled in from the median of public
+ * aggregators in proportion to how few polls our feed has from the last two weeks (full trust at five). `recent`
+ * counts those polls.
+ */
+export type Generic = { margin: number; count: number; own?: number; recent?: number; aggregate?: { margin: number; sources: Aggregate[] } | null };
+export type Signal = { market: Market | null; polls: Polls | null; rating: Rating | null; forecast?: Forecast | null };
 /** One source's price for a race, with the volume traded on it. */
 export type Quote = { odds: Partial<Record<Side, number>>; volume: number };
 type Book = Record<string, Quote>;
@@ -19,11 +32,26 @@ export type OddsSnapshot = {
   at: number;
   kalshi: { at: number; book: Book } | null;
   polymarket: { at: number; book: Book } | null;
-  polls: { at: number; averages: Record<string, Polls> } | null;
+  polls: { at: number; averages: Record<string, Polls>; generic?: Generic | null } | null;
   signals: Record<string, Signal>;
+  /** Simulated chamber control from the race forecasts. */
+  chambers?: Chambers | null;
 };
+/** [ET day, Democrats' chance of control, D seats, R seats]: one point per day for each chamber. */
+export type ChamberPoint = [string, number, number, number];
+/** `backfilled` marks days recomputed later from what was known on each day, without markets. */
+export type ChamberHistory = { house: ChamberPoint[]; senate: ChamberPoint[]; governor: ChamberPoint[]; backfilled?: { from: string; to: string; markets: "none" } };
+/** Each race's left-side forecast chance per day (ET dates), for the race page's chart. */
+export type ForecastHistory = { days: string[]; races: Record<string, { side: Side; p: (number | null)[] }> };
 
 const KEY = "midterms:odds";
+/** Per-race poll lists and trends, written only when polls are refreshed, so page views don't carry them. */
+export const POLLS_KEY = "midterms:polls";
+export const HISTORY_KEY = "midterms:forecast-history";
+export const CHAMBER_HISTORY_KEY = "midterms:chamber-history";
+/** The first day the history is recomputed back to. */
+const BACKFILL_FROM = "2026-08-01";
+const LEAN = lean2026 as { house: Record<string, number>; state: Record<string, number>; incumbents: Record<string, string> };
 const KALSHI = "https://api.elections.kalshi.com/trade-api/v2/markets";
 const POLYMARKET = "https://gamma-api.polymarket.com/events";
 const VOTEHUB = "https://api.votehub.com/polls";
@@ -34,8 +62,6 @@ const MARKETS_MAX_AGE_MS = 3 * 60 * 60 * 1000;
 /** Poll averages kept through a VoteHub outage for at most this long. */
 const POLLS_MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15_000;
-/** Polls older than this are left out of the average. */
-const POLL_WINDOW_MS = 45 * 24 * 60 * 60 * 1000;
 const TICKERS_PER_CALL = 150;
 /** Kalshi rate-limits bursts: requests are spaced out, and a 429 is retried after these waits. */
 const KALSHI_GAP_MS = 400;
@@ -44,32 +70,35 @@ const KALSHI_RETRY_MS = [2000, 6000];
 export const raceKey = (office: Office, state: string, district: number | null | undefined) => `${office}:${state}:${office === "house" ? (district ?? 0) : ""}`;
 const STATE_BY_NAME = new Map(Object.entries(STATE_NAMES).map(([postal, name]) => [name.toLowerCase(), postal]));
 
-// ---------- Rating ----------
+// ---------- Forecast ----------
 
-const level = (p: number) => (p < 0.6 ? "tossup" : p < 0.75 ? "lean" : p < 0.9 ? "likely" : null);
-const levelFromMargin = (m: number) => (m < 3 ? "tossup" : m < 6 ? "lean" : m < 10 ? "likely" : null);
+const sideOf = (party: string): Side | null => (/^democrat/i.test(party) ? "D" : /^republican/i.test(party) ? "R" : /independent/i.test(party) ? "I" : null);
 
-/**
- * Markets decide when they exist, pulled toward the polls when thinly traded (see `chances`): the favorite's chance
- * under 60% is a toss-up, under 75% leans, under 90% is likely, and above that the race is safe (no rating).
- * Without a market, the polling margin does the same at 3 / 6 / 10 points.
- */
-export function rate(market: Market | null, polls: Polls | null): Rating | null {
-  let side: Side;
-  let tier: ReturnType<typeof level>;
-  if (market && Object.keys(market.odds).length > 0) {
-    const [best, p] = (Object.entries(chances({ market, polls })!) as [Side, number][]).sort((a, b) => b[1] - a[1])[0];
-    side = best;
-    tier = level(p);
-  } else if (polls) {
-    side = polls.margin >= 0 ? "D" : "R";
-    tier = levelFromMargin(Math.abs(polls.margin));
-  } else {
-    return null;
-  }
-  if (!tier) return null;
-  if (tier === "tossup") return "tossup";
-  return `${tier}-${side.toLowerCase()}` as Rating;
+/** The side whose incumbent is on the ballot: a candidate sharing the seat holder's last name. */
+export function incumbentSide(r: Pick<RaceSummary, "office" | "state" | "district" | "candidates">): Side | null {
+  const holder = LEAN.incumbents[raceKey(r.office, r.state, r.district)];
+  if (!holder) return null;
+  const running = r.candidates.find((c) => lastName(c.name) === lastName(holder));
+  return running ? sideOf(running.party) : null;
+}
+
+/** The seat's 2024 presidential margin: the district's for House races, the state's otherwise. */
+export const leanOf = (r: Pick<RaceSummary, "office" | "state" | "district">): number | null =>
+  (r.office === "house" ? LEAN.house[raceKey("house", r.state, r.district)] : LEAN.state[r.state]) ?? null;
+
+const RECEIPTS = fec2026 as Record<string, { D: number; R: number }>;
+
+/** ln(Democrat's receipts / Republican's) from FEC's 2026 candidate summaries, capped at ±3, as in the fit; null without both. */
+export function fundraisingOf(r: Pick<RaceSummary, "office" | "state" | "district">): number | null {
+  const m = RECEIPTS[raceKey(r.office, r.state, r.district)];
+  if (!m?.D || !m.R) return null;
+  return Math.max(-3, Math.min(3, Math.log(Math.max(m.D, 5000) / Math.max(m.R, 5000))));
+}
+
+/** One race's forecast from its market, polls and the generic ballot; null for measures and races nothing separates. */
+export function raceForecast(r: RaceSummary, market: Market | null, polls: Polls | null, generic: number | null): Forecast | null {
+  if (r.office === "measure") return null;
+  return forecastRace(matchup(r, LEAN.incumbents[raceKey(r.office, r.state, r.district)]), { office: r.office, lean: leanOf(r), genericBallot: generic, incumbent: incumbentSide(r), fundraising: fundraisingOf(r), polls, market });
 }
 
 // ---------- Kalshi ----------
@@ -239,10 +268,6 @@ export function combineMarkets(kalshi: Map<string, Quote>, poly: Map<string, Quo
 
 // ---------- Polls (VoteHub) ----------
 
-type VoteHubPoll = { subject?: string; seat_name?: string | null; pollster?: string; end_date?: string; internal?: boolean; partisan?: string | null; answers?: { choice: string; pct: number }[] };
-
-const lastName = (name: string) => name.toLowerCase().replace(/[^a-z\s'-]/g, " ").replace(/\b(jr|sr|ii|iii|iv)\b/g, " ").trim().split(/\s+/).at(-1) ?? "";
-
 /** The race a general-election poll is about: "2026 Michigan" (statewide) or "2026 PA-07" (House). Primaries don't match. */
 function pollRace(poll: VoteHubPoll, office: Office): string | null {
   const subject = poll.subject?.match(/^2026 (.+)$/)?.[1]?.trim();
@@ -256,39 +281,23 @@ function pollRace(poll: VoteHubPoll, office: Office): string | null {
 }
 
 /**
- * Polling margin (Democrat minus Republican, in points) per race: the newest nonpartisan poll from each pollster
- * in the last 45 days, averaged. Poll answers are matched to the race's candidates by last name.
+ * Each contested race's polls of one office, averaged the DDHQ way (lib/midterms/pollAverage.ts). The poll's subject
+ * names the race; answers are matched to the race's two sides by last name.
  */
-export function pollAverages(polls: readonly VoteHubPoll[], office: Office, races: readonly RaceSummary[], now: number): Map<string, Polls> {
-  const byKey = new Map(races.filter((r) => r.office === office).map((r) => [raceKey(r.office, r.state, r.district), r]));
-  const newest = new Map<string, Map<string, { margin: number; end: string }>>();
+export function officePolls(polls: readonly VoteHubPoll[], office: Office, races: readonly RaceSummary[], now: number): Map<string, RacePolls> {
+  const byKey = new Map<string, VoteHubPoll[]>();
   for (const poll of polls) {
-    if (poll.internal || poll.partisan || !poll.end_date) continue;
-    const end = Date.parse(poll.end_date);
-    if (!Number.isFinite(end) || end > now || now - end > POLL_WINDOW_MS) continue;
     const key = pollRace(poll, office);
-    const race = key ? byKey.get(key) : undefined;
-    if (!key || !race) continue;
-    const sideOf = new Map(race.candidates.map((c) => [lastName(c.name), partyOf(c.party)]));
-    let d = 0;
-    let r = 0;
-    for (const a of poll.answers ?? []) {
-      const side = sideOf.get(lastName(a.choice));
-      if (side === "D") d += a.pct;
-      if (side === "R") r += a.pct;
-    }
-    if (!d || !r) continue;
-    const pollster = poll.pollster ?? "unknown";
-    const seen = newest.get(key) ?? new Map();
-    const prev = seen.get(pollster);
-    if (!prev || prev.end < poll.end_date) seen.set(pollster, { margin: d - r, end: poll.end_date });
-    newest.set(key, seen);
+    if (key) byKey.set(key, [...(byKey.get(key) ?? []), poll]);
   }
-  const out = new Map<string, Polls>();
-  for (const [key, byPollster] of newest) {
-    const list = [...byPollster.values()].sort((a, b) => b.end.localeCompare(a.end)).slice(0, 8);
-    const margin = list.reduce((s, p) => s + p.margin, 0) / list.length;
-    out.set(key, { margin: Math.round(margin * 10) / 10, count: list.length, latest: list[0].end.slice(0, 10) });
+  const out = new Map<string, RacePolls>();
+  for (const r of races) {
+    if (r.office !== office) continue;
+    const key = raceKey(r.office, r.state, r.district);
+    const m = matchup(r, LEAN.incumbents[key]);
+    const list = byKey.get(key);
+    if (m.kind !== "contest" || !list?.length) continue;
+    out.set(key, racePolls(list, m, now));
   }
   return out;
 }
@@ -349,14 +358,30 @@ async function fetchPolymarket(): Promise<Book> {
   return { ...book, ...Object.fromEntries(house) };
 }
 
-async function fetchPolls(races: readonly RaceSummary[], now: number): Promise<Record<string, Polls>> {
+type PollsResult = { averages: Record<string, Polls>; generic: (Generic & { trend: TrendPoint[] }) | null; detail: Record<string, RacePolls> };
+
+async function fetchPolls(races: readonly RaceSummary[], now: number): Promise<PollsResult> {
   const types: [Office, string][] = [["senate", "us-senator"], ["governor", "governor"], ["house", "us-representative"]];
-  const out: Record<string, Polls> = {};
+  const averages: Record<string, Polls> = {};
+  const detail: Record<string, RacePolls> = {};
+  const list = (p: unknown) => (Array.isArray(p) ? (p as VoteHubPoll[]) : []);
   for (const [office, type] of types) {
-    const polls = (await getJson(`${VOTEHUB}?poll_type=${type}`)) as VoteHubPoll[];
-    for (const [key, avg] of pollAverages(Array.isArray(polls) ? polls : [], office, races, now)) out[key] = avg;
+    for (const [key, polls] of officePolls(list(await getJson(`${VOTEHUB}?poll_type=${type}`)), office, races, now)) {
+      detail[key] = polls;
+      if (polls.average) averages[key] = { margin: polls.average.margin, count: polls.average.count, latest: polls.average.latest };
+    }
   }
-  return out;
+  const own = genericBallot(list(await getJson(`${VOTEHUB}?poll_type=generic-ballot`)), now);
+  const aggregate = await fetchAggregates(HEADERS)
+    .then((rows) => aggregateMedian(rows, now))
+    .catch((err) => {
+      console.error("midterms generic-ballot aggregates failed:", err instanceof Error ? err.message : err);
+      return null;
+    });
+  const ownWeight = own ? Math.min(1, own.recent / RECENT_FULL) : 0;
+  const margin = own && aggregate ? ownWeight * own.margin + (1 - ownWeight) * aggregate.margin : (own?.margin ?? aggregate?.margin ?? null);
+  const generic = margin === null ? null : { margin: Math.round(margin * 10) / 10, count: own?.count ?? 0, own: own?.margin, recent: own?.recent ?? 0, aggregate, trend: own?.trend ?? [] };
+  return { averages, generic, detail };
 }
 
 /** A fresh result, or the previous one while it's younger than `maxAge`, or nothing. */
@@ -392,27 +417,146 @@ async function rebuild(db: Db, races: readonly RaceSummary[], now: number): Prom
   const [kalshi, polymarket, polls] = await Promise.all([
     freshOrKept<{ at: number; book: Book }>(fetchKalshi(races, independents).then((book) => ({ book })), previous?.kalshi ?? null, MARKETS_MAX_AGE_MS, now, "Kalshi"),
     freshOrKept<{ at: number; book: Book }>(fetchPolymarket().then((book) => ({ book })), previous?.polymarket ?? null, MARKETS_MAX_AGE_MS, now, "Polymarket"),
-    freshOrKept<{ at: number; averages: Record<string, Polls> }>(pollsDue ? fetchPolls(races, now).then((averages) => ({ averages })) : null, previous?.polls ?? null, POLLS_MAX_AGE_MS, now, "VoteHub"),
+    freshOrKept<{ at: number } & PollsResult>(pollsDue ? fetchPolls(races, now) : null, null, POLLS_MAX_AGE_MS, now, "VoteHub").then((fresh) => fresh ?? (previous?.polls && now - previous.polls.at < POLLS_MAX_AGE_MS ? previous.polls : null)),
   ]);
 
   // A snapshot saved before volumes were kept holds bare odds; those prices are left out rather than read as untraded.
   const quotes = (book: Book | undefined) => new Map(Object.entries(book ?? {}).filter(([, q]) => typeof q.odds === "object"));
   const markets = combineMarkets(quotes(kalshi?.book), quotes(polymarket?.book));
+  const generic = polls?.generic?.margin ?? null;
   const signals: Record<string, Signal> = {};
   for (const r of races) {
     if (r.office === "measure") continue;
     const key = raceKey(r.office, r.state, r.district);
     const market = markets.get(key) ?? null;
     const p = polls?.averages[key] ?? null;
-    if (market || p) signals[key] = { market, polls: p, rating: rate(market, p) };
+    // Once votes are counted the forecast stays at its last pre-election value; markets then trade on the count itself.
+    const frozen = r.total > 0 ? (previous?.signals[key]?.forecast ?? null) : null;
+    const forecast = frozen ?? raceForecast(r, market, p, generic);
+    if (market || p || forecast) signals[key] = { market, polls: p, rating: ratingOf(forecast), forecast };
   }
-  const snapshot: OddsSnapshot = { at: now, kalshi, polymarket, polls, signals };
+  const forecasts = chamberEntries(races, (r) => signals[raceKey(r.office, r.state, r.district)]?.forecast ?? null);
+  const snapshot: OddsSnapshot = {
+    at: now,
+    kalshi,
+    polymarket,
+    // Poll lists stay out of the snapshot every page view reads; they're saved under their own key below.
+    polls: polls ? { at: polls.at, averages: polls.averages, generic: polls.generic ? { margin: polls.generic.margin, count: polls.generic.count, own: polls.generic.own, recent: polls.generic.recent, aggregate: polls.generic.aggregate ?? null } : null } : null,
+    signals,
+    chambers: chamberViews(forecasts),
+  };
   // Only replaces an older snapshot: a slow run that started earlier can't overwrite a newer one.
   await db
     .prepare("INSERT INTO research_cache (key, data, created_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, created_at = excluded.created_at WHERE excluded.created_at >= research_cache.created_at")
     .bind(KEY, JSON.stringify(snapshot), now)
     .run();
+  // Only a fresh poll fetch carries the per-race lists and the generic ballot's trend.
+  const fresh = polls && "detail" in polls ? (polls as { at: number } & PollsResult) : null;
+  if (fresh) await putCached(db, POLLS_KEY, fresh.detail, now);
+  const history = await recordHistory(db, signals, now);
+  const chamberHistory = await recordChamberHistory(db, snapshot.chambers!, now);
+  if (fresh && !chamberHistory.backfilled) await backfill(db, races, fresh.detail, fresh.generic?.trend ?? [], now, history, chamberHistory);
   return snapshot;
+}
+
+/** Every race's forecast for the chamber simulations; a race between two candidates of one party goes to that party. */
+function chamberEntries(races: readonly RaceSummary[], forecastOf: (r: RaceSummary) => Pick<Forecast, "odds"> | null) {
+  return races.flatMap((r) => {
+    if (r.office === "measure") return [];
+    const sides = new Set(r.candidates.map((c) => sideOf(c.party)).filter((s) => s === "D" || s === "R"));
+    const odds = forecastOf(r)?.odds ?? (sides.size === 1 ? { [[...sides][0]!]: 1 } : null);
+    const lean = leanOf(r);
+    // The census division and lean bucket whose shared errors the race takes part in.
+    const group = lean === null ? {} : { region: (divisions as Record<string, string>)[r.state], bucket: leanBucket(lean - PARAMS.national2024) };
+    return odds ? [{ office: r.office, forecast: { odds }, ...group }] : [];
+  });
+}
+
+/** Adds today's chamber odds and seats to the daily chamber history, replacing today's earlier point. */
+async function recordChamberHistory(db: Db, chambers: Chambers, now: number): Promise<ChamberHistory> {
+  const prev = (await getCached<ChamberHistory>(db, CHAMBER_HISTORY_KEY, now)) ?? { house: [], senate: [], governor: [] };
+  const today = etDay(now);
+  const point = (c: Chambers["house"]): ChamberPoint => [today, c.dControl, c.dSeats, c.rSeats];
+  const add = (list: ChamberPoint[], c: Chambers["house"]) => [...list.filter((p) => p[0] !== today), point(c)];
+  const next: ChamberHistory = { ...prev, house: add(prev.house, chambers.house), senate: add(prev.senate, chambers.senate), governor: add(prev.governor, chambers.governor) };
+  await putCached(db, CHAMBER_HISTORY_KEY, next, now);
+  return next;
+}
+
+const dayAfter = (day: string) => new Date(Date.parse(`${day}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+/** A race's polling average as it stood on `day`, from its daily trend and the polls that had finished by then. */
+function pollsOn(p: RacePolls | undefined, day: string): Polls | null {
+  const point = p?.trend.find((t) => t[0] === Date.parse(`${day}T12:00:00Z`) / 1000);
+  if (!p || !point) return null;
+  const counted = p.rows.filter((r) => !r.excluded && r.end && r.end <= day);
+  return counted.length >= 2 ? { margin: Math.round((point[1] - point[2]) * 10) / 10, count: counted.length, latest: counted[0].end } : null;
+}
+
+/**
+ * Recomputes the daily race and chamber history back to BACKFILL_FROM, once, from what was known on each day: polls
+ * that had finished and the generic ballot as of that day. Past market prices aren't stored, so those days have
+ * none; the history marks them. Runs with fewer simulations per day to stay within the scheduled job's time.
+ */
+async function backfill(db: Db, races: readonly RaceSummary[], detail: Record<string, RacePolls>, genericTrend: TrendPoint[], now: number, history: ForecastHistory, chambers: ChamberHistory): Promise<void> {
+  const firstKnown = [history.days[0], chambers.house[0]?.[0]].filter(Boolean).sort()[0] ?? etDay(now);
+  const days: string[] = [];
+  for (let d = BACKFILL_FROM; d < firstKnown; d = dayAfter(d)) days.push(d);
+  if (!days.length) return;
+  const gb = new Map(genericTrend.map((t) => [new Date(t[0] * 1000).toISOString().slice(0, 10), Math.round((t[1] - t[2]) * 10) / 10]));
+  const raceP: Record<string, { side: Side; p: (number | null)[] }> = {};
+  const points: Record<"house" | "senate" | "governor", ChamberPoint[]> = { house: [], senate: [], governor: [] };
+  days.forEach((day, i) => {
+    const forecasts = new Map<RaceSummary, Forecast | null>();
+    for (const r of races) {
+      if (r.office === "measure") continue;
+      const key = raceKey(r.office, r.state, r.district);
+      const f = raceForecast(r, null, pollsOn(detail[key], day), gb.get(day) ?? null);
+      forecasts.set(r, f);
+      if (!f) continue;
+      const line = (raceP[key] ??= { side: f.left, p: Array<number | null>(days.length).fill(null) });
+      if (line.side === f.left) line.p[i] = f.odds[f.left] ?? null;
+    }
+    const views = chamberViews(chamberEntries(races, (r) => forecasts.get(r) ?? null), 1000);
+    for (const b of ["house", "senate", "governor"] as const) points[b].push([day, views[b].dControl, views[b].dSeats, views[b].rSeats]);
+  });
+  const races2: ForecastHistory["races"] = {};
+  for (const key of new Set([...Object.keys(raceP), ...Object.keys(history.races)])) {
+    const old = history.races[key];
+    const back = raceP[key];
+    const side = old?.side ?? back!.side;
+    const before = back && back.side === side ? back.p : Array<number | null>(days.length).fill(null);
+    races2[key] = { side, p: [...before, ...(old?.p ?? Array<number | null>(history.days.length).fill(null))] };
+  }
+  await putCached(db, HISTORY_KEY, { days: [...days, ...history.days], races: races2 }, now);
+  await putCached(db, CHAMBER_HISTORY_KEY, {
+    house: [...points.house, ...chambers.house],
+    senate: [...points.senate, ...chambers.senate],
+    governor: [...points.governor, ...chambers.governor],
+    backfilled: { from: days[0], to: days.at(-1)!, markets: "none" },
+  } satisfies ChamberHistory, now);
+}
+
+/** The day in Eastern time, which is when races are decided. */
+const etDay = (now: number) => new Date(now).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+
+/** Adds today's forecast to each race's daily history, replacing today's earlier point. */
+async function recordHistory(db: Db, signals: Record<string, Signal>, now: number): Promise<ForecastHistory> {
+  const history = (await getCached<ForecastHistory>(db, HISTORY_KEY, now)) ?? { days: [], races: {} };
+  const today = etDay(now);
+  const days = history.days.at(-1) === today ? history.days : [...history.days, today];
+  const at = days.length - 1;
+  const races: ForecastHistory["races"] = {};
+  for (const [key, signal] of Object.entries(signals)) {
+    const f = signal.forecast;
+    if (!f) continue;
+    const prev = history.races[key];
+    const p = [...(prev && prev.side === f.left ? prev.p : []), ...Array<number | null>(days.length).fill(null)].slice(0, days.length);
+    p[at] = f.odds[f.left] ?? null;
+    races[key] = { side: f.left, p };
+  }
+  await putCached(db, HISTORY_KEY, { days, races }, now);
+  return { days, races };
 }
 
 /** When the ratings' evidence was last fetched: the newest market prices, or the polls when no market answered. */

@@ -102,45 +102,15 @@ export function compareRaces(a: RaceSummary, b: RaceSummary): number {
   return ra - rb || favoriteChance(a) - favoriteChance(b) || a.state.localeCompare(b.state) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title);
 }
 
-type Odds = Partial<Record<"D" | "R" | "I", number>>;
-
-/**
- * How far a midterm polling average typically misses the final margin, in points (one standard deviation).
- * Senate polls missed by about 5 points on average in 2018 and 2022 (AAPOR's 2024 task force report).
- */
-const POLL_ERROR_SD = 6;
-/**
- * Traded volume at which a market's price and a polling average count equally. Market calibration improves with
- * volume (Kalshi's 2026 calibration study), and thin down-ballot markets did worse than poll-based models in 2024.
- */
-const EVEN_VOLUME = 50_000;
-
-/** A polling margin (Democrat minus Republican) as each party's chance, given polling averages' usual miss. */
-export function pollOdds(margin: number): { D: number; R: number } {
-  // Logistic approximation of the normal distribution.
-  const d = 1 / (1 + Math.exp((-1.702 * margin) / POLL_ERROR_SD));
-  return { D: d, R: 1 - d };
+/** Each side's chance of winning from the race's forecast (lib/midterms/forecast.ts), or null without one. */
+export function chances(signal: Pick<Signal, "forecast"> | null | undefined): Partial<Record<"D" | "R" | "I", number>> | null {
+  return signal?.forecast?.odds ?? null;
 }
 
-/**
- * Each side's chance from all the evidence: the market price, pulled toward the polling average as the market gets
- * thinner, or the polls alone with no market. Polls join a market only with two or more pollsters, and not in a race
- * with an independent, where a Democrat-minus-Republican margin can't be read as chances.
- */
-export function chances(signal: Pick<Signal, "market" | "polls"> | null | undefined): Odds | null {
-  const market = signal?.market && Object.keys(signal.market.odds).length ? signal.market : null;
-  const polls = signal?.polls ?? null;
-  if (!market) return polls ? pollOdds(polls.margin) : null;
-  if (!polls || polls.count < 2 || market.odds.I || market.volume === undefined) return market.odds;
-  const w = market.volume / (market.volume + EVEN_VOLUME);
-  const p = pollOdds(polls.margin);
-  return { D: w * (market.odds.D ?? 0) + (1 - w) * p.D, R: w * (market.odds.R ?? 0) + (1 - w) * p.R };
-}
-
-/** The favorite's chance, 0.5 for a coin flip; 1 with no market or polls, so unrated races sort last. */
+/** The forecast favorite's chance, 0.5 for a coin flip; 1 with no forecast, so unforecast races sort last. */
 export function favoriteChance(r: Pick<RaceSummary, "signal">): number {
-  const c = chances(r.signal);
-  return c ? Math.max(...Object.values(c)) : 1;
+  const odds = Object.values(chances(r.signal) ?? {});
+  return odds.length ? Math.max(...odds) : 1;
 }
 
 export function timeAgo(ms: number, now: number): string {
@@ -192,20 +162,41 @@ export function measureCount(races: readonly RaceSummary[]) {
   return out;
 }
 
-/** Map fill for a race before any votes: forecast color, strongest for Likely. */
+/** Map fill for a race before any votes, in DDHQ's forecast palette: light for Lean, medium for Likely (Safe is safeFill). */
 export function ratingFill(rating: Rating | null): string {
   if (!rating) return "var(--rule-strong)";
-  if (rating === "tossup") return "var(--tossup)";
-  const color = rating.endsWith("-d") ? "var(--dem)" : rating.endsWith("-r") ? "var(--rep)" : "var(--oth)";
-  return `color-mix(in srgb, ${color} ${rating.startsWith("lean") ? 35 : 60}%, var(--sheet))`;
+  if (rating === "tossup") return "var(--rate-tossup)";
+  const [tier, side] = rating.split("-");
+  if (side === "i") return `color-mix(in srgb, var(--oth) ${tier === "lean" ? 50 : 75}%, var(--sheet))`;
+  return `var(--rate-${tier}-${side})`;
+}
+
+/** Map fill for a race the forecast calls safe for `side`. */
+export function safeFill(side: "D" | "R" | "I"): string {
+  return side === "I" ? "var(--oth)" : `var(--rate-safe-${side.toLowerCase()})`;
 }
 
 const SIDE_NAME = { D: "Dem", R: "Rep", I: "Ind" } as const;
 
-/** "Markets: Rep 62% · Polls: D+2.1 (5)", the evidence behind a race's rating, or null when there is none. */
-export function signalLine(signal: Signal | null | undefined): string | null {
+/** The forecast favorite's last name and chance ("Talarico 64%"), or null without a forecast. */
+export function forecastLeader(race: Pick<RaceSummary, "signal" | "candidates">): string | null {
+  const odds = Object.entries(race.signal?.forecast?.odds ?? {}).sort((a, b) => b[1] - a[1]);
+  if (!odds.length || odds[0][1] === odds[1]?.[1]) return null;
+  const [side, p] = odds[0];
+  const who = race.candidates.find((c) => (side === "D" ? /^democrat/i : side === "R" ? /^republican/i : /independent/i).test(c.party));
+  const name = who ? who.name.replace(/["“][^"”]*["”]/g, " ").replace(/\b(Jr|Sr|II|III|IV)\.?$/i, "").trim().split(/\s+/).at(-1) : SIDE_NAME[side as keyof typeof SIDE_NAME];
+  return `${name} ${p >= 0.995 ? ">99" : Math.round(p * 100)}%`;
+}
+
+/**
+ * "Forecast: Talarico 64% · Markets: Rep 62% · Polls: D+2.1 (5)", the evidence behind a race's rating, or null when
+ * there is none. Pass the race to lead with the forecast.
+ */
+export function signalLine(signal: Signal | null | undefined, race?: Pick<RaceSummary, "candidates">): string | null {
   if (!signal) return null;
   const parts: string[] = [];
+  const leader = race ? forecastLeader({ signal, candidates: race.candidates }) : null;
+  if (leader) parts.push(`Forecast: ${leader}`);
   if (signal.market) {
     const [side, p] = (Object.entries(signal.market.odds) as [keyof typeof SIDE_NAME, number][]).sort((a, b) => b[1] - a[1])[0] ?? [];
     if (side) parts.push(`Markets: ${SIDE_NAME[side]} ${Math.round(p * 100)}%`);
