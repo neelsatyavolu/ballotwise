@@ -22,6 +22,7 @@ import { useSimulation } from "./useSimulation";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { SinceBanner } from "./SinceBanner";
 import { reportingText } from "./reporting";
+import { OverviewSkeleton } from "./Skeleton";
 
 type Tab = "key" | "mine" | "ai" | "all";
 const TABS: { id: Tab; label: string }[] = [
@@ -161,7 +162,7 @@ function AllRaces({ races, star, initialState }: { races: RaceSummary[]; star: S
   const reset = () => setShown(PAGE);
 
   return (
-    <div className="stack">
+    <div className="stack mt-in">
       <section className="mt-other" aria-labelledby="other-races">
         <h2 id="other-races">Other races</h2>
         <p className="muted small">Mayors, county seats, school boards, judges and local questions: anything civicAPI covers, with the same live results.</p>
@@ -242,14 +243,14 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
         <ElectionToggle on={election.on} onChange={election.set} />
       </header>
       {error && <p className="error">{data ? `${error} Showing the last results we got.` : error}</p>}
-      {!data && !error && <p className="muted">Loading every race…</p>}
+      {!data && !error && <OverviewSkeleton />}
 
       {data && races && (
         <SinceBanner races={races}>
       {election.on && <ElectionMode data={data} stars={favorites} />}
       {!election.on && (
         <>
-          <div className="mt-balances">
+          <div className="mt-balances mt-in">
             <BalanceBar title="Senate" office="senate" tally={data.balance.senate} />
             <BalanceBar title="House" office="house" tally={data.balance.house} />
             <BalanceBar title="Governors" office="governor" tally={data.balance.governor} />
@@ -269,19 +270,19 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
           {favorites.error && <p className="error small">{favorites.error}</p>}
 
           {tab === "key" && (
-            <div className="stack">
+            <div className="stack mt-in">
               <div className="mt-overview">
                 <RaceMap races={races} updatedAt={data.ratings.updatedAt} />
                 <section className="mt-closest">
                   <div className="mt-section-head tight">
                     <h2>Key races</h2>
-                    {favorites.ids && (
+                    {favorites.ids && key.length > 0 && (
                       <button type="button" className="btn quiet" onClick={() => favorites.addMany(key.map((r) => r.id))}>
                         Star all {key.length}
                       </button>
                     )}
                   </div>
-                  <RaceRows races={key} star={star} />
+                  {key.length ? <RaceRows races={key} star={star} /> : <p className="mt-empty small">No race has a market or polling rating yet. Key races fill in as the ratings arrive.</p>}
                   <p className="muted small">
                     Ratings come live from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades
                     {data.ratings.updatedAt ? `, updated ${timeAgo(data.ratings.updatedAt, now)}` : ""}.
@@ -295,7 +296,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
           )}
 
           {tab === "mine" && (
-            <div className="stack">
+            <div className="stack mt-in">
               {favorites.loading ? null : favorites.ids === null ? (
                 <div className="panel stack">
                   <h2>Star races to follow them here</h2>

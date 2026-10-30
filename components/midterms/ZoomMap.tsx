@@ -1,6 +1,6 @@
 // Rendered inside OfficeView.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CityLabels, FlipStripes, useDistrictShapes, usePatternId, type City } from "./maps";
+import { CityLabels, FlipStripes, loadMap, useDistrictShapes, usePatternId, type City } from "./maps";
 import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zoom";
 
 type Nation = { viewBox: string; borders: string; states: { state: string; name: string; d: string; box: [number, number, number, number] }[] };
@@ -8,20 +8,6 @@ type Layer = { counties: { fips: string; name: string; d: string }[]; cities?: C
 type Districts = { districts: { district: number; d: string }[] };
 /** `flip` stripes a state or district projected to change party; `called` marks a state's label with a check. */
 export type Fill = { fill: string; tip: ReactNode; flip?: boolean; called?: boolean; watch?: boolean };
-
-const cache = new Map<string, Promise<unknown>>();
-function load<T>(path: string): Promise<T> {
-  if (!cache.has(path)) {
-    cache.set(
-      path,
-      fetch(path).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).catch((err) => {
-        cache.delete(path);
-        throw err;
-      }),
-    );
-  }
-  return cache.get(path) as Promise<T>;
-}
 
 const FULL: Box = [0, 0, 975, 610];
 
@@ -99,12 +85,12 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   const [zoomed, setZoomed] = useState<{ fips: string; focus: string; raceId: number | null } | null>(null);
 
   useEffect(() => {
-    load<Nation>("/midterms/maps/US.json").then(setNation, () => setNation("error"));
+    loadMap<Nation>("US").then(setNation, () => setNation("error"));
   }, []);
   useEffect(() => {
     if (!focus) return;
     let live = true;
-    load<Layer>(`/midterms/maps/albers/${focus}.json`).then(
+    loadMap<Layer>(`albers/${focus}`).then(
       (data) => live && setLayer({ state: focus, data }),
       () => {},
     );
@@ -125,7 +111,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   useEffect(() => {
     if (!focus || !wantsDistricts) return;
     let live = true;
-    load<Districts>(`/midterms/maps/districts/${focus}.json`).then(
+    loadMap<Districts>(`districts/${focus}`).then(
       (data) => live && setLines({ state: focus, data }),
       () => {},
     );

@@ -14,6 +14,7 @@ import { RaceInsights } from "./RaceInsights";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
 import { RaceRows } from "./RaceRows";
+import { OfficeSkeleton } from "./Skeleton";
 import { ZoomMap, type Fill } from "./ZoomMap";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { ForecastTip, WatchNote } from "./ForecastTip";
@@ -196,12 +197,12 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
         )}
       </header>
       {error && <p className="error">{data ? `${error} Showing the last results we got.` : error}</p>}
-      {!data && !error && <p className="muted">Loading every race…</p>}
+      {!data && !error && <OfficeSkeleton />}
 
       {data && (
         <>
           <SeatHeader office={office} data={data} />
-          <div className="mt-office">
+          <div className="mt-office mt-in">
             <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (detail.data ? countyFills : undefined) : null} raceId={shownId} districtFills={districtFills} nationDistricts={nationDistricts} onPickNationDistrict={(key) => {
                 const r = races.find((x) => `${x.state}-${x.district ?? 0}` === key);
                 if (r) zoomTo(r.state, r.id);

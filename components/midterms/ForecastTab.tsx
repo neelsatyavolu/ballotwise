@@ -13,6 +13,7 @@ import { ForecastTip } from "./ForecastTip";
 import { useLive } from "./hooks";
 import type { ChartPoint } from "./LineChart";
 import { ModeNav } from "./ModeNav";
+import { ForecastSkeleton } from "./Skeleton";
 import { ZoomMap, type Fill } from "./ZoomMap";
 
 export type ForecastView = "overview" | ForecastOffice;
@@ -205,7 +206,7 @@ export function ForecastTab({ view }: { view: ForecastView }) {
         </nav>
       </header>
       {error && !data && <p className="error">{error}</p>}
-      {!data && !error && <p className="muted">Loading the forecast…</p>}
+      {!data && !error && <ForecastSkeleton />}
       {data && views && (view === "overview" ? <OverviewPage data={data} views={views} forecast={forecast} /> : <OfficeForecast office={view} data={data} view={views[view]} forecast={forecast} />)}
     </div>
   );

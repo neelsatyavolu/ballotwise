@@ -19,6 +19,7 @@ import { CountingContext, RaceStatus, TurnoutLine, VoteUpdates } from "./RaceCon
 import { CheckedAgo } from "./CheckedAgo";
 import { reportingText } from "./reporting";
 import { RcvFlag } from "./ResultList";
+import { RaceSkeleton } from "./Skeleton";
 
 type Fetched = { race: RaceDetail; fetchedAt: number; stale: boolean; history?: Observation[]; callPending?: boolean };
 const SCREEN = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -39,7 +40,9 @@ export function RaceView({ id }: { id: number }) {
   if (!race) {
     return (
       <div className="wrap mt">
-        {error ? <p className="error">{error}</p> : <p className="muted">Loading results…</p>}
+        {/* The tabs stay in the header while the race loads, so it doesn't jump; none is marked until the office is known. */}
+        <ModeNav />
+        {error ? <p className="error">{error}</p> : <RaceSkeleton />}
       </div>
     );
   }
@@ -98,9 +101,11 @@ export function RaceView({ id }: { id: number }) {
         {favorites.error && <p className="error small">{favorites.error}</p>}
       </header>
 
-      <div className="mt-race-grid">
+      <div className="mt-race-grid mt-in">
         <section aria-labelledby="cands">
-          <h2 id="cands">Candidates</h2>
+          <div className="mt-section-head">
+            <h2 id="cands">Candidates</h2>
+          </div>
           <div className="mt-cands">
             <CandidateTable
               race={race}

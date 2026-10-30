@@ -12,6 +12,19 @@ export { ELECTION_POLL_MS, POLL_MS, pollInterval } from "@/lib/midterms/live";
 /** What a page holds for one path: the data shown, the ETag it came with, and the server's latest fetch time. */
 type Held<T> = { path: string; data: T; etag: string | null; fetchedAt: number | null };
 
+/**
+ * The last answer for each path, shared by every screen in this tab, so moving between the overview, office and
+ * forecast screens draws the last results at once and revalidates them (a cheap 304) instead of starting blank.
+ * Only filled from effects, so the server render and hydration never see it. The oldest paths drop out past CACHED.
+ */
+const CACHED = 40;
+const lastAnswers = new Map<string, Held<unknown>>();
+function remember(held: Held<unknown>) {
+  lastAnswers.delete(held.path);
+  lastAnswers.set(held.path, held);
+  if (lastAnswers.size > CACHED) lastAnswers.delete(lastAnswers.keys().next().value!);
+}
+
 /** Development previews (`?sim=`) run every live answer through the made-up election night, on every page. */
 async function previewed<T>(path: string, data: T): Promise<T> {
   const at = simAt();
@@ -42,10 +55,13 @@ export function useLive<T>(path: string | null) {
 
   useEffect(() => {
     if (!path) return;
+    // Start from another screen's copy, so the first poll sends its ETag and only counts newer than it replace it.
+    if (held.current?.path !== path) held.current = (lastAnswers.get(path) as Held<T> | undefined) ?? null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let inFlight: AbortController | null = null;
     let failures = 0;
     let done = false;
+    let kept = false;
 
     const take = (answer: Awaited<ReturnType<typeof fetchLive<T>>>, data: T | null) => {
       const prev = held.current?.path === path ? held.current : null;
@@ -53,8 +69,11 @@ export function useLive<T>(path: string | null) {
       let next: Held<T> | null = prev;
       if (data !== null && (!prev || isNewer(prev.data, data, answer.etag !== prev.etag))) next = { path, data, etag: answer.etag, fetchedAt };
       else if (prev && fetchedAt !== prev.fetchedAt) next = { ...prev, etag: answer.etag ?? prev.etag, fetchedAt };
-      if (next && next !== prev) {
+      // The first answer is always kept in state, so a copy seeded from another screen stays put if it's evicted.
+      if (next && (next !== prev || !kept)) {
+        kept = true;
         held.current = next;
+        remember(next);
         setState(next);
       }
     };
@@ -105,7 +124,7 @@ export function useLive<T>(path: string | null) {
     };
   }, [path]);
 
-  const mine = state && state.path === path ? state : null;
+  const mine = state && state.path === path ? state : path ? ((lastAnswers.get(path) as Held<T> | undefined) ?? null) : null;
   const fetchedAt = mine?.fetchedAt ?? null;
   return { data: mine ? mine.data : null, error, now, interval, fetchedAt, lagging: isLagging(fetchedAt, now) };
 }

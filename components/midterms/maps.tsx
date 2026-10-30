@@ -9,7 +9,7 @@ type NationMap = { viewBox: string; borders: string; states: { state: string; na
 const loaded = new Map<string, Promise<unknown>>();
 
 /** A pre-projected map from public/midterms/maps (built by scripts/build-maps.mjs), fetched once per page. */
-function loadMap<T>(name: string): Promise<T> {
+export function loadMap<T>(name: string): Promise<T> {
   if (!loaded.has(name)) {
     loaded.set(
       name,

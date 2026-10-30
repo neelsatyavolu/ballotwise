@@ -119,7 +119,7 @@
 .mt-tip td + td { padding-left: 10px; }
 .mt-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; }
 .mt-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
-.mt-nation { margin-top: 4px; }
+.mt-nation { margin-top: 0; }
 .mt-nation .mt-map { padding: 4px; }
 
 /* Filters */
@@ -1267,3 +1267,35 @@ body:has(.mt-dv-popout) .site-header, body:has(.mt-dv-popout) #header-slot { dis
 .mt-panel .mt-rows th, .mt-panel .mt-rows td { padding-left: 6px; padding-right: 6px; }
 .mt-panel .mt-rows.counting th:nth-child(2), .mt-panel .mt-rows.counting td:nth-child(2) { display: none; }
 .mt-panel .mt-rows.counting .mt-leader .muted { display: none; }
+
+/* Loading placeholders (Skeleton.tsx), shaped like the screen they stand in for so nothing jumps when results land.
+ * They fade in after a beat, so a quick answer goes straight to the page without a flash of grey. */
+.mt-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mt-skel-frame { margin-top: 12px; animation: mt-in 0.3s ease 0.2s both; }
+.mt-skel { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--el-raised) 30%, color-mix(in srgb, var(--el-line) 55%, var(--el-raised)) 50%, var(--el-raised) 70%) 0 0 / 300% 100%; animation: mt-shimmer 1.6s ease-in-out infinite; }
+@keyframes mt-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.mt .mt-skel-balance { min-height: 150px; padding: 12px 0; align-content: space-between; }
+/* The real US outline, greyed and breathing, stands in for a map whose colors are still loading. */
+.mt-skel-breathe { animation: mt-breathe 1.6s ease-in-out infinite alternate; pointer-events: none; }
+@keyframes mt-breathe { from { opacity: 0.45; } to { opacity: 0.8; } }
+.mt-skel-map { width: 100%; border-radius: 8px; }
+.mt-skel-map.zoom { aspect-ratio: 975 / 610; }
+.mt-skel-map.state { aspect-ratio: 640 / 440; }
+.mt-skel-rows { display: grid; gap: 14px; padding: 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+.mt-skel-frame .mt-section-head { min-height: 36px; }
+
+/* Results fade up into place when they first arrive, and a switched tab or view eases in rather than snapping. */
+.mt-in { animation: mt-in 0.25s ease both; }
+@keyframes mt-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.mt .mt-seg button, .mt .tab, .mt-el .mt-el-offices .tab { transition: background-color 0.15s, color 0.15s; }
+.mt .mt-seg button:focus-visible, .mt .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Side-by-side blocks line up: a heading with a toggle beside one without sits on the same line. */
+.mt-overview .mt-section-head, .mt-race-grid .mt-section-head { min-height: 36px; }
+.mt-race-grid .mt-section-head h2 { margin-bottom: 0; }
+/* Race page: the forecast and polls panels get room below the candidates' footnote. */
+.mt-race-grid > section > .mt-mk { margin-top: 20px; }
+/* Before any votes, the leader and lead columns are only dashes; in the narrow state panel the race names get their room. */
+.mt-panel .mt-rows:not(.counting) th:nth-child(3), .mt-panel .mt-rows:not(.counting) td:nth-child(3),
+.mt-panel .mt-rows:not(.counting) th:nth-child(4), .mt-panel .mt-rows:not(.counting) td:nth-child(4) { display: none; }
+.mt-empty { padding: 20px 16px; border: 1px dashed var(--rule); border-radius: 8px; color: var(--muted); text-align: center; }

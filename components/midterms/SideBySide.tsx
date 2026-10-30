@@ -12,6 +12,7 @@ import { ModeNav } from "./ModeNav";
 import { byCloseness, districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills } from "./OfficeView";
 import { PollSchedule } from "./PollClose";
 import { RaceRows, type Star } from "./RaceRows";
+import { ColumnsSkeleton } from "./Skeleton";
 import { ZoomMap, type Fill } from "./ZoomMap";
 
 type Column = Exclude<Office, "measure">;
@@ -98,9 +99,9 @@ export function SideBySide() {
       </header>
       <p className="muted small mt-sbs-note">Made for wide screens: widen the window, or open this on a large or ultrawide monitor, to see all three offices at once.</p>
       {error && <p className="error">{data ? `${error} Showing the last results we got.` : error}</p>}
-      {!data && !error && <p className="muted">Loading every race…</p>}
+      {!data && !error && <ColumnsSkeleton />}
       {data && (
-        <div className="mt-sbs">
+        <div className="mt-sbs mt-in">
           {COLUMNS.map((c) => (
             <OfficeColumn key={c.office} {...c} data={data} results={results} star={star} />
           ))}
