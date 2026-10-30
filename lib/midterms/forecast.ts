@@ -14,7 +14,8 @@ type Odds = Partial<Record<Side, number>>;
 
 type Terms = { intercept: number; lean: number; environment: number; incumbent: number; personal: number; fundraising?: number };
 type Reliability = { band: string; races: number; predicted: number; actual: number };
-type Calibration = { k: number; midtermSigma: number | null; presidentialSigma: number; midtermLogScoreGain: number; kCompetitiveOnly: number; before: { logScore: number; brier: number; reliability: Reliability[] }; after: { logScore: number; brier: number; reliability: Reliability[] }; tuned: { k: number; logScore: number; brier: number; reliability: Reliability[] } | null };
+type Calibration = { k: number; midtermSigma: number | null; presidentialSigma: number; midtermLogScoreGain: number; kCompetitiveOnly: number; before: { logScore: number; brier: number; reliability: Reliability[] }; after: { logScore: number; brier: number; reliability: Reliability[] }; tuned: { k: number; logScore: number; brier: number; reliability: Reliability[] } | null; seatCheck?: { backtest: SeatCheck; tuned: SeatCheck; grid?: { share: number; national: number | null; logLik: number }[] } };
+type SeatCheck = { share: number | null; national: number | null; logLik: number; cycles: Record<string, { races: number; actual: number; expected: number; sd: number; z: number }> };
 type Model = {
   coefficients: Terms;
   standardErrors: Terms;
@@ -55,6 +56,16 @@ export type Tuning = {
   shared: Record<Body, number>;
   /** How much of the final chance the expert raters' consensus takes, where there is one. */
   experts: Record<Body, number>;
+  /** A scale on the fitted flat incumbency term. */
+  incumbency: Record<Body, number>;
+  /** The most an incumbent's measured personal vote can count for, in points either way, before its coefficient. */
+  personalCap: Record<Body, number>;
+  /** The largest fundraising ratio counted, as a natural log (3 is 20 to 1): past it, more money adds nothing. */
+  fundraisingCap: Record<Body, number>;
+  /** How many polls a race needs for its polling average to reach full weight. */
+  pollFull: Record<Body, number>;
+  /** The national draw's fraction of the shared variance, the rest split between region and lean band; null keeps the backtest's proportions. */
+  nationalShare: Record<Body, number | null>;
 };
 export const TUNING: Tuning = tuningJson;
 
@@ -106,7 +117,13 @@ export function backtestShare(m: Model, office: Body, grouped = true, t: Tuning 
  * the backtest's own), so a race's total uncertainty, and its chance, stay the same.
  */
 function errorParts(m: Model, office: Body, grouped: boolean, t: Tuning) {
-  const parts = { national: nationalError(m) ** 2, region: grouped ? FIT.correlation.region ** 2 : 0, bucket: grouped ? FIT.correlation.bucket ** 2 : 0 };
+  const fitted = { national: nationalError(m) ** 2, region: grouped ? FIT.correlation.region ** 2 : 0, bucket: grouped ? FIT.correlation.bucket ** 2 : 0 };
+  const local = fitted.region + fitted.bucket;
+  const fraction = t.nationalShare[office];
+  const parts =
+    fraction === null || !grouped || local === 0
+      ? fitted
+      : { national: fraction, region: ((1 - fraction) * fitted.region) / local, bucket: ((1 - fraction) * fitted.bucket) / local };
   const sum = parts.national + parts.region + parts.bucket;
   const share = Math.min(0.95, Math.max(backtestShare(m, office, grouped, t), t.shared[office]));
   const w = (v: number) => Math.sqrt((share * v) / sum);
@@ -216,7 +233,7 @@ export function phiInverse(p: number): number {
   return ((((((a[0] * s + a[1]) * s + a[2]) * s + a[3]) * s + a[4]) * s + a[5]) * r) / (((((b[0] * s + b[1]) * s + b[2]) * s + b[3]) * s + b[4]) * s + 1);
 }
 
-export const pollWeight = (count: number) => (count >= 2 ? PARAMS.polls.max * Math.min(1, count / PARAMS.polls.full) : 0);
+export const pollWeight = (count: number, full: number = PARAMS.polls.full) => (count >= 2 ? PARAMS.polls.max * Math.min(1, count / full) : 0);
 
 export function marketWeight(volume: number | undefined, office: Body, t: Tuning = TUNING): number {
   const { min, full } = PARAMS.markets;
@@ -253,11 +270,13 @@ export function forecastRace(m: Matchup, x: Inputs, t: Tuning = TUNING): Forecas
   const c = model.coefficients;
   const sigma = sigmaOf(model, x.office as Body, t);
   const environment = x.genericBallot === null ? 0 : t.environment * c.environment * x.genericBallot;
-  const incumbency = x.incumbent === null ? 0 : (x.incumbent === "R" ? -1 : x.incumbent === m.left ? 1 : 0) * c.incumbent;
-  const personal = x.incumbent !== null && x.personal ? t.personal[x.office as Body] * c.personal * x.personal : null;
-  const fundraising = hasFund ? (c.fundraising ?? 0) * x.fundraising! : null;
+  const body = x.office as Body;
+  const clamp = (v: number, cap: number) => Math.max(-cap, Math.min(cap, v));
+  const incumbency = x.incumbent === null ? 0 : (x.incumbent === "R" ? -1 : x.incumbent === m.left ? 1 : 0) * c.incumbent * t.incumbency[body];
+  const personal = x.incumbent !== null && x.personal ? t.personal[body] * c.personal * clamp(x.personal, t.personalCap[body]) : null;
+  const fundraising = hasFund ? (c.fundraising ?? 0) * clamp(x.fundraising!, t.fundraisingCap[body]) : null;
   const fundamentals = x.lean === null ? null : c.intercept + c.lean * (x.lean - PARAMS.national2024) + environment + incumbency + (personal ?? 0) + (fundraising ?? 0);
-  const wPoll = x.polls ? pollWeight(x.polls.count) : 0;
+  const wPoll = x.polls ? pollWeight(x.polls.count, t.pollFull[body]) : 0;
   // Without a lean the polls stand alone; without either there is nothing to model, and the market (if any) decides.
   const margin = fundamentals === null ? (x.polls && x.polls.count >= 2 ? x.polls.margin : null) : (1 - wPoll) * fundamentals + wPoll * (x.polls?.margin ?? 0);
   const base = margin === null ? null : phi(margin / sigma);
@@ -341,10 +360,15 @@ export type ChamberView = {
 };
 export type Chambers = { house: ChamberView; senate: ChamberView; governor: ChamberView };
 
-const BODIES: Record<Body, { notUp: { D: number; R: number; other: number }; majority: number }> = {
-  house: { notUp: { D: 0, R: 0, other: 0 }, majority: 218 },
-  // The vice president breaks a 50-50 Senate tie for Republicans, so Democrats need 51.
-  senate: { notUp: HOLDOVER.senate, majority: 51 },
+/**
+ * `majority` is what Democrats need for a majority of their own. `rKeeps`, where set, is what Republicans need to keep
+ * control; Democrats' chance of control is the chance Republicans fall short of it, so a winning independent (Nebraska's
+ * Osborn) counts against Republican control rather than for neither side, and the two parties' chances add to 100%.
+ */
+const BODIES: Record<Body, { notUp: { D: number; R: number; other: number }; majority: number; rKeeps?: number }> = {
+  house: { notUp: { D: 0, R: 0, other: 0 }, majority: 218, rKeeps: 218 },
+  // The vice president breaks a 50-50 Senate tie for Republicans: they keep control at 50, and Democrats need 51.
+  senate: { notUp: HOLDOVER.senate, majority: 51, rKeeps: 50 },
   governor: { notUp: HOLDOVER.governor, majority: 26 },
 };
 
@@ -364,8 +388,9 @@ function bucket(odds: Odds | null): keyof RatingCounts {
  * Chamber control from simulated elections. Each race's chance becomes a margin in units of its own error; one
  * national miss per simulation (the generic ballot's polling error and the backtest's cycle-wide bias, as a share of
  * each race's uncertainty) moves every race in every chamber together, so seats aren't independent coin flips.
- * Democrats control the House at 218 and the Senate at 51; a governors' majority is 26 of 50. Independents who win
- * count toward neither party.
+ * Democrats control the House and Senate when Republicans fall short of 218 and 50 (the vice president breaks a tie);
+ * a governors' majority is 26 of 50. Independents who win count toward neither party's seats, but against Republican
+ * control.
  */
 export function chamberViews(races: readonly { office: Office; forecast: Pick<Forecast, "odds"> | null; region?: string; bucket?: number }[], runs = 10_000, t: Tuning = TUNING): Chambers {
   const next = rng(2026);
@@ -414,7 +439,8 @@ export function chamberViews(races: readonly { office: Office; forecast: Pick<Fo
       const s = seats[b];
       s.d += tally[b].D;
       s.r += tally[b].R;
-      if (tally[b].D >= BODIES[b].majority) s.wins += 1;
+      const { majority, rKeeps } = BODIES[b];
+      if (rKeeps === undefined ? tally[b].D >= majority : tally[b].R < rKeeps) s.wins += 1;
       s.hist.set(tally[b].D, (s.hist.get(tally[b].D) ?? 0) + 1);
     }
   }

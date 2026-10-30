@@ -40,7 +40,7 @@ describe("forecastRace", () => {
     const f = forecastRace(contest, inputs({ lean: -2, genericBallot: 6.5, incumbent: "D" }))!;
     const c = modelFor("senate", false).coefficients;
     expect(f.environment).toBeCloseTo(TUNING.environment * c.environment * 6.5, 1);
-    expect(f.fundamentals).toBeCloseTo(c.intercept + c.lean * (-2 - PARAMS.national2024) + TUNING.environment * c.environment * 6.5 + c.incumbent, 1);
+    expect(f.fundamentals).toBeCloseTo(c.intercept + c.lean * (-2 - PARAMS.national2024) + TUNING.environment * c.environment * 6.5 + TUNING.incumbency.senate * c.incumbent, 1);
     expect(f.odds.D).toBeCloseTo(phi(f.fundamentals! / sigmaOf(modelFor("senate", false), "senate")), 2);
     expect(f.odds.D! + f.odds.R!).toBeCloseTo(1, 6);
   });
@@ -57,7 +57,7 @@ describe("forecastRace", () => {
     const held = forecastRace(contest, inputs({ lean: 0, genericBallot: 0, incumbent: "R", personal: -17 }))!;
     expect(open.personal).toBeNull();
     expect(held.personal).toBeCloseTo(TUNING.personal.senate * c.personal * -17, 1);
-    expect(held.fundamentals! - open.fundamentals!).toBeCloseTo(-c.incumbent + held.personal!, 0);
+    expect(held.fundamentals! - open.fundamentals!).toBeCloseTo(-TUNING.incumbency.senate * c.incumbent + held.personal!, 0);
   });
 
   it("adds fundraising only when both sides have FEC receipts, using the model fit with it", () => {
@@ -89,6 +89,15 @@ describe("forecastRace", () => {
     const base = phi(f.margin! / f.sigma!);
     expect(f.market).toBe(1 - PARAMS.markets.clip);
     expect(f.odds.D).toBeCloseTo((1 - max) * base + max * (1 - PARAMS.markets.clip), 2);
+  });
+
+  it("caps the personal vote and the fundraising ratio at the office's tuned limits, and scales incumbency", () => {
+    const c = modelFor("house", true).coefficients;
+    const t = { ...TUNING, personal: { ...TUNING.personal, house: 1 }, personalCap: { ...TUNING.personalCap, house: 4 }, fundraisingCap: { ...TUNING.fundraisingCap, house: 1 }, incumbency: { ...TUNING.incumbency, house: 0.5 } };
+    const f = forecastRace(contest, inputs({ office: "house", lean: 0, genericBallot: 0, incumbent: "R", personal: -12, fundraising: 2.5 }), t)!;
+    expect(f.personal).toBeCloseTo(c.personal * -4, 1);
+    expect(f.fundraising).toBeCloseTo(c.fundraising! * 1, 1);
+    expect(f.incumbency).toBeCloseTo(-c.incumbent * 0.5, 1);
   });
 
   it("blends the expert raters' average chance in at the office's weight, and uses it alone when nothing else is known", () => {
@@ -142,8 +151,9 @@ describe("chamberViews", () => {
     expect(v.house).toMatchObject({ dControl: 1, dSeats: 218, rSeats: 0, majority: 218, notUp: { D: 0, R: 0, other: 0 } });
     expect(v.house.ratings.safeD).toBe(218);
     expect(v.house.distribution).toEqual([{ seats: 218, p: 1 }]);
-    // No Senate races given: only the 65 seats not up.
-    expect(v.senate).toMatchObject({ dSeats: 34, rSeats: 31, dControl: 0, majority: 51 });
+    // No Senate races given: only the 65 seats not up. Control is now the chance Republicans fall short of the 50 they
+    // need to keep the chamber, and 31 is short, so it counts as Democratic control.
+    expect(v.senate).toMatchObject({ dSeats: 34, rSeats: 31, dControl: 1, majority: 51 });
     expect(v.governor).toMatchObject({ dSeats: 6, rSeats: 8, majority: 26 });
   });
 

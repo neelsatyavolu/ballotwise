@@ -18,7 +18,8 @@
 // furthest from a rating line and whose k is nearest the backtest's. A grid over the shared settings, each office
 // searched on its own within it, then a coordinate search at finer steps until nothing improves.
 //
-// Run with `node scripts/tune-to-ddhq.mjs <benchmark.json> [--refresh] [--dry-run]`. Inputs (prod races and market
+// Run with `node scripts/tune-to-ddhq.mjs <benchmark.json> [--refresh] [--dry-run] [--evaluate]`; --evaluate reports on
+// the settings in tuning.json without searching. Inputs (prod races and market
 // prices, VoteHub polls, the aggregators' generic ballot) are cached beside the benchmark; --refresh fetches them again.
 // It bundles the app's own forecast code with esbuild (installed with wrangler), so the search runs the real model.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -163,13 +164,18 @@ function score(t, runs = 2000) {
 // ---------- Search ----------
 
 const range = (lo, hi, step) => Array.from({ length: Math.round((hi - lo) / step) + 1 }, (_, i) => Math.round((lo + i * step) * 1000) / 1000);
-const withOffice = (t, office, { k, max, personal, shared, experts }) => ({
+const withOffice = (t, office, { k, max, personal, shared, experts, incumbency, personalCap, fundraisingCap, pollFull, nationalShare }) => ({
   ...t,
   k: { ...t.k, [office]: k ?? t.k[office] },
   markets: { ...t.markets, max: { ...t.markets.max, [office]: max ?? t.markets.max[office] } },
   personal: { ...t.personal, [office]: personal ?? t.personal[office] },
   shared: { ...t.shared, [office]: shared ?? t.shared[office] },
   experts: { ...t.experts, [office]: experts ?? t.experts[office] },
+  incumbency: { ...t.incumbency, [office]: incumbency ?? t.incumbency[office] },
+  personalCap: { ...t.personalCap, [office]: personalCap ?? t.personalCap[office] },
+  fundraisingCap: { ...t.fundraisingCap, [office]: fundraisingCap ?? t.fundraisingCap[office] },
+  pollFull: { ...t.pollFull, [office]: pollFull ?? t.pollFull[office] },
+  nationalShare: { ...t.nationalShare, [office]: nationalShare === undefined ? t.nationalShare[office] : nationalShare },
 });
 const K = range(0.6, 2, 0.1);
 const MAX = range(0, 0.5, 0.1);
@@ -203,10 +209,11 @@ function bestForOffice(t, office) {
 }
 
 const start = M.TUNING;
+const EVALUATE = flags.includes("--evaluate");
 let best = start;
 let bestTotal = Infinity;
 let tried = 0;
-for (const clip of SHARED.clip) {
+for (const clip of EVALUATE ? [] : SHARED.clip) {
   for (const environment of SHARED.environment) {
     let t = { ...start, markets: { ...start.markets, clip }, environment };
     let total = 0;
@@ -232,12 +239,17 @@ const FINE = [
     [(t, v) => withOffice(t, o, { personal: v }), range(0, 2, 0.05)],
     [(t, v) => withOffice(t, o, { shared: v }), range(0, 0.9, 0.025)],
     [(t, v) => withOffice(t, o, { experts: v }), range(0, 0.8, 0.025)],
+    [(t, v) => withOffice(t, o, { incumbency: v }), range(0, 2, 0.1)],
+    [(t, v) => withOffice(t, o, { personalCap: v }), range(2, 25, 0.5)],
+    [(t, v) => withOffice(t, o, { fundraisingCap: v }), range(0.5, 3, 0.25)],
+    [(t, v) => withOffice(t, o, { pollFull: v }), [2, 3, 4, 5, 6, 8, 10, 15]],
+    [(t, v) => withOffice(t, o, { nationalShare: v }), [null, 0, 0.25, 0.5, 0.75, 1]],
   ]),
   [(t, v) => ({ ...t, markets: { ...t.markets, clip: v } }), range(0.03, 0.15, 0.01)],
   [(t, v) => ({ ...t, environment: v }), range(0.8, 1.3, 0.025)],
 ];
 let bestScore = score(best);
-for (let pass = 1; pass <= 4; pass++) {
+for (let pass = 1; pass <= (EVALUATE ? 0 : 4); pass++) {
   const before = bestScore.total;
   for (const [set, grid] of FINE) {
     for (const v of grid) {
@@ -298,10 +310,10 @@ for (const [k, want] of Object.entries(bench.races ?? {})) {
 }
 console.log(`  same rating ${same} of ${Object.keys(bench.races ?? {}).length}, mean gap ${check.gap.toFixed(1)}`);
 
-if (!flags.includes("--dry-run")) {
+if (!flags.includes("--dry-run") && !EVALUATE) {
   const round = (v) => Math.round(v * 1000) / 1000;
   const per = (rec) => Object.fromEntries(OFFICES.map((o) => [o, round(rec[o])]));
-  const out = { k: per(best.k), markets: { max: per(best.markets.max), clip: round(best.markets.clip) }, environment: round(best.environment), personal: per(best.personal), shared: per(best.shared), experts: per(best.experts) };
+  const out = { k: per(best.k), markets: { max: per(best.markets.max), clip: round(best.markets.clip) }, environment: round(best.environment), personal: per(best.personal), shared: per(best.shared), experts: per(best.experts), incumbency: per(best.incumbency), personalCap: per(best.personalCap), fundraisingCap: per(best.fundraisingCap), nationalShare: Object.fromEntries(OFFICES.map((o) => [o, best.nationalShare[o] === null ? null : round(best.nationalShare[o])])), pollFull: per(best.pollFull) };
   writeFileSync(join(ROOT, "lib/midterms/tuning.json"), `${JSON.stringify(out)}\n`);
   console.log("\nwrote lib/midterms/tuning.json");
 }

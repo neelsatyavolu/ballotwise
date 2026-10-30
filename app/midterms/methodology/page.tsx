@@ -18,6 +18,15 @@ const MODELS = [
 const BODIES = ["house", "senate", "governor"] as const;
 const BACKTEST_SHARE = Object.fromEntries(BODIES.map((b) => [b, backtestShare(modelFor(b, b !== "governor"), b)])) as Record<(typeof BODIES)[number], number>;
 const SHARE = Object.fromEntries(BODIES.map((b) => [b, Math.max(BACKTEST_SHARE[b], TUNING.shared[b])])) as Record<(typeof BODIES)[number], number>;
+/** The backtest's seat-count check of the simulations' correlation, at its own share and at the tuned one. */
+const SEAT_CHECK = (["house", "senate"] as const)
+  .map((b) => {
+    const c = FIT[b].calibration.seatCheck;
+    if (!c) return "";
+    const zs = (r: { cycles: Record<string, { z: number }> }) => Object.entries(r.cycles).map(([y, v]) => `${y} ${v.z >= 0 ? "+" : "−"}${Math.abs(v.z).toFixed(1)}`).join(", ");
+    return `${b === "house" ? "House" : "Senate"} seats Democrats won, in standard deviations from the simulated count, ${zs(c.tuned)} at the tuned share (${zs(c.backtest)} at the backtest's); log likelihood of the four counts ${c.tuned.logLik.toFixed(1)} against ${c.backtest.logLik.toFixed(1)}.`;
+  })
+  .join(" ");
 const signed = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}`;
 
 export default function Methodology() {
@@ -270,7 +279,16 @@ export default function Methodology() {
         <li>
           The fitted environment coefficient times {TUNING.environment.toFixed(2)}; the incumbent&apos;s own vote times{" "}
           {TUNING.personal.house.toFixed(2)} for the House, {TUNING.personal.senate.toFixed(2)} for the Senate and{" "}
-          {TUNING.personal.governor.toFixed(2)} for governors.
+          {TUNING.personal.governor.toFixed(2)} for governors, counting at most {TUNING.personalCap.house} points of a House
+          member&apos;s past overperformance ({TUNING.personalCap.senate} for senators, {TUNING.personalCap.governor} for governors).
+          The flat incumbency bonus times {TUNING.incumbency.house.toFixed(1)} for the House, {TUNING.incumbency.senate.toFixed(1)} for
+          the Senate and {TUNING.incumbency.governor.toFixed(1)} for governors.
+        </li>
+        <li>
+          Fundraising: a ratio past {Math.round(Math.exp(TUNING.fundraisingCap.house))} to 1 adds nothing more in House races (
+          {Math.round(Math.exp(TUNING.fundraisingCap.senate))} to 1 in the Senate). Polls reach full weight at{" "}
+          {TUNING.pollFull.house} polls in House races, {TUNING.pollFull.senate} in Senate races and {TUNING.pollFull.governor} for
+          governors.
         </li>
         <li>
           In the chamber simulations, the share of each race&apos;s uncertainty that moves with other races (the national, regional
@@ -278,7 +296,10 @@ export default function Methodology() {
           governors, against {pct(BACKTEST_SHARE.house)}, {pct(BACKTEST_SHARE.senate)} and {pct(BACKTEST_SHARE.governor)} from the
           backtest&apos;s cycle-wide, regional and lean-band errors alone. A race&apos;s total uncertainty, and so its chance, is the
           same either way; a larger shared share makes races swing together, so chamber control follows the tipping-point races
-          more closely, as in DDHQ&apos;s correlated simulations.
+          more closely, as in DDHQ&apos;s correlated simulations.{" "}
+          {TUNING.nationalShare.senate !== null &&
+            `In the Senate the shared part is ${pct(TUNING.nationalShare.senate)} national, so all its races move together. `}
+          On past cycles: {SEAT_CHECK}
         </li>
       </ul>
       <p>
@@ -320,6 +341,12 @@ export default function Methodology() {
       <p>
         Their sizes come from the backtest: how much the held-out misses of races in the same division, or the same lean band, moved
         together within a cycle, beyond what chance alone would produce. What&apos;s left is each race&apos;s own error.
+      </p>
+      <p>
+        Democrats&apos; chance of controlling the House or Senate is the chance Republicans fall short of what they need to keep it:
+        218 House seats, or 50 Senate seats, since the vice president breaks a 50–50 tie. An independent who wins, such as Dan
+        Osborn in Nebraska, counts toward neither party&apos;s seats but against Republican control, so the two parties&apos; chances
+        add to 100%.
       </p>
 
       <h2>On election night</h2>

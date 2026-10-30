@@ -380,7 +380,80 @@ function calibrate(residuals, sigma, tunedK) {
     after: summary(chancesOf(residuals, chosen)),
     // How the backtest would have scored at the multiplier tuned to agree with DDHQ (scripts/tune-to-ddhq.mjs).
     tuned: tunedK === undefined ? null : { k: tunedK, ...summary(chancesOf(residuals, useKind ? (r) => tunedK * kindSigma(r) : () => tunedK * sigma)) },
+    // Not serialized: each race's σ at the tuned multiplier, for the seat-count check.
+    tunedSigma: tunedK === undefined ? null : useKind ? (r) => tunedK * kindSigma(r) : () => tunedK * sigma,
   };
+}
+
+// ---------- Seat-count check ----------
+
+/** The inverse normal CDF, by bisection on `phi`; precise enough for simulation thresholds. */
+function phiInverse(p) {
+  let lo = -9;
+  let hi = 9;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (phi(mid) < p) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * How well a chamber-simulation correlation fits the past: for each held-out cycle, the chance the simulation gives
+ * the number of races Democrats actually won, with each race's own chance from the backtest and `share` of its
+ * variance drawn from errors shared nationally, by census division and by lean band (`national` is the national
+ * draw's fraction of that shared part; null splits it as the backtest measured). Race-level log loss and
+ * calibration don't depend on the correlation at all; this is the part of the backtest that does.
+ */
+function seatCheck(residuals, sigmaFor, sizes, share, national, runs = 20_000) {
+  const next = rng(2026);
+  const gauss = () => Math.sqrt(-2 * Math.log(Math.max(1e-12, next()))) * Math.cos(2 * Math.PI * next());
+  const local = sizes.region ** 2 + sizes.bucket ** 2;
+  const parts = national === null ? { n: sizes.national ** 2, r: sizes.region ** 2, b: sizes.bucket ** 2 } : { n: national, r: ((1 - national) * sizes.region ** 2) / local, b: ((1 - national) * sizes.bucket ** 2) / local };
+  const sum = parts.n + parts.r + parts.b;
+  const divisions = [...new Set(Object.values(DIVISION))];
+  const cycles = {};
+  let logLik = 0;
+  for (const year of CYCLES) {
+    const races = residuals.filter((r) => r.year === year).map((r) => {
+      const sigma = sigmaFor(r);
+      const s = share ?? Math.min(0.75, (sizes.national ** 2 + local) / sigma ** 2);
+      return { z: phiInverse(Math.min(1 - 1e-9, Math.max(1e-9, phi(r.predicted / sigma)))), won: r.margin > 0, region: divisions.indexOf(DIVISION[r.state]), bucket: bucketOf(r.lean), w: { n: Math.sqrt((s * parts.n) / sum), r: Math.sqrt((s * parts.r) / sum), b: Math.sqrt((s * parts.b) / sum), o: Math.sqrt(1 - s) } };
+    });
+    if (!races.length) continue;
+    const actual = races.filter((r) => r.won).length;
+    const counts = new Map();
+    let mean = 0;
+    let sq = 0;
+    for (let i = 0; i < runs; i++) {
+      const n = gauss();
+      const reg = divisions.map(() => gauss());
+      const buck = LEAN_EDGES.map(() => gauss()).concat(gauss());
+      let wins = 0;
+      for (const r of races) if (r.z + r.w.n * n + r.w.r * reg[r.region] + r.w.b * buck[r.bucket] + r.w.o * gauss() > 0) wins += 1;
+      counts.set(wins, (counts.get(wins) ?? 0) + 1);
+      mean += wins;
+      sq += wins * wins;
+    }
+    mean /= runs;
+    const sd = Math.sqrt(Math.max(0, sq / runs - mean * mean));
+    // A seat count the simulation never drew gets half a draw's chance.
+    const lik = Math.max(0.5, counts.get(actual) ?? 0) / runs;
+    logLik += Math.log(lik);
+    cycles[year] = { races: races.length, actual, expected: Math.round(mean * 10) / 10, sd: Math.round(sd * 10) / 10, z: Math.round(((actual - mean) / Math.max(1e-9, sd)) * 100) / 100 };
+  }
+  return { share, national, logLik: Math.round(logLik * 100) / 100, cycles };
 }
 
 // ---------- Correlated errors ----------
@@ -521,7 +594,20 @@ for (const [office, rows] of [["house", houseRows], ["senate", senateRows]]) {
       result.correlation = { region: region.sd, bucket: bucket.sd, regionGroups: region.groups, bucketGroups: bucket.groups, leanEdges: LEAN_EDGES };
       console.log("correlation", JSON.stringify(result.correlation));
     }
-    const cal = calibrate(bt.residuals, bt.rmse, TUNED?.k[office]);
+    const { tunedSigma, ...cal } = calibrate(bt.residuals, bt.rmse, TUNED?.k[office]);
+    if (tunedSigma && withFund) {
+      // The backtest's own correlation against the tuned one, both at the tuned multiplier.
+      const sizes = { national: Math.sqrt(Object.values(bt.cycles).reduce((s, b) => s + b.bias ** 2, 0) / Object.keys(bt.cycles).length), region: result.correlation.region, bucket: result.correlation.bucket };
+      cal.seatCheck = { backtest: seatCheck(bt.residuals, tunedSigma, sizes, null, null), tuned: seatCheck(bt.residuals, tunedSigma, sizes, TUNED.shared[office], TUNED.nationalShare?.[office] ?? null) };
+      // For the Senate, the same check across shared shares, to bound how far the simulation's correlation can go.
+      if (office === "senate") {
+        cal.seatCheck.grid = [null, 1].flatMap((national) => Array.from({ length: 15 }, (_, i) => r2(0.25 + i * 0.05)).map((share) => {
+          const c = seatCheck(bt.residuals, tunedSigma, sizes, share, national);
+          return { share, national, logLik: c.logLik };
+        }));
+      }
+      console.log(`${name} seat check`, JSON.stringify(cal.seatCheck));
+    }
     const biases = Object.values(bt.cycles).map((b) => b.bias);
     result[name] = {
       calibration: cal,
