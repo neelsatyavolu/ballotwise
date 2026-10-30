@@ -1117,7 +1117,9 @@ body:has(.wrap.mt.mt-sbs-page) .site-footer .wrap { max-width: none; padding: 0 
   .wrap.mt.mt-office-page { display: flex; flex-direction: column; height: calc(100dvh - 56px); padding-top: 10px; padding-bottom: 10px; }
   .wrap.mt.mt-office-page > * { flex: none; }
   .wrap.mt.mt-office-page > * + * { margin-top: 10px; }
-  .mt-office-page > .mt-office { flex: 1 1 0; min-height: 0; }
+  .wrap.mt.mt-office-page > .mt-office { flex: 1 1 0; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  /* A picked state adds its race, forecast and polls to the rail; they scroll inside it so the map keeps its size. */
+  .mt-office-page > .mt-office > .mt-panel { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .mt-office-page > .mt-office > .mt-zoom { height: 100%; min-height: 0; display: flex; }
   .mt-office-page > .mt-office > .mt-zoom svg { width: 100%; height: 100%; aspect-ratio: auto; }
   .mt-office-page .mt-seats { padding-top: 8px; padding-bottom: 8px; }
