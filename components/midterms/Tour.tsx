@@ -28,6 +28,11 @@ const STEPS: Step[] = [
     body: "Starred races collect under My races. My dashboards builds boards of your own, and All races lists every race on the ballot, ballot measures included.",
   },
   {
+    target: ".mt-modes",
+    title: "The rest of the tracker",
+    body: "Near you finds the races on your ballot. Senate, House, Governor and Ballot measures list every race of each kind. Forecast has the odds, Early vote the turnout so far, and Search finds any race or candidate.",
+  },
+  {
     target: ".mt-hero .mt-el-switch",
     title: "On election night",
     body: "Switch on election mode for the live view: race calls as they happen, the next polls to close, and the races still counting.",
@@ -70,6 +75,9 @@ function setDone(done: boolean) {
 /** Starts the tour over, for the overview's "Take the tour" link. */
 export const replayTour = () => setDone(false);
 
+/** The first match that's on screen: the section tabs have a hidden copy, in the header or the page depending on width. */
+const find = (selector: string) => Array.from(document.querySelectorAll(selector)).find((el) => el.getClientRects().length > 0);
+
 const boxOf = (el: Element): Box => {
   const r = el.getBoundingClientRect();
   return { top: r.top, left: r.left, width: r.width, height: r.height };
@@ -96,7 +104,7 @@ export function Tour() {
   useLayoutEffect(() => {
     if (done) return;
     const show = () => {
-      const el = document.querySelector(STEPS[step].target);
+      const el = find(STEPS[step].target);
       if (!el) return step + 1 < STEPS.length ? setStep(step + 1) : finish();
       const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       el.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
@@ -111,29 +119,27 @@ export function Tour() {
     if (shown) card.current?.focus({ preventScroll: true });
   }, [shown, step]);
 
-  // The highlight follows its part of the page through scrolling and resizing, and the card's height is re-read.
+  // The highlight is re-measured every frame, so it stays on its part of the page through scrolling, resizing,
+  // entrance animations and content loading in above it; the card's size is re-read the same way.
   useEffect(() => {
     if (done) return;
     let frame = 0;
     const follow = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const el = document.querySelector(STEPS[step].target);
-        if (el) setTarget(boxOf(el));
-        const c = card.current;
-        if (c) setCardSize((s) => (s.w === c.offsetWidth && s.h === c.offsetHeight ? s : { w: c.offsetWidth, h: c.offsetHeight }));
-      });
+      const el = find(STEPS[step].target);
+      if (el) {
+        const b = boxOf(el);
+        setTarget((t) => (t && t.top === b.top && t.left === b.left && t.width === b.width && t.height === b.height ? t : b));
+      }
+      const c = card.current;
+      if (c) setCardSize((s) => (s.w === c.offsetWidth && s.h === c.offsetHeight ? s : { w: c.offsetWidth, h: c.offsetHeight }));
+      frame = requestAnimationFrame(follow);
     };
     // Escape puts the tour away wherever focus is.
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && finish();
     follow();
-    window.addEventListener("scroll", follow, { capture: true, passive: true });
-    window.addEventListener("resize", follow);
     window.addEventListener("keydown", onKey);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", follow, { capture: true });
-      window.removeEventListener("resize", follow);
       window.removeEventListener("keydown", onKey);
     };
   }, [done, step, finish]);

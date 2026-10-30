@@ -1301,8 +1301,10 @@ body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
 .mt-empty { padding: 20px 16px; border: 1px dashed var(--rule); border-radius: 8px; color: var(--muted); text-align: center; }
 
 /* First-visit tour (Tour.tsx): the page dims around one part at a time, which keeps working under the dimming. */
-.mt-tour-hole { position: fixed; z-index: 60; border-radius: 10px; outline: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.6); pointer-events: none; transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease; }
-.mt-tour-card { position: fixed; z-index: 61; display: grid; gap: 8px; width: min(360px, calc(100vw - 32px)); padding: 16px; background: var(--el-raised); border: 1px solid var(--el-line); border-radius: 10px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.5); animation: mt-in 0.2s ease both; transition: top 0.25s ease, left 0.25s ease; }
+.mt-tour-hole { position: fixed; z-index: 60; border-radius: 10px; outline: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.6); pointer-events: none; }
+.mt-tour-card { position: fixed; z-index: 61; display: grid; gap: 8px; width: min(360px, calc(100vw - 32px)); padding: 16px; background: var(--el-raised); border: 1px solid var(--el-line); border-radius: 10px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.5); animation: mt-in 0.2s ease both; }
+/* Both layers sit directly in .wrap.mt, whose sibling spacing would push them 16px below where they are placed. */
+.wrap.mt > .mt-tour-hole, .wrap.mt > .mt-tour-card { margin: 0; }
 /* The card takes focus only to bring keyboards and screen readers along; its buttons carry the focus rings. */
 .mt-tour-card:focus, .mt-tour-card:focus-visible { outline: none; }
 .mt-tour-card h2 { margin: 0; font-size: 17px; font-weight: 700; }
