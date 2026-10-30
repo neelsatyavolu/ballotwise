@@ -905,7 +905,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
   .mt-modes a.mt-mode-wide { display: inline-block !important; }
   a.small.mt-mode-wide { display: inline !important; }
 }
-.wrap.mt.mt-sbs-page { max-width: none; }
+.wrap.mt.mt-sbs-page { max-width: none; padding: 0 16px; }
 .mt-sbs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
 .mt-sbs-col { display: grid; gap: 12px; align-content: start; min-width: 0; }
 .mt-sbs-col .mt-section-head h2 a { color: var(--ink); text-decoration: none; }
@@ -1058,3 +1058,21 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
   .mt-fc-table td:first-child { width: 40%; }
   .mt-fc-table th.axis span { display: none; }
 }
+
+/* Senate, House and Governor pages: the map takes the full window, with the race list beside it at a fixed width. */
+.wrap.mt.mt-office-page { max-width: none; padding: 0 16px; }
+@media (min-width: 1001px) {
+  .mt-office-page .mt-office { grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); gap: 12px; }
+}
+@media (min-width: 1800px) {
+  .mt-office-page .mt-office { grid-template-columns: minmax(0, 1fr) minmax(380px, 480px); }
+}
+/* The site header and footer line up with the full-width office and side-by-side pages. */
+body:has(.wrap.mt.mt-office-page) .site-header .wrap,
+body:has(.wrap.mt.mt-office-page) .site-footer .wrap,
+body:has(.wrap.mt.mt-sbs-page) .site-header .wrap,
+body:has(.wrap.mt.mt-sbs-page) .site-footer .wrap { max-width: none; padding: 0 16px; }
+/* A measure's summary keeps its full height (up to its 3-line clamp) instead of being squeezed and cut mid-line;
+   the spacer row that levels card footers draws no border of its own. */
+.mt .mt-card-about { flex: none; }
+.mt-ct-fill td { border-bottom: 0; }

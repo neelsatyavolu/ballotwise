@@ -183,7 +183,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   }
 
   return (
-    <div className="wrap mt">
+    <div className="wrap mt mt-office-page">
       <ModeNav current={HREF[office]} />
       <header className="mt-hero">
         <h1>{TITLE[office]}</h1>
