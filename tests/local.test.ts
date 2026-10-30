@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Districts } from "../lib/ballot/census";
 import { resetCivicMemo } from "../lib/midterms/civic";
 import { COUNTY_ID_BASE, resetCountyMemo } from "../lib/midterms/county";
-import { localRaces } from "../lib/midterms/local";
+import { countyFips, localRaces } from "../lib/midterms/local";
 import { FIRST_POLLS_OPEN } from "../lib/midterms/races";
 
 const AFTER_POLLS = FIRST_POLLS_OPEN + 3_600_000;
@@ -93,6 +93,17 @@ describe("localRaces", () => {
     expect(sc.legislature.map((r) => r.id)).toEqual([25]);
     const md = await localRaces({ ...base, state: "Maryland", stateHouse: "State Legislative Subdistrict 12A" }, AFTER_POLLS);
     expect(md.legislature.map((r) => r.id)).toEqual([26]);
+  });
+
+  it("finds the address's county on the map, telling independent cities from counties of the same name", async () => {
+    vi.stubGlobal("fetch", sources());
+    expect((await localRaces(paloAlto, AFTER_POLLS)).countyFips).toBe("06085");
+    expect(countyFips("VA", "Richmond city")).toBe("51760");
+    expect(countyFips("VA", "Richmond County")).toBe("51159");
+    expect(countyFips("NV", "Carson City")).toBe("32510");
+    expect(countyFips("LA", "Acadia Parish")).toBe("22001");
+    expect(countyFips("CA", null)).toBeNull();
+    expect(countyFips("CA", "Nowhere County")).toBeNull();
   });
 
   it("has nothing for a place outside the US states", async () => {

@@ -447,7 +447,7 @@ function remember<K, V>(memo: Map<K, V>, key: K, value: V) {
 }
 
 /** Puts each candidate's civicAPI color back on the race and its counties, which raceDetail rebuilds without it. */
-function withColors(detail: RaceDetail, colors: ReadonlyMap<string, string | undefined>): RaceDetail {
+export function withColors(detail: RaceDetail, colors: ReadonlyMap<string, string | undefined>): RaceDetail {
   const paint = <T extends { name: string }>(c: T): T => (colors.get(c.name) ? { ...c, color: colors.get(c.name) } : c);
   return { ...detail, candidates: detail.candidates.map(paint), counties: detail.counties.map((c) => ({ ...c, candidates: c.candidates.map(paint) })) };
 }

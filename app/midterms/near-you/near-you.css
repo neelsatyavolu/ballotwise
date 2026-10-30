@@ -1,0 +1,22 @@
+/* The Near you screen. Each part of the ballot carries its color in --ny, set where the part is drawn. */
+
+.ny-tally { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 18px; }
+.ny-tally a { display: inline-flex; align-items: baseline; gap: 7px; padding: 7px 12px; background: var(--sheet); border: 1px solid var(--rule); border-left: 3px solid var(--ny); border-radius: var(--radius); color: var(--ink); text-decoration: none; font-size: 13px; transition: border-color 0.15s; }
+.ny-tally a:hover { border-color: var(--ny); }
+.ny-tally a b { color: var(--ny); font-size: 18px; font-variant-numeric: tabular-nums; }
+
+.ny-top { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .ny-top { grid-template-columns: 1fr; } }
+
+.ny-panel { display: grid; gap: 12px; align-content: start; padding: 14px; background: var(--sheet); border: 1px solid var(--rule); border-top: 3px solid var(--accent); border-radius: var(--radius); }
+.ny-panel h2 { margin: 2px 0 0; font-size: 22px; }
+.ny-panel .mt-ev-stats { margin: 0; }
+.ny-county-race { display: grid; gap: 4px; padding: 10px 12px; background: var(--paper); border-radius: var(--radius); }
+.ny-county-race b { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.ny-county-race i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+
+.ny-section { margin-top: 28px; }
+.ny-section > h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 18px; }
+.ny-section > h2 i { width: 10px; height: 10px; border-radius: 2px; background: var(--ny); }
+.ny-section > h2 .ny-count { color: var(--muted); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.ny-section .mt-card { border-top: 2px solid var(--ny); }

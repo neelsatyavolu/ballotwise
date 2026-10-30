@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CivicError, FRESH_MS, SEARCH_LIMIT, type Fetched, type FoundRace } from "./civic";
+import { CivicError, FRESH_MS, SEARCH_LIMIT, withColors, type Fetched, type FoundRace } from "./civic";
 import { blankResults, ELECTION_DATE, FIRST_POLLS_OPEN, raceDetail, summarizeOther, type RaceDetail, type RaceSummary } from "./races";
 import { SANTA_CLARA_RESULTS } from "./view";
 
@@ -95,6 +95,12 @@ export function updatedAt(stamp: unknown): string | null {
   return `${m[3]}-${pad(m[1])}-${pad(m[2])}T${pad(hour)}:${m[5]}:${m[6]}${m[8] === "PDT" ? "-07:00" : "-08:00"}`;
 }
 
+/**
+ * Candidate colors by ballot order, as civicAPI gives its local races: distinct hues that are never the parties' blue
+ * or red, since these races are nonpartisan.
+ */
+const COLORS = ["#14b8a6", "#f59e0b", "#a855f7", "#22c55e", "#ec4899", "#06b6d4", "#eab308", "#94a3b8"];
+
 /** A contest in civicAPI's race shape, so it's summarized and shown by the same code as civicAPI's local races. */
 function asCivic(c: Contest, updated: string | null) {
   return {
@@ -107,7 +113,7 @@ function asCivic(c: Contest, updated: string | null) {
     election_date: `${ELECTION_DATE}T08:00:00.000Z`,
     percent_reporting: c.TP ? ((c.PR ?? 0) / c.TP) * 100 : null,
     // The county lists a write-in line in every contest; it's kept only once it has votes.
-    candidates: c.CH.map((name, i) => ({ name: candidateName(name), party: c.P?.[i] || "Nonpartisan", votes: c.V[i] ?? 0 })).filter((x) => x.votes > 0 || !/^write-in$/i.test(x.name)),
+    candidates: c.CH.map((name, i) => ({ name: candidateName(name), party: c.P?.[i] || "Nonpartisan", votes: c.V[i] ?? 0, color: COLORS[i % COLORS.length] })).filter((x) => x.votes > 0 || !/^write-in$/i.test(x.name)),
     last_updated: updated,
   };
 }
@@ -199,7 +205,8 @@ export async function fetchCountyRace(id: number, now: number): Promise<Fetched<
   const input = asCivic(contest, updated);
   const summary = summarizeOther(input, now);
   if (!summary) return null;
-  const detail: RaceDetail = { ...raceDetail(summary, input, {}, now), ...countyFields(contest) };
+  const colors = new Map(summary.candidates.map((c) => [c.name, c.color]));
+  const detail: RaceDetail = { ...withColors(raceDetail(summary, input, {}, now), colors), ...countyFields(contest) };
   // Like civicAPI's races, a Nov 3 race shows no numbers before polls open, in case the county posts test counts.
   return { race: now < FIRST_POLLS_OPEN ? blankResults(detail) : detail, fetchedAt: at, stale };
 }

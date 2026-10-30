@@ -17,7 +17,6 @@ import { ForecastTip, WatchNote } from "./ForecastTip";
 import { electionModeDefault } from "@/lib/midterms/polls";
 import { NationMap, type NationFill } from "./maps";
 import { ModeNav } from "./ModeNav";
-import { NearYou } from "./NearYou";
 import { RaceCard } from "./RaceCard";
 import { RaceSearch } from "./RaceSearch";
 import { RaceRows, type Star } from "./RaceRows";
@@ -28,10 +27,9 @@ import { reportingText } from "./reporting";
 import { OverviewSkeleton } from "./Skeleton";
 import { replayTour, Tour } from "./Tour";
 
-type Tab = "key" | "near" | "mine" | "ai" | "all";
+type Tab = "key" | "mine" | "ai" | "all";
 const TABS: { id: Tab; label: string }[] = [
   { id: "key", label: "Key races" },
-  { id: "near", label: "Near you" },
   { id: "mine", label: "My races" },
   { id: "ai", label: "My dashboards" },
   { id: "all", label: "All races" },
@@ -302,8 +300,6 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
               ))}
             </div>
           )}
-
-          {tab === "near" && <NearYou races={races} star={star} />}
 
           {tab === "mine" && (
             <div className="stack mt-in">

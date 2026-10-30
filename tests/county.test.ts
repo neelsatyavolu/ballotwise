@@ -134,6 +134,8 @@ describe("fetchCountyRace", () => {
     vi.stubGlobal("fetch", feed());
     const { race } = (await fetchCountyRace(COUNTY_ID_BASE + 85, AFTER_POLLS))!;
     expect(race.candidates.map((c) => c.name)).toEqual(['Yu "Yudy" Deng', "Brian Hamachek", "Write-in"]);
+    // Each candidate keeps one color by ballot order, never the parties' blue or red.
+    expect(race.candidates.map((c) => c.color)).toEqual(["#f59e0b", "#14b8a6", "#a855f7"]);
   });
 
   it("reads a measure as a yes/no question", async () => {

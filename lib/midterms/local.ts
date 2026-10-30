@@ -1,6 +1,7 @@
 import type { Districts } from "../ballot/census";
 import { searchLive } from "./civic";
 import { countyRacesFor, normal } from "./county";
+import countyNames from "./countyNames.json";
 import type { RaceSummary } from "./races";
 import { STATE_NAMES } from "./view";
 
@@ -13,6 +14,8 @@ import { STATE_NAMES } from "./view";
 export type LocalRaces = {
   area: string;
   state: string | null;
+  /** The address's county on the state's map. */
+  countyFips: string | null;
   house: number | null;
   legislature: RaceSummary[];
   yours: RaceSummary[];
@@ -31,6 +34,21 @@ const placeName = (place: string | null) => place?.replace(/\s+(city|town|villag
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Whether `name` holds `phrase` as whole words, ignoring case and accents. */
 const names = (name: string, phrase: string) => new RegExp(`\\b${escapeRe(normal(phrase))}\\b`).test(normal(name));
+
+const COUNTY_NAMES = countyNames as Record<string, Record<string, string>>;
+
+/**
+ * A county's FIPS code from its Census name. The map's names drop the kind ("Santa Clara County" → "Santa Clara"),
+ * and an independent city shares its name with a county ("Richmond city", "Richmond County"); cities' codes start at 510.
+ */
+export function countyFips(state: string, county: string | null): string | null {
+  if (!county) return null;
+  const city = / city$/.test(county);
+  const name = county.replace(/\s+(County|Parish|Borough|Census Area|Municipality|City and Borough)$| city$/, "");
+  const inState = COUNTY_NAMES[state] ?? {};
+  const hits = Object.keys(inState).filter((fips) => inState[fips] === name);
+  return hits.find((fips) => Number(fips.slice(2)) >= 510 === city) ?? hits[0] ?? null;
+}
 
 /** "Congressional District 16" → 16, "Congressional District (at Large)" → 0, as the tracked House races number them. */
 function houseDistrict(name: string | null): number | null {
@@ -91,5 +109,5 @@ export async function localRaces(districts: Districts, now: number): Promise<Loc
   const area = [place, districts.county, districts.state].filter(Boolean).join(", ");
   const state = Object.keys(STATE_NAMES).find((code) => STATE_NAMES[code] === districts.state) ?? null;
   const [local, seats] = await Promise.all([cityAndCounty(districts, state, place, now), state ? legislature(districts, state, now) : { races: [], stale: false }]);
-  return { area, state, house: houseDistrict(districts.congressional), legislature: seats.races, ...local, stale: local.stale || seats.stale };
+  return { area, state, countyFips: state && countyFips(state, districts.county), house: houseDistrict(districts.congressional), legislature: seats.races, ...local, stale: local.stale || seats.stale };
 }

@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 
 const MODES = [
   { href: "/midterms", label: "Overview" },
+  { href: "/midterms/near-you", label: "Near you" },
   { href: "/midterms/senate", label: "Senate" },
   { href: "/midterms/house", label: "House" },
   { href: "/midterms/governor", label: "Governor" },
