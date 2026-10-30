@@ -16,9 +16,10 @@ const SMALL_PAGE: Record<string, number> = { "US Senate": 100, Governor: 100 };
 export const FRESH_MS = 30_000;
 /**
  * A page view that can refresh in the background is served a catalog up to this old at once, rather than waiting
- * the several seconds civicAPI takes; the next poll gets the refreshed one.
+ * the several seconds civicAPI takes; the next poll gets the refreshed one. The minutely cron keeps D1's copy within
+ * this, with room for a skipped write (WRITE_EVERY_MS) and a slow refresh.
  */
-export const SERVE_STALE_MS = 2 * 60_000;
+export const SERVE_STALE_MS = 3 * 60_000;
 /**
  * How long a page view waits on civicAPI when it has an older catalog to fall back on. Past this it gets that
  * catalog marked stale, and the fetch finishes after the response for the next view.
@@ -165,16 +166,32 @@ export function resetCivicMemo() {
  */
 export type Fetched<T> = T & { fetchedAt: number; stale: boolean; stored?: true; partial?: string[] };
 
-/** Every race's stored numbers, with `seen` set to when they were written. Null when D1 can't be read. */
-async function readRaceSnapshots(db: Db): Promise<Known | null> {
+/** D1's stored races, and when the last complete refresh finished with all its numbers stored (null if never). */
+type Snapshots = { known: Known; refreshedAt: number | null };
+
+/** When the last complete refresh was stored, or null when it never was or can't be read. */
+async function readRefreshedAt(db: Db): Promise<number | null> {
   try {
-    const { results } = await db.prepare("SELECT race_id, data, fetched_at FROM midterm_race_snapshots").all<{ race_id: number; data: string; fetched_at: number }>();
+    return (await db.prepare("SELECT at FROM midterm_catalog_refresh WHERE id = 1").first<{ at: number }>())?.at ?? null;
+  } catch (err) {
+    console.error("midterms catalog refresh time read failed:", err);
+    return null;
+  }
+}
+
+/** Every race's stored numbers, with `seen` set to when they were written. Null when D1 can't be read. */
+async function readRaceSnapshots(db: Db): Promise<Snapshots | null> {
+  try {
+    const [{ results }, refreshedAt] = await Promise.all([
+      db.prepare("SELECT race_id, data, fetched_at FROM midterm_race_snapshots").all<{ race_id: number; data: string; fetched_at: number }>(),
+      readRefreshedAt(db),
+    ]);
     const known: Known = new Map();
     for (const row of results) {
       known.set(row.race_id, { race: JSON.parse(row.data) as RaceSummary, seen: row.fetched_at });
       written.set(row.race_id, row.data);
     }
-    return known;
+    return { known, refreshedAt };
   } catch (err) {
     console.error("midterms race snapshot read failed:", err);
     return null;
@@ -198,30 +215,38 @@ const REGISTER = "INSERT OR IGNORE INTO midterm_registry (race_id, office, state
 const UPSERT = `INSERT INTO midterm_race_snapshots (race_id, data, fetched_at) VALUES (?, ?, ?)
   ON CONFLICT(race_id) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at
   WHERE excluded.fetched_at > midterm_race_snapshots.fetched_at`;
+const MARK_REFRESHED = `INSERT INTO midterm_catalog_refresh (id, at) VALUES (1, ?)
+  ON CONFLICT(id) DO UPDATE SET at = excluded.at WHERE excluded.at > midterm_catalog_refresh.at`;
 
 /**
  * One batch that registers `newcomers` and stores the fetched races whose numbers changed since this isolate last
- * wrote them: at most one batch a minute, unless `urgent` (races D1 hasn't stored). Null when there's nothing to write.
+ * wrote them: at most one batch a minute, unless `urgent` (races D1 hasn't stored). When the refresh was `complete`
+ * and its numbers are all stored, its time is recorded after the batch. Null when there's nothing to write.
  */
-function saveRaces(db: Db, fetched: readonly RaceSummary[], newcomers: readonly RaceSummary[], now: number, urgent: boolean): Promise<void> | null {
+function saveRaces(db: Db, fetched: readonly RaceSummary[], newcomers: readonly RaceSummary[], now: number, urgent: boolean, complete: boolean): Promise<void> | null {
   const due = urgent || now - lastWriteAt >= WRITE_EVERY_MS;
   const changed = due ? fetched.map((race) => ({ race, json: JSON.stringify(race) })).filter(({ race, json }) => written.get(race.id) !== json) : [];
-  if (changed.length === 0 && newcomers.length === 0) return null;
+  const mark = due && complete;
+  if (changed.length === 0 && newcomers.length === 0 && !mark) return null;
   if (changed.length > 0) lastWriteAt = now;
   for (const { race, json } of changed) written.set(race.id, json);
   for (const r of newcomers) registryMemo?.value.set(r.id, { race_id: r.id, office: r.office, state: r.state, district: r.district, first_seen: now });
   return (async () => {
-    try {
-      await db.batch([
-        ...newcomers.map((r) => db.prepare(REGISTER).bind(r.id, r.office, r.state, r.district, now)),
-        ...changed.map(({ race, json }) => db.prepare(UPSERT).bind(race.id, json, now)),
-      ]);
-    } catch (err) {
-      // Forget them, so the next batch tries again.
-      for (const { race } of changed) written.delete(race.id);
-      for (const r of newcomers) registryMemo?.value.delete(r.id);
-      throw err;
+    if (changed.length > 0 || newcomers.length > 0) {
+      try {
+        await db.batch([
+          ...newcomers.map((r) => db.prepare(REGISTER).bind(r.id, r.office, r.state, r.district, now)),
+          ...changed.map(({ race, json }) => db.prepare(UPSERT).bind(race.id, json, now)),
+        ]);
+      } catch (err) {
+        // Forget them, so the next batch tries again.
+        for (const { race } of changed) written.delete(race.id);
+        for (const r of newcomers) registryMemo?.value.delete(r.id);
+        throw err;
+      }
     }
+    // Only after the numbers it vouches for are stored.
+    if (mark) await db.prepare(MARK_REFRESHED).bind(now).run();
   })();
 }
 
@@ -241,11 +266,15 @@ function newer(a: Known, b: Known): Known {
   return out;
 }
 
-/** What a fresh isolate serves during an outage: every stored race, as of the latest write. */
-function fromSnapshots(known: Known | null): Stored | null {
-  if (!known || known.size === 0) return null;
-  const entries = [...known.values()];
-  return { at: Math.max(...entries.map((e) => e.seen)), value: entries.map((e) => e.race).filter((r) => !RETIRED_RACE_IDS.has(r.id)), fromStore: true };
+/**
+ * What a fresh isolate serves: every stored race, as of the latest write or the last complete refresh, whichever is
+ * later. Unchanged races aren't rewritten, so the refresh time is what shows a still count is current.
+ */
+function fromSnapshots(snapshots: Snapshots | null): Stored | null {
+  if (!snapshots || snapshots.known.size === 0) return null;
+  const entries = [...snapshots.known.values()];
+  const at = Math.max(snapshots.refreshedAt ?? -Infinity, ...entries.map((e) => e.seen));
+  return { at, value: entries.map((e) => e.race).filter((r) => !RETIRED_RACE_IDS.has(r.id)), fromStore: true };
 }
 
 /** Stand-in for a registered race no snapshot has numbers for. */
@@ -367,7 +396,7 @@ export async function fetchCatalog(
 }
 
 /** The civicAPI fetch under way, or a new one when there's none (or the last one looks cut off). */
-function latest(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Known | null>): Promise<Stored> {
+function latest(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Snapshots | null>): Promise<Stored> {
   if (inFlight && now - inFlight.since < STUCK_MS) return inFlight.work;
   const work: Promise<Stored> = load(now, db, background, warm, snapshots).finally(() => {
     if (inFlight?.work === work) inFlight = null;
@@ -377,17 +406,17 @@ function latest(now: number, db: Db | undefined, background: ((work: Promise<unk
 }
 
 /** Asks civicAPI for every race, keeps the ones it left out, saves the result to memory and D1. Throws on CivicError. */
-async function load(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Known | null>): Promise<Stored> {
+async function load(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Snapshots | null>): Promise<Stored> {
   const registeredRaces = registry(db, now);
   const { races: fetched, failed } = await fetchRaces(now);
   if (failed.length) console.error(`midterms: civicAPI failed for ${failed.join(", ")}; those races keep their last known numbers`);
-  let known = warm ? knownFrom(warm) : ((await snapshots) ?? new Map());
+  let known = warm ? knownFrom(warm) : ((await snapshots)?.known ?? new Map());
   const registered = await registeredRaces;
   const listed = new Set(fetched.map((r) => r.id));
   // Registered races this isolate has no numbers for: another isolate saw them, so D1 may hold their numbers.
   if (db && warm && [...(registered?.keys() ?? [])].some((id) => !listed.has(id) && !known.has(id))) {
     const stored = await readRaceSnapshots(db);
-    if (stored) known = newer(known, stored);
+    if (stored) known = newer(known, stored.known);
   }
   const races = assemble(fetched, known, registered);
   const missing = missingByOffice(races);
@@ -397,7 +426,7 @@ async function load(now: number, db: Db | undefined, background: ((work: Promise
   if (!catalogMemo || catalogMemo.at <= now) catalogMemo = memo;
   if (db) {
     const newcomers = registered ? fetched.filter((r) => !registered.has(r.id)) : [];
-    const write = saveRaces(db, fetched, newcomers, now, fetched.some((r) => !known.has(r.id)));
+    const write = saveRaces(db, fetched, newcomers, now, fetched.some((r) => !known.has(r.id)), failed.length === 0);
     if (write) await handOff(write, background);
   }
   return memo;

@@ -363,4 +363,41 @@ describe("fetchCatalog serving a recent catalog while it refreshes", () => {
     await Promise.all(work);
     expect((await fetchCatalog(NOW + MINUTE + 1000, [], db)).races).toHaveLength(27);
   });
+
+  it("serves a fresh isolate D1's copy at once after a recent refresh that changed no numbers", async () => {
+    const db = testDb();
+    await at(0, FULL, db);
+    await at(2, FULL, db);
+    expect(await fetchedAt(db, 1)).toBe(NOW); // unchanged, so not rewritten
+    resetCivicMemo();
+    outage();
+    const work: Promise<unknown>[] = [];
+    const first = await fetchCatalog(NOW + 3 * MINUTE, [], db, (w) => work.push(w), true);
+    expect(first).toMatchObject({ fetchedAt: NOW + 2 * MINUTE, stale: false });
+    expect(first.races).toHaveLength(26);
+    await Promise.all(work);
+  });
+
+  it("doesn't count a refresh that missed a race type as recent", async () => {
+    const db = testDb();
+    await at(0, FULL, db);
+    vi.stubGlobal("fetch", async (url: string) => {
+      const type = decodeURIComponent(new URL(url).searchParams.get("type") ?? "");
+      return type === "Governor" ? new Response("down", { status: 503 }) : new Response(JSON.stringify({ races: FULL[type] ?? [] }));
+    });
+    await fetchCatalog(NOW + 2 * MINUTE, [], db);
+    resetCivicMemo();
+    outage();
+    expect(await fetchCatalog(NOW + 4 * MINUTE, [], db, () => {}, true)).toMatchObject({ fetchedAt: NOW, stale: true });
+  });
+
+  it("still stores races when the refresh time can't be written", async () => {
+    const db = testDb();
+    await db.prepare("DROP TABLE midterm_catalog_refresh").run();
+    await at(0, FULL, db);
+    expect(await rows(db)).toHaveLength(26);
+    resetCivicMemo();
+    outage();
+    expect(await fetchCatalog(NOW + MINUTE, [], db, () => {}, true)).toMatchObject({ fetchedAt: NOW, stale: false });
+  });
 });

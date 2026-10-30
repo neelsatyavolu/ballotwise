@@ -11,6 +11,8 @@ import { apnsConfig, dispatchPushes } from "./lib/push/dispatch";
 
 type Env = CloudflareEnv & { GROK_TOKEN_KEY?: string; APNS_KEY?: string; APNS_KEY_ID?: string; APNS_TEAM_ID?: string; APNS_TOPIC?: string };
 const MAX_ATTEMPTS = 3;
+/** Market and poll ratings are rebuilt on this many minutes' cron runs, as before the cron ran every minute. */
+const ODDS_EVERY_MIN = 5;
 const OLD_HOST = "ballotwise.n3el.dev";
 const NEW_ORIGIN = "https://ballotwise.xanom.co";
 
@@ -40,20 +42,21 @@ export default {
   },
 
   /**
-   * Every 5 minutes (wrangler.jsonc): record race calls and vote history from the current results, so they don't
-   * depend on page views, send the iOS app's push alerts for what changed, then re-rate the midterm races from
-   * current market prices and polls. Recording goes first so all three share one civicAPI fetch.
+   * Every minute (wrangler.jsonc): refresh the results into D1, so page views on a fresh isolate are served the stored
+   * copy at once instead of waiting on civicAPI; record race calls and vote history from them, so they don't depend
+   * on page views; and send the iOS app's push alerts for what changed. Every ODDS_EVERY_MIN minutes, also re-rate the
+   * midterm races from current market prices and polls. Recording goes first so all of it shares one civicAPI fetch.
    */
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const now = Date.now();
     const db = env.DB as unknown as Db;
     const apns = apnsConfig(env);
+    const oddsDue = new Date(controller.scheduledTime).getUTCMinutes() % ODDS_EVERY_MIN === 0;
     ctx.waitUntil(
       recordResults(db, now)
         .then((races) => (apns ? dispatchPushes(db, apns, races, now).catch((err) => console.error("push alerts failed:", err instanceof Error ? err.message : err)) : undefined))
         .catch((err) => console.error("midterms results recording failed:", err instanceof Error ? err.message : err))
-        .then(() => bareRaces(now, db))
-        .then((races) => refreshOdds(db, races, now))
+        .then(() => (oddsDue ? bareRaces(now, db).then((races) => refreshOdds(db, races, now)) : undefined))
         .catch((err) => console.error("midterms odds refresh failed:", err instanceof Error ? err.message : err)),
     );
   },
