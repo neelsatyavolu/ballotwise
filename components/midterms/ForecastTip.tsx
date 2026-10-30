@@ -1,7 +1,7 @@
 // Rendered inside the tracker's map tooltips.
 import { flipTo, isWatch, safeSide } from "@/lib/midterms/explore";
 import { holderOf } from "@/lib/midterms/holders";
-import { chances, nomineeOf, RATING_LABEL, ratingFill, safeFill, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
+import { chances, nomineeOf, RATING_LABEL, ratingFill, safeFill, STATE_NAMES, wholePercents, type RaceSummary } from "@/lib/midterms/view";
 import { partyColor } from "./party";
 
 const ORDINAL = new Intl.PluralRules("en-US", { type: "ordinal" });
@@ -35,6 +35,7 @@ export function ForecastTip({ race, updatedAt }: { race: RaceSummary; updatedAt:
   const rows = candidateOdds(race);
   const priced = rows.filter((c) => c.p !== null);
   const shown = (priced.length ? priced : rows).slice(0, 3);
+  const percents = wholePercents(shown.map((c) => c.p));
   const safe = race.rating ? null : safeSide(race);
   const label = race.rating ? RATING_LABEL[race.rating] : safe ? `Safe ${safe}` : null;
   const fill = race.rating ? ratingFill(race.rating) : safe ? safeFill(safe) : null;
@@ -57,13 +58,13 @@ export function ForecastTip({ race, updatedAt }: { race: RaceSummary; updatedAt:
       </div>
       <div className="mt-ft-body">
         <ul className="mt-ft-rows">
-          {shown.map((c) => (
+          {shown.map((c, i) => (
             <li key={c.name} style={{ borderLeftColor: partyColor(c) }}>
               <span className="mt-ft-name">
                 {c.name}
                 {c.incumbent && "*"}
               </span>
-              <span className="mt-ft-p">{c.p === null ? "—" : `${Math.round(c.p * 100)}%`}</span>
+              <span className="mt-ft-p">{percents[i] === null ? "—" : `${percents[i]}%`}</span>
             </li>
           ))}
         </ul>

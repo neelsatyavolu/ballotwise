@@ -113,6 +113,17 @@ export function chances(signal: Pick<Signal, "forecast"> | null | undefined): Pa
   return signal?.forecast?.odds ?? null;
 }
 
+/**
+ * Chances as whole percents. Two chances that make up the whole race (favorite first) keep adding to 100: the second
+ * takes the remainder, so 91.5% and 8.5% read 92% and 8%, not 92% and 9%.
+ */
+export function wholePercents(ps: readonly (number | null)[]): (number | null)[] {
+  const whole = ps.map((p) => (p === null ? null : Math.round(p * 100)));
+  const [a, b] = ps;
+  if (ps.length !== 2 || a === null || b === null || Math.abs(a + b - 1) > 0.001) return whole;
+  return [whole[0], 100 - whole[0]!];
+}
+
 /** The forecast favorite's chance, 0.5 for a coin flip; 1 with no forecast, so unforecast races sort last. */
 export function favoriteChance(r: Pick<RaceSummary, "signal">): number {
   const odds = Object.values(chances(r.signal) ?? {});
