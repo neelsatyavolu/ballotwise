@@ -39,6 +39,8 @@ export const isCalled = (r: RaceSummary) => r.candidates.some((c) => c.winner);
 
 /** A race the forecast rated a toss-up that hasn't been called yet: the ones to watch on election night. */
 export const isWatch = (r: RaceSummary) => r.rating === "tossup" && !isCalled(r);
+/** An uncalled race the forecast rated a lean: competitive, and highlighted on election night a step below toss-ups. */
+export const isCompetitive = (r: RaceSummary) => !!r.rating?.startsWith("lean") && !isCalled(r);
 
 export function statusOf(r: RaceSummary): Status {
   if (isCalled(r)) return "called";

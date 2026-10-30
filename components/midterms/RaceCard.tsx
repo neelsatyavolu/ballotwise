@@ -34,7 +34,7 @@ function CardStatus({ race }: { race: RaceSummary }) {
 }
 
 /** One race at a glance: the top candidates as a results table, a stacked vote bar once votes are in, and how much is counted. */
-export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void }) {
+export function RaceCard({ race, starred, onStar, limit = 3 }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void; limit?: number }) {
   const label = raceLabel(race);
   const sub = race.total ? null : signalLine(race.signal, race);
   return (
@@ -53,7 +53,7 @@ export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred
           {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c) }} />)}
         </div>
       )}
-      <CandidateTable race={race} limit={3} short fill status={<CardStatus race={race} />} />
+      <CandidateTable race={race} limit={limit} short fill status={<CardStatus race={race} />} />
     </li>
   );
 }

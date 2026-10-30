@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { flipTo, isWatch, raceFill } from "@/lib/midterms/explore";
+import { flipTo, isCompetitive, isWatch, raceFill } from "@/lib/midterms/explore";
 import { electionModeDefault } from "@/lib/midterms/polls";
 import { colorOf, compareRaces, lead, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
@@ -55,7 +55,7 @@ const hoverTip = (r: RaceSummary, updatedAt: number | null) => (r.total ? raceTi
 
 /** How a district looks on the House map, nationally or zoomed to its state. */
 export function districtFill(r: RaceSummary, updatedAt: number | null, results: boolean): Fill {
-  return { fill: raceFill(r, results), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), watch: results && isWatch(r), tip: hoverTip(r, updatedAt) };
+  return { fill: raceFill(r, results), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), watch: results && isWatch(r), lean: results && isCompetitive(r), tip: hoverTip(r, updatedAt) };
 }
 
 /** Every House district for the national map, keyed "PA-7" (at-large seats "WY-0"); a district's regular race colors it. */
@@ -77,7 +77,7 @@ export function stateFills(office: Office, races: RaceSummary[], updatedAt: numb
     const name = STATE_NAMES[state] ?? state;
     if (office === "senate" || office === "governor") {
       const r = [...list].sort(regularFirst)[0];
-      out.set(state, { fill: raceFill(r, results), tip: hoverTip(r, updatedAt), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), watch: results && isWatch(r) });
+      out.set(state, { fill: raceFill(r, results), tip: hoverTip(r, updatedAt), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), watch: results && isWatch(r), lean: results && isCompetitive(r) });
     } else if (office === "house") {
       const ahead = leading(list, "house");
       const won = { D: 0, R: 0 };

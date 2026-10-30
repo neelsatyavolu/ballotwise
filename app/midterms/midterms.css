@@ -1353,3 +1353,54 @@ body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
 .mt-search-none p { margin: 0; max-width: 64ch; }
 .mt-search-none b { color: var(--ink); }
 .mt-search-none .mt-search-chips { align-items: center; justify-content: center; }
+
+/* Inner scroll areas (race lists, panels, tables) scroll without drawn scrollbars; wheels, trackpads and touch still scroll them. */
+.mt *, .mt-dv * { scrollbar-width: none; }
+.mt *::-webkit-scrollbar, .mt-dv *::-webkit-scrollbar { display: none; }
+
+/* Side by side: no title row; the columns' widths come from the draggable dividers (SideBySide.tsx). */
+body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
+@media (min-width: 1800px) {
+  .mt-sbs { grid-template-columns: var(--sbs-3, repeat(3, minmax(0, 1fr))); }
+}
+@media (min-width: 2560px) {
+  .mt-sbs { grid-template-columns: var(--sbs-4, repeat(3, minmax(0, 1fr)) minmax(300px, 0.6fr)); }
+}
+.mt-sbs-col { position: relative; }
+.mt-sbs-col > .mt-section-head { justify-content: flex-start; min-height: 36px; }
+.mt-sbs-col > .mt-section-head > .mt-seg { margin-left: auto; }
+.mt-sbs-count { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mt-sbs-status { display: inline-flex; align-items: center; gap: 6px; }
+.mt-sbs-focus { display: grid; gap: 10px; }
+.mt-sbs-focus h3 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt-sbs-cards { margin-top: 0; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.mt-sbs-resize { display: none; }
+@media (min-width: 1800px) {
+  /* Centered in the 20px gap to the next column: a faint rule that lights up when grabbed. */
+  .mt-sbs-resize { display: block; position: absolute; top: 0; bottom: 0; right: -16px; width: 12px; cursor: col-resize; touch-action: none; z-index: 4; }
+  .mt-sbs-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 2px; border-radius: 1px; background: var(--rule); transition: background-color 0.15s; }
+  .mt-sbs-resize:hover::after, .mt-sbs-resize:active::after, .mt-sbs-resize:focus-visible::after { background: var(--accent); }
+  .mt-sbs-resize:focus-visible { outline: none; }
+  .mt-sbs-resize.to-side { display: none; }
+}
+@media (min-width: 2560px) {
+  .mt-sbs-resize.to-side { display: block; }
+}
+/* Race lists fit their column instead of scrolling sideways: long names end in "…", and columns that only show
+   dashes (leader and lead before votes, the rating once counting) step aside, as in the office screens' panel. */
+.mt-sbs-col .mt-rows th, .mt-sbs-col .mt-rows td { padding-left: 6px; padding-right: 6px; }
+.mt .mt-sbs-col .mt-rows th:first-child, .mt .mt-sbs-col .mt-rows td:first-child { padding-left: 12px; }
+.mt-sbs-col .mt-rows td:first-child { max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.mt-sbs-col .mt-rows.counting th:nth-child(2), .mt-sbs-col .mt-rows.counting td:nth-child(2),
+.mt-sbs-col .mt-rows:not(.counting) th:nth-child(3), .mt-sbs-col .mt-rows:not(.counting) td:nth-child(3),
+.mt-sbs-col .mt-rows:not(.counting) th:nth-child(4), .mt-sbs-col .mt-rows:not(.counting) td:nth-child(4) { display: none; }
+.mt-sbs-col .mt-rows.counting .mt-leader .muted { display: none; }
+
+/* Election night: uncalled leans are highlighted a step below toss-ups, in the same yellow: a half-strength bar in
+   race lists, a thin dashed outline on maps and seats, and a fainter ring on tiles. */
+.mt-watch.lean { stroke-width: 1.2; stroke-dasharray: 3 2.5; stroke-opacity: 0.85; }
+.mt .mt-rows tbody tr.lean td:first-child { position: relative; }
+.mt .mt-rows tbody tr.lean td:first-child::before { content: ""; position: absolute; left: 0; top: 0; bottom: -1px; width: 3px; background: color-mix(in srgb, var(--rate-tossup) 45%, transparent); }
+.mt .mt-tile.lean { box-shadow: 0 0 0 1px color-mix(in srgb, var(--rate-tossup) 45%, transparent); }
+.mt .mt-seat.lean { outline: 1px dashed var(--rate-tossup); outline-offset: -1px; }
+.mt-legend i.watch.lean { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rate-tossup) 70%, transparent); }

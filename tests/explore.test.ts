@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeCount, DEFAULT_FILTERS, explore, flipTo, fromQuery, leaderOf, raceFill, safeSide, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
+import { activeCount, DEFAULT_FILTERS, explore, flipTo, fromQuery, isCompetitive, isWatch, leaderOf, raceFill, safeSide, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
 import { compareRaces, type RaceSummary } from "../lib/midterms/view";
 
 let nextId = 1;
@@ -20,6 +20,17 @@ function race(over: Partial<RaceSummary> & { votes?: [number, number]; winner?: 
   return { id: nextId++, office: "senate", state: "GA", district: null, title: "Georgia US Senate", reporting: total ? 50 : 0, total, candidates: cands, rating: null, signal: null, ...over };
 }
 const f = (over: Partial<Filters> = {}): Filters => ({ ...DEFAULT_FILTERS, ...over });
+
+describe("races to watch", () => {
+  it("flags uncalled toss-ups to watch, and uncalled leans as competitive", () => {
+    expect(isWatch(race({ rating: "tossup" }))).toBe(true);
+    expect(isCompetitive(race({ rating: "lean-d" }))).toBe(true);
+    expect(isCompetitive(race({ rating: "lean-r", votes: [10, 9] }))).toBe(true);
+    expect(isCompetitive(race({ rating: "tossup" }))).toBe(false);
+    expect(isCompetitive(race({ rating: "likely-r" }))).toBe(false);
+    expect(isCompetitive(race({ rating: "lean-r", votes: [10, 9], winner: 1 }))).toBe(false);
+  });
+});
 
 describe("race classification", () => {
   it("tells awaiting, counting and called apart", () => {
