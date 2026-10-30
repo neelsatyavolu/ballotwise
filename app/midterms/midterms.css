@@ -77,16 +77,9 @@
 .mt-card-title::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
 .mt-card-title:focus-visible { outline: none; }
 .mt-card-title:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
-.mt-card-cands { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 14px; }
-.mt-card-cands li { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; }
-.mt-card-cands .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mt-card-cands .tag { color: var(--muted); font-size: 13px; }
-.mt-card-cands li.won { font-weight: 700; }
 .mt-check { color: var(--yes); font-weight: 700; }
 .mt-stack { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--rule); }
 .mt-stack span { height: 100%; transition: width 0.5s ease; }
-.mt-card-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
-.mt-card-foot .called { color: var(--yes); font-weight: 700; }
 
 .mt-star { position: relative; z-index: 1; border: 0; background: none; padding: 0 2px; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; }
 .mt-star:hover { color: var(--tossup); }
@@ -148,7 +141,6 @@
 .mt-table tbody tr.won td:first-child { font-weight: 700; }
 .mt-table tbody tr.selected td { background: var(--mark); }
 .mt-table tfoot td { font-weight: 600; color: var(--muted); border-bottom: 0; }
-.mt-cands td:first-child { padding-left: 14px; font-family: var(--serif); font-weight: 600; font-size: 17px; }
 .mt-share { display: inline-block; width: 60px; height: 6px; margin-right: 8px; border-radius: 3px; background: var(--rule); overflow: hidden; vertical-align: 1px; }
 .mt-share > span { display: block; height: 100%; }
 .mt-share.small-bar { width: 44px; }
@@ -593,34 +585,14 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-tile-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
 .mt-el .mt-tile-head .mt-rating { font-size: 11px; padding: 0 6px; }
 .mt-el .mt-tile-head .mt-star { font-size: 17px; }
-.mt-el .mt-tile-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.mt-el .mt-tile-table th { padding: 5px 4px; border-bottom: 1px solid var(--rule); font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); text-align: left; }
-.mt-el .mt-tile-table th.num { text-align: right; }
-.mt-el .mt-tile-table td { height: 29px; padding: 0 4px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-.mt-el .mt-tile-table th:first-child, .mt-el .mt-tile-table td:first-child { padding-left: 12px; }
-.mt-el .mt-tile-table th:last-child, .mt-el .mt-tile-table td:last-child { padding-right: 12px; }
-.mt-el .mt-tile-table td:first-child { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; box-shadow: inset 4px 0 0 var(--p, transparent); }
-.mt-el .mt-tile-table tbody tr:last-child td { border-bottom: 0; }
-.mt-el .mt-tile-table tr.won td { background: color-mix(in srgb, var(--p) 38%, transparent); font-weight: 600; }
-.mt-el .mt-tile-table .mt-check { color: var(--el-reported); }
-.mt-el .mt-av { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 7px; border-radius: 50%; background: var(--el-raised); box-shadow: inset 0 0 0 1.5px var(--p, var(--muted)); color: var(--ink); font-size: 8.5px; font-weight: 700; letter-spacing: 0.02em; vertical-align: middle; }
 /* Candidate avatar: photo or initials inside a ring of the party's color, a fixed size so nothing shifts as photos load. */
 .mt-avatar { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; margin-right: 7px; border-radius: 50%; overflow: hidden; background: var(--el-raised, var(--rule)); box-shadow: inset 0 0 0 1.5px var(--p, var(--muted)); color: var(--ink); font-size: 8.5px; font-weight: 700; letter-spacing: 0.02em; vertical-align: middle; }
 .mt-avatar img { display: block; width: calc(100% - 3px); height: calc(100% - 3px); border-radius: 50%; object-fit: cover; object-position: center 18%; }
-.mt-card-cands .mt-avatar { margin-right: 6px; }
-.mt-el .mt-tile-party { font-size: 11px; font-weight: 600; }
-.mt-el .mt-tile-more td { height: 26px; }
-.mt-el .mt-tile-more a { color: var(--muted); text-decoration: none; }
-.mt-el .mt-tile-more a:hover { color: var(--ink); }
 .mt-el .mt-tile-foot { margin-top: auto; display: grid; gap: 5px; padding: 8px 12px 10px; border-top: 1px solid var(--rule); }
 .mt-el .mt-tile-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; color: var(--muted); }
 .mt-el .mt-tile-status .mt-res-status { font-size: 12px; }
 .mt-el .mt-tile-lead { display: inline-flex; align-items: center; gap: 6px; }
 .mt-el .mt-margin { display: inline-block; padding: 1px 6px; border-radius: 4px; color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; }
-.mt-el .mt-tile-in { display: flex; align-items: center; gap: 8px; color: var(--ink); }
-.mt-el .mt-tile-in .num { min-width: 28px; text-align: left; }
-.mt-el .mt-tile-track { flex: 1; height: 8px; background: var(--el-track); overflow: hidden; }
-.mt-el .mt-tile-track span { display: block; height: 100%; background: var(--el-reported); transition: width 0.5s ease; }
 .mt-el .mt-res-trend { margin-top: 0; font-size: 12px; }
 
 /* Latest calls and poll closings: dark tiles of hairline-ruled rows. */
@@ -695,12 +667,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt .mt-card-top { min-height: 40px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--rule); }
 .mt .mt-card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--sans); font-size: 14px; font-weight: 600; }
 .mt .mt-card-about { margin: 8px 12px 0; font-size: 12px; }
-.mt .mt-card-cands { gap: 0; font-size: 12px; }
-.mt .mt-card-cands li { grid-template-columns: 4px minmax(0, 1fr) auto; gap: 8px; min-height: 29px; padding-right: 12px; border-bottom: 1px solid var(--rule); }
-.mt .mt-card-cands .swatch { align-self: stretch; width: 4px; height: auto; min-height: 29px; border-radius: 0; }
-.mt .mt-card-cands .tag { font-size: 11px; font-weight: 600; color: var(--muted); }
 .mt .mt-card .mt-stack { margin: 8px 12px 0; height: 8px; border-radius: 0; background: var(--el-track); }
-.mt .mt-card-foot { margin: 8px 12px 0; font-size: 12px; }
 .mt .mt-star:hover, .mt .mt-star.on { color: var(--accent); }
 
 /* Tables: uppercase grey headers, ruled rows, tabular figures. */
@@ -712,8 +679,6 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt .mt-rows-wrap, .mt .mt-scroll { border-radius: 8px; }
 .mt .mt-table tbody tr.selected td { background: var(--el-raised); }
 .mt .mt-rows tbody tr:hover td, .mt .mt-counties tbody tr:hover td { background: var(--el-hover); }
-.mt .mt-cands td:first-child { font-family: var(--sans); font-size: 14px; font-weight: 600; }
-.mt .mt-cands tbody tr.won td { background: color-mix(in srgb, var(--el-reported) 14%, transparent); }
 .mt .mt-share { height: 8px; border-radius: 0; background: var(--el-track); }
 .mt .mt-race-head { border-bottom-color: var(--rule); }
 .mt .mt-crumbs a { color: var(--accent); }
@@ -767,3 +732,96 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
   .mt-office > .mt-panel .mt-rows-wrap { flex: 1 1 0; min-height: 0; max-height: none; }
 }
 .wrap.mt > .tabs { margin-bottom: 0; }
+
+/* Candidate tables (DDHQ style): party bar, photo, name, party, votes and share per row, then the poll closing with
+   total votes, then how much is reported. Shared by race cards, election-mode tiles and the race page. */
+.mt-ct { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.mt-ct th { padding: 8px; border-bottom: 1px solid var(--rule); color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; text-align: left; white-space: nowrap; }
+.mt-ct th.num, .mt-ct td.num { text-align: right; }
+.mt-ct td { height: 34px; padding: 0 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.mt-ct th:first-child, .mt-ct td:first-child { padding-left: 14px; }
+.mt-ct th:last-child, .mt-ct td:last-child { padding-right: 12px; }
+.mt-ct tbody tr:not(.mt-ct-more, .mt-ct-fill) td:first-child { box-shadow: inset 4px 0 0 var(--p, var(--muted)); }
+.mt-ct-cand { width: 100%; max-width: 0; }
+.mt-ct-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mt-ct-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink); font-weight: 500; }
+.mt-ct-inc { color: var(--muted); }
+.mt-ct .mt-avatar { width: 24px; height: 24px; margin: 0; font-size: 9px; }
+.mt-ct-party { color: var(--ink); font-weight: 500; }
+.mt-ct tbody tr.won td { background: color-mix(in srgb, var(--p) 22%, transparent); font-weight: 600; }
+.mt-ct .mt-check { color: var(--el-reported); }
+.mt-ct-more td { height: 28px; }
+.mt-ct-more a { color: var(--muted); text-decoration: none; }
+.mt-ct-more a:hover { color: var(--ink); }
+.mt-ct tfoot td { height: 36px; color: var(--muted); background: color-mix(in srgb, var(--ink) 3%, transparent); }
+/* A long status ("Polls close Nov 4, 1:00 AM ET") wraps within the row's height, so footers stay level across cards. */
+.mt-ct-status td:first-child { white-space: normal; line-height: 1.15; padding-top: 0; padding-bottom: 0; }
+.mt-ct-status .called { color: var(--el-reported); font-weight: 600; }
+.mt-ct-report td { border-bottom: 0; }
+.mt-ct-in { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.mt-ct-in .num { min-width: 28px; text-align: right; }
+.mt-ct-track { flex: 0 1 45%; max-width: 260px; height: 8px; background: var(--el-track); overflow: hidden; }
+.mt-ct-track span { display: block; height: 100%; background: var(--el-reported); transition: width 0.5s ease; }
+
+/* Cards end on the table's last row, which sits at the card's bottom. */
+.mt .mt-card { display: flex; flex-direction: column; padding-bottom: 0; }
+.mt-card-sub { margin: 8px 12px 0; font-size: 12px; color: var(--muted); }
+.mt .mt-card .mt-stack { margin: 8px 12px; }
+/* Overview cards run five across, so their tables are tighter. */
+.mt-card .mt-ct td, .mt-card .mt-ct th { padding: 0 5px; }
+.mt-card .mt-ct th { padding-top: 8px; padding-bottom: 8px; }
+.mt-card .mt-ct th:first-child, .mt-card .mt-ct td:first-child { padding-left: 12px; }
+.mt-card .mt-ct th:last-child, .mt-card .mt-ct td:last-child { padding-right: 10px; }
+.mt-card .mt-ct .mt-avatar { width: 20px; height: 20px; font-size: 8px; }
+.mt-card .mt-ct-who { gap: 6px; }
+.mt-el .mt-tile-foot:empty { display: none; }
+/* A tile's table takes the tile's spare height in one empty row above the footer, as DDHQ's cards do. */
+.mt-ct.fill { flex: 1 1 auto; height: 100%; }
+.mt-ct-fill { height: 100%; }
+.mt-ct-fill td { height: auto; padding: 0; border-bottom: 1px solid var(--rule); }
+
+/* The race page's table, larger and in its own box. */
+.mt-cands { overflow: hidden; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+.mt-cands .mt-ct { font-size: 14px; }
+.mt-cands .mt-ct td { height: 46px; }
+.mt-cands .mt-ct .mt-avatar { width: 30px; height: 30px; font-size: 10px; }
+.mt-cands .mt-ct-who { gap: 10px; }
+
+/* Election mode: race cards past the end of the side rail continue full width under the layout. */
+.mt-el-more:empty { display: none; }
+.mt-el .mt-el-more { margin-top: 10px; }
+
+/* Market panel */
+.mt-mk { display: grid; gap: 10px; }
+.mt-mk-head { margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt .mt-mk-sources { display: flex; }
+.mt .mt-mk-sources button { flex: 1; }
+.mt-mk-card { position: relative; display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+.mt-mk-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.mt-mk-q { margin: 0; color: var(--muted); font-size: 14px; }
+.mt-mk-lead { margin: 0; font-size: 20px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.mt-mk-chart { position: relative; }
+.mt-mk-chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.mt-mk-grid { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.mt-mk-axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mt-mk-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.mt-mk-cross { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.mt-mk-tip { position: absolute; top: 0; transform: translateX(-50%); z-index: 3; min-width: 150px; padding: 6px 8px; border: 1px solid var(--el-line, var(--rule)); border-radius: 6px; background: var(--el-raised, var(--sheet)); font-size: 12px; pointer-events: none; white-space: nowrap; }
+.mt-mk-tip div { display: flex; align-items: center; gap: 6px; }
+.mt-mk-tip div span { margin-left: auto; padding-left: 10px; font-variant-numeric: tabular-nums; }
+.mt-mk-tip i, .mt-mk-legend svg { flex: none; }
+.mt-mk-tip i { width: 8px; height: 2px; }
+.mt-mk-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink); }
+.mt-mk-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.mt-mk-legend span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.mt-mk-src { justify-self: start; }
+.mt-mk-empty { margin: 8px 0; }
+.mt .mt-mk-top .mt-seg { flex: none; flex-wrap: nowrap; }
+/* The chart scales with its box, so its labels are set larger in chart units on narrow screens to stay legible. */
+@media (max-width: 720px) {
+  .mt-mk-axis { font-size: 16px; }
+}
+/* The state panel ends where the map ends; with a market panel in it, it scrolls rather than cutting the panel off. */
+@media (min-width: 1001px) {
+  .mt-office > .mt-panel:has(.mt-mk) { overflow-y: auto; }
+}

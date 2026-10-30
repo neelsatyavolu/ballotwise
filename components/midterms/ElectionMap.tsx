@@ -4,7 +4,7 @@ import { isCalled, statusOf } from "@/lib/midterms/explore";
 import { fmt, lead, measureCount, OFFICE_LABEL, raceLabel, STATE_NAMES, type Office, type RaceSummary } from "@/lib/midterms/view";
 import { NationMap } from "./maps";
 import { partyColor } from "./party";
-import { lastName } from "./ResultList";
+import { lastName } from "./CandidateTable";
 import { FillLegend, seatFill, seatSummary, type FillMode } from "./SeatBoard";
 
 type Fill = { fill: string; tip: ReactNode; label: string };

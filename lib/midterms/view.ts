@@ -172,19 +172,6 @@ export function leading(races: readonly RaceSummary[], office: Office): Record<P
   return out;
 }
 
-/** Races of one office with no votes counted yet, by which party the prediction markets (Kalshi and Polymarket) favor, thin markets blended with polls. */
-export function projected(races: readonly RaceSummary[], office: Office): Record<Party, number> {
-  const out: Record<Party, number> = { D: 0, R: 0, other: 0 };
-  for (const r of races) {
-    if (r.office !== office || r.candidates.some((c) => c.winner) || lead(r.candidates)) continue;
-    const [first, second] = Object.entries((r.signal?.market && chances(r.signal)) ?? {}).sort((a, b) => b[1] - a[1]);
-    // An even market favors nobody.
-    if (!first || first[1] === second?.[1]) continue;
-    out[first[0] === "I" ? "other" : (first[0] as "D" | "R")] += 1;
-  }
-  return out;
-}
-
 /** Ballot measures: passed, failed, and still counting. A measure passes when "Yes" is called. */
 export function measureCount(races: readonly RaceSummary[]) {
   const out = { passed: 0, failed: 0, counting: 0, yesAhead: 0, noAhead: 0 };

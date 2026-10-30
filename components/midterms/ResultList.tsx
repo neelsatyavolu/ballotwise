@@ -1,13 +1,15 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
-import { useState, type CSSProperties } from "react";
+import { useContext, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { EARLY_REPORTING, favoredSide, groupOf, isEarly, leaderOf, statusOf, tierOf, type Group, type Sort } from "@/lib/midterms/explore";
 import { leadingFlip, outcomeOf } from "@/lib/midterms/holders";
 import { stampET, stateFinal } from "@/lib/midterms/polls";
-import { fmt, lead, partyTag, signalLine, type RaceSummary } from "@/lib/midterms/view";
-import { Avatar } from "./Avatar";
+import { fmt, lead, signalLine, type RaceSummary } from "@/lib/midterms/view";
+import { CandidateTable, lastName } from "./CandidateTable";
 import { partyColor } from "./party";
 import { shortLabel } from "./PollClose";
+import { RailContext, useRailSplit } from "./railSplit";
 import { RatingTag } from "./RaceCard";
 
 const PAGE = 50;
@@ -25,13 +27,6 @@ export type Stars = { ids: number[] | null; toggle: (id: number) => void };
 /** Candidates shown on a card; the rest are a link away. */
 const CARD_CANDIDATES = 3;
 
-export const lastName = (name: string) => {
-  const parts = name.replace(/,? (Jr|Sr|II|III|IV)\.?$/i, "").split(" ");
-  // "de la Cruz", "Van Hollen": keep lowercase particles with the surname.
-  let i = parts.length - 1;
-  while (i > 0 && /^(de|la|van|von|del|da|di|le)$/i.test(parts[i - 1])) i -= 1;
-  return parts.slice(i).join(" ");
-};
 
 function Tier({ race }: { race: RaceSummary }) {
   if (race.rating) return <RatingTag rating={race.rating} signal={race.signal} />;
@@ -54,66 +49,6 @@ function TrendLine({ race, now }: { race: RaceSummary; now: number }) {
   const title = `Compared with the count Ballotwise saved at ${at}. Ballotwise saves a race's count at most every five minutes (right away for a correction or a new leader); the last save was ${minutes < 1 ? "just now" : `${minutes} minutes ago`}.`;
   parts.push(minutes < 1 ? "saved just now" : `last saved ${minutes}m ago`);
   return <span className="mt-res-trend" title={title}>{parts.join(" · ")}</span>;
-}
-
-type Cand = RaceSummary["candidates"][number];
-
-/** Party as a results desk abbreviates it: DEM, GOP, LIB, GRE, IND, or the party's own short tag. */
-function partyCode(party: string): string {
-  if (/^Democrat/i.test(party)) return "DEM";
-  if (/^Republican/i.test(party)) return "GOP";
-  if (/libertarian/i.test(party)) return "LIB";
-  if (/green/i.test(party)) return "GRE";
-  if (/independent/i.test(party)) return "IND";
-  return partyTag(party).toUpperCase();
-}
-
-export const initials = (name: string) => {
-  const parts = name.replace(/[^\p{L}\s'-]/gu, " ").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "?";
-  return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + lastName(name)[0]).toUpperCase();
-};
-
-/** The race's candidates as a small results table: party bar, initials, party, votes and share. */
-function Candidates({ race }: { race: RaceSummary }) {
-  const measure = race.office === "measure";
-  const shown = race.candidates.slice(0, CARD_CANDIDATES);
-  const hidden = race.candidates.length - shown.length;
-  const early = isEarly(race);
-  return (
-    <table className="mt-tile-table">
-      <thead>
-        <tr>
-          <th scope="col">{measure ? "Choice" : "Candidate"}</th>
-          {!measure && <th scope="col">Party</th>}
-          <th scope="col" className="num">Votes</th>
-          <th scope="col" className="num">Pct</th>
-        </tr>
-      </thead>
-      <tbody>
-        {shown.map((c: Cand) => (
-          <tr key={c.name} className={c.winner ? "won" : undefined} style={{ "--p": partyColor(c), opacity: early && !c.winner ? 0.85 : undefined } as CSSProperties}>
-            <td title={c.name}>
-              {!measure && <Avatar race={race} candidate={c} className="mt-av">{initials(c.name)}</Avatar>}
-              <span className="mt-tile-name">{measure ? c.name : lastName(c.name)}</span>
-              {c.incumbent && <span title="Incumbent">*</span>}
-              {c.winner && <span className="mt-check" aria-label="winner"> ✓</span>}
-            </td>
-            {!measure && <td className="mt-tile-party">{partyCode(c.party)}</td>}
-            <td className="num">{fmt(c.votes)}</td>
-            <td className="num">{c.pct.toFixed(2)}%</td>
-          </tr>
-        ))}
-        {hidden > 0 && (
-          <tr className="mt-tile-more">
-            <td colSpan={measure ? 3 : 4}>
-              <Link href={`/midterms/${race.id}`}>+{hidden} more</Link>
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  );
 }
 
 function Status({ race, now }: { race: RaceSummary; now: number }) {
@@ -167,18 +102,6 @@ function Lead({ race }: { race: RaceSummary }) {
   );
 }
 
-/** How much of the count is in, as a percentage over a thin track. */
-function Reporting({ race }: { race: RaceSummary }) {
-  const unknown = race.total > 0 && race.reportingUnknown;
-  const pct = race.total > 0 && !unknown ? Math.min(100, race.reporting) : 0;
-  return (
-    <div className="mt-tile-in" title={unknown ? "civicAPI has votes for this race but no reporting figure" : "civicAPI's estimate of precincts or ballot batches reported. Not the share of the expected vote."}>
-      <span className="num">{unknown ? "Reporting unknown" : `${Math.round(pct)}%`}</span>
-      <span className="mt-tile-track" aria-hidden><span style={{ width: `${pct}%` }} /></span>
-    </div>
-  );
-}
-
 /** One race as a results card: name and rating, the candidates' table, then status, lead and how much is in. */
 function RaceTile({ race, starred, onStar, now }: { race: RaceSummary; starred: boolean; onStar: () => void; now: number }) {
   const leader = leaderOf(race);
@@ -200,14 +123,20 @@ function RaceTile({ race, starred, onStar, now }: { race: RaceSummary; starred: 
           {starred ? "★" : "☆"}
         </button>
       </header>
-      <Candidates race={race} />
+      <CandidateTable
+        race={race}
+        limit={CARD_CANDIDATES}
+        short
+        fill
+        status={
+          <span className="mt-tile-status">
+            <Status race={race} now={now} />
+            <Lead race={race} />
+          </span>
+        }
+      />
       <footer className="mt-tile-foot">
-        <div className="mt-tile-status">
-          <Status race={race} now={now} />
-          <Lead race={race} />
-        </div>
         <TrendLine race={race} now={now} />
-        <Reporting race={race} />
       </footer>
     </article>
   );
@@ -216,30 +145,50 @@ function RaceTile({ race, starred, onStar, now }: { race: RaceSummary; starred: 
 /** The filtered races as results cards in a grid, grouped by count status when sorted by closeness. */
 export function ResultList({ races, stars, sort, now }: { races: RaceSummary[]; stars: Stars; sort: Sort; now: number }) {
   const [shown, setShown] = useState(PAGE);
+  const beside = useRef<HTMLOListElement>(null);
+  const { slot } = useContext(RailContext);
+  const split = useRailSplit(beside, `${races.map((r) => r.id).join()}|${shown}|${sort}`);
   if (!races.length) return <p className="muted mt-res-empty">No races match these filters.</p>;
   const groupCounts = races.reduce((acc, r) => ({ ...acc, [groupOf(r)]: (acc[groupOf(r)] ?? 0) + 1 }), {} as Partial<Record<Group, number>>);
+  const items = races.slice(0, shown).flatMap((r, i) => {
+    const group = sort === "close" ? groupOf(r) : null;
+    const header =
+      group && (i === 0 || groupOf(races[i - 1]) !== group) ? (
+        <li key={`g-${group}`} className="mt-res-group">
+          {GROUP_LABEL[group]} · {groupCounts[group]}
+        </li>
+      ) : null;
+    const tile = (
+      <li key={r.id}>
+        <RaceTile race={r} starred={!!stars.ids?.includes(r.id)} onStar={() => stars.toggle(r.id)} now={now} />
+      </li>
+    );
+    return header ? [header, tile] : [tile];
+  });
+  // Cards past the end of election mode's side rail move to a full-width grid under the layout.
+  const wide = split !== null && slot ? items.slice(split) : [];
+  const more = races.length > shown && (
+    <button type="button" className="btn secondary mt-res-more" onClick={() => setShown((n) => n + PAGE)}>
+      Show {Math.min(PAGE, races.length - shown)} more of {races.length - shown}
+    </button>
+  );
   return (
     <div className="mt-res">
-      <ol className="mt-res-grid" aria-label="Races">
-        {races.slice(0, shown).map((r, i) => {
-          const group = sort === "close" ? groupOf(r) : null;
-          const header = group && (i === 0 || groupOf(races[i - 1]) !== group) ? (
-            <li key={`g-${group}`} className="mt-res-group">
-              {GROUP_LABEL[group]} · {groupCounts[group]}
-            </li>
-          ) : null;
-          return [
-            header,
-            <li key={r.id}>
-              <RaceTile race={r} starred={!!stars.ids?.includes(r.id)} onStar={() => stars.toggle(r.id)} now={now} />
-            </li>,
-          ];
-        })}
+      <ol ref={beside} className="mt-res-grid" aria-label="Races">
+        {wide.length ? items.slice(0, split!) : items}
       </ol>
-      {races.length > shown && (
-        <button type="button" className="btn secondary mt-res-more" onClick={() => setShown((n) => n + PAGE)}>
-          Show {Math.min(PAGE, races.length - shown)} more of {races.length - shown}
-        </button>
+      {wide.length && slot ? (
+        createPortal(
+          <>
+            <ol className="mt-res-grid" aria-label="More races">
+              {wide}
+            </ol>
+            {more}
+          </>,
+          slot,
+        )
+      ) : (
+        more
       )}
     </div>
   );

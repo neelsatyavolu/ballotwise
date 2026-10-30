@@ -5,17 +5,18 @@ import { useMemo, useState } from "react";
 import { stampET, stateFinal } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { fmt, OFFICE_LABEL, partyTag, pct, raceLabel, signalLine, STATE_NAMES, timeAgo } from "@/lib/midterms/view";
-import { Avatar, PhotoCredit } from "./Avatar";
-import { partyColor } from "./party";
-import { initials } from "./ResultList";
+import { OFFICE_LABEL, raceLabel, signalLine, STATE_NAMES } from "@/lib/midterms/view";
+import { PhotoCredit } from "./Avatar";
+import { CandidateTable } from "./CandidateTable";
 import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
 import { useLive, useStars } from "./hooks";
 import { CountyMap, type CountyFill } from "./maps";
+import { MarketPanel } from "./MarketPanel";
 import { ModeNav } from "./ModeNav";
 import { RatingTag, StarButton } from "./RaceCard";
 import { CountingContext, RaceStatus, VoteUpdates } from "./RaceContext";
+import { CheckedAgo } from "./CheckedAgo";
 
 type Fetched = { race: RaceDetail; fetchedAt: number; stale: boolean; history?: Observation[]; callPending?: boolean };
 const SCREEN = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -44,6 +45,7 @@ export function RaceView({ id }: { id: number }) {
   const label = raceLabel(race);
   const mapped = race.counties.some((c) => c.fips);
   const called = race.candidates.find((c) => c.winner);
+  const closes = stateFinal(race.state);
   const close = race.pollsClose ? new Date(race.pollsClose) : null;
 
   return (
@@ -84,7 +86,7 @@ export function RaceView({ id }: { id: number }) {
           <span>{race.total > 0 ? (race.reportingUnknown ? "Reporting unknown" : `${Math.round(race.reporting)}% reporting`) : "No results yet"}</span>
           {close && close.getTime() !== stateFinal(race.state) && <span title="civicAPI's closing time for this race, which differs from the state's last scheduled closing">civicAPI lists polls closing {stampET(close.getTime())} ET</span>}
           <span>
-            Checked {timeAgo(data.fetchedAt, now)}
+            Checked <CheckedAgo at={data.fetchedAt} />
             {data.stale && " (results source is slow; showing the last good count)"}
           </span>
         </p>
@@ -95,48 +97,19 @@ export function RaceView({ id }: { id: number }) {
       <div className="mt-race-grid">
         <section aria-labelledby="cands">
           <h2 id="cands">Candidates</h2>
-          <table className="mt-table mt-cands">
-            <thead>
-              <tr>
-                <th>Candidate</th>
-                <th>Party</th>
-                <th className="num">Votes</th>
-                <th className="num">Share</th>
-              </tr>
-            </thead>
-            <tbody>
-              {race.candidates.map((c) => (
-                <tr key={c.name} className={c.winner ? "won" : undefined}>
-                  <td style={{ boxShadow: `inset 4px 0 0 ${partyColor(c)}` }}>
-                    {race.office !== "measure" && <Avatar race={race} candidate={c}>{initials(c.name)}</Avatar>}
-                    {c.name}
-                    {c.incumbent && <span title="Incumbent">*</span>}
-                    {c.winner && <span className="mt-check"> ✓ Winner</span>}
-                  </td>
-                  <td>{partyTag(c.party) || c.party || "—"}</td>
-                  <td className="num">{fmt(c.votes)}</td>
-                  <td className="num">
-                    <span className="mt-share">
-                      <span style={{ width: `${c.pct}%`, background: partyColor(c) }} />
-                    </span>
-                    {pct(c.pct)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={2}>Total</td>
-                <td className="num">{fmt(race.total)}</td>
-                <td className="num">{race.reportingUnknown ? "Reporting unknown" : `${Math.round(race.reporting)}% reporting`}</td>
-              </tr>
-            </tfoot>
-          </table>
+          <div className="mt-cands">
+            <CandidateTable
+              race={race}
+              share
+              status={called ? `${called.name} declared the winner` : race.total > 0 ? "Total votes" : closes && closes > now ? `Polls close ${stampET(closes)} ET` : "No results yet"}
+            />
+          </div>
           <p className="muted small mt-source">
             {called ? `${called.name} was declared the winner by civicAPI's decision desk, not AP or Decision Desk HQ. ` : "No winner declared yet. "}
             Results from <a href="https://civicapi.org">civicAPI</a>, which collects them from state and county election offices. * Incumbent.
             {race.office !== "measure" && <PhotoCredit />}
           </p>
+          {race.office !== "measure" && <MarketPanel raceId={race.id} />}
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
           {data.history && <VoteUpdates history={data.history} />}
         </section>

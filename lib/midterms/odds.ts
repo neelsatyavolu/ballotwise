@@ -168,7 +168,7 @@ export function kalshiTickers(races: readonly RaceSummary[], houseCovered: Reado
 
 type PolyEvent = { title?: string; volume?: number | string; markets?: { question?: string; groupItemTitle?: string; outcomePrices?: string; active?: boolean; closed?: boolean }[] };
 
-function polySide(text: string): Side | null {
+export function polySide(text: string): Side | null {
   const tag = text.match(/\((D|R|I)\)/);
   if (tag) return tag[1] as Side;
   if (/democrat/i.test(text)) return "D";
@@ -178,7 +178,7 @@ function polySide(text: string): Side | null {
 }
 
 /** The race a Polymarket winner event is about: "{State} Senate|Governor Election Winner" or "PA-07 House Election Winner". */
-function polyRace(title: string | undefined): string | null {
+export function polyRace(title: string | undefined): string | null {
   const t = title?.trim() ?? "";
   const statewide = t.match(/^(.+?) (Senate|Governor) Election Winner$/);
   if (statewide) {

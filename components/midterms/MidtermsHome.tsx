@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { flipTo, raceFill } from "@/lib/midterms/explore";
 import { holderOf } from "@/lib/midterms/holders";
-import { colorOf, compareRaces, OFFICE_LABEL, pct, projected, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { colorOf, compareRaces, OFFICE_LABEL, pct, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { AiDashboards } from "./AiDashboard";
 import { BalanceBar } from "./Balance";
 import { PhotoCredit } from "./Avatar";
@@ -17,6 +17,7 @@ import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
 import { RaceRows, type Star } from "./RaceRows";
 import { useSimulation } from "./useSimulation";
+import { CheckedAgo } from "./CheckedAgo";
 
 type Tab = "key" | "mine" | "ai" | "all";
 const TABS: { id: Tab; label: string }[] = [
@@ -177,7 +178,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
         <span className="mt-kicker">{counting ? "Live results, updated every 30 seconds" : "Tuesday, Nov 3 · first polls close at 6:00 PM ET"}</span>
         {data && (
           <span className="mt-updated small">
-            <span className={`mt-dot${data.stale ? " stale" : ""}${counting ? "" : " idle"}`} aria-hidden /> {counting ? "" : "No votes counted yet · "}Checked {timeAgo(data.fetchedAt, now)}
+            <span className={`mt-dot${data.stale ? " stale" : ""}${counting ? "" : " idle"}`} aria-hidden /> {counting ? "" : "No votes counted yet · "}Checked <CheckedAgo at={data.fetchedAt} />
             {data.stale && " · source is slow"}
           </span>
         )}
@@ -195,9 +196,9 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       {data && races && !election.on && (
         <>
           <div className="mt-balances">
-            <BalanceBar title="Senate" office="senate" tally={data.balance.senate} projected={projected(races, "senate")} />
-            <BalanceBar title="House" office="house" tally={data.balance.house} projected={projected(races, "house")} />
-            <BalanceBar title="Governors" office="governor" tally={data.balance.governor} projected={projected(races, "governor")} />
+            <BalanceBar title="Senate" office="senate" tally={data.balance.senate} />
+            <BalanceBar title="House" office="house" tally={data.balance.house} />
+            <BalanceBar title="Governors" office="governor" tally={data.balance.governor} />
           </div>
 
           <div className="tabs" role="tablist">

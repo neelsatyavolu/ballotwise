@@ -5,7 +5,7 @@ import { applyAction, chatTurn, createDashboard, listDashboards, MAX_DASHBOARDS,
 import { addFavorite, listFavorites, removeFavorite } from "../lib/midterms/favorites";
 import { balance, raceDetail, summarize, type RaceSummary } from "../lib/midterms/races";
 import { fetchCatalog, resetCivicMemo } from "../lib/midterms/civic";
-import { projected, raceLabel } from "../lib/midterms/view";
+import { raceLabel } from "../lib/midterms/view";
 import { testDb } from "./sqlite-db";
 
 const NOW = 1_800_000_000_000; // 2027, after the polls opened
@@ -117,18 +117,6 @@ describe("balance", () => {
   });
 });
 
-describe("projected", () => {
-  const race = (odds: Record<string, number> | null, votes = 0, winner = false): RaceSummary => ({
-    ...summarize(raw({ percent_reporting: 0, candidates: [{ name: "A", party: "Democratic", votes, percent: 0, winner }, { name: "B", party: "Republican", votes: 0, percent: 0, winner: false }] }), [])!,
-    signal: odds ? { market: { odds, sources: ["Kalshi", "Polymarket"] }, polls: null, rating: null } : null,
-  });
-
-  it("counts uncounted races by the market favorite and skips counted, called or unpriced ones", () => {
-    const races = [race({ D: 0.7, R: 0.3 }), race({ D: 0.2, R: 0.8 }), race({ R: 0.4, I: 0.6 }), race({ D: 0.5, R: 0.5 }), race(null), race({ R: 0.9, D: 0.1 }, 10), race({ R: 0.9, D: 0.1 }, 10, true)];
-    expect(projected(races, "senate")).toEqual({ D: 1, R: 1, other: 1 });
-    expect(projected(races, "house")).toEqual({ D: 0, R: 0, other: 0 });
-  });
-});
 
 describe("fetchCatalog", () => {
   afterEach(() => {

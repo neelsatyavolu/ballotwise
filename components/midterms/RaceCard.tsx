@@ -1,9 +1,10 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
-import { fmt, lead, partyTag, pct, raceLabel, RATING_LABEL, signalLine, type RaceSummary } from "@/lib/midterms/view";
-import { Avatar } from "./Avatar";
+import { stampET, stateFinal } from "@/lib/midterms/polls";
+import { lead, raceLabel, RATING_LABEL, signalLine, type RaceSummary } from "@/lib/midterms/view";
+import { CandidateTable } from "./CandidateTable";
+import { useClock } from "./hooks";
 import { partyColor } from "./party";
-import { initials } from "./ResultList";
 
 export function StarButton({ starred, onToggle, label }: { starred: boolean; onToggle: () => void; label: string }) {
   return (
@@ -22,12 +23,20 @@ export function RatingTag({ rating, signal }: { rating: RaceSummary["rating"]; s
   );
 }
 
-/** One race at a glance: the top candidates, a stacked vote bar, and how much is counted. */
-export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void }) {
-  const top = race.candidates.slice(0, 3);
-  const called = race.candidates.find((c) => c.winner);
+/** Where a card's count stands, for the footer of its candidates table: called, the lead, or when polls close. */
+function CardStatus({ race }: { race: RaceSummary }) {
+  const now = useClock(60_000);
   const ahead = lead(race.candidates);
+  if (race.candidates.some((c) => c.winner)) return <span className="called">Called</span>;
+  if (ahead) return <span>Lead {ahead.margin.toFixed(1)} pts</span>;
+  const final = stateFinal(race.state);
+  return <span>{final && final > now ? `Polls close ${stampET(final)} ET` : "No results yet"}</span>;
+}
+
+/** One race at a glance: the top candidates as a results table, a stacked vote bar once votes are in, and how much is counted. */
+export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void }) {
   const label = raceLabel(race);
+  const sub = race.total ? null : signalLine(race.signal);
   return (
     <li className="mt-card">
       <div className="mt-card-top">
@@ -38,31 +47,13 @@ export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred
         {starred !== null && <StarButton starred={starred} label={label} onToggle={() => onStar(race.id)} />}
       </div>
       {race.about && <p className="mt-card-about" title={race.about.text}>{race.about.text}</p>}
-      <ul className="mt-card-cands">
-        {top.map((c) => (
-          <li key={c.name} className={c.winner ? "won" : undefined}>
-            {race.office === "measure" ? (
-              <span className="swatch" style={{ background: partyColor(c) }} aria-hidden />
-            ) : (
-              <Avatar race={race} candidate={c}>{initials(c.name)}</Avatar>
-            )}
-            <span className="name">
-              {c.name}
-              {partyTag(c.party) && <span className="tag"> {partyTag(c.party)}</span>}
-              {c.incumbent && <span className="tag" title="Incumbent">*</span>}
-              {c.winner && <span className="mt-check" title="Called by civicAPI"> ✓</span>}
-            </span>
-            <span className="num">{race.total ? pct(c.pct) : "—"}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-stack" aria-hidden>
-        {race.total > 0 && race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c) }} />)}
-      </div>
-      <div className="mt-card-foot">
-        <span>{race.reporting > 0 ? `${Math.round(race.reporting)}% reporting` : (signalLine(race.signal) ?? "No results yet")}</span>
-        {called ? <span className="called">Called</span> : ahead ? <span>Lead {ahead.margin.toFixed(1)} pts</span> : race.total > 0 ? <span>{fmt(race.total)} votes</span> : null}
-      </div>
+      {sub && <p className="mt-card-sub">{sub}</p>}
+      {race.total > 0 && (
+        <div className="mt-stack" aria-hidden>
+          {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c) }} />)}
+        </div>
+      )}
+      <CandidateTable race={race} limit={3} short fill status={<CardStatus race={race} />} />
     </li>
   );
 }

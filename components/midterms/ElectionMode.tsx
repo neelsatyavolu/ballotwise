@@ -10,10 +10,11 @@ import { CallsFeed } from "./CallsFeed";
 import { ControlStrip } from "./ControlStrip";
 import { ElectionMap } from "./ElectionMap";
 import { Explorer } from "./Explorer";
-import type { useStars } from "./hooks";
+import { useClock, type useStars } from "./hooks";
 import { NextClose, PollSchedule, shortLabel } from "./PollClose";
 import { SeatBoard, type FillMode } from "./SeatBoard";
 import { PhotoCredit } from "./Avatar";
+import { RailContext } from "./railSplit";
 
 const OFFICES: (Office | "all")[] = ["senate", "house", "governor", "measure", "all"];
 const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -40,11 +41,14 @@ function subscribe(onChange: () => void) {
   };
 }
 
-/** Whether election mode is on: the viewer's own choice, or on by default from Nov 3. */
+/**
+ * Whether election mode is on: the viewer's own choice, or on by default from Nov 3. The clock ticks each minute
+ * so a tab left open overnight switches on by itself that morning (the choice read then is election day's).
+ */
 export function useElectionMode() {
-  const [start] = useState(clockNow);
+  const now = useClock(60_000);
   const choice = useSyncExternalStore(subscribe, readChoice, () => null);
-  const on = choice ?? electionModeDefault(start);
+  const on = choice ?? electionModeDefault(now);
   const set = (next: boolean) => {
     try {
       localStorage.setItem(storageKey(clockNow()), next ? "on" : "off");
@@ -111,6 +115,12 @@ function LatestLink({ races }: { races: Overview["races"] }) {
 export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnType<typeof useStars> }) {
   const [f, set] = useUrlFilters();
   const [fillMode, setFillMode] = useState<FillMode>("results");
+  // The side rail's boxes and the full-width slot under the layout, for the race list to flow past the rail.
+  const [mapbox, setMapbox] = useState<HTMLElement | null>(null);
+  const [callbox, setCallbox] = useState<HTMLElement | null>(null);
+  const [schedbox, setSchedbox] = useState<HTMLElement | null>(null);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const rail = useMemo(() => ({ boxes: [mapbox, callbox, schedbox].filter((b): b is HTMLElement => !!b), slot }), [mapbox, callbox, schedbox, slot]);
   const counts = useMemo(() => Object.fromEntries(OFFICES.map((o) => [o, o === "all" ? data.races.length : data.races.filter((r) => r.office === o).length])), [data.races]);
   const mapOffice: Office = f.office === "all" ? "senate" : f.office;
   const pickState = (state: string) => set({ states: toggle(f.states, state) });
@@ -131,12 +141,13 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
         ))}
       </div>
 
+      <RailContext.Provider value={rail}>
       <div className="mt-el-grid">
         <div className="mt-el-list">
           <LatestLink races={data.races} />
           <Explorer races={data.races} f={f} set={set} stars={stars} />
         </div>
-        <div className="mt-el-mapbox">
+        <div className="mt-el-mapbox" ref={setMapbox}>
           <div className="mt-section-head tight">
             <h2>{mapOffice === "house" ? "Every House seat" : `${OFFICE_LABEL[mapOffice]} map`}</h2>
             {mapOffice !== "measure" && (
@@ -152,13 +163,15 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
           </div>
           {mapOffice === "house" ? <SeatBoard races={data.races} selected={f.states} onState={pickState} matching={matching} mode={fillMode} /> : <ElectionMap office={mapOffice} races={data.races} selected={f.states} onState={pickState} mode={fillMode} />}
         </div>
-        <div className="mt-el-callbox">
+        <div className="mt-el-callbox" ref={setCallbox}>
           <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office={f.office} />
         </div>
-        <div className="mt-el-schedbox">
+        <div className="mt-el-schedbox" ref={setSchedbox}>
           <PollSchedule races={f.office === "all" ? data.races : data.races.filter((r) => r.office === f.office)} picked={f.waves} onPick={(at) => set({ waves: toggle(f.waves, at) })} />
         </div>
       </div>
+      <div className="mt-el-more" ref={setSlot} />
+      </RailContext.Provider>
 
       <p className="muted small mt-source">
         Live results and calls from <a href="https://civicapi.org">civicAPI</a> and its own decision desk, collected from state and county election offices; not AP or Decision Desk HQ. &ldquo;Reporting&rdquo; is precincts or ballot batches in, not the share of the expected vote. Ratings come from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a>, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades. Seat holders from <a href="https://github.com/unitedstates/congress-legislators">congress-legislators</a>.

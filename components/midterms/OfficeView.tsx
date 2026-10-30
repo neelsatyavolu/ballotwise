@@ -4,15 +4,17 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { flipTo, raceFill, safeSide } from "@/lib/midterms/explore";
-import { colorOf, compareRaces, lead, leading, measureCount, pct, projected, raceLabel, RATING_LABEL, shade, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { colorOf, compareRaces, lead, leading, measureCount, pct, raceLabel, RATING_LABEL, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
 import { useLive, useStars } from "./hooks";
 import { PhotoCredit } from "./Avatar";
+import { MarketPanel } from "./MarketPanel";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
 import { RaceRows } from "./RaceRows";
 import { ZoomMap, type Fill } from "./ZoomMap";
+import { CheckedAgo } from "./CheckedAgo";
 
 const TITLE: Record<Office, string> = { senate: "Senate", house: "House", governor: "Governors", measure: "Ballot measures" };
 const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -126,11 +128,11 @@ export function SeatHeader({ office, data }: { office: Office; data: Overview })
     );
   }
   const tally = office === "senate" ? data.balance.senate : office === "house" ? data.balance.house : data.balance.governor;
-  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} projected={projected(data.races, office)} />;
+  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} />;
 }
 
 export function OfficeView({ office, initialState }: { office: Office; initialState: string | null }) {
-  const { data, error, now } = useLive<Overview>("/api/midterms");
+  const { data, error } = useLive<Overview>("/api/midterms");
   const favorites = useStars();
   const [focus, setFocus] = useState<string | null>(initialState);
   const [picked, setPicked] = useState<number | null>(null);
@@ -179,7 +181,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
         <span className="mt-kicker">{races.length ? `${races.length} races` : ""}</span>
         {data && (
           <span className="mt-updated small">
-            <span className={`mt-dot${data.stale ? " stale" : ""}`} aria-hidden /> Checked {timeAgo(data.fetchedAt, now)}
+            <span className={`mt-dot${data.stale ? " stale" : ""}`} aria-hidden /> Checked <CheckedAgo at={data.fetchedAt} />
             {data.stale && " · source is slow"}
           </span>
         )}
@@ -211,7 +213,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                       ← All states
                     </button>
                   </div>
-                  {shown ? (
+                  {shown && (
                     <>
                       <ul className="mt-grid one">
                         <RaceCard race={shown} starred={favorites.ids ? favorites.ids.includes(shown.id) : null} onStar={favorites.toggle} />
@@ -220,9 +222,8 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                         <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>
                       </p>
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
+                      {shown.office !== "measure" && <MarketPanel key={shown.id} raceId={shown.id} />}
                     </>
-                  ) : (
-                    <p className="muted small">{office === "house" ? "Tap a district on the map, or pick one below, to see its counties." : "Pick a measure to see its counties on the map."}</p>
                   )}
                   {inState.length > 1 && (
                     <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} selectedId={shownId} />
