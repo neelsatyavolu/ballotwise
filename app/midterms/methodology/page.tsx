@@ -44,8 +44,10 @@ export default function Methodology() {
           district lines in use that year. For 2026 that&apos;s the 2024 result against Trump&apos;s 1.5-point national win.
         </li>
         <li>
-          <strong>National environment:</strong> that year&apos;s national House vote. For 2026 the generic-ballot average stands in for it
-          (see below for how it&apos;s built).
+          <strong>National environment:</strong> the generic-ballot average as it stood before that election, not the national vote
+          that came after, so the fit sees the environment the way a forecast does. For past cycles that&apos;s
+          RealClearPolitics&apos; final average ({cycles.map((c) => `${c} ${signed(FIT.national.generic[c])}`).join(", ")}); for 2026 it&apos;s our
+          own average (see below for how it&apos;s built).
         </li>
         <li>
           <strong>Incumbency:</strong> whether the Democrat or the Republican holds the seat, or it&apos;s open.
@@ -93,8 +95,10 @@ export default function Methodology() {
 
       <h3>How well it predicts</h3>
       <p>
-        Each cycle is predicted from a fit on the other three, so no race is scored by a model that saw it. The miss is the root mean
-        square error of the margin, in points.
+        Each cycle is predicted from a fit on the other three, so no race is scored by a model that saw it, using only what was known
+        before that election. The miss is the root mean square error of the margin, in points. Fundraising is each campaign&apos;s
+        full-cycle total, including money raised after election day, since the FEC&apos;s bulk files don&apos;t split it out; that
+        flatters the fundraising term a little.
       </p>
       <div className="mt-method-scroll">
         <table>
@@ -123,8 +127,55 @@ export default function Methodology() {
         </table>
       </div>
       <p>
-        That out-of-sample miss is each race&apos;s uncertainty, plus the generic ballot&apos;s own polling miss (about{" "}
-        {PARAMS.genericBallotError} points nationally): the fit used the real national vote, and the forecast only has polls of it.
+        Because the environment going in was a poll average, that miss already includes how far the generic ballot ended up from the
+        real vote. It becomes each race&apos;s uncertainty after one more check.
+      </p>
+
+      <h3>Calibration</h3>
+      <p>
+        A race-level error can be the right size on average and still produce chances that are too sure or too timid. So we scale it by
+        a multiplier, chosen per office to give the best held-out log score on who actually won: {MODELS.map(([name, m]) => `${name} ${m.calibration.k.toFixed(2)}`).join("; ")}.
+        We also tried a separate error for midterm years, since 2026 is one; it scored better only for the Senate, where midterm
+        misses ran {FIT.senate.calibration.midtermSigma?.toFixed(1)} points against {FIT.senate.calibration.presidentialSigma.toFixed(1)} in
+        presidential years, so the Senate uses it. Dropping blowouts (margins over 30 points) from the scoring leaves the multipliers
+        within 0.02.
+      </p>
+      <p>How often the favorite won, House races 2018–2024, before and after the multiplier:</p>
+      <div className="mt-method-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Favorite&apos;s chance</th>
+              <th className="num">Races</th>
+              <th className="num">Predicted</th>
+              <th className="num">Won</th>
+              <th className="num">Races after</th>
+              <th className="num">Predicted after</th>
+              <th className="num">Won after</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FIT.house.calibration.before.reliability.map((b, i) => {
+              const a = FIT.house.calibration.after.reliability[i];
+              return (
+                <tr key={b.band}>
+                  <td>{b.band}%</td>
+                  <td className="num">{b.races}</td>
+                  <td className="num">{pct(b.predicted)}</td>
+                  <td className="num">{pct(b.actual)}</td>
+                  <td className="num">{a.races}</td>
+                  <td className="num">{pct(a.predicted)}</td>
+                  <td className="num">{pct(a.actual)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="small muted">
+        Brier score, House: {FIT.house.calibration.before.brier.toFixed(4)} before, {FIT.house.calibration.after.brier.toFixed(4)} after;
+        Senate: {FIT.senate.calibration.before.brier.toFixed(4)} before, {FIT.senate.calibration.after.brier.toFixed(4)} after. Lower is
+        better. Four cycles is a small sample, and the closest band has only a few dozen races, so read the toss-up rows loosely.
       </p>
 
       <h2>2. Polls</h2>
@@ -145,9 +196,16 @@ export default function Methodology() {
         Prices from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> are then blended into
         that chance. A market counts for nothing below {money(markets.min)} traded and up to {pct(markets.max)} of the final chance at{" "}
         {money(markets.full)} or more, growing with the logarithm of volume, because busier markets have been better calibrated.
-        Prices are kept between {pct(markets.clip)} and {pct(1 - markets.clip)} so one extreme quote can&apos;t dominate. The cap is
-        half because markets called the 2024 presidency well but trailed poll-based models in down-ballot races, and we couldn&apos;t
-        backtest 2024 race-level prices ourselves.
+        The cap is a third because we couldn&apos;t backtest race-level market prices ourselves, and the evidence there is shows
+        markets called the 2024 presidency well but trailed poll-based models in down-ballot races. Without a fitted weight, markets
+        stay the minority input, a second layer on top of the model, as in DDHQ&apos;s method.
+      </p>
+      <p>
+        Prices are kept between {pct(markets.clip)} and {pct(1 - markets.clip)}. Near the ends a price says little: trading fees, money
+        tied up until November and the long-standing habit of overpaying for long shots keep heavy favorites trading at 95 to 99 cents
+        whatever their real odds. Past about 90 cents the market is only saying &ldquo;fairly safe&rdquo;, and the model decides how
+        safe. A seat the model gives 99% stays Safe with a 99-cent market ({pct((1 - markets.max) * 0.99 + markets.max * (1 - markets.clip))});
+        one the model gives 93% ends up Likely ({pct((1 - markets.max) * 0.93 + markets.max * (1 - markets.clip))}) however high the price.
       </p>
 
       <h2>Ratings</h2>
@@ -164,8 +222,9 @@ export default function Methodology() {
       </p>
       <ul>
         <li>
-          <strong>A national error</strong> that moves every race: the generic ballot&apos;s polling miss plus how far whole cycles ran
-          from the model in the backtest.
+          <strong>A national error</strong> that moves every race, sized from how far whole cycles ran from the model in the backtest
+          (about {FIT.house.cycleBias.toFixed(1)} points for the House): the generic ballot&apos;s miss shows up there, as in 2018 and
+          2020.
         </li>
         <li>
           <strong>A regional error</strong> for each of the nine census divisions, about {FIT.correlation.region} points, so seats in

@@ -45,6 +45,13 @@ describe("forecastRace", () => {
     expect(f.odds.D! + f.odds.R!).toBeCloseTo(1, 6);
   });
 
+  it("scales each model's held-out σ by its calibrated multiplier, using the midterm σ where it scored better", () => {
+    const house = modelFor("house", true);
+    const senate = modelFor("senate", true);
+    expect(sigmaOf(house)).toBeCloseTo(house.calibration.k * house.sigma, 6);
+    expect(sigmaOf(senate)).toBeCloseTo(senate.calibration.k * (senate.calibration.midtermSigma ?? senate.sigma), 6);
+  });
+
   it("adds fundraising only when both sides have FEC receipts, using the model fit with it", () => {
     const without = forecastRace(contest, inputs({ office: "house", lean: 0, genericBallot: 0 }))!;
     const withMoney = forecastRace(contest, inputs({ office: "house", lean: 0, genericBallot: 0, fundraising: 1 }))!;

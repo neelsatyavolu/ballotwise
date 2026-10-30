@@ -11,12 +11,25 @@ export type Side = "D" | "R" | "I";
 type Odds = Partial<Record<Side, number>>;
 
 type Terms = { intercept: number; lean: number; environment: number; incumbent: number; fundraising?: number };
-type Model = { coefficients: Terms; standardErrors: Terms; sigma: number; backtest: Record<string, { races: number; rmse: number; mae: number; bias: number; wrongWinner: number }>; races: number };
+type Reliability = { band: string; races: number; predicted: number; actual: number };
+type Calibration = { k: number; midtermSigma: number | null; presidentialSigma: number; midtermLogScoreGain: number; kCompetitiveOnly: number; before: { logScore: number; brier: number; reliability: Reliability[] }; after: { logScore: number; brier: number; reliability: Reliability[] } };
+type Model = {
+  coefficients: Terms;
+  standardErrors: Terms;
+  /** Held-out root mean square miss, with the environment as known before each election. */
+  sigma: number;
+  /** The σ multiplier chosen by held-out log score, and midterm cycles' own σ when that scored better. */
+  calibration: Calibration;
+  /** Root mean square of the held-out cycles' average misses: the part of the error every race in a cycle shares. */
+  cycleBias: number;
+  backtest: Record<string, { races: number; rmse: number; mae: number; bias: number; wrongWinner: number }>;
+  races: number;
+};
 export const FIT = fitJson as unknown as {
   fitted: string;
   /** Errors shared within a census division, and within a partisan-lean bucket, in a cycle (points), from the backtest. */
   correlation: { region: number; bucket: number; regionGroups: number; bucketGroups: number; leanEdges: number[] };
-  national: { house: Record<string, number>; president: Record<string, number> };
+  national: { house: Record<string, number>; generic: Record<string, number>; president: Record<string, number> };
   house: Model;
   houseNoFundraising: Model;
   senate: Model;
@@ -28,18 +41,13 @@ export const PARAMS = {
   polls: { max: 0.5, full: 10 },
   /**
    * Markets count up to `max` of the probability, from `min` traded to `full`, on a log scale; prices are kept within
-   * `clip` of 0 and 1. Half at most: markets called the 2024 presidency well but trailed poll-based models down the
-   * ballot, and no 2024 race-level price history could be backtested here.
+   * `clip` of 0 and 1. A third at most: markets trailed poll-based models down the ballot in 2024, and no race-level
+   * price history could be backtested here, so they stay the minority input. Clipped at 10–90% because fees, capital
+   * tied up until November and the favorite-longshot bias hold heavy favorites at 95–99¢ whatever their real odds.
    */
-  markets: { max: 0.5, min: 10_000, full: 1_000_000, clip: 0.03 },
+  markets: { max: 1 / 3, min: 10_000, full: 1_000_000, clip: 0.1 },
   /** Harris minus Trump nationally in 2024: the leans are measured against it. */
   national2024: FIT.national.president["2024"],
-  /**
-   * How far a final generic-ballot average typically misses the national House vote, in points. The fit uses the
-   * actual vote; the forecast only has the polls, so this miss is added to every race's uncertainty and shared by all
-   * of them in the chamber simulations.
-   */
-  genericBallotError: 2.5,
 } as const;
 
 /** The fitted model for an office: governors borrow the Senate's statewide fit without fundraising (MEDSL has no governor returns). */
@@ -48,19 +56,15 @@ export function modelFor(office: Office, withFundraising: boolean): Model {
   return withFundraising && office === "senate" ? FIT.senate : FIT.senateNoFundraising;
 }
 
-/** A race's total uncertainty in points: the model's out-of-sample miss plus the generic ballot's own polling miss. */
-export const sigmaOf = (m: Model) => Math.sqrt(m.sigma ** 2 + (m.coefficients.environment * PARAMS.genericBallotError) ** 2);
-
 /**
- * The national part of that uncertainty, in points, which moves every race together: the generic ballot's polling
- * miss, plus how far a whole cycle ran from the model in the backtest (the root mean square of the held-out cycles'
- * average errors), which no single race's error captures.
+ * A race's uncertainty in points: the held-out miss with the environment as known before the election (so the
+ * generic ballot's own polling error is already in it), midterm cycles' own when that scored better (2026 is a
+ * midterm), times the calibrated multiplier.
  */
-export function nationalError(m: Model): number {
-  const biases = Object.values(m.backtest).map((b) => b.bias);
-  const cycle = Math.sqrt(biases.reduce((s, b) => s + b * b, 0) / Math.max(1, biases.length));
-  return Math.sqrt((m.coefficients.environment * PARAMS.genericBallotError) ** 2 + cycle ** 2);
-}
+export const sigmaOf = (m: Model) => m.calibration.k * (m.calibration.midtermSigma ?? m.sigma);
+
+/** The national part of that uncertainty, in points, moving every race together: how far whole cycles ran from the model. */
+export const nationalError = (m: Model) => m.cycleBias;
 /** The lean bucket (relative to the nation) a seat falls in: races in one bucket share part of their error, like a demographic wave. */
 export const leanBucket = (relativeLean: number) => FIT.correlation.leanEdges.filter((edge) => relativeLean >= edge).length;
 

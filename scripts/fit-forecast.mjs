@@ -7,13 +7,14 @@
 //   margin       Democrat minus Republican, share of the two-party vote, in points.
 //   lean         the seat's previous presidential margin minus that election's national margin (2016 for 2018 and
 //                2020, 2020 for 2022 and 2024), on the district lines used that year.
-//   environment  that year's national House vote margin (Democrats minus Republicans). At forecast time the generic
-//                ballot average stands in for it, and its own polling miss is added to the uncertainty.
+//   environment  that year's final pre-election generic-ballot average (RealClearPolitics), what a forecaster knew
+//                before the votes, so the backtest's misses include the generic ballot's own polling error.
 //   incumbent    +1 when the Democrat is the incumbent, −1 for the Republican, 0 for an open seat (FEC's flag).
 //   fundraising  ln(Democrat's receipts / Republican's), capped at ±3; 0 when either is missing from FEC's summary.
 //
 // Each cycle is backtested from a fit on the other three (leave one cycle out); σ is the out-of-sample root mean
-// square error. Races without both a Democrat and a Republican, or where a party ran two serious candidates (top-two,
+// square error. A multiplier k on σ is then chosen per model to maximize the out-of-sample log score of who won,
+// as DDHQ scales its σ "to avoid overconfidence", and midterm cycles get their own σ when that scores better. Races without both a Democrat and a Republican, or where a party ran two serious candidates (top-two,
 // jungle and ranked-choice fields), are left out.
 //
 // Sources: MIT Election Data and Science Lab House, Senate and President returns (Harvard Dataverse, CC0);
@@ -48,6 +49,13 @@ const DISTRICT_PRES = [
   [2024, "1ng1i_Dm_RMDnEvauH44pgE6JCUsapcuu8F2pCfeLWFo", "620838163", [6, 7]],
 ];
 const CYCLES = [2018, 2020, 2022, 2024];
+const MIDTERMS = new Set([2018, 2022]);
+/**
+ * RealClearPolitics' final generic congressional ballot averages before each election (Democrats minus Republicans):
+ * realclearpolling.com/polls/state-of-the-union/{year}/generic-congressional-vote. 2018 D 49.7–R 42.4, 2020 D 48.4–R 41.6,
+ * 2022 R 48.0–D 45.5, 2024 R 47.0–D 46.7.
+ */
+const PRE_ELECTION_GENERIC = { 2018: 7.3, 2020: 6.8, 2022: -2.5, 2024: -0.3 };
 const PRIOR_PRES = { 2018: 2016, 2020: 2016, 2022: 2020, 2024: 2020, 2026: 2024 };
 const FUND_CAP = 3;
 const RACES_URL = process.env.RACES_URL ?? "https://ballotwise.xanom.co/api/midterms";
@@ -275,7 +283,7 @@ function backtest(rows) {
     if (!test.length || train.length < 20) continue;
     const { beta } = ols(train);
     const errors = test.map((r) => r.margin - predict(beta, r));
-    test.forEach((r, i) => residuals.push({ year, state: r.state, lean: r.lean, e: errors[i] }));
+    test.forEach((r, i) => residuals.push({ year, state: r.state, lean: r.lean, e: errors[i], predicted: r.margin - errors[i], margin: r.margin }));
     const rmse = Math.sqrt(errors.reduce((s, e) => s + e * e, 0) / errors.length);
     const wrong = test.filter((r) => Math.sign(predict(beta, r)) !== Math.sign(r.margin)).length;
     out[year] = { races: test.length, rmse: r2(rmse), mae: r2(errors.reduce((s, e) => s + Math.abs(e), 0) / errors.length), bias: r2(errors.reduce((s, e) => s + e, 0) / errors.length), wrongWinner: wrong };
@@ -283,6 +291,65 @@ function backtest(rows) {
     n += errors.length;
   }
   return { cycles: out, rmse: r2(Math.sqrt(sq / n)), residuals };
+}
+
+// ---------- Calibration ----------
+
+function phi(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp((-z * z) / 2);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
+}
+/** The chance the Democrat wins each held-out race, with σ chosen per race. */
+const chancesOf = (residuals, sigmaFor) => residuals.map((r) => ({ p: Math.min(1 - 1e-6, Math.max(1e-6, phi(r.predicted / sigmaFor(r)))), won: r.margin > 0 }));
+const logScore = (cs) => cs.reduce((s, c) => s + Math.log(c.won ? c.p : 1 - c.p), 0) / cs.length;
+const brier = (cs) => cs.reduce((s, c) => s + (c.p - (c.won ? 1 : 0)) ** 2, 0) / cs.length;
+/** Reliability: within bands of the favorite's chance, how often the favorite actually won. */
+function reliability(cs) {
+  const bands = [[0.5, 0.6], [0.6, 0.75], [0.75, 0.95], [0.95, 1.0001]];
+  return bands.map(([lo, hi]) => {
+    const inBand = cs.map((c) => ({ fav: Math.max(c.p, 1 - c.p), favWon: c.p >= 0.5 ? c.won : !c.won })).filter((c) => c.fav >= lo && c.fav < hi);
+    return { band: `${Math.round(lo * 100)}–${Math.min(100, Math.round(hi * 100))}`, races: inBand.length, predicted: r2(inBand.reduce((s, c) => s + c.fav, 0) / Math.max(1, inBand.length)), actual: r2(inBand.filter((c) => c.favWon).length / Math.max(1, inBand.length)) };
+  });
+}
+const summary = (cs) => ({ logScore: Math.round(logScore(cs) * 1000) / 1000, brier: Math.round(brier(cs) * 10000) / 10000, reliability: reliability(cs) });
+const rmseOf = (rs) => Math.sqrt(rs.reduce((s, r) => s + r.e * r.e, 0) / Math.max(1, rs.length));
+
+/**
+ * The σ multiplier k that maximizes the held-out log score, searched on a grid; also whether giving midterm cycles
+ * their own σ (each cycle's σ from the other cycles of its kind) scores better.
+ */
+function calibrate(residuals, sigma) {
+  const grid = Array.from({ length: 111 }, (_, i) => 0.4 + i * 0.02);
+  const best = (sigmaFor) => grid.reduce((b, k) => {
+    const score = logScore(chancesOf(residuals, (r) => k * sigmaFor(r)));
+    return score > b.score ? { k: r2(k), score } : b;
+  }, { k: 1, score: -Infinity });
+  const pooled = best(() => sigma);
+  const kindSigma = (r) => {
+    const same = residuals.filter((o) => o.year !== r.year && MIDTERMS.has(o.year) === MIDTERMS.has(r.year));
+    return rmseOf(same.length ? same : residuals);
+  };
+  const byKind = best(kindSigma);
+  const midterm = rmseOf(residuals.filter((r) => MIDTERMS.has(r.year)));
+  const useKind = byKind.score > pooled.score;
+  const chosen = useKind ? (r) => byKind.k * kindSigma(r) : () => pooled.k * sigma;
+  // The same search on competitive races only, as a check that blowouts don't drive k.
+  const close = residuals.filter((r) => Math.abs(r.margin) <= 30);
+  const closeK = grid.reduce((b, k) => {
+    const score = logScore(chancesOf(close, () => k * sigma));
+    return score > b.score ? { k: r2(k), score } : b;
+  }, { k: 1, score: -Infinity }).k;
+  return {
+    k: useKind ? byKind.k : pooled.k,
+    midtermSigma: useKind ? r2(midterm) : null,
+    presidentialSigma: r2(rmseOf(residuals.filter((r) => !MIDTERMS.has(r.year)))),
+    midtermLogScoreGain: Math.round((byKind.score - pooled.score) * 1000) / 1000,
+    kCompetitiveOnly: closeK,
+    before: summary(chancesOf(residuals, () => sigma)),
+    after: summary(chancesOf(residuals, chosen)),
+  };
 }
 
 // ---------- Correlated errors ----------
@@ -354,7 +421,7 @@ function features(office, list) {
     rows.push({
       ...c,
       lean: raw - pres.nation[prior],
-      environment: national[c.year],
+      environment: PRE_ELECTION_GENERIC[c.year],
       incumbent: d?.ici === "I" ? 1 : r?.ici === "I" ? -1 : 0,
       fundraising: fundraising(d, r),
       matched: !!(d && r),
@@ -363,7 +430,7 @@ function features(office, list) {
   return rows;
 }
 
-const result = { fitted: new Date().toISOString().slice(0, 10), national: { house: Object.fromEntries(CYCLES.map((y) => [y, r2(national[y])])), president: Object.fromEntries([2016, 2020, 2024].map((y) => [y, r2(pres.nation[y])])) } };
+const result = { fitted: new Date().toISOString().slice(0, 10), national: { house: Object.fromEntries(CYCLES.map((y) => [y, r2(national[y])])), generic: PRE_ELECTION_GENERIC, president: Object.fromEntries([2016, 2020, 2024].map((y) => [y, r2(pres.nation[y])])) } };
 for (const [office, rows] of [["house", houseRows], ["senate", senateRows]]) {
   const data = features(office, contests(rows, office));
   for (const withFund of [true, false]) {
@@ -378,7 +445,12 @@ for (const [office, rows] of [["house", houseRows], ["senate", senateRows]]) {
       result.correlation = { region: region.sd, bucket: bucket.sd, regionGroups: region.groups, bucketGroups: bucket.groups, leanEdges: LEAN_EDGES };
       console.log("correlation", JSON.stringify(result.correlation));
     }
+    const cal = calibrate(bt.residuals, bt.rmse);
+    const biases = Object.values(bt.cycles).map((b) => b.bias);
     result[name] = {
+      calibration: cal,
+      /** The root mean square of the held-out cycles' average misses: the error every race in a cycle shares. */
+      cycleBias: r2(Math.sqrt(biases.reduce((s, b) => s + b * b, 0) / biases.length)),
       coefficients: Object.fromEntries(TERMS.map((t, i) => [t, r2(fit.beta[i])])),
       standardErrors: Object.fromEntries(TERMS.map((t, i) => [t, r2(fit.se[i])])),
       inSampleRmse: r2(fit.rmse),
@@ -387,7 +459,8 @@ for (const [office, rows] of [["house", houseRows], ["senate", senateRows]]) {
       races: data.length,
       fundraisingMatched: data.filter((r) => r.matched).length,
     };
-    console.log(name, JSON.stringify({ c: result[name].coefficients, se: result[name].standardErrors, sigma: bt.rmse, bt: Object.fromEntries(Object.entries(bt.cycles).map(([y, b]) => [y, `${b.rmse} rmse, bias ${b.bias}, ${b.wrongWinner}/${b.races} wrong`])) }));
+    console.log(name, JSON.stringify({ c: result[name].coefficients, se: result[name].standardErrors, sigma: bt.rmse, cycleBias: result[name].cycleBias, bt: Object.fromEntries(Object.entries(bt.cycles).map(([y, b]) => [y, `${b.rmse} rmse, bias ${b.bias}, ${b.wrongWinner}/${b.races} wrong`])) }));
+    console.log(`${name} calibration`, JSON.stringify(cal));
   }
 }
 writeFileSync(new URL("../lib/midterms/fit.json", import.meta.url), `${JSON.stringify(result)}\n`);
