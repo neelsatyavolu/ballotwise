@@ -33,7 +33,9 @@ export default function Credits() {
       </p>
       <ul>
         <li>
-          Polls from <a href="https://votehub.com/polls">VoteHub</a>, under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
+          Polls from <a href="https://votehub.com/polls">VoteHub</a>, under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, and, for Senate and governor races, from the
+          polling tables in each race&apos;s <a href="https://en.wikipedia.org/">Wikipedia</a> article, under{" "}
+          <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.
         </li>
         <li>
           Market prices from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a>.

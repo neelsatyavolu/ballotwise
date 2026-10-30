@@ -24,7 +24,7 @@
 // --evaluate reports on the settings in tuning.json without searching, and --office searches only that office's own
 // settings, leaving the other offices and the shared settings as they are. The House and Senate keep DDHQ's own
 // published weights (METHOD) and search only the rest. Inputs (prod races and market
-// prices, VoteHub polls, the aggregators' generic ballot) are cached beside the benchmark; --refresh fetches them again.
+// prices, VoteHub and Wikipedia polls, the aggregators' generic ballot) are cached beside the benchmark; --refresh fetches them again.
 // It bundles the app's own forecast code with esbuild (installed with wrangler), so the search runs the real model.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -53,7 +53,7 @@ const OFF = 0.05;
 
 const bundle = join(WORK, "forecast-bundle.mjs");
 await build({
-  stdin: { contents: 'export * from "./lib/midterms/odds"; export * from "./lib/midterms/forecast"; export * from "./lib/midterms/pollAverage"; export * from "./lib/midterms/genericAggregates";', resolveDir: ROOT, loader: "ts" },
+  stdin: { contents: 'export * from "./lib/midterms/odds"; export * from "./lib/midterms/forecast"; export * from "./lib/midterms/pollAverage"; export * from "./lib/midterms/genericAggregates"; export * from "./lib/midterms/wikiPolls";', resolveDir: ROOT, loader: "ts" },
   bundle: true,
   platform: "node",
   format: "esm",
@@ -75,7 +75,8 @@ async function fetchInputs() {
   const now = Date.now();
   const polls = {};
   for (const [office, type] of [["senate", "us-senator"], ["governor", "governor"], ["house", "us-representative"]]) {
-    for (const [key, p] of M.officePolls(await json(`${VOTEHUB}?poll_type=${type}`), office, races, now)) {
+    const wiki = office === "house" ? [] : await M.fetchWikiPolls(office, races, HEADERS);
+    for (const [key, p] of M.officePolls(M.mergePolls(await json(`${VOTEHUB}?poll_type=${type}`), wiki), office, races, now)) {
       if (p.average) polls[key] = { margin: p.average.margin, count: p.average.count, latest: p.average.latest, left: p.left };
     }
   }
@@ -205,10 +206,11 @@ const SHARE = range(0, 0.9, 0.05);
  * DDHQ's published method (votes-docs.decisiondeskhq.com/forecast-methodology), held fixed rather than searched: no
  * expert ratings, markets at 25% of the chance, one national factor behind every race's shared error, and no personal
  * vote in the Senate. The House keeps incumbency and the personal vote: our fit was made with them, and dropping them
- * after the fit moves every incumbent's seat away from DDHQ's. Governors keep their own searched settings, which sit
- * closer to DDHQ's governor forecast than its method does on our fundamentals.
+ * after the fit moves every incumbent's seat away from DDHQ's. Governors add candidate quality (the personal vote) to
+ * the margin in full, as DDHQ's governor fundamentals are a plain sum of baseline, incumbency and quality, and search
+ * the rest.
  */
-const METHOD = { house: { experts: 0, max: 0.25, nationalShare: 1 }, senate: { experts: 0, max: 0.25, personal: 0, nationalShare: 1 } };
+const METHOD = { house: { experts: 0, max: 0.25, nationalShare: 1 }, senate: { experts: 0, max: 0.25, personal: 0, nationalShare: 1 }, governor: { personal: 1 / M.FIT.senateNoFundraising.coefficients.personal } };
 /** A setting's search values: the method's own where it fixes one. */
 const grid = (office, key, values) => (METHOD[office]?.[key] === undefined ? values : [METHOD[office][key]]);
 /** Settings shared by every office, searched as a full grid. */

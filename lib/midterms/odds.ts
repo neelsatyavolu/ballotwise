@@ -10,6 +10,7 @@ import { aggregateMedian, fetchAggregates, type Aggregate } from "./genericAggre
 import { genericBallot, independentLeads, lastName, racePolls, RECENT_FULL, type RacePolls, type TrendPoint, type VoteHubPoll } from "./pollAverage";
 import type { Office, RaceSummary, RatedRace, Rating } from "./races";
 import { STATE_NAMES } from "./view";
+import { fetchWikiPolls, mergePolls } from "./wikiPolls";
 
 // Race forecasts and ratings (lib/midterms/forecast.ts) computed live from the 2024 presidential lean, the generic
 // ballot, polls (VoteHub, CC BY 4.0) and prediction markets (Kalshi, Polymarket). A scheduled job refreshes them
@@ -416,7 +417,16 @@ async function fetchPolls(races: readonly RaceSummary[], now: number): Promise<P
   const detail: Record<string, RacePolls> = {};
   const list = (p: unknown) => (Array.isArray(p) ? (p as VoteHubPoll[]) : []);
   for (const [office, type] of types) {
-    for (const [key, polls] of officePolls(list(await getJson(`${VOTEHUB}?poll_type=${type}`)), office, races, now)) {
+    const votehub = list(await getJson(`${VOTEHUB}?poll_type=${type}`));
+    // Senate and governor races add the polls Wikipedia lists that VoteHub doesn't; without Wikipedia, VoteHub's alone.
+    const wiki =
+      office === "senate" || office === "governor"
+        ? await fetchWikiPolls(office, races, HEADERS).catch((err) => {
+            console.error("midterms Wikipedia polls failed:", err instanceof Error ? err.message : err);
+            return [];
+          })
+        : [];
+    for (const [key, polls] of officePolls(mergePolls(votehub, wiki), office, races, now)) {
       detail[key] = polls;
       if (polls.average) averages[key] = { margin: polls.average.margin, count: polls.average.count, latest: polls.average.latest, left: polls.left };
     }
