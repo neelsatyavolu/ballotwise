@@ -20,6 +20,12 @@ export type EarlyState = Counts & { state: string; base2024: number | null };
 export type EarlyCounty = Counts & { name: string; fips: string | null; base2024: number | null };
 export type Breakdown = { label: string; votes: number }[];
 export type Demographics = Partial<Record<"age" | "gender" | "race", Breakdown>>;
+/**
+ * An estimate of how the early ballots lean, for states that don't record party: each county's ballots counted at
+ * that county's 2024 presidential margin (Democrat minus Republican, in points). `state2024` is the whole state's
+ * 2024 margin to set it against; `coverage` is the share of ballots placed in a county.
+ */
+export type Lean = { margin: number; state2024: number; coverage: number };
 /** The same day before the 2024 election, where civicAPI kept that year's counts. */
 export type Prior = { date: string; returned: number; inperson: number; cast: number; party: PartySplit | null };
 
@@ -34,10 +40,13 @@ export type EarlyStateDetail = Counts & {
   byTown: boolean;
   prior: Prior | null;
   demographics: Demographics;
+  lean: Lean | null;
 };
 
 /** A party split is shown only when the state records party for at least this share of its ballots. */
 const PARTY_COVERAGE = 0.9;
+/** The county estimate is made only when at least this share of ballots can be placed in a county. */
+const LEAN_COVERAGE = 0.8;
 const ELECTION_2026 = Date.UTC(2026, 10, 3);
 const ELECTION_2024 = Date.UTC(2024, 10, 5);
 const DAY_MS = 86_400_000;
@@ -70,11 +79,30 @@ const stateFips: Record<string, string> = Object.fromEntries(states.map(([fips, 
 const postalOf: Record<string, string> = Object.fromEntries(states.map(([fips, postal]) => [fips, postal]));
 /** Each county's 2024 presidential vote as [Harris, Trump, total]. */
 const votes2024: Record<string, number[]> = baseline;
-/** Each state's 2024 presidential vote, summed from its counties. */
+/** Each state's 2024 presidential vote, summed from its counties, and its Democrat-minus-Republican lead in votes. */
 const stateBase: Record<string, number> = {};
-for (const [fips, [, , total]] of Object.entries(votes2024)) {
+const stateLead: Record<string, number> = {};
+for (const [fips, [dem, rep, total]] of Object.entries(votes2024)) {
   const postal = postalOf[fips.slice(0, 2)];
-  if (postal) stateBase[postal] = (stateBase[postal] ?? 0) + total;
+  if (!postal) continue;
+  stateBase[postal] = (stateBase[postal] ?? 0) + total;
+  stateLead[postal] = (stateLead[postal] ?? 0) + dem - rep;
+}
+
+/** How a state's early ballots lean if each county's voted the way the county did in 2024; null when too few can be placed. */
+export function leanOf(state: string, counties: readonly EarlyCounty[]): Lean | null {
+  let all = 0;
+  let placed = 0;
+  let weighted = 0;
+  for (const c of counties) {
+    all += c.cast;
+    const v = c.fips ? votes2024[c.fips] : undefined;
+    if (!v?.[2] || !c.cast) continue;
+    placed += c.cast;
+    weighted += c.cast * (((v[0] - v[1]) / v[2]) * 100);
+  }
+  if (!placed || placed < all * LEAN_COVERAGE || !stateBase[state]) return null;
+  return { margin: weighted / placed, state2024: (stateLead[state] / stateBase[state]) * 100, coverage: placed / all };
 }
 
 /** Ballots cast so far as a percentage of the 2024 presidential vote; null without a 2024 figure. */

@@ -5,7 +5,7 @@ import { getCached, putCached } from "../cache";
 import { db } from "../env";
 import { civic, CivicNotFound, pooled } from "./civic";
 import names from "./countyNames.json";
-import { breakdown, countiesOf, earlyFeed, nationOf, priorDate, priorOf, stateTotals, type Demographics, type EarlyFeed, type EarlyNation, type EarlyStateDetail, type Feeds } from "./earlyVote";
+import { breakdown, countiesOf, earlyFeed, leanOf, nationOf, priorDate, priorOf, stateTotals, type Demographics, type EarlyFeed, type EarlyNation, type EarlyStateDetail, type Feeds } from "./earlyVote";
 import { createServe } from "./staleServe";
 
 /** How long a fetched answer is reused before asking civicAPI again. */
@@ -32,10 +32,13 @@ export class EarlyVoteMissing extends Error {}
  * Each answer is kept in memory and saved to D1, so a new isolate starts from the last one instead of making its
  * first visitors wait on civicAPI. With a copy in hand, a visitor waits at most 6 seconds for a refresh.
  */
+/** The saved copies' key prefix; changed whenever an answer's shape does, so older copies aren't served as current. */
+const KEY = "earlyvote2";
+
 const cached = createServe({
   now: Date.now,
-  read: (key) => getCached(db(), `earlyvote:${key}`, Date.now()),
-  write: (key, value) => putCached(db(), `earlyvote:${key}`, value, Date.now()),
+  read: (key) => getCached(db(), `${KEY}:${key}`, Date.now()),
+  write: (key, value) => putCached(db(), `${KEY}:${key}`, value, Date.now()),
   later: (work) => getCloudflareContext().ctx.waitUntil(work),
   freshMs: FRESH_MS,
   waitMs: 6_000,
@@ -110,6 +113,6 @@ export function earlyState(state: string): Promise<EarlyStateDetail> {
       demographicsOf(state, deadline),
     ]);
     const { counties, byTown } = countiesOf(feeds, (names as Record<string, Record<string, string>>)[state] ?? {});
-    return { fetchedAt: Date.now(), state, ...totals, counties, byTown, prior, demographics: demo };
+    return { fetchedAt: Date.now(), state, ...totals, counties, byTown, prior, demographics: demo, lean: leanOf(state, counties) };
   });
 }

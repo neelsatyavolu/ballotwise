@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breakdown, countiesOf, earlyFeed, nationOf, partyOf, priorDate, shareOf2024, type EarlyFeed } from "../lib/midterms/earlyVote";
+import { breakdown, countiesOf, earlyFeed, leanOf, nationOf, partyOf, priorDate, shareOf2024, type EarlyCounty, type EarlyFeed } from "../lib/midterms/earlyVote";
 
 const tally = (t: Record<string, number>) => Object.fromEntries(Object.entries(t).map(([k, votes]) => [k, { votes, color: "#999" }]));
 const feed = (regions: Record<string, Record<string, number>>, asOf = "2026-10-30"): EarlyFeed =>
@@ -102,5 +102,30 @@ describe("shareOf2024", () => {
     expect(shareOf2024(250, 1000)).toBe(25);
     expect(shareOf2024(250, null)).toBeNull();
     expect(shareOf2024(250, 0)).toBeNull();
+  });
+});
+
+describe("leanOf", () => {
+  const county = (fips: string | null, cast: number) => ({ name: fips ?? "Town", fips, cast }) as EarlyCounty;
+  // Delaware's 2024 presidential vote: Kent D+2.0, New Castle D+32.6, Sussex R+11.0; the state D+14.7.
+  const margin = (d: number, r: number, total: number) => ((d - r) / total) * 100;
+
+  it("weights each county's 2024 margin by its early ballots", () => {
+    const lean = leanOf("DE", [county("10001", 100), county("10003", 300), county("10005", 100)]);
+    const expected = (100 * margin(44222, 42458, 88141) + 300 * margin(180700, 90868, 275917) + 100 * margin(64836, 81025, 147639)) / 500;
+    expect(lean?.margin).toBeCloseTo(expected, 6);
+    expect(lean?.state2024).toBeCloseTo(margin(44222 + 180700 + 64836, 42458 + 90868 + 81025, 88141 + 275917 + 147639), 6);
+    expect(lean?.coverage).toBe(1);
+  });
+
+  it("leans toward where the ballots come from", () => {
+    expect(leanOf("DE", [county("10005", 900), county("10003", 100)])!.margin).toBeLessThan(0);
+    expect(leanOf("DE", [county("10005", 100), county("10003", 900)])!.margin).toBeGreaterThan(20);
+  });
+
+  it("makes no estimate when most ballots can't be placed in a county", () => {
+    expect(leanOf("DE", [county("10001", 100), county(null, 900)])).toBeNull();
+    expect(leanOf("DE", [])).toBeNull();
+    expect(leanOf("DE", [county("10001", 0)])).toBeNull();
   });
 });

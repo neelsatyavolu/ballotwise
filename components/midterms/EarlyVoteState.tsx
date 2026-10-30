@@ -2,6 +2,7 @@
 import type { Breakdown, Counts, EarlyCounty, EarlyStateDetail, PartySplit } from "@/lib/midterms/earlyVote";
 import { shareOf2024 } from "@/lib/midterms/earlyVote";
 import { fmt, marginLabel, pct } from "@/lib/midterms/view";
+import { LeadCard } from "./EarlyVoteLead";
 
 /** The share of the 2024 vote at which the map's shading tops out. */
 const FULL_SHARE = 80;
@@ -186,20 +187,12 @@ function CountyRows({ counties, byTown, party }: { counties: EarlyCounty[]; byTo
   );
 }
 
-/** One state's panel: its counts, registration split, 2024 comparison, demographics and places. */
+/** One state's panel: who's ahead, its counts, 2024 comparison, demographics and places. */
 export function StatePanel({ detail }: { detail: EarlyStateDetail }) {
   return (
-    <div className="stack mt-ev-state">
+    <div className="mt-ev-state">
+      <LeadCard detail={detail} />
       <Stats counts={detail} base2024={detail.base2024} />
-      {detail.party ? (
-        <section className="mt-ev-block" aria-labelledby="ev-party">
-          <h3 id="ev-party">By party registration</h3>
-          <PartyBar party={detail.party} />
-          <p className="muted small">Registration isn&apos;t a vote: many voters cross party lines, and Democrats vote by mail more than Republicans do.</p>
-        </section>
-      ) : (
-        <p className="muted small">This state doesn&apos;t report early voters&apos; party registration.</p>
-      )}
       <VersusPrior detail={detail} />
       <Demographics detail={detail} />
       {detail.counties.length > 0 && <CountyRows counties={detail.counties} byTown={detail.byTown} party={!!detail.party} />}
