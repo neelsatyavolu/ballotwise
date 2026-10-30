@@ -88,10 +88,15 @@ describe("forecastRace", () => {
     expect(f.margin).toBeCloseTo((1 - PARAMS.polls.max) * f.fundamentals! + PARAMS.polls.max * 10, 0);
   });
 
-  it("weighs markets by volume on a log scale, clipping extreme prices", () => {
+  it("gives polls at most DDHQ's share of the margin: 45% of the forecast against fundamentals' 30%", () => {
+    expect(PARAMS.polls.max).toBeCloseTo(45 / 75, 6);
+  });
+
+  it("weighs markets by the square root of their volume, as DDHQ does, clipping extreme prices", () => {
     const max = TUNING.markets.max.senate;
     expect(marketWeight(undefined, "senate")).toBe(0);
     expect(marketWeight(PARAMS.markets.min - 1, "senate")).toBe(0);
+    expect(marketWeight(PARAMS.markets.full / 4, "senate")).toBeCloseTo(max / 2, 6);
     expect(marketWeight(PARAMS.markets.full * 10, "senate")).toBe(max);
     const f = forecastRace(contest, inputs({ lean: 0, market: { odds: { D: 1, R: 0 }, volume: 5_000_000 } }))!;
     const base = phi(f.margin! / f.sigma!);

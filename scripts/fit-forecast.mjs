@@ -662,9 +662,16 @@ async function governorResults(year) {
     const state = STATE_CODE[block.match(/^! \[\[\d{4} ([^\]|]+?) gubernatorial election\|/)?.[1]];
     if (!state) continue;
     const top = {};
-    for (const m of block.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]'*\s*\((Democratic|Republican)[^)]*\)\s*([\d.]+)%/g)) {
-      const side = m[2] === "Democratic" ? "D" : "R";
-      if (!top[side] || Number(m[3]) > top[side].pct) top[side] = { name: m[1], pct: Number(m[3]) };
+    // One candidate per bullet, linked ("'''[[Phil Scott]]''' (Republican) 73.4%") or not, as losers without an
+    // article are ("Esther Charlestin (Democratic) 21.8%").
+    for (const line of block.split("\n").filter((l) => l.startsWith("*"))) {
+      const m = line
+        .replace(/\{\{[^}]*\}\}/g, "")
+        .replace(/'{2,}/g, "")
+        .match(/^\*\s*(?:\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|([^([\]]+?))\s*\((Democratic|Republican)[^)]*\)\s*([\d.]+)%/);
+      if (!m) continue;
+      const side = m[3] === "Democratic" ? "D" : "R";
+      if (!top[side] || Number(m[4]) > top[side].pct) top[side] = { name: (m[1] ?? m[2]).trim(), pct: Number(m[4]) };
     }
     if (top.D && top.R) out.push({ year, state, district: "", dName: top.D.name, rName: top.R.name, margin: ((top.D.pct - top.R.pct) / (top.D.pct + top.R.pct)) * 100 });
   }

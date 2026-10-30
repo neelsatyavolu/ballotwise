@@ -70,17 +70,20 @@ export type Tuning = {
 export const TUNING: Tuning = tuningJson;
 
 export const PARAMS = {
-  /** Polls count up to `max` of the margin, reaching it at `full` polls (DDHQ: a well-polled race is "nearly half" polls). */
-  polls: { max: 0.5, full: 10 },
+  /**
+   * Polls count up to `max` of the margin, reaching it at `full` polls: DDHQ's race pages give a well-polled race 45%
+   * polls against 30% fundamentals (with 25% markets on top), so polls take at most 45/75 of the margin.
+   */
+  polls: { max: 45 / 75, full: 10 },
   /** The chance an expert rating gives its favorite, by category (Safe and Solid alike). */
   experts: { solid: 0.97, likely: 0.85, lean: 0.68, tilt: 0.58, tossup: 0.5 },
   /**
-   * Markets count up to `max` of the probability, from `min` traded to `full`, on a log scale; prices are kept within
-   * `clip` of 0 and 1. A third at most: markets trailed poll-based models down the ballot in 2024, and no race-level
-   * price history could be backtested here, so they stay the minority input. Clipped at 10–90% because fees, capital
-   * tied up until November and the favorite-longshot bias hold heavy favorites at 95–99¢ whatever their real odds.
+   * Markets count up to `max` of the probability from `min` traded, rising with the square root of the volume to full
+   * weight at `full`, after DDHQ's published market weight (their race pages show the full 25% from about $50k traded,
+   * Wyoming's Senate race included). Prices are kept within `clip` of 0 and 1: fees, capital tied up until November and
+   * the favorite-longshot bias hold heavy favorites at 95–99¢ whatever their real odds.
    */
-  markets: { min: 10_000, full: 1_000_000, clip: TUNING.markets.clip },
+  markets: { min: 10_000, full: 50_000, clip: TUNING.markets.clip },
   /** Harris minus Trump nationally in 2024: the leans are measured against it. */
   national2024: FIT.national.president["2024"],
 } as const;
@@ -240,7 +243,7 @@ export const pollWeight = (count: number, full: number = PARAMS.polls.full) => (
 export function marketWeight(volume: number | undefined, office: Body, t: Tuning = TUNING): number {
   const { min, full } = PARAMS.markets;
   if (!volume || volume < min) return 0;
-  return t.markets.max[office] * Math.min(1, Math.log(volume / min) / Math.log(full / min));
+  return t.markets.max[office] * Math.min(1, Math.sqrt(volume / full));
 }
 
 /** The market's chance for `left` against the Republican, from whichever of the two it prices, clipped. */

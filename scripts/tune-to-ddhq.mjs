@@ -22,7 +22,8 @@
 //
 // Run with `node scripts/tune-to-ddhq.mjs <benchmark.json> [--refresh] [--dry-run] [--evaluate] [--office=senate]`;
 // --evaluate reports on the settings in tuning.json without searching, and --office searches only that office's own
-// settings, leaving the other offices and the shared settings as they are. Inputs (prod races and market
+// settings, leaving the other offices and the shared settings as they are. The House and Senate keep DDHQ's own
+// published weights (METHOD) and search only the rest. Inputs (prod races and market
 // prices, VoteHub polls, the aggregators' generic ballot) are cached beside the benchmark; --refresh fetches them again.
 // It bundles the app's own forecast code with esbuild (installed with wrangler), so the search runs the real model.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -200,6 +201,16 @@ const MAX = range(0, 0.5, 0.1);
 const PERSONAL = range(0, 2, 0.5);
 const EXPERTS = range(0, 0.6, 0.1);
 const SHARE = range(0, 0.9, 0.05);
+/**
+ * DDHQ's published method (votes-docs.decisiondeskhq.com/forecast-methodology), held fixed rather than searched: no
+ * expert ratings, markets at 25% of the chance, one national factor behind every race's shared error, and no personal
+ * vote in the Senate. The House keeps incumbency and the personal vote: our fit was made with them, and dropping them
+ * after the fit moves every incumbent's seat away from DDHQ's. Governors keep their own searched settings, which sit
+ * closer to DDHQ's governor forecast than its method does on our fundamentals.
+ */
+const METHOD = { house: { experts: 0, max: 0.25, nationalShare: 1 }, senate: { experts: 0, max: 0.25, personal: 0, nationalShare: 1 } };
+/** A setting's search values: the method's own where it fixes one. */
+const grid = (office, key, values) => (METHOD[office]?.[key] === undefined ? values : [METHOD[office][key]]);
 /** Settings shared by every office, searched as a full grid. */
 const SHARED = { clip: [0.03, 0.06, 0.1], environment: range(0.85, 1.25, 0.05) };
 
@@ -209,7 +220,7 @@ const SHARED = { clip: [0.03, 0.06, 0.1], environment: range(0.85, 1.25, 0.05) }
  */
 function bestForOffice(t, office) {
   const statics = [];
-  for (const k of K) for (const max of MAX) for (const personal of PERSONAL) for (const experts of EXPERTS) {
+  for (const k of K) for (const max of grid(office, "max", MAX)) for (const personal of grid(office, "personal", PERSONAL)) for (const experts of grid(office, "experts", EXPERTS)) {
     const tk = withOffice(t, office, { k, max, personal, experts });
     const forecasts = forecastsOf(tk, office);
     statics.push({ tk, forecasts, s: officeScore(office, forecasts, null, tk).total });
@@ -226,8 +237,9 @@ function bestForOffice(t, office) {
   return best;
 }
 
-const start = M.TUNING;
 const EVALUATE = flags.includes("--evaluate");
+// A search starts from the method's fixed settings; --evaluate reports on tuning.json as it is.
+const start = EVALUATE ? M.TUNING : Object.keys(METHOD).reduce((t, o) => withOffice(t, o, METHOD[o]), M.TUNING);
 let best = start;
 let bestTotal = Infinity;
 let tried = 0;
@@ -254,15 +266,15 @@ for (const clip of EVALUATE || ONLY ? [] : SHARED.clip) {
 const FINE = [
   ...SEARCHED.flatMap((o) => [
     [(t, v) => withOffice(t, o, { k: v }), range(0.5, 2.2, 0.02)],
-    [(t, v) => withOffice(t, o, { max: v }), range(0, 0.5, 0.025)],
-    [(t, v) => withOffice(t, o, { personal: v }), range(0, 2, 0.05)],
+    [(t, v) => withOffice(t, o, { max: v }), grid(o, "max", range(0, 0.5, 0.025))],
+    [(t, v) => withOffice(t, o, { personal: v }), grid(o, "personal", range(0, 2, 0.05))],
     [(t, v) => withOffice(t, o, { shared: v }), range(0, 0.9, 0.025)],
-    [(t, v) => withOffice(t, o, { experts: v }), range(0, 0.8, 0.025)],
-    [(t, v) => withOffice(t, o, { incumbency: v }), range(0, 2, 0.1)],
-    [(t, v) => withOffice(t, o, { personalCap: v }), range(2, 25, 0.5)],
+    [(t, v) => withOffice(t, o, { experts: v }), grid(o, "experts", range(0, 0.8, 0.025))],
+    [(t, v) => withOffice(t, o, { incumbency: v }), grid(o, "incumbency", range(0, 2, 0.1))],
+    [(t, v) => withOffice(t, o, { personalCap: v }), grid(o, "personalCap", range(2, 25, 0.5))],
     [(t, v) => withOffice(t, o, { fundraisingCap: v }), range(0.5, 3, 0.25)],
     [(t, v) => withOffice(t, o, { pollFull: v }), [2, 3, 4, 5, 6, 8, 10, 15]],
-    [(t, v) => withOffice(t, o, { nationalShare: v }), [null, 0, 0.25, 0.5, 0.75, 1]],
+    [(t, v) => withOffice(t, o, { nationalShare: v }), grid(o, "nationalShare", [null, 0, 0.25, 0.5, 0.75, 1])],
   ]),
   ...(ONLY
     ? []
@@ -305,7 +317,7 @@ for (const office of OFFICES) {
     const fav = favoriteOf(f);
     return `${k} ${fav ? `${fav.side} ${pct(fav.p)}` : "—"} margin ${f?.margin} (fundamentals ${f?.fundamentals}, polls ${f?.pollMargin ?? "—"} at ${f?.pollWeight}, personal ${f?.personal ?? "—"}) experts ${f?.expert === null || f?.expert === undefined ? "—" : pct(f.expert)} at ${f?.expertWeight} market ${f?.market === null || f?.market === undefined ? "—" : pct(f.market)} at ${f?.marketWeight}`;
   };
-  console.log("  matched toss-ups, points below the 60 line:", theirs.filter((k) => ours.includes(k)).map((k) => `${k.split(":").slice(1).join("-").replace(/-$/, "")} ${(100 * (0.6 - favoriteOf(final.forecasts.get(k)).p)).toFixed(1)}`).join(", "));
+  console.log("  matched toss-ups, points below the 60 line:", theirs.filter((k) => ours.includes(k)).map((k) => `${k.split(":").slice(1).join("-").replace(/-$/, "")} ${(100 * (0.6 - (favoriteOf(final.forecasts.get(k))?.p ?? 0.5))).toFixed(1)}`).join(", "));
   console.log(`  shared-error share ${best.shared[office]} (backtest's own ${M.backtestShare(M.modelFor(office, office !== "governor"), office, true, best).toFixed(3)})`);
   for (const k of theirs.filter((k) => !ours.includes(k))) console.log("  missing:", describe(k));
   for (const k of ours.filter((k) => !theirs.includes(k))) console.log("  extra:  ", describe(k));
