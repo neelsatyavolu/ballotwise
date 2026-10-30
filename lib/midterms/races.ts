@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MEASURES } from "./data";
 import type { Signal } from "./odds";
+import { POLL_CLOSE, stateFinal } from "./polls";
 import { partyOf, STATE_NAMES } from "./view";
 
 export const ELECTION_DATE = "2026-11-03";
@@ -26,6 +27,20 @@ export type RaceSummary = {
   rating: Rating | null;
   /** Set when civicAPI has votes but no reporting figure, so `reporting` (0) shouldn't be shown as a share. */
   reportingUnknown?: true;
+  /**
+   * Set when civicAPI's answer didn't say who won (no candidates, or none with a winner field), so no one shows as
+   * the winner but the race's recorded call is kept rather than read as withdrawn.
+   */
+  callUnknown?: true;
+  /** A ranked-choice race (Alaska's, and Maine's for Congress): the leader can change between rounds. */
+  rcv?: true;
+  /** civicAPI's tabulation round for the numbers shown, when it gives one; above 1 means ranked-choice rounds have run. */
+  round?: number;
+  /**
+   * The candidate the race is called for, from the same source as the call log: the current winner when it agrees
+   * with the recorded call (or no record is available), null when uncalled or while `callPending`. Set by the overview.
+   */
+  calledFor?: string | null;
   /** civicAPI left this race out of its latest answer; the numbers are the last we saw. */
   missing?: true;
   /** When civicAPI last included this race; set on missing races. */
@@ -68,6 +83,8 @@ export type CountyResult = {
   reporting: number;
   total: number;
   candidates: Omit<Candidate, "incumbent" | "winner">[];
+  /** Set when civicAPI has votes for the county but no reporting figure, so `reporting` (0) isn't a share. */
+  reportingUnknown?: true;
   /** 2024 presidential margin, Harris minus Trump, in points. */
   baseline2024: number | null;
   pres2024: Pres2024 | null;
@@ -90,6 +107,7 @@ const civicRace = z.object({
   province: z.string().nullish(),
   district: z.string().nullish(),
   percent_reporting: z.number().nullish(),
+  round: z.number().nullish(),
   candidates: z.array(civicCandidate).default([]),
 });
 export type CivicRace = z.input<typeof civicRace> & { id?: number };
@@ -127,7 +145,17 @@ function partyRank(party: string): number {
   return /write/i.test(party) ? 3 : 2;
 }
 
-function candidates(list: z.output<typeof civicCandidate>[]): Candidate[] {
+/** The last scheduled poll closing of the night, for a race in a state the closing table doesn't list. */
+const LAST_CLOSE = Math.max(...Object.keys(POLL_CLOSE).map((s) => stateFinal(s) ?? 0));
+
+/** Whether every poll in `state` has closed by `now`. A Nov 3 race elsewhere waits for the night's last closing. */
+const pollsClosed = (state: string, now: number) => now >= (stateFinal(state) ?? LAST_CLOSE);
+
+/**
+ * `unopposedCalled` says whether an unopposed candidate's call stands without votes: civicAPI flags them won ahead
+ * of time, and only once the polls have closed is that a call rather than a preview.
+ */
+function candidates(list: z.output<typeof civicCandidate>[], unopposedCalled = true): Candidate[] {
   const total = list.reduce((sum, c) => sum + (c.votes ?? 0), 0);
   return list
     .map((c) => ({
@@ -136,8 +164,8 @@ function candidates(list: z.output<typeof civicCandidate>[]): Candidate[] {
       votes: c.votes ?? 0,
       pct: total ? Math.round(((c.votes ?? 0) / total) * 10000) / 100 : 0,
       // civicAPI has flagged contested races as won before any votes were counted; trust a call only once
-      // votes are in, or when the candidate is unopposed.
-      winner: (c.winner ?? false) && (total > 0 || list.length === 1),
+      // votes are in, or when the candidate is unopposed and the polls have closed.
+      winner: (c.winner ?? false) && (total > 0 || (list.length === 1 && unopposedCalled)),
       incumbent: c.incumbent ?? false,
     }))
     .sort((a, b) => b.votes - a.votes || partyRank(a.party) - partyRank(b.party));
@@ -145,8 +173,26 @@ function candidates(list: z.output<typeof civicCandidate>[]): Candidate[] {
 
 const ratingKey = (office: Office, state: string, district: number | null | undefined) => `${office}:${state}:${district ?? ""}`;
 
-/** A Nov 3 general-election race for one of the tracked offices, or null for anything else. */
-export function summarize(input: unknown, ratings: readonly RatedRace[]): RaceSummary | null {
+/** Whether an answer left out who won: no candidates at all, or none carrying a winner field. */
+const callUnknownIn = (list: readonly z.output<typeof civicCandidate>[]) => list.every((c) => c.winner == null);
+
+/** Alaska elects every office by ranked choice; Maine only its members of Congress. */
+const isRcv = (office: Office, state: string) => (state === "AK" && office !== "measure") || (state === "ME" && (office === "senate" || office === "house"));
+
+/** The fields a Nov 3 race's answer adds about calls and ranked-choice rounds. */
+function callFields(race: z.output<typeof civicRace>, office: Office, state: string) {
+  return {
+    ...(callUnknownIn(race.candidates) && { callUnknown: true as const }),
+    ...(isRcv(office, state) && { rcv: true as const }),
+    ...(race.round != null && { round: race.round }),
+  };
+}
+
+/**
+ * A Nov 3 general-election race for one of the tracked offices, or null for anything else. `now` decides whether an
+ * unopposed candidate's call stands yet (see candidates()); left out, every poll counts as closed.
+ */
+export function summarize(input: unknown, ratings: readonly RatedRace[], now = Infinity): RaceSummary | null {
   const parsed = civicRace.safeParse(input);
   if (!parsed.success) return null;
   const race = parsed.data;
@@ -154,7 +200,7 @@ export function summarize(input: unknown, ratings: readonly RatedRace[]): RaceSu
   if (!office) return null;
   const state = race.province ?? "";
   const district = office === "house" ? districtOf(race.district) : null;
-  const list = candidates(race.candidates);
+  const list = candidates(race.candidates, pollsClosed(state, now));
   const key = ratingKey(office, state, district);
   return {
     id: (input as { id?: number }).id ?? 0,
@@ -164,6 +210,7 @@ export function summarize(input: unknown, ratings: readonly RatedRace[]): RaceSu
     title: race.election_name,
     reporting: race.percent_reporting ?? 0,
     ...(race.percent_reporting == null && list.some((c) => c.votes > 0) && { reportingUnknown: true as const }),
+    ...callFields(race, office, state),
     total: list.reduce((sum, c) => sum + c.votes, 0),
     candidates: list,
     rating: ratings.find((r) => ratingKey(r.office, r.state, r.district) === key)?.rating ?? null,
@@ -182,14 +229,15 @@ const HEX = /^#[0-9a-f]{3,8}$/i;
 
 /**
  * Any US race on civicAPI outside the tracked offices, for a race found by search: carried as a "measure" with
- * `local` set (see RaceSummary). Null for races outside the US or that don't parse.
+ * `local` set (see RaceSummary). Null for races outside the US or that don't parse. `now` gates unopposed calls in a
+ * Nov 3 race, as in summarize().
  */
-export function summarizeOther(input: unknown): RaceSummary | null {
+export function summarizeOther(input: unknown, now = Infinity): RaceSummary | null {
   const parsed = civicOther.safeParse(input);
   if (!parsed.success) return null;
   const race = parsed.data;
   if (race.country && race.country !== "US") return null;
-  const list = candidates(race.candidates);
+  const list = candidates(race.candidates, !race.election_date.startsWith(ELECTION_DATE) || pollsClosed(race.province ?? "", now));
   // Search answers name the race type in `type`; the race detail puts it in `election_type` ("School Board", "County").
   const type = race.type ?? race.election_type ?? "";
   const question = QUESTION_TYPE.test(type) || (list.length > 0 && list.every((c) => /^(yes|no|for|against)\b/i.test(c.name)));
@@ -220,27 +268,38 @@ function aboutMeasure(name: string): RaceSummary["about"] {
 /**
  * One race with its county (or town) breakdown. The detail endpoint doesn't say which office a race is for,
  * so that comes from the race's catalog `summary`; votes come from the fresher detail.
- * `baseline` maps county FIPS to the 2024 presidential vote as [Harris, Trump, total].
+ * `baseline` maps county FIPS to the 2024 presidential vote as [Harris, Trump, total]. `now` gates unopposed calls,
+ * as in summarize().
  */
-export function raceDetail(summary: RaceSummary, input: unknown, baseline: Readonly<Record<string, readonly [number, number, number]>>): RaceDetail {
+export function raceDetail(summary: RaceSummary, input: unknown, baseline: Readonly<Record<string, readonly [number, number, number]>>, now = Infinity): RaceDetail {
   const race = civicDetail.parse(input);
-  const list = candidates(race.candidates);
-  const counties = Object.values(race.region_results ?? {}).map((region) => {
+  const nov3 = race.election_date.startsWith(ELECTION_DATE);
+  const list = candidates(race.candidates, !nov3 || pollsClosed(summary.state, now));
+  const counties = Object.values(race.region_results ?? {}).map((region): CountyResult => {
     const list = candidates(region.candidates);
     const pres = region.fips ? baseline[region.fips] : undefined;
     return {
       fips: region.fips ?? null,
       name: region.name,
       reporting: region.percent_reporting ?? 0,
+      ...(region.percent_reporting == null && list.some((c) => c.votes > 0) && { reportingUnknown: true as const }),
       total: list.reduce((sum, c) => sum + c.votes, 0),
       candidates: list.map(({ name, party, votes, pct }) => ({ name, party, votes, pct })),
       baseline2024: pres ? Math.round(((pres[0] - pres[1]) / pres[2]) * 1000) / 10 : null,
       pres2024: pres ? { harris: pres[0], trump: pres[1], total: pres[2] } : null,
     };
   });
+  // The detail's own answer decides what's unknown about it; the summary's flags came from a different fetch.
+  // With no figure of its own, the detail borrows the catalog's, unless that one was unknown too.
+  const { reportingUnknown, ...rest } = summary;
+  const reporting = race.percent_reporting ?? (reportingUnknown ? null : summary.reporting);
   return {
-    ...summary,
-    reporting: race.percent_reporting ?? summary.reporting,
+    ...rest,
+    callUnknown: undefined,
+    round: undefined,
+    reporting: reporting ?? 0,
+    ...(reporting == null && list.some((c) => c.votes > 0) && { reportingUnknown: true as const }),
+    ...(nov3 ? callFields(race, summary.office, summary.state) : {}),
     total: list.reduce((sum, c) => sum + c.votes, 0),
     candidates: list,
     pollsClose: race.polls_close ?? null,

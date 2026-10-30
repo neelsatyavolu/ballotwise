@@ -194,7 +194,7 @@ describe("AI dashboards", () => {
     expect(await listDashboards(db, user.id)).toMatchObject([{ id, layout: layout("Close", [10]) }]);
 
     expect(await applyAction(db, user.id, { type: "update", dashboardId: id!, layout: layout("Close", [10, 11]) }, races, id, NOW + 1)).toBe(id);
-    expect((await listDashboards(db, user.id))[0].layout.sections[0].raceIds).toEqual([10, 11]);
+    expect((await listDashboards(db, user.id))[0].layout).toMatchObject({ sections: [{ raceIds: [10, 11] }] });
 
     // Another voter can't touch it, even by naming its id.
     await applyAction(db, other.id, { type: "delete", dashboardId: id! }, races, null, NOW + 2);

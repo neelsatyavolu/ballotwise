@@ -19,6 +19,10 @@ export type Overview = {
   callEventCounts?: Record<Office, number>;
   /** Races listed per office against how many there should be, and how many civicAPI left out of its latest answer. */
   coverage?: Coverage;
+  /** The civicAPI race types whose search failed in the latest refresh; their races show their last known numbers. */
+  partial?: string[];
+  /** Set on a development preview's made-up election night (see sim.ts), so it's never simulated twice. */
+  simulated?: true;
 };
 
 export const STATE_NAMES: Record<string, string> = Object.fromEntries(states.map(([, postal, name]) => [postal, name]));
@@ -130,16 +134,26 @@ export function twoWay(candidates: readonly { name: string; party: string; pct: 
   return d && r ? d.pct - r.pct : null;
 }
 
-/** Races of one office not yet called, by which party's candidate leads the count. */
-export function leading(races: readonly RaceSummary[], office: Office): Record<Party, number> {
+/** Under this share reporting, a count is early: its lead says little, so it sorts after fuller counts and stays pale on maps. */
+export const EARLY_REPORTING = 25;
+
+/** An uncalled race with votes in but under EARLY_REPORTING reporting (an unknown share isn't early). */
+export const isEarly = (r: RaceSummary) => r.total > 0 && !r.candidates.some((c) => c.winner) && !r.reportingUnknown && r.reporting < EARLY_REPORTING;
+
+/**
+ * Races of one office not yet called, by which party's candidate leads the count. Early counts (see isEarly) don't
+ * count as leading; they're tallied apart in `early`.
+ */
+export function leading(races: readonly RaceSummary[], office: Office): Record<Party, number> & { early: Record<Party, number> } {
   const out: Record<Party, number> = { D: 0, R: 0, other: 0 };
+  const early: Record<Party, number> = { D: 0, R: 0, other: 0 };
   for (const r of races) {
     if (r.office !== office || r.candidates.some((c) => c.winner)) continue;
     const ahead = lead(r.candidates);
     // A tie leads for nobody.
-    if (ahead && ahead.margin > 0) out[partyOf(ahead.leader.party)] += 1;
+    if (ahead && ahead.margin > 0) (isEarly(r) ? early : out)[partyOf(ahead.leader.party)] += 1;
   }
-  return out;
+  return { ...out, early };
 }
 
 /** Ballot measures: passed, failed, and still counting. A measure passes when "Yes" is called. */

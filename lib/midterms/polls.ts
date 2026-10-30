@@ -36,6 +36,17 @@ export function stateFinal(state: string): number | null {
   return hours ? at(hours[1] ?? hours[0]) : null;
 }
 
+/** Whether a state's polls close at two times, split across time zones. */
+export const isSplit = (state: string) => POLL_CLOSE[state]?.[1] !== undefined;
+
+/**
+ * The races filed under a closing time: those in states whose first polls close then, since results start with them.
+ * `partial` marks a state whose other polls close later, so its races can't be called until then (see stateFinal).
+ */
+export function filedAt<T extends { state: string }>(races: readonly T[], at: number): { race: T; partial: boolean }[] {
+  return races.filter((r) => stateCloses(r.state) === at).map((race) => ({ race, partial: isSplit(race.state) }));
+}
+
 /** "all" for a state that closes at once; "most" and "rest" for the two halves of a split state. */
 export type ClosePart = "all" | "most" | "rest";
 export type CloseWave = { at: number; states: { state: string; part: ClosePart }[] };

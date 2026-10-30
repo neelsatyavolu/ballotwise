@@ -1,6 +1,6 @@
 import type { Db } from "../auth/accounts";
 import { agrees, recordCalls, type Call } from "./calls";
-import { CivicError, fetchCatalog, fetchOtherRace, fetchRace } from "./civic";
+import { CivicError, fetchCatalog, fetchOtherRace, fetchRace, FRESH_MS } from "./civic";
 import { BASELINE_2024 } from "./data";
 import { raceHistory, recordHistory } from "./history";
 import { evidenceAt, raceKey, ratedRaces, readOdds, refreshOdds } from "./odds";
@@ -26,19 +26,48 @@ export async function overview(db: Db, now: number, background: (work: Promise<u
     background(bareRaces(now, db).then((races) => refreshOdds(db, races, now)).catch((err) => console.error("midterms odds refresh failed:", err)));
   }
   const catalog = await fetchCatalog(now, ratedRaces(odds), db, background, true);
-  const { races, fetchedAt, stale, coverage } = catalog;
+  const { races, fetchedAt, coverage, partial } = catalog;
   // Both record only from a fresh catalog newer than the last one processed; a stale one just reads what's known.
   const [{ calls, events, counts }, trends] = await Promise.all([recordCalls(db, catalog, now), recordHistory(db, catalog, now)]);
   const withSignals = races.map((r) => ({ ...withCall(r, calls.get(r.id) ?? null), signal: odds?.signals[raceKey(r.office, r.state, r.district)] ?? null, trend: trends.get(r.id) ?? null }));
-  return { races: withSignals, balance: balance(races), fetchedAt, stale, coverage, ratings: { updatedAt: evidenceAt(odds) }, callEvents: events, callEventCounts: counts };
+  return {
+    races: withSignals,
+    // Counted after calls are applied, so a race whose answer left out its winner still counts for the called side.
+    balance: balance(withSignals),
+    fetchedAt,
+    stale: isStale(catalog, now),
+    ...(partial && { partial }),
+    coverage,
+    ratings: { updatedAt: evidenceAt(odds) },
+    callEvents: events,
+    callEventCounts: counts,
+  };
 }
 
 /**
- * A race with its recorded call, or with `callPending` when the call disagrees with the race's current winner (or,
- * for a missing race, its retained one): the recorded log can trail or lead the catalog being served.
+ * Past this age, results shown while a refresh runs behind them count as stale. Above FRESH_MS plus the time a refresh
+ * takes, so the usual serve-then-refresh cycle (a copy up to about 35 seconds old) doesn't flicker stale on each poll.
+ */
+export const STALE_AFTER_MS = FRESH_MS + 15_000;
+
+/**
+ * For viewers, results are stale when served from a fallback (civicAPI failed or was slow) or older than
+ * STALE_AFTER_MS, as a catalog served while it refreshes in the background can be. Recording still goes by the
+ * catalog's own `stale`.
+ */
+export const isStale = (fetched: { stale: boolean; fetchedAt: number }, now: number) => fetched.stale || now - fetched.fetchedAt > STALE_AFTER_MS;
+
+/**
+ * A race with its recorded call and `calledFor`, or with `callPending` when the call disagrees with the race's current
+ * winner (or, for a missing race, its retained one): the recorded log can trail or lead the catalog being served.
+ * A race whose answer left out who won (`callUnknown`) keeps its recorded call, winner flag included.
  */
 export function withCall(race: RaceSummary, call: Call | null): RaceSummary {
-  return agrees(call, race) ? { ...race, call } : { ...race, call: null, callPending: true };
+  if (race.callUnknown && call && !call.withdrawn && race.candidates.some((c) => c.name === call.winner)) {
+    return { ...race, candidates: race.candidates.map((c) => (c.name === call.winner ? { ...c, winner: true } : c)), call, calledFor: call.winner };
+  }
+  if (!agrees(call, race)) return { ...race, call: null, callPending: true, calledFor: null };
+  return { ...race, call, calledFor: race.candidates.find((c) => c.winner)?.name ?? null };
 }
 
 /** One tracked race with county results and its rating signals, or null when the id isn't a tracked race. */
@@ -51,9 +80,9 @@ export async function race(db: Db, id: number, now: number, background?: (work: 
   // Calls come from the catalog's races, so this reuses the overview's memo and rarely touches the database.
   const [{ calls }, history] = await Promise.all([recordCalls(db, catalog, now), raceHistory(db, id)]);
   // The detail's results come from their own fetch, so a call the catalog hasn't caught up with is held back as pending.
-  const call = calls.get(id) ?? null;
-  const callPending = !agrees(call, found.race);
-  return { ...found, race: { ...found.race, signal: odds?.signals[raceKey(summary.office, summary.state, summary.district)] ?? null, call: callPending ? null : call }, callPending, history };
+  const shown = withCall(found.race, calls.get(id) ?? null);
+  const callPending = !!shown.callPending;
+  return { ...found, stale: isStale(found, now), race: { ...found.race, ...shown, signal: odds?.signals[raceKey(summary.office, summary.state, summary.district)] ?? null }, callPending, history };
 }
 
 /**

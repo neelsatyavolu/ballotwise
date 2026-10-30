@@ -3,67 +3,111 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useAccount } from "@/components/AccountProvider";
 import { api, ApiError } from "@/lib/client";
-import { clockNow } from "@/lib/midterms/clock";
-import { isNewer } from "@/lib/midterms/live";
-import { electionModeDefault } from "@/lib/midterms/polls";
+import { clockNow, simAt } from "@/lib/midterms/clock";
+import { fetchLive, isLagging, isNewer, LIVE_TIMEOUT_MS, LiveError, pollInterval, retryDelay } from "@/lib/midterms/live";
+import type { GridLayout } from "@/lib/midterms/decisionView";
 
-/** How often an open tracker page asks for new results. */
-export const POLL_MS = 30_000;
-/** From election day on, results move fast and the server's copy is refreshed every 30 seconds, so pages ask twice as often. */
-export const ELECTION_POLL_MS = 15_000;
+export { ELECTION_POLL_MS, POLL_MS, pollInterval } from "@/lib/midterms/live";
+
+/** What a page holds for one path: the data shown, the ETag it came with, and the server's latest fetch time. */
+type Held<T> = { path: string; data: T; etag: string | null; fetchedAt: number | null };
+
+/** Development previews (`?sim=`) run every live answer through the made-up election night, on every page. */
+async function previewed<T>(path: string, data: T): Promise<T> {
+  const at = simAt();
+  if (process.env.NODE_ENV !== "development" || at === null) return data;
+  const sim = await import("@/lib/midterms/sim");
+  return sim.simulatePayload(path, data, at);
+}
 
 /**
- * Fetches `path` now and every POLL_MS while the tab is visible, keeping the last good data through errors.
- * A null path fetches nothing.
- * `now` ticks with each poll so "updated X ago" labels stay current.
+ * Fetches `path` now and again after each answer while the tab is visible, keeping the last good data through
+ * errors. A null path fetches nothing. One request is in flight at a time and the next is scheduled once it settles,
+ * so slow answers can't pile up or overtake each other; the wait is re-read every time (see pollInterval), a request
+ * is given up after LIVE_TIMEOUT_MS, and failures back off (see retryDelay). An answer the server says is unchanged
+ * (a 304) or that's no newer than the one shown keeps the same data object, so the page doesn't redraw.
+ *
+ * `now` ticks with each poll so "updated X ago" labels stay current. `interval` is the current wait between polls.
+ * `fetchedAt` is when the server last fetched these results (even when the answer was unchanged), and `lagging` is
+ * set once that's LAG_MS or more ago.
  */
 export function useLive<T>(path: string | null) {
   // Data is kept with the path it came from, so switching paths never shows the previous one's numbers.
-  const [state, setState] = useState<{ path: string; data: T } | null>(null);
+  const [state, setState] = useState<Held<T> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const current = useRef(path);
-  const latest = useRef(0);
-
-  const load = useCallback(async () => {
-    if (!path) return;
-    const call = ++latest.current;
-    try {
-      const data = await api<T>(path);
-      // A slow answer for a path the page has moved on from, or one overtaken by a newer request, is dropped.
-      if (current.current !== path || call !== latest.current) return;
-      setState((prev) => (prev && prev.path === path && !isNewer(prev.data, data) ? prev : { path, data }));
-      setError(null);
-    } catch (err) {
-      if (current.current === path && call === latest.current) setError(err instanceof ApiError ? err.message : "Couldn't load results.");
-    } finally {
-      setNow(Date.now());
-    }
-  }, [path]);
+  const [interval, setIntervalMs] = useState(() => pollInterval(clockNow()));
+  // The same as `state`, readable from the polling loop without restarting it.
+  const held = useRef<Held<T> | null>(null);
 
   useEffect(() => {
-    current.current = path;
     if (!path) return;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const start = () => {
-      if (timer) return;
-      void load();
-      timer = setInterval(() => void load(), electionModeDefault(clockNow()) ? ELECTION_POLL_MS : POLL_MS);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let inFlight: AbortController | null = null;
+    let failures = 0;
+    let done = false;
+
+    const take = (answer: Awaited<ReturnType<typeof fetchLive<T>>>, data: T | null) => {
+      const prev = held.current?.path === path ? held.current : null;
+      const fetchedAt = Math.max(answer.fetchedAt ?? 0, prev?.fetchedAt ?? 0) || null;
+      let next: Held<T> | null = prev;
+      if (data !== null && (!prev || isNewer(prev.data, data, answer.etag !== prev.etag))) next = { path, data, etag: answer.etag, fetchedAt };
+      else if (prev && fetchedAt !== prev.fetchedAt) next = { ...prev, etag: answer.etag ?? prev.etag, fetchedAt };
+      if (next && next !== prev) {
+        held.current = next;
+        setState(next);
+      }
     };
-    const stop = () => {
-      if (timer) clearInterval(timer);
+
+    const poll = async () => {
       timer = null;
+      const wait = pollInterval(clockNow());
+      const controller = new AbortController();
+      inFlight = controller;
+      const timeout = setTimeout(() => controller.abort(), LIVE_TIMEOUT_MS);
+      try {
+        const etag = held.current?.path === path ? held.current.etag : null;
+        const answer = await fetchLive<T>(path, etag, controller.signal);
+        const data = answer.same ? null : await previewed(path, answer.data);
+        if (done) return;
+        take(answer, data);
+        failures = 0;
+        setError(null);
+      } catch (err) {
+        if (done) return;
+        failures += 1;
+        setError(err instanceof LiveError || err instanceof ApiError ? err.message : "Couldn't load results.");
+      } finally {
+        clearTimeout(timeout);
+        inFlight = null;
+        if (!done) {
+          setNow(Date.now());
+          setIntervalMs(wait);
+          if (!document.hidden) timer = setTimeout(() => void poll(), failures ? retryDelay(wait, failures) : wait);
+        }
+      }
     };
-    const onVisibility = () => (document.hidden ? stop() : start());
-    start();
+
+    // Coming back to the tab asks at once; leaving it lets a request in flight finish but schedules nothing more.
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (timer) clearTimeout(timer);
+        timer = null;
+      } else if (!timer && !inFlight) void poll();
+    };
+    void poll();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      stop();
+      done = true;
+      if (timer) clearTimeout(timer);
+      inFlight?.abort();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [load, path]);
+  }, [path]);
 
-  return { data: state && state.path === path ? state.data : null, error, now };
+  const mine = state && state.path === path ? state : null;
+  const fetchedAt = mine?.fetchedAt ?? null;
+  return { data: mine ? mine.data : null, error, now, interval, fetchedAt, lagging: isLagging(fetchedAt, now) };
 }
 
 /** The signed-in voter's starred races. `ids` is null when signed out. */
@@ -119,7 +163,8 @@ export function useFavorites() {
 }
 
 export type DashboardLayout = { title: string; sections: { title: string; note: string; raceIds: number[] }[] };
-export type Dashboard = { id: string; layout: DashboardLayout; updatedAt: number };
+/** A Grok-built dashboard (sections of race cards) or a Decision View grid of panels. */
+export type Dashboard = { id: string; layout: DashboardLayout | GridLayout; updatedAt: number };
 
 /** The signed-in voter's dashboards and which one is open. `list` is null until loaded or when signed out. */
 export function useDashboards() {

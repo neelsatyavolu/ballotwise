@@ -1,11 +1,15 @@
 // Development only: a made-up election night for previewing the tracker before real votes exist.
 // Loaded with a dynamic import behind a NODE_ENV check, so it never ships to production.
+import type { CallEvent } from "./calls";
 import { holderOf } from "./holders";
-import { stateCloses, stateFinal } from "./polls";
-import { balance, type RaceSummary } from "./races";
+import { ELECTION_DAY_START, stateCloses, stateFinal } from "./polls";
+import { balance, type CountyResult, type RaceDetail, type RaceSummary } from "./races";
 import type { Overview } from "./view";
 
 const HOUR = 3_600_000;
+/** One race's call is withdrawn at 10 p.m. Eastern and made again at 11, so previews show both in the feed and on the map. */
+const WITHDRAW_AT = ELECTION_DAY_START + 22 * HOUR;
+const RECALL_AT = ELECTION_DAY_START + 23 * HOUR;
 
 /** A repeatable random number in [0, 1) for a race and a salt. */
 function rand(id: number, salt: number): number {
@@ -65,18 +69,93 @@ function simulateRace(r: RaceSummary, at: number): RaceSummary {
     candidates: counted,
     // A made-up last quarter hour: some votes added and the lead a little different.
     trend: callable ? null : { since: at - 15 * 60_000, baselineAt: at - 15 * 60_000, votesAdded: Math.round(total * 0.1 * (1 - reporting / 100)), prevMargin: Math.abs(margin + (rand(r.id, 9) - 0.5) * 3), prevLeader: null, lastChange: at - rand(r.id, 10) * 12 * 60_000 },
+    calledFor: callable ? counted[0].name : null,
     call: callable ? { id: r.id, at: Math.max(stateFinal(r.state) ?? close, at - rand(r.id, 7) * Math.min(at - close, 1.5 * HOUR)), winner: counted[0].name, replaced: null, withdrawn: false } : null,
   };
 }
 
-/** The overview as it might look at `at`, with seat counts to match. */
+/** The race whose call is withdrawn and made again: the first Senate race (by id) called before WITHDRAW_AT. */
+function withdrawnRace(races: readonly RaceSummary[]): number | null {
+  const called = races.filter((r) => r.office === "senate").map((r) => simulateRace(r, WITHDRAW_AT)).filter((r) => r.call && r.call.at < WITHDRAW_AT);
+  return called.length ? Math.min(...called.map((r) => r.id)) : null;
+}
+
+type Event = Omit<CallEvent, "id">;
+
+/** A race at `at` with its events, oldest first. The withdrawn race loses its call between WITHDRAW_AT and RECALL_AT. */
+function raceWithEvents(r: RaceSummary, at: number, withdrawn: number | null): { race: RaceSummary; events: Event[] } {
+  const race = simulateRace(r, at);
+  const won = race.candidates.find((c) => c.winner);
+  const call = (e: Pick<Event, "at" | "winner" | "previous">): Event => ({ raceId: r.id, office: r.office, kind: e.winner === null ? "withdrawal" : e.previous === null ? "call" : "change", party: e.winner === null ? null : (won?.party ?? null), ...e });
+  if (r.id !== withdrawn || at < WITHDRAW_AT) return { race, events: race.call?.winner ? [call({ at: race.call.at, winner: race.call.winner, previous: null })] : [] };
+  const first = simulateRace(r, WITHDRAW_AT).call!;
+  const name = first.winner!;
+  const events = [call({ at: first.at, winner: name, previous: null }), call({ at: WITHDRAW_AT, winner: null, previous: name })];
+  if (at < RECALL_AT) {
+    const shown = { ...race, candidates: race.candidates.map((c) => ({ ...c, winner: false })), calledFor: null };
+    return { race: { ...shown, call: { id: 0, at: WITHDRAW_AT, winner: null, replaced: name, withdrawn: true } }, events };
+  }
+  const candidates = race.candidates.map((c) => ({ ...c, winner: c.name === name }));
+  return { race: { ...race, candidates, calledFor: name, call: { id: 0, at: RECALL_AT, winner: name, replaced: null, withdrawn: false } }, events: [...events, call({ at: RECALL_AT, winner: name, previous: null })] };
+}
+
+/** The overview as it might look at `at`, with seat counts to match. Call events are numbered in the order they happened. */
 export function simulateOverview(data: Overview, at: number): Overview {
-  const races = data.races.map((r) => simulateRace(r, at));
-  const callEvents = races
-    .filter((r) => r.call)
-    .map((r) => ({ id: r.call!.id, raceId: r.id, office: r.office, kind: "call" as const, winner: r.call!.winner, party: r.candidates.find((c) => c.winner)?.party ?? null, previous: null, at: r.call!.at }))
-    .sort((a, b) => b.at - a.at);
+  if (data.simulated) return data;
+  const withdrawn = withdrawnRace(data.races);
+  const results = data.races.map((r) => raceWithEvents(r, at, withdrawn));
+  const ordered = results.flatMap((x) => x.events).sort((a, b) => a.at - b.at || a.raceId - b.raceId);
+  const events: CallEvent[] = ordered.map((e, i) => ({ ...e, id: i + 1 }));
+  const latestId = new Map(events.map((e) => [e.raceId, e.id]));
+  const races = results.map(({ race }) => (race.call ? { ...race, call: { ...race.call, id: latestId.get(race.id) ?? 0 } } : race));
+  const callEvents = [...events].reverse();
   const callEventCounts = { senate: 0, house: 0, governor: 0, measure: 0 };
   for (const e of callEvents) callEventCounts[e.office] += 1;
-  return { ...data, races, balance: balance(races), fetchedAt: at, callEvents, callEventCounts };
+  return { ...data, races, balance: balance(races), fetchedAt: at, callEvents, callEventCounts, simulated: true };
+}
+
+/** A county's share of the race's votes: its 2024 presidential turnout where known, else an even split. */
+function weights(counties: readonly CountyResult[]): number[] {
+  const known = counties.map((c) => c.pres2024?.total ?? 0);
+  const sum = known.reduce((a, b) => a + b, 0);
+  return sum > 0 ? known.map((k) => k / sum) : counties.map(() => 1 / Math.max(1, counties.length));
+}
+
+/** One race page as it might look at `at`: the race simulated as in the overview, its counties counting around it. */
+export function simulateDetail(race: RaceDetail, at: number): RaceDetail {
+  const summary = simulateRace(race, at);
+  if (summary === race) return race;
+  const share = weights(race.counties);
+  const counties = race.counties.map((c, i): CountyResult => {
+    const seed = Number(c.fips ?? i);
+    const reporting = Math.max(0, Math.min(100, Math.round(summary.reporting + (rand(seed, 11) - 0.5) * 40)));
+    const total = Math.round(summary.total * share[i] * (reporting / Math.max(1, summary.reporting)));
+    // Counties lean from the statewide count the way they did in 2024.
+    const tilt = c.baseline2024 === null ? (rand(seed, 12) - 0.5) * 20 : c.baseline2024 / 2;
+    const candidates = summary.candidates.map((x) => {
+      const p = /^Democrat/i.test(x.party) ? x.pct + tilt : /^Republican/i.test(x.party) ? x.pct - tilt : x.pct;
+      return { name: x.name, party: x.party, pct: Math.max(0, p), votes: 0 };
+    });
+    const sum = candidates.reduce((a, x) => a + x.pct, 0) || 1;
+    const counted = candidates.map((x) => {
+      const votes = Math.round((total * x.pct) / sum);
+      return { ...x, votes, pct: total ? Math.round((votes / total) * 10000) / 100 : 0 };
+    });
+    return { ...c, reporting, total: counted.reduce((a, x) => a + x.votes, 0), candidates: counted.sort((a, b) => b.votes - a.votes) };
+  });
+  return { ...race, ...summary, counties };
+}
+
+/**
+ * Any live answer as it might look at `at`: the overview, or a race page with its counties. Other answers (markets,
+ * forecasts) pass through unchanged.
+ */
+export function simulatePayload<T>(path: string, data: T, at: number): T {
+  const d = data as unknown as { races?: unknown; race?: unknown };
+  if (path === "/api/midterms" && Array.isArray(d.races)) return simulateOverview(data as unknown as Overview, at) as unknown as T;
+  if (/^\/api\/midterms\/race\/\d+$/.test(path) && d.race) {
+    const race = simulateDetail(d.race as RaceDetail, at);
+    return { ...data, race, callPending: false, fetchedAt: at } as T;
+  }
+  return data;
 }

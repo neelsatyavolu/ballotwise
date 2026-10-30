@@ -213,6 +213,26 @@ describe("recordCalls", () => {
     expect(await timeline(db, 1)).toEqual([["Alice", T]]);
   });
 
+  it("doesn't skip a correction another isolate stored when a newer catalog matches the local log", async () => {
+    const db = testDb();
+    await record(db, [race(1, "Alice")], T);
+    // Another isolate sees Bob and records him, as its sync would.
+    await db.prepare("INSERT INTO midterm_call_events (race_id, office, winner, party, previous, observed_at) VALUES (1, 'senate', 'Bob', 'REP', 'Alice', ?)").bind(T + 5000).run();
+    await db.prepare("UPDATE midterm_ingest SET at = ? WHERE key = 'calls'").bind(T + 5000).run();
+    // Before this isolate's next sync, a newer catalog shows Alice again: unchanged against its own log, but not the stored one.
+    const { calls } = await record(db, [race(1, "Alice")], T + 10_000, T + 12_000);
+    expect(await timeline(db, 1)).toEqual([["Alice", T], ["Bob", T + 5000], ["Alice", T + 10_000]]);
+    expect(calls.get(1)).toMatchObject({ winner: "Alice", at: T + 10_000, replaced: "Bob" });
+  });
+
+  it("keeps a call when an answer leaves out who won", async () => {
+    const db = testDb();
+    await record(db, [race(1, "Alice")], step(0));
+    const { calls } = await record(db, [{ ...race(1, null), callUnknown: true }], step(1));
+    expect(calls.get(1)).toMatchObject({ winner: "Alice", withdrawn: false });
+    expect(await callHistory(db, 1)).toHaveLength(1);
+  });
+
   it("catches up on calls another isolate recorded, even with nothing new locally", async () => {
     const db = testDb();
     await record(db, [race(1, "Alice")], step(0));

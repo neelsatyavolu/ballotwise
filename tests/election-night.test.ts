@@ -123,8 +123,11 @@ describe("election night, poll by poll", () => {
     answer = { senate: [ga(40, 52_000, 48_000, null)] };
     await settle(db, NIGHT);
     answer = "down";
-    // Within SERVE_STALE_MS the page gets the recent copy while the refresh fails behind it.
-    expect(await poll(db, NIGHT + MINUTE)).toMatchObject({ stale: false });
+    // Within SERVE_STALE_MS the page gets the recent copy at once while the refresh fails behind it, flagged stale
+    // since it's older than STALE_AFTER_MS.
+    const recent = await poll(db, NIGHT + MINUTE);
+    expect(recent).toMatchObject({ stale: true, fetchedAt: NIGHT });
+    expect(georgia(recent)).toMatchObject({ reporting: 40 });
     const down = await poll(db, NIGHT + SERVE_STALE_MS + MINUTE);
     expect(down.stale).toBe(true);
     expect(georgia(down)).toMatchObject({ reporting: 40 });
@@ -173,7 +176,9 @@ describe("the page keeps the newest results", () => {
   it("drops an answer older than the one on screen", () => {
     expect(isNewer({ fetchedAt: 2000 }, { fetchedAt: 1000 })).toBe(false);
     expect(isNewer({ fetchedAt: 1000 }, { fetchedAt: 2000 })).toBe(true);
-    expect(isNewer({ fetchedAt: 1000 }, { fetchedAt: 1000 })).toBe(true);
+    // The same fetch is kept as it is, unless the server says its content changed (calls can move without a new fetch).
+    expect(isNewer({ fetchedAt: 1000 }, { fetchedAt: 1000 })).toBe(false);
+    expect(isNewer({ fetchedAt: 1000 }, { fetchedAt: 1000 }, true)).toBe(true);
     // Answers without a time (other endpoints) always replace.
     expect(isNewer(null, { fetchedAt: 1 })).toBe(true);
     expect(isNewer({ items: [] }, { items: [1] })).toBe(true);

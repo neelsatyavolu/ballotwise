@@ -2,7 +2,7 @@
 // Senate and House come from congress-legislators (scripts/build-holders.mjs). House seats are matched by district
 // number, so a district redrawn since the last election compares against the member who holds that number now.
 import holders from "./holders.json";
-import { partyOf, type RaceSummary } from "./view";
+import { isEarly, partyOf, type RaceSummary } from "./view";
 
 export type Side = "D" | "R" | "I";
 
@@ -32,9 +32,12 @@ export function outcomeOf(r: RaceSummary): { side: Side; gain: boolean } | null 
   return { side, gain: side !== holder };
 }
 
-/** An uncalled race whose current leader is from a different party than holds the seat: a flip if it holds. */
-export function leadingFlip(r: RaceSummary): Side | null {
-  if (r.candidates.some((c) => c.winner)) return null;
+/**
+ * An uncalled race whose current leader is from a different party than holds the seat: a flip if it holds. An early
+ * count (see isEarly) says too little to call a possible flip, unless `includeEarly`.
+ */
+export function leadingFlip(r: RaceSummary, includeEarly = false): Side | null {
+  if (r.candidates.some((c) => c.winner) || (!includeEarly && isEarly(r))) return null;
   const [first, second] = r.candidates;
   const holder = holderOf(r);
   if (!holder || !first?.votes || first.votes === second?.votes) return null;

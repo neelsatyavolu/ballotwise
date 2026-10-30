@@ -27,6 +27,11 @@ export const WAIT_MS = 8_000;
 /** One civicAPI request is given up after this long, so a hung connection can't hold a response or a refresh. */
 const REQUEST_TIMEOUT_MS = 15_000;
 /**
+ * A whole catalog refresh (every race type, every page, with retries) gets this long; race types still unanswered
+ * then count as failed. Under STUCK_MS, so a refresh ends before another is allowed to start beside it.
+ */
+const REFRESH_BUDGET_MS = 40_000;
+/**
  * A fetch still unsettled after this long is presumed cut off (Workers end background work 30 seconds after the
  * response), so a new one may start.
  */
@@ -36,11 +41,19 @@ export class CivicError extends Error {}
 /** civicAPI has no race with that id: not worth retrying. */
 export class CivicNotFound extends CivicError {}
 
-async function civicOnce(path: string): Promise<unknown> {
+/** How long a request may take: REQUEST_TIMEOUT_MS, or less when a `deadline` (epoch ms) comes first. Throws once it has passed. */
+function timeLeft(deadline: number): number {
+  const left = Math.min(REQUEST_TIMEOUT_MS, deadline - Date.now());
+  if (left <= 0) throw new CivicError("civicAPI refresh ran out of time.");
+  return left;
+}
+
+async function civicOnce(path: string, deadline: number): Promise<unknown> {
   let res: Response;
+  const timeout = timeLeft(deadline);
   try {
     // On Cloudflare, `cf.cacheTtl` shares one fetch per data center among every visitor polling at once.
-    res = await fetch(BASE + path, { cf: { cacheTtl: 20, cacheEverything: true }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) } as RequestInit);
+    res = await fetch(BASE + path, { cf: { cacheTtl: 20, cacheEverything: true }, signal: AbortSignal.timeout(timeout) } as RequestInit);
   } catch {
     throw new CivicError("Couldn't reach civicAPI.");
   }
@@ -52,17 +65,21 @@ async function civicOnce(path: string): Promise<unknown> {
 const RETRY_DELAYS_MS = [300, 1000];
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** civicAPI answers 503 now and then under load, so each request is retried twice after a short pause. */
-async function civic(path: string): Promise<unknown> {
+/**
+ * civicAPI answers 503 now and then under load, so each request is retried twice after a short pause, as long as
+ * `deadline` (epoch ms) leaves time for it.
+ */
+async function civic(path: string, deadline = Infinity): Promise<unknown> {
   for (const delay of RETRY_DELAYS_MS) {
     try {
-      return await civicOnce(path);
+      return await civicOnce(path, deadline);
     } catch (err) {
       if (err instanceof CivicNotFound) throw err;
+      if (Date.now() + delay >= deadline) throw err;
       await sleep(delay);
     }
   }
-  return civicOnce(path);
+  return civicOnce(path, deadline);
 }
 
 /** Runs `work` over `items` with at most `limit` in flight, keeping results in order. */
@@ -79,16 +96,17 @@ async function pooled<T, R>(items: readonly T[], limit: number, work: (item: T) 
   return out;
 }
 
-// civicAPI ignores the date filter but lists newest elections first, so paging stops at the first page
-// that reaches an earlier election.
-async function racesOfType(type: string): Promise<unknown[]> {
+// civicAPI ignores the date filter but lists newest elections first. Its order isn't strict (a later runoff or an
+// earlier special can sit among the Nov 3 races), so paging goes on past mixed pages and stops at the first page
+// with no Nov 3 race at all; summarize() keeps only Nov 3 races.
+async function racesOfType(type: string, deadline: number): Promise<unknown[]> {
   const out: unknown[] = [];
   const size = SMALL_PAGE[type] ?? PAGE;
   for (let offset = 0; offset < 10 * PAGE; offset += size) {
-    const page = (await civic(`race/search?country=US&election_date=${ELECTION_DATE}&type=${encodeURIComponent(type)}&limit=${size}&offset=${offset}`)) as { races?: { election_date?: string }[] };
+    const page = (await civic(`race/search?country=US&election_date=${ELECTION_DATE}&type=${encodeURIComponent(type)}&limit=${size}&offset=${offset}`, deadline)) as { races?: { election_date?: string }[] };
     const races = page.races ?? [];
     out.push(...races);
-    if (races.length < size || races.some((r) => !r.election_date?.startsWith(ELECTION_DATE))) break;
+    if (races.length < size || !races.some((r) => r.election_date?.startsWith(ELECTION_DATE))) break;
   }
   return out;
 }
@@ -97,8 +115,9 @@ type Memo<T> = { at: number; value: T };
 /**
  * A catalog as of `at`. Races without `missing` were in civicAPI's answer at `at`; missing ones carry `lastSeen`.
  * `fromStore` marks one pieced together from D1's per-race snapshots rather than a single civicAPI answer.
+ * `failed` lists the race types whose search failed; their races keep their last numbers, marked missing.
  */
-type Stored = Memo<RaceSummary[]> & { fromStore?: true };
+type Stored = Memo<RaceSummary[]> & { fromStore?: true; failed?: string[] };
 // Per-isolate memory of the last served catalog, so a civicAPI outage shows slightly old results instead of none.
 let catalogMemo: Stored | null = null;
 /** The civicAPI fetch under way, so page views and background refreshes arriving together share one. */
@@ -138,8 +157,11 @@ export function resetCivicMemo() {
   searchMemo.clear();
 }
 
-/** `stored` marks a catalog pieced together from D1's snapshots: shown to viewers, but not recorded as an observation. */
-export type Fetched<T> = T & { fetchedAt: number; stale: boolean; stored?: true };
+/**
+ * `stored` marks a catalog pieced together from D1's snapshots: shown to viewers, but not recorded as an observation.
+ * `partial` lists the civicAPI race types that failed in the fetch behind it (see Stored's `failed`).
+ */
+export type Fetched<T> = T & { fetchedAt: number; stale: boolean; stored?: true; partial?: string[] };
 
 /** Every race's stored numbers, with `seen` set to when they were written. Null when D1 can't be read. */
 async function readRaceSnapshots(db: Db): Promise<Known | null> {
@@ -247,16 +269,43 @@ function missingByOffice(races: readonly RaceSummary[]): string | null {
   return counts.size > 0 ? [...counts].map(([office, n]) => `${office} ${n}`).join(", ") : null;
 }
 
-async function fetchRaces(now: number): Promise<RaceSummary[]> {
-  // Two searches at a time: civicAPI answers 503 more often when hit with all six at once.
-  const pages = await pooled(TYPES, 2, racesOfType);
+/**
+ * Every race of each type civicAPI answered for, and the types it didn't. One failed type doesn't discard the
+ * others; only when every type fails does this throw.
+ */
+async function fetchRaces(now: number): Promise<{ races: RaceSummary[]; failed: string[] }> {
+  const deadline = Date.now() + REFRESH_BUDGET_MS;
+  const tally = { ok: 0, failed: 0 };
+  // Settles once a type has answered or two have failed: whether civicAPI is up is known by then.
+  let decide = () => {};
+  const decided = new Promise<void>((resolve) => (decide = resolve));
+  // Two searches at a time: civicAPI answers 503 more often when hit with all six at once. Once two have failed
+  // with none answered, civicAPI is down, so the rest aren't tried.
+  const pages = await pooled(TYPES, 2, async (type): Promise<{ races: unknown[] } | { err: unknown }> => {
+    if (tally.ok === 0 && tally.failed > 0) await decided;
+    if (tally.ok === 0 && tally.failed >= 2) return { err: new CivicError("civicAPI looks down.") };
+    try {
+      const races = await racesOfType(type, deadline);
+      tally.ok += 1;
+      decide();
+      return { races };
+    } catch (err) {
+      tally.failed += 1;
+      if (tally.failed >= 2) decide();
+      return { err };
+    }
+  });
+  const failed = TYPES.filter((_, i) => "err" in pages[i]);
+  if (failed.length === TYPES.length) throw (pages[0] as { err: unknown }).err;
   // A race can appear under two type searches; keep the first.
   const byId = new Map<number, RaceSummary>();
-  for (const raw of pages.flat()) {
-    const race = summarize(raw, []);
-    if (race && !byId.has(race.id)) byId.set(race.id, now < FIRST_POLLS_OPEN ? blankResults(race) : race);
+  for (const page of pages) {
+    for (const raw of "races" in page ? page.races : []) {
+      const race = summarize(raw, [], now);
+      if (race && !byId.has(race.id)) byId.set(race.id, now < FIRST_POLLS_OPEN ? blankResults(race) : race);
+    }
   }
-  return [...byId.values()];
+  return { races: [...byId.values()], failed };
 }
 
 const served = (memo: Stored, ratings: readonly RatedRace[], stale: boolean) => ({
@@ -265,6 +314,7 @@ const served = (memo: Stored, ratings: readonly RatedRace[], stale: boolean) => 
   fetchedAt: memo.at,
   stale,
   ...(memo.fromStore ? { stored: true as const } : {}),
+  ...(memo.failed?.length ? { partial: memo.failed } : {}),
 });
 
 /**
@@ -327,7 +377,8 @@ function latest(now: number, db: Db | undefined, background: ((work: Promise<unk
 /** Asks civicAPI for every race, keeps the ones it left out, saves the result to memory and D1. Throws on CivicError. */
 async function load(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Known | null>): Promise<Stored> {
   const registeredRaces = registry(db, now);
-  const fetched = await fetchRaces(now);
+  const { races: fetched, failed } = await fetchRaces(now);
+  if (failed.length) console.error(`midterms: civicAPI failed for ${failed.join(", ")}; those races keep their last known numbers`);
   let known = warm ? knownFrom(warm) : ((await snapshots) ?? new Map());
   const registered = await registeredRaces;
   const listed = new Set(fetched.map((r) => r.id));
@@ -339,7 +390,7 @@ async function load(now: number, db: Db | undefined, background: ((work: Promise
   const races = assemble(fetched, known, registered);
   const missing = missingByOffice(races);
   if (missing) console.error(`midterms: civicAPI left out races (${missing}); showing their last known numbers`);
-  const memo: Stored = { at: now, value: races };
+  const memo: Stored = { at: now, value: races, ...(failed.length && { failed }) };
   // A slower fetch that started earlier never replaces a newer catalog.
   if (!catalogMemo || catalogMemo.at <= now) catalogMemo = memo;
   if (db) {
@@ -363,7 +414,7 @@ export async function fetchRace(summary: RaceSummary, now: number, baseline: Rea
   const memo = raceMemo.get(summary.id);
   if (memo && now - memo.at < FRESH_MS) return { race: memo.value, fetchedAt: memo.at, stale: false };
   try {
-    const detail = raceDetail(summary, await civic(`race/${summary.id}`), baseline);
+    const detail = raceDetail(summary, await civic(`race/${summary.id}`), baseline, now);
     const race = now < FIRST_POLLS_OPEN ? { ...blankResults(detail), counties: detail.counties.map((c) => ({ ...c, reporting: 0, total: 0, candidates: c.candidates.map((x) => ({ ...x, votes: 0, pct: 0 })) })) } : detail;
     raceMemo.set(summary.id, { at: now, value: race });
     return { race, fetchedAt: now, stale: false };
@@ -416,12 +467,12 @@ export async function fetchOtherRace(id: number, now: number, baseline: Readonly
     if (memo?.value) return { race: memo.value, fetchedAt: memo.at, stale: true };
     throw err;
   }
-  const summary = summarizeOther({ ...(input as object), id });
+  const summary = summarizeOther({ ...(input as object), id }, now);
   if (!summary) {
     remember(otherMemo, id, { at: now, value: null });
     return null;
   }
-  const detail = withColors(raceDetail(summary, input, baseline), new Map(summary.candidates.map((c) => [c.name, c.color])));
+  const detail = withColors(raceDetail(summary, input, baseline, now), new Map(summary.candidates.map((c) => [c.name, c.color])));
   // Like tracked races, a Nov 3 race shows no numbers before polls open: civicAPI posts test counts beforehand.
   const race = summary.local?.date === ELECTION_DATE && now < FIRST_POLLS_OPEN ? { ...blankResults(detail), counties: detail.counties.map((c) => ({ ...c, reporting: 0, total: 0, candidates: c.candidates.map((x) => ({ ...x, votes: 0, pct: 0 })) })) } : detail;
   remember(otherMemo, id, { at: now, value: race });
