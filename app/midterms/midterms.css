@@ -1404,3 +1404,5 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
 .mt .mt-tile.lean { box-shadow: 0 0 0 1px color-mix(in srgb, var(--rate-tossup) 45%, transparent); }
 .mt .mt-seat.lean { outline: 1px dashed var(--rate-tossup); outline-offset: -1px; }
 .mt-legend i.watch.lean { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rate-tossup) 70%, transparent); }
+/* The balance and seat rows never wrap their parts: each number keeps its label on its own line. */
+.mt-balance-nums > span, .mt-seats-nums > .d, .mt-seats-nums > .r { white-space: nowrap; }

@@ -32,17 +32,18 @@ export function BalanceBar({ title, office, tally, projected = null }: { title: 
         <span className="muted small">{CONTROL[office]}</span>
       </div>
       <div className="mt-balance-nums">
+        {/* Before votes, the big numbers are the projected totals, so the row stays one short line in a narrow card. */}
         <span className="d">
-          <b>{tally.D}</b> Dem{ahead.D > 0 && <em> +{ahead.D} projected</em>}
+          <b>{tally.D + ahead.D}</b> Dem
         </span>
         {tally.other > 0 && (
           <span className="o">
             <b>{tally.other}</b> Other
           </span>
         )}
-        <span className="u">{projected ? controlOdds(projected.dControl) : `${open} undecided`}</span>
+        <span className="u">{projected ? "projected" : `${open} undecided`}</span>
         <span className="r">
-          {ahead.R > 0 && <em>{ahead.R} projected + </em>}Rep <b>{tally.R}</b>
+          Rep <b>{tally.R + ahead.R}</b>
         </span>
       </div>
       <div className="mt-balance-bar" role="img" aria-label={`${tally.D} Democratic, ${tally.R} Republican, ${tally.other} other, ${open} undecided${projected ? `; projected ${tally.D + ahead.D} Democratic, ${tally.R + ahead.R} Republican` : ""}`}>
@@ -55,6 +56,7 @@ export function BalanceBar({ title, office, tally, projected = null }: { title: 
         {tick(office, tally)}
       </div>
       <p className="muted small">
+        {projected && controlOdds(projected.dControl) && `${controlOdds(projected.dControl)}. `}
         {NOTE[office]}
         {projected && ` ${PROJECTED_NOTE}`}
       </p>
@@ -62,8 +64,11 @@ export function BalanceBar({ title, office, tally, projected = null }: { title: 
   );
 }
 
-/** Election-night seat count: seats won (solid) and races led but not called (light), from each end toward the majority line. */
-/** Before votes, `projected` takes the place of the leaders: the forecast's expected seats, and the chance of control. */
+/**
+ * The office screens' seat count, from each end toward the majority line. On election night: seats won (solid) and
+ * races led but not called (light). Before votes, `projected` takes the leaders' place: the big numbers are the
+ * forecast's projected totals, the light segments its expected seats, and the middle gives the chance of control.
+ */
 export function SeatBar({ tally, ahead: leading, office, projected = null }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE; projected?: Projected }) {
   const share = (n: number) => `${(n / tally.total) * 100}%`;
   const ahead = projected?.ahead ?? leading;
@@ -73,15 +78,16 @@ export function SeatBar({ tally, ahead: leading, office, projected = null }: { t
     <section className="mt-seats">
       <div className="mt-seats-nums">
         <span className="d">
-          <b>{tally.D}</b> Dem{ahead.D > 0 && <em> +{ahead.D} {word}</em>}
+          <b>{projected ? tally.D + ahead.D : tally.D}</b> Dem{!projected && ahead.D > 0 && <em> +{ahead.D} {word}</em>}
         </span>
         <span className="mt-seats-mid">
+          {projected && "Projected · "}
           {CONTROL[office]}
           {tally.other + ahead.other > 0 && ` · Other ${tally.other}${ahead.other ? ` +${ahead.other}` : ""}`}
           {projected ? (controlOdds(projected.dControl) ? ` · ${controlOdds(projected.dControl)}` : "") : ` · ${open} uncounted`}
         </span>
         <span className="r">
-          {ahead.R > 0 && <em>{ahead.R} {word} + </em>}Rep <b>{tally.R}</b>
+          {!projected && ahead.R > 0 && <em>{ahead.R} {word} + </em>}Rep <b>{projected ? tally.R + ahead.R : tally.R}</b>
         </span>
       </div>
       <div className="mt-balance-bar mt-seats-bar" role="img" aria-label={`Democrats ${tally.D} won and ${ahead.D} ${word}; Republicans ${tally.R} won and ${ahead.R} ${word}; ${open} uncounted`}>
