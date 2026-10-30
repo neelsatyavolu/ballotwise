@@ -1,13 +1,20 @@
 // Fetches civicAPI's early vote tracker and keeps each answer for a while: states publish once or twice a day.
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
+import { getCached, putCached } from "../cache";
+import { db } from "../env";
 import { civic, CivicNotFound, pooled } from "./civic";
 import names from "./countyNames.json";
 import { breakdown, countiesOf, earlyFeed, nationOf, priorDate, priorOf, stateTotals, type Demographics, type EarlyFeed, type EarlyNation, type EarlyStateDetail, type Feeds } from "./earlyVote";
+import { createServe } from "./staleServe";
 
 /** How long a fetched answer is reused before asking civicAPI again. */
 const FRESH_MS = 10 * 60_000;
-/** A whole state's fetch (a dozen requests) gives up after this long. */
-const BUDGET_MS = 20_000;
+/**
+ * A fetch with no older copy to fall back on (a dozen requests for a state) gives up after this long: under the
+ * page's 20-second wait, so the visitor gets an error they can retry rather than a hung request.
+ */
+const BUDGET_MS = 15_000;
 const KINDS = ["returned", "inperson", "requested"] as const;
 /** The demographic breakdowns shown, with civicAPI's names for them in its capabilities list and its `by` parameter. */
 const DEMOGRAPHICS = [
@@ -21,34 +28,19 @@ const demographics = z.object({ values: z.record(z.string(), z.number()).default
 
 export class EarlyVoteMissing extends Error {}
 
-const memo = new Map<string, { at: number; value: unknown }>();
-const inFlight = new Map<string, Promise<unknown>>();
-
 /**
- * `load()`'s answer under `key`, reused for FRESH_MS and shared by requests arriving together. When a refresh fails,
- * the last answer is served instead, as long as there is one.
+ * Each answer is kept in memory and saved to D1, so a new isolate starts from the last one instead of making its
+ * first visitors wait on civicAPI. With a copy in hand, a visitor waits at most 6 seconds for a refresh.
  */
-async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
-  const held = memo.get(key);
-  if (held && Date.now() - held.at < FRESH_MS) return held.value as T;
-  const running = inFlight.get(key);
-  if (running) return running as Promise<T>;
-  const work = load()
-    .then((value) => {
-      memo.set(key, { at: Date.now(), value });
-      return value;
-    })
-    .catch((err) => {
-      if (held && !(err instanceof EarlyVoteMissing)) {
-        console.error(`early vote: refresh of ${key} failed, serving the last answer:`, err);
-        return held.value as T;
-      }
-      throw err;
-    })
-    .finally(() => inFlight.delete(key));
-  inFlight.set(key, work);
-  return work;
-}
+const cached = createServe({
+  now: Date.now,
+  read: (key) => getCached(db(), `earlyvote:${key}`, Date.now()),
+  write: (key, value) => putCached(db(), `earlyvote:${key}`, value, Date.now()),
+  later: (work) => getCloudflareContext().ctx.waitUntil(work),
+  freshMs: FRESH_MS,
+  waitMs: 6_000,
+  stuckMs: 25_000,
+});
 
 /** A feed, or null when civicAPI has none for it. */
 async function feed(path: string, deadline: number): Promise<EarlyFeed | null> {
