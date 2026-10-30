@@ -174,6 +174,9 @@ export function NearYouView() {
   // Sections with nothing to show drop out, except the ones whose absence says something.
   const shown = parts.filter((p) => p.races.length || p.key === "ticket" || p.key === "local");
   const counting = shown.some((p) => p.races.some((r) => r.total > 0));
+  const section = (p: Part) => <Section key={p.key} part={p} stars={favorites.ids} onStar={favorites.toggle} />;
+  // With a map, the top of the ticket goes beside it, under the county panel.
+  const beside = local.state ? shown.find((p) => p.key === "ticket") : undefined;
 
   return (
     <Shell
@@ -195,10 +198,8 @@ export function NearYouView() {
       {live.error && <p className="error small">{live.error} Showing the last results we got.</p>}
       {editing && <AddressForm onSaved={saved} onCancel={() => setEditing(false)} />}
       <Tally parts={shown.filter((p) => p.races.length)} />
-      {local.state && <NearYouMap state={local.state} fips={local.countyFips} raceId={ticket[0]?.id ?? null} />}
-      {shown.map((p) => (
-        <Section key={p.key} part={p} stars={favorites.ids} onStar={favorites.toggle} />
-      ))}
+      {local.state && <NearYouMap state={local.state} fips={local.countyFips} raceId={ticket[0]?.id ?? null} side={beside && section(beside)} />}
+      {shown.filter((p) => p !== beside).map(section)}
       <p className="muted small mt-source">
         Matched from your saved address, which your <Link href="/ballot">ballot page</Link> uses too. Local results from{" "}
         {county ? <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a> : <a href="https://civicapi.org">civicAPI</a>}; the rest from civicAPI. <Link href="/midterms/credits">Sources and credits</Link>

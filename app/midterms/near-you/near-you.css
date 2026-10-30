@@ -8,6 +8,8 @@
 .ny-top { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
 @media (max-width: 860px) { .ny-top { grid-template-columns: 1fr; } }
 
+.ny-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
+.ny-side > .ny-section { margin-top: 0; }
 .ny-panel { display: grid; gap: 12px; align-content: start; padding: 14px; background: var(--sheet); border: 1px solid var(--rule); border-top: 3px solid var(--accent); border-radius: var(--radius); }
 .ny-panel h2 { margin: 2px 0 0; font-size: 22px; }
 .ny-panel .mt-ev-stats { margin: 0; }

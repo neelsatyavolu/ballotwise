@@ -2,7 +2,7 @@
 
 // The Near you page's map: the voter's state by county, framed on their county, shaded by early vote, the top race's
 // count, or the 2024 presidential vote; beside it, how their own county stands.
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { shareOf2024, type EarlyCounty, type EarlyStateDetail } from "@/lib/midterms/earlyVote";
 import type { CountyResult, RaceDetail } from "@/lib/midterms/races";
 import { fmt, lead, marginLabel, pct, raceLabel, STATE_NAMES } from "@/lib/midterms/view";
@@ -67,7 +67,8 @@ function CountyRace({ race, county }: { race: RaceDetail; county: CountyResult }
   );
 }
 
-export function NearYouMap({ state, fips, raceId }: { state: string; fips: string | null; raceId: number | null }) {
+/** `side` sits under the county panel, so a tall state's map doesn't leave that column empty. */
+export function NearYouMap({ state, fips, raceId, side }: { state: string; fips: string | null; raceId: number | null; side?: ReactNode }) {
   const early = useLive<EarlyStateDetail>(`/api/midterms/early-vote/${state}`);
   const detail = useLive<{ race: RaceDetail }>(raceId ? `/api/midterms/race/${raceId}` : null);
   const race = detail.data?.race ?? null;
@@ -119,22 +120,25 @@ export function NearYouMap({ state, fips, raceId }: { state: string; fips: strin
         )}
       </section>
 
-      <aside className="ny-panel" aria-label="Your county">
-        <div>
-          <span className="muted small">Your county</span>
-          <h2>{name ?? "—"}</h2>
-        </div>
-        {race && myRace && <CountyRace race={race} county={myRace} />}
-        {myEarly ? (
-          <>
-            <span className="muted small">Early vote{early.data?.asOf ? ` as of ${dayLabel(early.data.asOf)}` : ""}</span>
-            <Stats counts={myEarly} base2024={myEarly.base2024} />
-            {myEarly.party && <PartyBar party={myEarly.party} />}
-          </>
-        ) : (
-          <p className="muted small">{early.data ? "No early vote figures for your county yet." : early.error ? "Early vote figures aren't available for your state." : "Loading early vote…"}</p>
-        )}
-      </aside>
+      <div className="ny-side">
+        <aside className="ny-panel" aria-label="Your county">
+          <div>
+            <span className="muted small">Your county</span>
+            <h2>{name ?? "—"}</h2>
+          </div>
+          {race && myRace && <CountyRace race={race} county={myRace} />}
+          {myEarly ? (
+            <>
+              <span className="muted small">Early vote{early.data?.asOf ? ` as of ${dayLabel(early.data.asOf)}` : ""}</span>
+              <Stats counts={myEarly} base2024={myEarly.base2024} />
+              {myEarly.party && <PartyBar party={myEarly.party} />}
+            </>
+          ) : (
+            <p className="muted small">{early.data ? "No early vote figures for your county yet." : early.error ? "Early vote figures aren't available for your state." : "Loading early vote…"}</p>
+          )}
+        </aside>
+        {side}
+      </div>
     </div>
   );
 }
