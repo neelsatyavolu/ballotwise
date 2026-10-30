@@ -241,7 +241,7 @@
 .mt-seats-nums .r b { color: var(--rep); }
 .mt-seats-nums .yes b { color: var(--yes); }
 .mt-seats-nums .no b { color: var(--no); }
-.mt-seats-mid { font-size: 14px; color: var(--muted); text-align: center; }
+.mt-seats-mid { align-self: center; font-size: 14px; color: var(--muted); text-align: center; }
 .mt-seats-bar { height: 18px; }
 .mt-seats > p { font-size: 12px; }
 
@@ -855,6 +855,19 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-ft { display: grid; font-size: 13px; }
 .mt-ft-head { display: grid; grid-template-columns: 1fr auto 92px; align-items: baseline; gap: 12px; padding: 6px 10px 5px; border-bottom: 1px solid var(--rule); }
 .mt-ft-head b { font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-ft-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* With a flip tag the card widens to keep the whole race name rather than cutting it short. */
+.mt .mt-tip:has(.mt-ft-flip) { max-width: 460px; }
+.mt-ft-title:has(.mt-ft-flip) { min-width: max-content; }
+/* The flip tag: the holder's letter to the favorite's, each in its party color, on a fill fading from one to the other. */
+.mt-ft-head .mt-ft-flip { --from: var(--oth); --to: var(--oth); flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--muted); background: linear-gradient(90deg, color-mix(in srgb, var(--from) 28%, transparent), color-mix(in srgb, var(--to) 28%, transparent)); }
+.mt-ft-flip i { font-style: normal; }
+.mt-ft-flip i:first-child { color: var(--from); }
+.mt-ft-flip i:last-child { color: var(--to); }
+.mt-ft-flip.from-D { --from: var(--dem-ink); }
+.mt-ft-flip.from-R { --from: var(--rep-ink); }
+.mt-ft-flip.to-D { --to: var(--dem-ink); }
+.mt-ft-flip.to-R { --to: var(--rep-ink); }
 .mt-ft-head span { color: var(--muted); font-size: 12px; }
 .mt-ft-head span:last-child { text-align: center; }
 .mt-ft-body { display: grid; grid-template-columns: 1fr 92px; align-items: center; }
@@ -1081,7 +1094,9 @@ body:has(.wrap.mt.mt-sbs-page) .site-footer .wrap { max-width: none; padding: 0 
 .mt-watch { fill: none; stroke: var(--rate-tossup); stroke-width: 2.2; stroke-linejoin: round; pointer-events: none; }
 .mt-watch-note { margin-top: 4px; color: var(--rate-tossup); font-size: 12px; font-weight: 700; }
 .mt-ft .mt-watch-note, .mt-el-tip .mt-watch-note { padding: 0 10px 6px; }
-.mt .mt-rows tbody tr.watch td:first-child { box-shadow: inset 3px 0 0 var(--rate-tossup); }
+/* The toss-up bar also covers the row's bottom rule, so back-to-back toss-ups read as one unbroken bar. */
+.mt .mt-rows tbody tr.watch td:first-child { position: relative; }
+.mt .mt-rows tbody tr.watch td:first-child::before { content: ""; position: absolute; left: 0; top: 0; bottom: -1px; width: 3px; background: var(--rate-tossup); }
 .mt .mt-tile.watch { box-shadow: 0 0 0 1px var(--rate-tossup); }
 .mt .mt-seat.watch { outline: 2px solid var(--rate-tossup); outline-offset: -2px; }
 
@@ -1135,6 +1150,8 @@ body:has(.mt-dv) .site-footer { display: none; }
 body:has(.mt-dv-popout) .site-header, body:has(.mt-dv-popout) #header-slot { display: none; }
 .mt-dv:fullscreen { overflow: auto; padding: 8px; }
 .mt-dv.presenting .mt-dv-bar, .mt-dv.presenting .mt-dv-note { display: none; }
+body:has(.wrap.mt.mt-dv) main { padding-top: 0; }
+.wrap.mt.mt-dv > * + * { margin-top: 4px; }
 .mt-dv-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 0; }
 .mt-dv-crumb { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; font-weight: 700; min-width: 0; }
 .mt-dv-crumb a { color: var(--accent); text-decoration: none; }
@@ -1254,8 +1271,9 @@ body:has(.mt-dv-popout) .site-header, body:has(.mt-dv-popout) #header-slot { dis
   #el-races, #el-map, #latest-calls { scroll-margin-top: 64px; }
   .mt-cs-mini span { white-space: normal; }
 }
-/* The floating Ask Grok button sits over the page's bottom-right corner; leave room for it. */
-.wrap.mt:not(.mt-el-on) { padding-bottom: 76px; }
+/* The page ends close above the footer; the footer leaves room for the floating Ask Grok button (overview only). */
+body:has(.wrap.mt) .site-footer { margin-top: 32px; }
+body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
 /* Narrow dashboard toplines: no party column, so names aren't cut to "Hus…". */
 .mt-dv-compact { display: contents; }
 .mt-dv-compact .mt-ct-party, .mt-dv-compact .mt-ct thead th:nth-child(2):not(.num) { display: none; }
@@ -1265,6 +1283,8 @@ body:has(.mt-dv-popout) .site-header, body:has(.mt-dv-popout) #header-slot { dis
    their yellow mark), and the leader's party tag goes since the swatch already shows it. */
 .mt-panel .mt-rows td:first-child { max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .mt-panel .mt-rows th, .mt-panel .mt-rows td { padding-left: 6px; padding-right: 6px; }
+/* Race names start clear of the toss-up bar, on every row and the header alike. */
+.mt .mt-rows th:first-child, .mt .mt-rows td:first-child { padding-left: 12px; }
 .mt-panel .mt-rows.counting th:nth-child(2), .mt-panel .mt-rows.counting td:nth-child(2) { display: none; }
 .mt-panel .mt-rows.counting .mt-leader .muted { display: none; }
 

@@ -119,8 +119,8 @@ export function RaceView({ id }: { id: number }) {
           </p>
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
           {race.office !== "measure" && <RaceInsights race={race} />}
-          {race.office !== "measure" && <MarketPanel raceId={race.id} />}
           {data.history && <VoteUpdates history={data.history} />}
+          {race.office !== "measure" && <MarketPanel raceId={race.id} />}
         </section>
 
         <section aria-labelledby="map">

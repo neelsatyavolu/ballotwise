@@ -1,5 +1,6 @@
 // Rendered inside the tracker's map tooltips.
-import { isWatch, safeSide } from "@/lib/midterms/explore";
+import { flipTo, isWatch, safeSide } from "@/lib/midterms/explore";
+import { holderOf } from "@/lib/midterms/holders";
 import { chances, partyOf, RATING_LABEL, ratingFill, safeFill, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { partyColor } from "./party";
 
@@ -42,10 +43,20 @@ export function ForecastTip({ race, updatedAt }: { race: RaceSummary; updatedAt:
   const safe = race.rating ? null : safeSide(race);
   const label = race.rating ? RATING_LABEL[race.rating] : safe ? `Safe ${safe}` : null;
   const fill = race.rating ? ratingFill(race.rating) : safe ? safeFill(safe) : null;
+  const holder = holderOf(race);
+  const flip = holder && flipTo(race);
   return (
     <div className="mt-ft">
       <div className="mt-ft-head">
-        <b>{forecastTitle(race)}</b>
+        <div className="mt-ft-title">
+          <b>{forecastTitle(race)}</b>
+          {/* After DDHQ: the seat's current party, then the party the forecast favors to take it. */}
+          {flip && (
+            <span className={`mt-ft-flip from-${holder} to-${flip}`} aria-label={`Projected to flip from ${holder} to ${flip}`}>
+              <i>{holder}</i> → <i>{flip}</i>
+            </span>
+          )}
+        </div>
         <span>Probability</span>
         <span>Rating</span>
       </div>

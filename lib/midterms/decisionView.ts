@@ -28,6 +28,20 @@ export const PANEL_TYPES = Object.keys(PANELS) as PanelType[];
 export const GRID_SIZES = { "24x16": { cols: 24, rows: 16 }, "32x24": { cols: 32, rows: 24 } } as const;
 export type GridSize = keyof typeof GRID_SIZES;
 
+/**
+ * The columns and rows the board is drawn with. A layout that stops a few columns short of the grid's right edge
+ * (the Senate template uses 30 of 32) is drawn that wide, so it fills the window instead of leaving a strip; one
+ * that fills at least half the grid's height sizes its rows to its own bottom, so it fills the window's height.
+ * Sparser layouts keep the whole grid, with room to place things.
+ */
+export function fitted(panels: readonly Panel[], grid: { cols: number; rows: number }): { cols: number; fit: number } {
+  const right = panels.reduce((m, p) => Math.max(m, p.x + p.w), 0);
+  const bottom = panels.reduce((m, p) => Math.max(m, p.y + p.h), 0);
+  const cols = right > 0 && grid.cols - right <= Math.ceil(grid.cols / 8) ? right : grid.cols;
+  const fit = bottom >= grid.rows / 2 ? bottom : grid.rows;
+  return { cols, fit };
+}
+
 /** Panels may run below the chosen rows (the board grows); this caps how far. */
 const MAX_ROW = 200;
 export const MAX_PANELS = 80;

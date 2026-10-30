@@ -236,12 +236,13 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                       </p>
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
                       {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} />}
-                      {shown.office !== "measure" && <MarketPanel key={shown.id} raceId={shown.id} />}
                     </>
                   )}
                   {inState.length > 1 && (
                     <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} selectedId={shownId} />
                   )}
+                  {/* The market viewer comes last, below everything else for the state. */}
+                  {shown && shown.office !== "measure" && <MarketPanel key={shown.id} raceId={shown.id} />}
                 </>
               )}
             </aside>

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { signUp } from "../lib/auth/accounts";
 import { applyAction, chatTurn, createGrid, listDashboards, MAX_DASHBOARDS, saveGrid } from "../lib/midterms/dashboard";
-import { blank, decodeShare, encodeShare, fromSections, GRID_SIZES, gridLayoutSchema, openSpot, place, template, type GridLayout, type Panel } from "../lib/midterms/decisionView";
+import { blank, decodeShare, encodeShare, fitted, fromSections, GRID_SIZES, gridLayoutSchema, openSpot, place, template, type GridLayout, type Panel } from "../lib/midterms/decisionView";
 import type { RaceSummary } from "../lib/midterms/view";
 import { testDb } from "./sqlite-db";
 
@@ -127,5 +127,26 @@ describe("grid sizes", () => {
   it("offers DDHQ's two board sizes", () => {
     expect(GRID_SIZES["24x16"]).toEqual({ cols: 24, rows: 16 });
     expect(GRID_SIZES["32x24"]).toEqual({ cols: 32, rows: 24 });
+  });
+});
+
+describe("fitted", () => {
+  const panel = (x: number, y: number, w: number, h: number): Panel => ({ id: `${x}-${y}`, type: "topline", raceId: 1, x, y, w, h });
+  const grid = GRID_SIZES["32x24"];
+
+  it("draws a layout a few columns short of the edge at its own width, so it fills the window", () => {
+    const senate = template("senate", Array.from({ length: 10 }, (_, i) => race(i + 1, "senate", 0.5 + i / 100, "PA")));
+    expect(fitted(senate.panels, grid)).toEqual({ cols: 30, fit: 18 });
+  });
+
+  it("keeps the whole grid for a sparse layout, with room to place things", () => {
+    expect(fitted([panel(0, 0, 6, 5)], grid)).toEqual({ cols: 32, fit: 24 });
+    expect(fitted([], grid)).toEqual({ cols: 32, fit: 24 });
+  });
+
+  it("sizes rows to the layout's bottom once it fills half the grid's height", () => {
+    expect(fitted([panel(0, 0, 32, 11)], grid).fit).toBe(24);
+    expect(fitted([panel(0, 0, 32, 12)], grid).fit).toBe(12);
+    expect(fitted([panel(0, 0, 32, 30)], grid).fit).toBe(30);
   });
 });

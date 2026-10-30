@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent } from "react";
-import { GRID_SIZES, PANELS, place, type GridLayout, type Panel } from "@/lib/midterms/decisionView";
+import { fitted, GRID_SIZES, PANELS, place, type GridLayout, type Panel } from "@/lib/midterms/decisionView";
 import type { RaceSummary } from "@/lib/midterms/view";
 import { PanelBody, panelHref, panelTitle } from "./Panels";
 
@@ -11,14 +11,16 @@ export type PanelAction = { type: "change" | "duplicate" | "remove" | "rename"; 
 
 /** Rows never get shorter than this, so small grids on short windows stay legible. */
 const MIN_ROW = 34;
+/** The space between cells, as .mt-dv-board's gap. */
+const GAP = 6;
 
-/** Each row's height: the grid's rows fill the window below the board's top edge, down to MIN_ROW. */
+/** Each row's height: the grid's rows and the gaps between them fill the window below the board's top edge, down to MIN_ROW. */
 function useRowHeight(board: React.RefObject<HTMLDivElement | null>, rows: number) {
   const [row, setRow] = useState(MIN_ROW);
   useLayoutEffect(() => {
     const measure = () => {
       const top = board.current?.getBoundingClientRect().top ?? 0;
-      setRow(Math.max(MIN_ROW, Math.floor((window.innerHeight - Math.max(0, top) - 12) / rows)));
+      setRow(Math.max(MIN_ROW, Math.floor((window.innerHeight - Math.max(0, top) - 12 - (rows - 1) * GAP) / rows)));
     };
     measure();
     window.addEventListener("resize", measure);
@@ -37,9 +39,11 @@ function useRowHeight(board: React.RefObject<HTMLDivElement | null>, rows: numbe
  * Anything a move would overlap is pushed down.
  */
 export function Board({ layout, editable, find, onChange, onAction }: { layout: GridLayout; editable: boolean; find: (id: number) => RaceSummary | undefined; onChange: (panels: Panel[]) => void; onAction: (a: PanelAction) => void }) {
-  const { cols, rows } = GRID_SIZES[layout.size];
+  const grid = GRID_SIZES[layout.size];
+  const { cols, fit } = fitted(layout.panels, grid);
+  const rows = grid.rows;
   const board = useRef<HTMLDivElement>(null);
-  const row = useRowHeight(board, rows);
+  const row = useRowHeight(board, fit);
   const [drag, setDrag] = useState<{ id: string; mode: "move" | "resize"; start: { x: number; y: number }; from: Rect; to: Rect } | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
 
@@ -93,7 +97,7 @@ export function Board({ layout, editable, find, onChange, onAction }: { layout: 
     <div
       ref={board}
       className={`mt-dv-board${editable ? " editing" : ""}${drag ? " dragging" : ""}`}
-      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${Math.max(rows, bottom)}, ${row}px)`, ["--row" as string]: `${row}px`, ["--cols" as string]: cols }}
+      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${editable ? Math.max(rows, bottom) : Math.max(fit, bottom)}, ${row}px)`, ["--row" as string]: `${row}px`, ["--cols" as string]: cols }}
       onPointerMove={moveTo}
       onPointerUp={end}
       onPointerCancel={() => setDrag(null)}
