@@ -1,7 +1,7 @@
 "use client";
 
 // Rendered inside the tracker's client components, and as the shell's streamed fallback.
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { loadMap, NationMap } from "./maps";
 
 /** A grey placeholder block, shimmering while results load. */
@@ -9,16 +9,33 @@ function Bone({ w, h, style, className }: { w?: string | number; h?: string | nu
   return <span className={`mt-skel${className ? ` ${className}` : ""}`} style={{ width: w, height: h, ...style }} aria-hidden />;
 }
 
+/** How many placeholders are on screen, and when the first of them started its shimmer (document timeline ms). */
+let shown = 0;
+let since = 0;
+
 /**
  * The frame every placeholder shares: a status line for screen readers, the blocks hidden from them. `nation`
  * starts fetching the US map now, alongside the results, rather than only once they arrive.
+ * A frame that takes over from one already on screen (the streamed fallback handing off to the page's own) skips
+ * the entrance fade and picks up the shimmer mid-beat, so the placeholder doesn't blink out and back.
  */
 function Frame({ label, nation, children }: { label: string; nation?: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [handoff] = useState(() => (shown > 0 ? ({ "--skel-t": `${Math.round(since - performance.now())}ms` } as CSSProperties) : undefined));
+  useLayoutEffect(() => {
+    if (shown++ === 0 && !handoff) {
+      const start = ref.current?.getAnimations?.({ subtree: true }).find((a) => typeof a.startTime === "number")?.startTime;
+      since = typeof start === "number" ? start : performance.now();
+    }
+    return () => {
+      shown--;
+    };
+  }, [handoff]);
   useEffect(() => {
     if (nation) loadMap("US").catch(() => {});
   }, [nation]);
   return (
-    <div className="mt-skel-frame" aria-busy>
+    <div ref={ref} className={`mt-skel-frame${handoff ? " handoff" : ""}`} style={handoff} aria-busy>
       <p className="mt-sr" role="status">{label}</p>
       {children}
     </div>

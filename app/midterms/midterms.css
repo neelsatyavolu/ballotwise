@@ -1279,6 +1279,9 @@ body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
 /* The real US outline, greyed and breathing, stands in for a map whose colors are still loading. */
 .mt-skel-breathe { animation: mt-breathe 1.6s ease-in-out infinite alternate; pointer-events: none; }
 @keyframes mt-breathe { from { opacity: 0.45; } to { opacity: 0.8; } }
+/* A placeholder taking over from another is already showing: no second fade, and the shimmer keeps its beat. */
+.mt-skel-frame.handoff { animation: none; }
+.mt-skel-frame.handoff .mt-skel, .mt-skel-frame.handoff .mt-skel-breathe { animation-delay: var(--skel-t); }
 .mt-skel-map { width: 100%; border-radius: 8px; }
 .mt-skel-map.zoom { aspect-ratio: 975 / 610; }
 .mt-skel-map.state { aspect-ratio: 640 / 440; }
