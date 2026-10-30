@@ -971,10 +971,16 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-fc-head { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; color: var(--ink); }
 .mt-fc-head .t-d { color: var(--dem-ink); }
 .mt-fc-head .t-r { color: var(--rep-ink); }
-.mt-fc-hero-body { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); }
-.mt-fc-hero-side { display: grid; gap: 14px; align-content: start; padding: 14px; border-right: 1px solid var(--rule); }
+/* The projection is the lead: its column takes about two-fifths of the panel, with the history chart beside it. */
+.mt-fc-hero-body { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); }
+.mt-fc-hero-side { display: grid; gap: 20px; align-content: center; padding: 20px 24px; border-right: 1px solid var(--rule); }
 .mt-fc-hero-chart { min-width: 0; padding: 12px 14px; }
-.mt-fc-hero .mt-fc-parts { margin: 0; }
+.mt-fc-hero .mt-fc-odds { gap: 12px; }
+.mt-fc-hero .mt-seats-nums { font-size: 15px; }
+.mt .mt-fc-hero .mt-seats-nums b { font-size: clamp(44px, 4.6vw, 64px); }
+.mt .mt-fc-hero .mt-balance-bar.mt-seats-bar { height: 20px; }
+.mt-fc-hero .mt-fc-sub { font-size: 14px; }
+.mt-fc-hero .mt-fc-parts { margin: 0; font-size: 15px; }
 .mt-fc-full { justify-self: start; font-size: 14px; font-weight: 600; color: var(--accent); text-decoration: none; }
 .mt-fc-full:hover { text-decoration: underline; }
 .mt-fc-odds { display: grid; gap: 8px; }
