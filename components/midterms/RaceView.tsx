@@ -6,7 +6,6 @@ import { stampET, stateFinal } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { OFFICE_LABEL, raceLabel, signalLine, STATE_NAMES } from "@/lib/midterms/view";
-import { PhotoCredit } from "./Avatar";
 import { CandidateTable } from "./CandidateTable";
 import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
@@ -16,8 +15,10 @@ import { MarketPanel } from "./MarketPanel";
 import { RaceInsights } from "./RaceInsights";
 import { ModeNav } from "./ModeNav";
 import { RatingTag, StarButton } from "./RaceCard";
-import { CountingContext, RaceStatus, VoteUpdates } from "./RaceContext";
+import { CountingContext, RaceStatus, TurnoutLine, VoteUpdates } from "./RaceContext";
 import { CheckedAgo } from "./CheckedAgo";
+import { reportingText } from "./reporting";
+import { RcvFlag } from "./ResultList";
 
 type Fetched = { race: RaceDetail; fetchedAt: number; stale: boolean; history?: Observation[]; callPending?: boolean };
 const SCREEN = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -60,6 +61,7 @@ export function RaceView({ id }: { id: number }) {
         <div className="mt-race-title">
           <h1>{label}</h1>
           <RatingTag rating={race.rating} signal={race.signal} />
+          <RcvFlag race={race} />
           {favorites.ids !== null && !race.local && <StarButton starred={favorites.ids.includes(race.id)} label={label} onToggle={() => favorites.toggle(race.id)} />}
         </div>
         {race.about && (
@@ -85,7 +87,7 @@ export function RaceView({ id }: { id: number }) {
         <RaceStatus race={race} now={now} />
         {data.callPending && <p className="muted small">The call status is catching up with the latest count; it will settle on the next update.</p>}
         <p className="mt-meta small">
-          <span>{race.total > 0 ? (race.reportingUnknown ? "Reporting unknown" : `${Math.round(race.reporting)}% reporting`) : "No results yet"}</span>
+          <span title={reportingText(race).title}>{reportingText(race).long}</span>
           {close && close.getTime() !== stateFinal(race.state) && <span title="civicAPI's closing time for this race, which differs from the state's last scheduled closing">civicAPI lists polls closing {stampET(close.getTime())} ET</span>}
           <span>
             Checked <CheckedAgo at={data.fetchedAt} />
@@ -106,14 +108,13 @@ export function RaceView({ id }: { id: number }) {
               status={called ? `${called.name} declared the winner` : race.total > 0 ? "Total votes" : closes && closes > now ? `Polls close ${stampET(closes)} ET` : "No results yet"}
             />
           </div>
+          {race.total > 0 && <TurnoutLine race={race} />}
           <p className="muted small mt-source">
-            {called ? `${called.name} was declared the winner by civicAPI's decision desk, not AP or Decision Desk HQ. ` : "No winner declared yet. "}
-            Results from <a href="https://civicapi.org">civicAPI</a>, which collects them from state and county election offices. * Incumbent.
-            {race.office !== "measure" && <PhotoCredit />}
+            {called ? `${called.name} was declared the winner by civicAPI's decision desk, not AP or Decision Desk HQ. ` : ""}* Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
+          {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
           {race.office !== "measure" && <RaceInsights race={race} />}
           {race.office !== "measure" && <MarketPanel raceId={race.id} />}
-          {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
           {data.history && <VoteUpdates history={data.history} />}
         </section>
 

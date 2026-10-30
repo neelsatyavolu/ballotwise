@@ -7,6 +7,7 @@ import { STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { useClock } from "./hooks";
 import { RaceSearchButton } from "./RaceSearch";
 import { ResultList, type Stars } from "./ResultList";
+import { parseIds, useStored } from "./seen";
 
 const VIEWS: { id: View; label: string; title: string }[] = [
   { id: "all", label: "All", title: "Every race in this office" },
@@ -14,7 +15,7 @@ const VIEWS: { id: View; label: string; title: string }[] = [
   { id: "key", label: "Key races", title: "Rated toss-up, lean or likely by markets or polls" },
   { id: "uncalled", label: "Uncalled", title: "Not called yet" },
   { id: "close", label: "Close", title: "Votes counted, lead under 5 points, not called" },
-  { id: "gains", label: "Flips & possible flips", title: "Called for a different party than holds the seat now, or led by one" },
+  { id: "gains", label: "Called gains & leading flips", title: "Called for a different party than holds the seat now, or led by one (early leads, under 25% reporting, are marked Early)" },
 ];
 const STATUSES: { id: Status; label: string }[] = [
   { id: "awaiting", label: "No votes yet" },
@@ -117,7 +118,10 @@ function Panel({ f, set, states, onClose }: { f: Filters; set: (next: Partial<Fi
 /** Search, quick views, more filters (count status among them) and sort over one office's races, all kept in the URL. */
 export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary[]; f: Filters; set: (next: Partial<Filters>) => void; stars: Stars }) {
   const [open, setOpen] = useState(false);
-  const [held, setHeld] = useState<number[] | null>(null);
+  // A frozen order is kept in this browser for the night, so a reload doesn't reshuffle the rows.
+  const [heldRaw, setHeldRaw] = useStored("mt-freeze");
+  const held = useMemo(() => parseIds(heldRaw), [heldRaw]);
+  const setHeld = (next: number[] | null) => setHeldRaw(next ? JSON.stringify(next) : null);
   const now = useClock(30_000);
   const list = useMemo(() => explore(races, f, stars.ids), [races, f, stars.ids]);
   // "Hold order" keeps rows where they are while results move; new matches go to the bottom.
@@ -145,7 +149,7 @@ export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary
         <select className="input mt-select" value={f.sort} onChange={(e) => sortBy(e.target.value as Sort)} aria-label="Sort by">
           {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
-        <button type="button" className="btn secondary small mt-fx-freeze" aria-pressed={!!held} onClick={() => setHeld((h) => (h ? null : list.map((r) => r.id)))} title="Stop rows moving as new votes come in">
+        <button type="button" className="btn secondary small mt-fx-freeze" aria-pressed={!!held} onClick={() => setHeld(held ? null : list.map((r) => r.id))} title="Stop rows moving as new votes come in">
           {held ? "Unfreeze" : "Freeze"}
         </button>
         <RaceSearchButton />
@@ -175,7 +179,7 @@ export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary
           </button>
         </p>
       )}
-      <ResultList key={`${f.office}${f.view}${f.sort}`} races={ordered} stars={stars} sort={f.sort} now={now} />
+      <ResultList key={`${f.office}${f.view}${f.sort}`} races={ordered} stars={stars} sort={f.sort} now={now} frozen={!!held} />
     </section>
   );
 }

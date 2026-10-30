@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "@/components/AccountProvider";
 import { GrokConnect } from "@/components/GrokConnect";
+import { isGrid } from "@/lib/midterms/decisionView";
 import type { RaceSummary } from "@/lib/midterms/view";
 import type { Dashboard } from "./hooks";
 import { RaceCard } from "./RaceCard";
@@ -62,6 +63,7 @@ export function AiDashboards({ races, dashboards, openId, onOpen, onRename, onDe
         <button type="button" className="mt-dash-new" onClick={() => onAsk("", true)}>
           + New dashboard
         </button>
+        <Link href="/midterms/dashboards" className="mt-dash-new">Decision View dashboards →</Link>
       </div>
       {error && <p className="error small">{error}</p>}
 
@@ -98,7 +100,14 @@ export function AiDashboards({ races, dashboards, openId, onOpen, onRename, onDe
               <h2>{open.layout.title}</h2>
             )}
             <div className="mt-dash-tools">
-              <button type="button" className="btn secondary" onClick={() => onAsk("", false)}>✦ Edit with Grok</button>
+              {isGrid(open.layout) ? (
+                <Link href={`/midterms/dashboards/${open.id}`} className="btn secondary">Open in Decision View</Link>
+              ) : (
+                <>
+                  <button type="button" className="btn secondary" onClick={() => onAsk("", false)}>✦ Edit with Grok</button>
+                  <Link href={`/midterms/dashboards/new?from=${open.id}`} className="btn quiet">Edit as grid</Link>
+                </>
+              )}
               <button type="button" className="btn quiet" onClick={() => setRenaming(open.id)}>Rename</button>
               <button
                 type="button"
@@ -111,8 +120,9 @@ export function AiDashboards({ races, dashboards, openId, onOpen, onRename, onDe
               </button>
             </div>
           </div>
-          {open.layout.sections.length === 0 && <p className="muted">This dashboard is empty. Ask Grok to add races.</p>}
-          {open.layout.sections.map((s, i) => {
+          {isGrid(open.layout) && <p className="muted">A Decision View dashboard of {open.layout.panels.length} panels. Open it to see and arrange them.</p>}
+          {!isGrid(open.layout) && open.layout.sections.length === 0 && <p className="muted">This dashboard is empty. Ask Grok to add races.</p>}
+          {!isGrid(open.layout) && open.layout.sections.map((s, i) => {
             const list = s.raceIds.map((id) => byId.get(id)).filter((r): r is RaceSummary => !!r);
             return (
               <section key={`${i}-${s.title}`} className="mt-group">

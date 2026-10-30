@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Db } from "../auth/accounts";
 import { ask } from "../grok/research";
 import type { GrokTokens } from "../grok/oauth";
+import { gridLayoutSchema, isGrid, type GridLayout } from "./decisionView";
 import type { RaceSummary } from "./races";
 
 /** A voter can keep this many dashboards. */
@@ -15,7 +16,10 @@ export const layoutSchema = z.object({
     .max(12),
 });
 export type Layout = z.infer<typeof layoutSchema>;
-export type Dashboard = { id: string; layout: Layout; updatedAt: number };
+/** A saved dashboard is either Grok's sections of race cards or a Decision View grid of panels. */
+export const storedLayoutSchema = z.union([gridLayoutSchema, layoutSchema]);
+export type StoredLayout = Layout | GridLayout;
+export type Dashboard = { id: string; layout: StoredLayout; updatedAt: number };
 
 export const chatMessageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(2000) });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
@@ -68,23 +72,26 @@ export function sanitizeLayout(layout: Layout, races: readonly RaceSummary[]): L
 }
 
 export async function chatTurn(tokens: GrokTokens, races: readonly RaceSummary[], dashboards: readonly Dashboard[], openId: string | null, messages: readonly ChatMessage[]) {
-  const context = `Races:\n${racesPrompt(races)}\n\nDashboards:\n${JSON.stringify(dashboards.map((d) => ({ id: d.id, ...d.layout })))}\n\nOpen dashboard: ${openId ?? "none"}`;
+  // Grok arranges section dashboards; Decision View grids are edited by hand, so it doesn't see them.
+  const sections = dashboards.filter((d) => !isGrid(d.layout));
+  const open = sections.some((d) => d.id === openId) ? openId : null;
+  const context = `Races:\n${racesPrompt(races)}\n\nDashboards:\n${JSON.stringify(sections.map((d) => ({ id: d.id, ...d.layout })))}\n\nOpen dashboard: ${open ?? "none"}`;
   return ask(tokens, INSTRUCTIONS, [{ role: "user", content: context }, { role: "assistant", content: '{"reply":"Got it.","action":{"type":"none"}}' }, ...messages], turnSchema);
 }
 
 export async function listDashboards(db: Db, userId: string): Promise<Dashboard[]> {
   const { results } = await db.prepare("SELECT id, layout, updated_at FROM midterm_dashboards WHERE user_id = ? ORDER BY created_at").bind(userId).all<{ id: string; layout: string; updated_at: number }>();
-  return results.map((r) => ({ id: r.id, layout: JSON.parse(r.layout) as Layout, updatedAt: r.updated_at }));
+  return results.map((r) => ({ id: r.id, layout: JSON.parse(r.layout) as StoredLayout, updatedAt: r.updated_at }));
 }
 
-export async function createDashboard(db: Db, userId: string, layout: Layout, now: number): Promise<string> {
+export async function createDashboard(db: Db, userId: string, layout: StoredLayout, now: number): Promise<string> {
   const id = randomUUID();
   await db.prepare("INSERT INTO midterm_dashboards (id, user_id, layout, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(id, userId, JSON.stringify(layout), now, now).run();
   return id;
 }
 
 /** Replaces a dashboard's layout. Only the owner's dashboards change. */
-export async function updateDashboard(db: Db, userId: string, id: string, layout: Layout, now: number): Promise<void> {
+export async function updateDashboard(db: Db, userId: string, id: string, layout: StoredLayout, now: number): Promise<void> {
   await db.prepare("UPDATE midterm_dashboards SET layout = ?, updated_at = ? WHERE id = ? AND user_id = ?").bind(JSON.stringify(layout), now, id, userId).run();
 }
 
@@ -114,6 +121,7 @@ export async function applyAction(db: Db, userId: string, action: Action, races:
     return createDashboard(db, userId, sanitizeLayout(action.layout, races), now);
   }
   if (action.type === "update" && mine(action.dashboardId)) {
+    if (owned.some((d) => d.id === action.dashboardId && isGrid(d.layout))) throw new DashboardError("Grok can't rearrange a Decision View dashboard. Edit it on its page.");
     const seenAt = (seen ?? owned).find((d) => d.id === action.dashboardId)?.updatedAt;
     if (seenAt === undefined || !(await updateIfUnchanged(db, userId, action.dashboardId, sanitizeLayout(action.layout, races), seenAt, now))) {
       throw new DashboardError("That dashboard changed while Grok was working. Ask again to apply the change.");
@@ -125,6 +133,19 @@ export async function applyAction(db: Db, userId: string, action: Action, races:
     return owned.find((d) => d.id !== action.dashboardId)?.id ?? null;
   }
   return openId;
+}
+
+/** Creates a Decision View dashboard, within the per-voter limit. */
+export async function createGrid(db: Db, userId: string, layout: GridLayout, now: number): Promise<string> {
+  if ((await listDashboards(db, userId)).length >= MAX_DASHBOARDS) throw new DashboardError(`You can keep up to ${MAX_DASHBOARDS} dashboards. Delete one to make room.`);
+  return createDashboard(db, userId, layout, now);
+}
+
+/** Replaces one of the voter's dashboards with a grid layout. Returns whether it was theirs. */
+export async function saveGrid(db: Db, userId: string, id: string, layout: GridLayout, now: number): Promise<boolean> {
+  if (!(await listDashboards(db, userId)).some((d) => d.id === id)) return false;
+  await updateDashboard(db, userId, id, layout, now);
+  return true;
 }
 
 export async function renameDashboard(db: Db, userId: string, id: string, title: string, now: number): Promise<boolean> {

@@ -1,6 +1,6 @@
 "use client";
 
-import { closeWaves, countdown, ELECTION_DAY_START, formatET, nextWave, stateFinal, type CloseWave } from "@/lib/midterms/polls";
+import { closeWaves, countdown, ELECTION_DAY_START, filedAt, formatET, nextWave, type CloseWave } from "@/lib/midterms/polls";
 import { OFFICE_LABEL, raceLabel, STATE_NAMES, type Office, type RaceSummary } from "@/lib/midterms/view";
 import { useClock } from "./hooks";
 
@@ -27,10 +27,13 @@ export function shortLabel(r: RaceSummary) {
   return r.office === "measure" ? `${r.state} ${raceLabel(r)}` : raceLabel(r);
 }
 
-/** Races filed under a closing time: those in states whose last scheduled polls close then. */
+/** Races filed under a closing time: those in states whose first polls close then (see filedAt). */
 function racesAt(races: readonly RaceSummary[], at: number) {
-  return races.filter((r) => stateFinal(r.state) === at);
+  return filedAt(races, at).map((f) => f.race);
 }
+
+/** How many of the races filed under a closing time are in states where only some polls close then. */
+const partialAt = (races: readonly RaceSummary[], at: number) => filedAt(races, at).filter((f) => f.partial).length;
 
 function officeCounts(races: readonly RaceSummary[]) {
   const by: Partial<Record<Office, number>> = {};
@@ -85,6 +88,7 @@ export function PollSchedule({ races, picked, onPick }: { races: readonly RaceSu
           const closed = w.at <= now;
           const isNext = w.at === next?.at;
           const filed = racesAt(races, w.at);
+          const partial = partialAt(races, w.at);
           const on = picked.includes(w.at);
           return (
             <li key={w.at} className={`${closed ? "closed" : ""}${isNext ? " next" : ""}`}>
@@ -97,17 +101,18 @@ export function PollSchedule({ races, picked, onPick }: { races: readonly RaceSu
                 <p className="small">{closingPlaces(w.states)}.</p>
               </details>
               {filed.length > 0 ? (
-                <button type="button" className={`mt-chip${on ? " on" : ""}`} aria-pressed={on} aria-label={`${on ? "Stop showing" : "Show"} the ${filed.length} races filed under ${formatET(w.at)}`} onClick={() => onPick(w.at)}>
+                <button type="button" className={`mt-chip${on ? " on" : ""}`} aria-pressed={on} aria-label={`${on ? "Stop showing" : "Show"} the ${filed.length} races filed under ${formatET(w.at)}${partial ? `, ${partial} in states where only some polls close then` : ""}`} onClick={() => onPick(w.at)}>
                   {filed.length}
+                  {partial > 0 && "*"}
                 </button>
               ) : (
-                <span className="mt-chip ghost" title="No races are filed here: these states' last polls close later">0</span>
+                <span className="mt-chip ghost" title="No races are filed here: these are the rest of states whose first polls closed earlier">0</span>
               )}
             </li>
           );
         })}
       </ol>
-      <p className="muted small">Races are grouped by the state&apos;s last scheduled poll closing; some districts close earlier. Times from <a href="https://www.270towin.com/content/local-poll-closing-times-november-2026-general-election/">270toWin</a>.</p>
+      <p className="muted small">Races are grouped by the state&apos;s first poll closing, when its results start. * marks states where the rest of the polls close later, so their races can&apos;t be called until then. Times from <a href="https://www.270towin.com/content/local-poll-closing-times-november-2026-general-election/">270toWin</a>.</p>
     </section>
   );
 }

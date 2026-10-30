@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { electionModeDefault } from "@/lib/midterms/polls";
 import { STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
-import { CheckedAgo } from "./CheckedAgo";
+import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { useClock, useLive, useStars } from "./hooks";
 import { ModeNav } from "./ModeNav";
 import { byCloseness, districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills } from "./OfficeView";
@@ -91,7 +91,7 @@ export function SideBySide() {
         <span className="mt-kicker">Senate · House · Governors</span>
         {data && (
           <span className="mt-updated small">
-            <span className={`mt-dot${data.stale ? " stale" : ""}`} aria-hidden /> Checked <CheckedAgo at={data.fetchedAt} />
+            <LiveDot at={data.fetchedAt} stale={data.stale} /> Checked <CheckedAgo at={data.fetchedAt} />
             {data.stale && " · source is slow"}
           </span>
         )}
@@ -110,9 +110,7 @@ export function SideBySide() {
           </aside>
         </div>
       )}
-      <p className="muted small mt-source">
-        Live results from <a href="https://civicapi.org">civicAPI</a>, collected from state and county election offices. Each column matches its office&apos;s page; open a column&apos;s title for county maps and race details.
-      </p>
+      <p className="muted small mt-source"><Link href="/midterms/credits">Sources and credits</Link></p>
     </div>
   );
 }

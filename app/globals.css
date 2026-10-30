@@ -69,6 +69,8 @@ button { font: inherit; color: inherit; }
 .site-header { background: var(--navy); color: #fff; position: relative; }
 .site-header::after { content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 6px; background: var(--stripe); }
 .site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 54px; }
+/* A page can put its own section tabs here (the midterms tracker does); hidden unless that page shows it. */
+.header-slot { display: none; }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-family: var(--serif); font-size: 21px; font-weight: 600; }
 .brand-mark { width: 26px; height: 18px; border: 2px solid #fff; border-radius: 50%; position: relative; overflow: hidden; }
 .brand-mark::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: #e8475f; clip-path: inset(0 45% 0 0); }

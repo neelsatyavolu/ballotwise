@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { holderOf, outcomeOf } from "@/lib/midterms/holders";
 import type { Coverage } from "@/lib/midterms/coverage";
 import { leading, partyOf, type Overview, type RaceSummary, type Tally } from "@/lib/midterms/view";
+import { CheckedAgo } from "./CheckedAgo";
 
 type Chamber = "senate" | "house" | "governor";
 type Seats = { D: number; R: number; other: number };
@@ -39,15 +40,21 @@ function numbers(office: Chamber, tally: Tally, races: readonly RaceSummary[]) {
     }
   }
   const notUp: Seats = { D: tally.D - won.D, R: tally.R - won.R, other: tally.other - won.other };
-  return { won, notUp, gained, lost, unknownHolder, ahead: leading(races, office), uncalled: tally.uncalled };
+  // Leads under 25% reporting are counted apart, so a 40-vote lead at 7pm doesn't read like one with most votes in.
+  const { early, ...ahead } = leading(races, office);
+  return { won, notUp, gained, lost, unknownHolder, ahead, early, uncalled: tally.uncalled };
 }
 
-/** "D needs 7 more · leads 6", or "D has control" once they have it. */
-/** `open` is every seat nobody holds yet, including any civicAPI hasn't listed, so a missing race can't fake an elimination. */
-function needLine(p: "D" | "R", have: number, need: number, leads: number, open: number) {
+/**
+ * "D needs 7 more · leads 6 +3 early", or "D has control" once they have it. Early leads (under 25% reporting) are
+ * shown apart. `open` is every seat nobody holds yet, including any civicAPI hasn't listed, so a missing race can't
+ * fake an elimination.
+ */
+function needLine(p: "D" | "R", have: number, need: number, leads: number, open: number, early = 0) {
   if (have >= need) return `${p} has control`;
   if (have + open < need) return `${p} can't reach ${need}`;
-  return `${p} needs ${need - have} more${leads ? ` · leads ${leads}` : ""}`;
+  const lead = [leads && `leads ${leads}`, early && `+${early} early`].filter(Boolean).join(" ");
+  return `${p} needs ${need - have} more${lead ? ` · ${lead}` : ""}`;
 }
 
 /** "Net D +1 (D gained 2, lost 1)", or a plain statement when nothing has changed hands. */
@@ -58,7 +65,7 @@ function netLine(n: ReturnType<typeof numbers>, called: number) {
   return parts.map((p) => `${side(p)} ${n.gained[p] - n.lost[p] >= 0 ? "+" : ""}${n.gained[p] - n.lost[p]} net`).join(" · ");
 }
 
-function ChamberCard({ office, tally, races, coverage }: { office: Chamber; tally: Tally; races: readonly RaceSummary[]; coverage?: Coverage[Chamber] }) {
+function ChamberCard({ office, tally, races, coverage, onNeed }: { office: Chamber; tally: Tally; races: readonly RaceSummary[]; coverage?: Coverage[Chamber]; onNeed?: (office: Chamber) => void }) {
   const n = numbers(office, tally, races);
   const need = NEED[office];
   const share = (x: number) => `${(x / tally.total) * 100}%`;
@@ -93,8 +100,17 @@ function ChamberCard({ office, tally, races, coverage }: { office: Chamber; tall
         {need && need.R !== need.D && <i className="r" style={{ left: `calc(100% - ${share(need.R)})` }} title={`${need.R} for Republican control`} />}
       </div>
       <div className="mt-cs-need small">
-        <span>{need ? needLine("D", tally.D, need.D, n.ahead.D, openSeats(tally)) : n.ahead.D ? `D leads ${n.ahead.D}` : ""}</span>
-        <span>{need ? needLine("R", tally.R, need.R, n.ahead.R, openSeats(tally)) : n.ahead.R ? `R leads ${n.ahead.R}` : ""}</span>
+        {(["D", "R"] as const).map((p) => {
+          const text = need ? needLine(p, tally[p], need[p], n.ahead[p], openSeats(tally), n.early[p]) : n.ahead[p] ? `${p} leads ${n.ahead[p]}${n.early[p] ? ` +${n.early[p]} early` : ""}` : "";
+          // The need line opens the race list on this chamber's uncalled races, closest calls first: the path to control.
+          return onNeed && text && n.uncalled > 0 ? (
+            <button key={p} type="button" className="mt-cs-path" onClick={() => onNeed(office)} title={`Show the ${n.uncalled} uncalled ${TITLE[office]} races`}>
+              {text} →
+            </button>
+          ) : (
+            <span key={p}>{text}</span>
+          );
+        })}
       </div>
       <details className="mt-cs-more small">
         <summary>{net ?? "Breakdown"}</summary>
@@ -103,7 +119,7 @@ function ChamberCard({ office, tally, races, coverage }: { office: Chamber; tall
           <span>{sub("R")}</span>
         </div>
         <p className="muted">
-          Bar: darker is not up this year, solid is won tonight, pale is leading but not called.{" "}
+          Bar: darker is not up this year, solid is won tonight, pale is leading but not called (leads under 25% reporting are left out as early).{" "}
           {called > 0 && `Gained: ${(["D", "R", "other"] as const).map((p) => `${side(p)} ${n.gained[p]}`).join(", ")}. Lost: ${(["D", "R", "other"] as const).map((p) => `${side(p)} ${n.lost[p]}`).join(", ")}. `}
           {NOTE[office]}
         </p>
@@ -112,15 +128,21 @@ function ChamberCard({ office, tally, races, coverage }: { office: Chamber; tall
   );
 }
 
-/** A phone-sized, always-pinned summary: one line per chamber. The full cards sit below it and scroll away. */
+/** "D needs 7", "D has control" or "D can't reach 51": the phone bar's short form. */
+function shortNeed(p: "D" | "R", have: number, need: number, open: number) {
+  if (have >= need) return `${p} has control`;
+  if (have + open < need) return `${p} out`;
+  return `${p} needs ${need - have}`;
+}
+
+/** A phone-sized, always-pinned summary: one short line per chamber and when results were checked. The full cards sit below it. */
 function Mini({ data }: { data: Overview }) {
   const line = (office: "senate" | "house", tally: Tally) => {
     const need = NEED[office]!;
-    const ahead = leading(data.races, office);
     return (
       <span>
         <b>{TITLE[office]}</b> <span className="d">{tally.D}</span>–<span className="r">{tally.R}</span>
-        <span className="muted"> · {needLine("D", tally.D, need.D, ahead.D, openSeats(tally))} · {needLine("R", tally.R, need.R, ahead.R, openSeats(tally))}</span>
+        <span className="muted"> · {shortNeed("D", tally.D, need.D, openSeats(tally))} · {shortNeed("R", tally.R, need.R, openSeats(tally))}</span>
       </span>
     );
   };
@@ -128,18 +150,21 @@ function Mini({ data }: { data: Overview }) {
     <div className="mt-cs-mini" role="group" aria-label="Control of Congress">
       {line("senate", data.balance.senate)}
       {line("house", data.balance.house)}
+      <span className="muted mt-cs-mini-age">
+        Checked <CheckedAgo at={data.fetchedAt} />
+      </span>
     </div>
   );
 }
 
 /** Who is winning each chamber: seats not up, won tonight and leading, against the line for control, with the next poll closing. */
-export function ControlStrip({ data, children }: { data: Overview; children?: React.ReactNode }) {
+export function ControlStrip({ data, children, onNeed }: { data: Overview; children?: React.ReactNode; onNeed?: (office: Chamber) => void }) {
   const phone = usePhone();
   const cards = (
     <div className="mt-cs">
-      <ChamberCard office="senate" tally={data.balance.senate} races={data.races} coverage={data.coverage?.senate} />
-      <ChamberCard office="house" tally={data.balance.house} races={data.races} coverage={data.coverage?.house} />
-      <ChamberCard office="governor" tally={data.balance.governor} races={data.races} coverage={data.coverage?.governor} />
+      <ChamberCard office="senate" tally={data.balance.senate} races={data.races} coverage={data.coverage?.senate} onNeed={onNeed} />
+      <ChamberCard office="house" tally={data.balance.house} races={data.races} coverage={data.coverage?.house} onNeed={onNeed} />
+      <ChamberCard office="governor" tally={data.balance.governor} races={data.races} coverage={data.coverage?.governor} onNeed={onNeed} />
       {children}
     </div>
   );

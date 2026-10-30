@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/client";
 import { holderOf, outcomeOf } from "@/lib/midterms/holders";
 import { stampET } from "@/lib/midterms/polls";
 import { colorOf, OFFICE_LABEL, partyOf, partyTag, type CallEvent, type Office, type RaceSummary } from "@/lib/midterms/view";
+import { CallAlerts } from "./CallAlerts";
 import { shortLabel } from "./PollClose";
+import { useStored } from "./seen";
 
 const SHOWN = 12;
 
@@ -78,9 +80,14 @@ export function CallsFeed({ races, events: given, counts, office }: { races: rea
       setLoadError(err instanceof ApiError ? err.message : "Couldn't load older calls.");
     }
   };
-  // New means arrived after this page opened (event ids only grow), and after the last "Mark seen".
+  // New means after the last "Mark seen" in this browser (event ids only grow), or after this page first opened.
   // Older events loaded on request are history, never new.
-  const [seenThrough, setSeenThrough] = useState(() => Math.max(0, ...events.map((e) => e.id)));
+  const [opened] = useState(() => Math.max(0, ...events.map((e) => e.id)));
+  const [stored, setStored] = useStored("mt-calls-seen");
+  const seenThrough = Number(stored) || opened;
+  useEffect(() => {
+    if (!stored && opened) setStored(String(opened));
+  }, [stored, opened, setStored]);
   const isNew = (e: CallEvent) => e.id > seenThrough;
   const fresh = shown.filter(isNew);
   const gains = races.filter((r) => (scope === "all" || r.office === scope) && outcomeOf(r)?.gain);
@@ -97,6 +104,7 @@ export function CallsFeed({ races, events: given, counts, office }: { races: rea
     <section className="mt-el-calls" id="latest-calls" aria-label="Latest calls">
       <div className="mt-section-head tight">
         <h2>Latest calls</h2>
+        <CallAlerts events={live} races={races} />
         <span className="muted small">
           {total ? `${total} so far${shown.length < total ? `, latest ${Math.min(shown.length, all ? shown.length : SHOWN)} shown` : ""}` : "None yet"}
           {office !== "all" && (
@@ -113,7 +121,7 @@ export function CallsFeed({ races, events: given, counts, office }: { races: rea
       {fresh.length > 0 && (
         <p className="mt-el-fresh small">
           {fresh.length} new since you looked{" "}
-          <button type="button" className="mt-linkish" onClick={() => setSeenThrough(Math.max(seenThrough, ...events.map((e) => e.id)))}>Mark seen</button>
+          <button type="button" className="mt-linkish" onClick={() => setStored(String(Math.max(seenThrough, ...events.map((e) => e.id))))}>Mark seen</button>
         </p>
       )}
       {gains.length > 0 && (

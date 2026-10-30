@@ -1076,3 +1076,192 @@ body:has(.wrap.mt.mt-sbs-page) .site-footer .wrap { max-width: none; padding: 0 
    the spacer row that levels card footers draws no border of its own. */
 .mt .mt-card-about { flex: none; }
 .mt-ct-fill td { border-bottom: 0; }
+
+/* Election night: uncalled pre-election toss-ups, the races to watch, are flagged in yellow wherever they appear. */
+.mt-watch { fill: none; stroke: var(--rate-tossup); stroke-width: 2.2; stroke-linejoin: round; pointer-events: none; }
+.mt-watch-note { margin-top: 4px; color: var(--rate-tossup); font-size: 12px; font-weight: 700; }
+.mt-ft .mt-watch-note, .mt-el-tip .mt-watch-note { padding: 0 10px 6px; }
+.mt .mt-rows tbody tr.watch td:first-child { box-shadow: inset 3px 0 0 var(--rate-tossup); }
+.mt .mt-tile.watch { box-shadow: 0 0 0 1px var(--rate-tossup); }
+.mt .mt-seat.watch { outline: 2px solid var(--rate-tossup); outline-offset: -2px; }
+
+/* A focused field's ring sits inside its edge, so panels that clip their contents can't cut it off. */
+.mt .input:focus { box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* Midterms tabs in the site header on wide screens, saving the row they used to take on the page. */
+@media (min-width: 1001px) {
+  .header-slot:not(:empty) { flex: 1; min-width: 0; display: flex; justify-content: center; }
+}
+.mt-modes.in-header { display: none; }
+@media (min-width: 1001px) {
+  .mt-modes.in-header { display: flex; margin: 0; padding: 0; overflow-x: auto; scrollbar-width: none; }
+  .mt-modes.in-header a { color: rgb(255 255 255 / 0.72); padding: 5px 11px; font-size: 14px; }
+  .mt-modes.in-header a:hover { color: #fff; background: rgb(255 255 255 / 0.08); }
+  .mt-modes.in-header a[aria-current="page"] { color: #fff; background: rgb(255 255 255 / 0.14); }
+  .mt-modes.moved { display: none; }
+}
+
+/* Race page cards, simplified: the forecast breakdown sits behind a toggle, and the poll table is pollster, dates, result. */
+.mt-fc-more { margin-top: 4px; }
+.mt-fc-more summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 6px 0; list-style: none; }
+.mt-fc-more summary::-webkit-details-marker { display: none; }
+.mt-fc-more summary::before { content: "▸ "; }
+.mt-fc-more[open] summary::before { content: "▾ "; }
+.mt-fc-more summary:hover { color: var(--ink); }
+.mt-pl-tag { font-size: 10.5px; padding: 0 5px; margin-left: 6px; }
+
+/* Office pages fit one screen on desktop: the map row takes whatever height the heading and seat bar leave,
+   and the map scales to fit it rather than to the width. Only the source notes and footer sit below. */
+@media (min-width: 1001px) and (min-height: 640px) {
+  body:has(.wrap.mt.mt-office-page) main { padding-top: 0; }
+  .wrap.mt.mt-office-page { display: flex; flex-direction: column; height: calc(100dvh - 56px); padding-top: 10px; padding-bottom: 10px; }
+  .wrap.mt.mt-office-page > * { flex: none; }
+  .wrap.mt.mt-office-page > * + * { margin-top: 10px; }
+  .mt-office-page > .mt-office { flex: 1 1 0; min-height: 0; }
+  .mt-office-page > .mt-office > .mt-zoom { height: 100%; min-height: 0; display: flex; }
+  .mt-office-page > .mt-office > .mt-zoom svg { width: 100%; height: 100%; aspect-ratio: auto; }
+  .mt-office-page .mt-seats { padding-top: 8px; padding-bottom: 8px; }
+  .mt-office-page > .mt-source { display: none; }
+}
+/* The next-poll-closing card: the red countdown marks it; no thick side bar against the rounded corners. */
+.mt .mt-cs-next { border-left: 1px solid var(--rule); }
+
+/* Decision View dashboards: a dotted grid of panels, after DDHQ's Decision View. */
+.wrap.mt.mt-dv { max-width: none; background: var(--paper); color: var(--ink); padding: 0 12px 12px; min-height: 100vh; }
+body:has(.wrap.mt.mt-dv) .site-header .wrap { max-width: none; padding: 0 12px; }
+body:has(.mt-dv) .site-footer { display: none; }
+body:has(.mt-dv-popout) .site-header, body:has(.mt-dv-popout) #header-slot { display: none; }
+.mt-dv:fullscreen { overflow: auto; padding: 8px; }
+.mt-dv.presenting .mt-dv-bar, .mt-dv.presenting .mt-dv-note { display: none; }
+.mt-dv-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 0; }
+.mt-dv-crumb { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; font-weight: 700; min-width: 0; }
+.mt-dv-crumb a { color: var(--accent); text-decoration: none; }
+.mt-dv-crumb > span[aria-hidden] { color: var(--muted); }
+.mt-dv-crumb b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-dv-crumb .input { font-size: 18px; font-weight: 700; min-height: 34px; padding: 2px 8px; }
+.mt-dv-icon { border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 2px 4px; }
+.mt-dv-icon:hover { color: var(--ink); }
+.mt-dv-saved { font-size: 12px; font-weight: 500; color: var(--muted); }
+.mt-dv-saved.failed { color: var(--rep-ink); }
+.mt-dv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mt-dv-actions .mt-select { min-height: 34px; font-size: 14px; }
+.mt .mt-dv-add { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 700; }
+.mt .mt-dv-present { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.mt-dv-note { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+
+.mt-dv-board { position: relative; display: grid; gap: 6px; background-image: radial-gradient(circle, var(--el-line) 1px, transparent 1.4px); background-size: calc((100% + 6px) / var(--cols)) calc(var(--row) + 6px); background-position: -3px -3px; min-height: 60vh; }
+.mt-dv-panel { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.mt-dv-panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mt-dv-panel.moving { opacity: 0.55; }
+.mt-dv-panel.header { background: none; border-color: transparent; }
+.mt-dv-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); min-height: 34px; flex: none; }
+.mt-dv-board.editing .mt-dv-head { cursor: grab; touch-action: none; }
+.mt-dv-board.dragging .mt-dv-head { cursor: grabbing; }
+.mt-dv-head p { margin: 0; display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; }
+.mt-dv-head p a, .mt-dv-head p b { color: var(--ink); font-weight: 700; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
+.mt-dv-head p a:hover { text-decoration: underline; }
+.mt-dv-head p span { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.mt-dv-panel.header .mt-dv-head { border-bottom: 0; height: 100%; padding: 4px 6px; }
+.mt-dv-panel.header h2 { margin: 0; font-size: clamp(18px, 2.2vw, 30px); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-dv-tools { position: relative; display: flex; gap: 2px; flex: none; }
+.mt-dv-tools > button { border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+.mt-dv-tools > button:hover { color: var(--ink); background: var(--el-hover); }
+.mt-dv-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: grid; min-width: 160px; padding: 4px; background: var(--el-raised); border: 1px solid var(--el-line); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); }
+.mt-dv-menu button { border: 0; background: none; color: var(--ink); text-align: left; padding: 7px 10px; border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; }
+.mt-dv-menu button:hover { background: var(--el-hover); }
+.mt-dv-menu button.danger { color: var(--rep-ink); }
+.mt-dv-body { flex: 1; min-height: 0; overflow: auto; }
+.mt-dv-body > .mt-map, .mt-dv-body > .mt-zoom { height: 100%; border: 0; border-radius: 0; padding: 0; }
+.mt-dv-body .mt-zoom svg, .mt-dv-body .mt-map svg { width: 100%; height: 100%; max-height: 100%; aspect-ratio: auto; }
+.mt-dv-body .mt-ct { border: 0; border-radius: 0; }
+.mt-dv-body .mt-fc-odds { padding: 10px 12px; }
+.mt-dv-body .mt-seats { border: 0; }
+.mt-dv-body svg { display: block; }
+.mt-dv-resize { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 50%, var(--el-line) 50%); border-bottom-right-radius: 8px; }
+.mt-dv-ghost { border: 2px dashed var(--accent); border-radius: 8px; pointer-events: none; z-index: 5; }
+.mt-dv-empty { margin: 0; padding: 16px; color: var(--muted); font-size: 13px; text-align: center; }
+/* A panel whose component has nothing to draw (no market for the race, say) says so instead of sitting blank. */
+.mt-dv-body:empty::before { content: "Nothing to show for this race yet."; display: block; padding: 16px; color: var(--muted); font-size: 13px; text-align: center; }
+.mt-dv-body .mt-mk-empty { padding: 16px; text-align: center; }
+.mt-dv-crumb a { white-space: nowrap; }
+.mt-dv-blank { grid-column: 1 / -1; grid-row: 2 / span 2; align-self: center; text-align: center; color: var(--muted); }
+.mt-dv-drops { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.mt-dv-drops li { display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+.mt-dv-drops li span:nth-child(3) { text-align: right; }
+
+.mt-dv-dialog { width: min(640px, calc(100vw - 32px)); max-height: min(80vh, 720px); padding: 0; background: var(--sheet); color: var(--ink); border: 1px solid var(--el-line); border-radius: 10px; }
+.mt-dv-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+.mt-dv-dialog > header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
+.mt-dv-dialog h2 { margin: 0; font-size: 17px; }
+.mt-dv-types { display: grid; gap: 14px; padding: 14px 16px; }
+.mt-dv-types fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.mt-dv-types legend { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.mt-dv-types button { border: 1px solid var(--rule); background: var(--paper); color: var(--ink); border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 13.5px; cursor: pointer; }
+.mt-dv-types button:hover { border-color: var(--accent); }
+.mt-dv-offices, .mt-dv-text { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 16px; }
+.mt-dv-text .input { flex: 1; min-width: 200px; }
+.mt-dv-races { padding: 12px 16px; display: grid; gap: 8px; }
+.mt-dv-races ul { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; border: 1px solid var(--rule); border-radius: 8px; }
+.mt-dv-races li button { display: grid; width: 100%; gap: 2px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--rule); background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.mt-dv-races li button:hover { background: var(--el-hover); }
+.mt-dv-races li button span { font-size: 12.5px; color: var(--muted); }
+.mt-dv-races li.muted { padding: 10px 12px; }
+
+.mt-dv-list { margin-top: 20px; }
+.mt-dv-list h2 { font-size: 16px; margin: 0 0 10px; }
+.mt-dv-list ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.mt-dv-list li { display: flex; align-items: stretch; justify-content: space-between; gap: 8px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
+.mt-dv-list li a { display: grid; gap: 4px; flex: 1; padding: 12px 14px; color: var(--ink); text-decoration: none; }
+.mt-dv-list li a:hover b { text-decoration: underline; }
+.mt-dv-list li a span { font-size: 13px; color: var(--muted); }
+.mt-dv-list li .btn { align-self: center; margin-right: 8px; }
+
+/* Phones: one column of panels in reading order, each keeping its height in rows. */
+@media (max-width: 720px) {
+  .mt-dv-board { grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: none !important; grid-auto-rows: auto; background-image: none; }
+  .mt-dv-panel { grid-column: 1 / -1 !important; grid-row: auto !important; min-height: calc(var(--h) * 40px); }
+  .mt-dv-panel.header { min-height: 0; }
+  .mt-dv-resize, .mt-dv-ghost { display: none; }
+  .mt-dv-crumb { font-size: 17px; }
+}
+
+/* Election night fixes */
+/* The map legend's swatch for an uncalled pre-election toss-up: the yellow watch outline. */
+.mt-legend i.watch { background: var(--sheet); box-shadow: inset 0 0 0 2px var(--rate-tossup); }
+/* "D needs 7 more" opens the races that decide control. */
+.mt-cs-path { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: inherit; cursor: pointer; white-space: nowrap; }
+.mt-cs-path:hover, .mt-cs-path:focus-visible { color: var(--accent); text-decoration: underline; }
+.mt-cs-need .mt-cs-path:last-child { margin-left: auto; text-align: right; }
+.mt-cs-mini-age { font-size: 12px; }
+/* "Since 9:15 PM: 6 calls, 2 flips". */
+.mt-since { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin: 0 0 10px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--rule)); border-radius: 4px; background: color-mix(in srgb, var(--accent) 10%, var(--sheet)); }
+.mt .mt-flag.lead-change { color: var(--accent); border-style: solid; }
+.mt-bell { margin-left: auto; border: 1px solid var(--rule); border-radius: 4px; background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; padding: 2px 8px; cursor: pointer; white-space: nowrap; }
+.mt-bell.on { color: var(--ink); border-color: var(--accent); }
+.mt-bell:hover { color: var(--ink); }
+/* The 2024 comparison under a race's candidates: a headline with its caveat. */
+.mt-turnout { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet); }
+.mt-turnout p { margin: 0; }
+.mt-turnout p + p { margin-top: 4px; }
+.mt-counties tbody tr[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Phone-only jump links under the control strip. */
+.mt-el-jump { display: none; }
+@media (max-width: 720px) {
+  .mt-el-jump { display: flex; gap: 6px; margin: 6px 0; }
+  .mt-el-jump a { flex: 1; text-align: center; padding: 6px 0; border: 1px solid var(--rule); border-radius: 4px; color: var(--ink); text-decoration: none; font-weight: 600; }
+  #el-races, #el-map, #latest-calls { scroll-margin-top: 64px; }
+  .mt-cs-mini span { white-space: normal; }
+}
+/* The floating Ask Grok button sits over the page's bottom-right corner; leave room for it. */
+.wrap.mt:not(.mt-el-on) { padding-bottom: 76px; }
+/* Narrow dashboard toplines: no party column, so names aren't cut to "Hus…". */
+.mt-dv-compact { display: contents; }
+.mt-dv-compact .mt-ct-party, .mt-dv-compact .mt-ct thead th:nth-child(2):not(.num) { display: none; }
+
+/* The race list in an office page's narrow rail: the race name gives way (with an ellipsis) so the lead and
+   reporting columns always show. Once votes are in, the pre-election rating column steps aside (toss-ups keep
+   their yellow mark), and the leader's party tag goes since the swatch already shows it. */
+.mt-panel .mt-rows td:first-child { max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.mt-panel .mt-rows th, .mt-panel .mt-rows td { padding-left: 6px; padding-right: 6px; }
+.mt-panel .mt-rows.counting th:nth-child(2), .mt-panel .mt-rows.counting td:nth-child(2) { display: none; }
+.mt-panel .mt-rows.counting .mt-leader .muted { display: none; }

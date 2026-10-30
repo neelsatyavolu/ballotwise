@@ -22,6 +22,8 @@ export function Header() {
           <span className="brand-mark" aria-hidden />
           Ballotwise
         </Link>
+        {/* Pages can put their own section tabs here (the midterms tracker does, on wide screens). */}
+        <div id="header-slot" className="header-slot" />
         <nav className="nav" aria-label="Main">
           <Link href="/midterms">Midterms</Link>
           <Link href="/method" className="wide-only">How it works</Link>

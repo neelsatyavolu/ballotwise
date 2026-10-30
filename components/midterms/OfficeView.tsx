@@ -3,21 +3,20 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { flipTo, raceFill } from "@/lib/midterms/explore";
+import { flipTo, isWatch, raceFill } from "@/lib/midterms/explore";
 import { electionModeDefault } from "@/lib/midterms/polls";
 import { colorOf, compareRaces, lead, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
 import { useClock, useLive, useStars } from "./hooks";
-import { PhotoCredit } from "./Avatar";
 import { MarketPanel } from "./MarketPanel";
 import { RaceInsights } from "./RaceInsights";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
 import { RaceRows } from "./RaceRows";
 import { ZoomMap, type Fill } from "./ZoomMap";
-import { CheckedAgo } from "./CheckedAgo";
-import { ForecastTip } from "./ForecastTip";
+import { CheckedAgo, LiveDot } from "./CheckedAgo";
+import { ForecastTip, WatchNote } from "./ForecastTip";
 
 const TITLE: Record<Office, string> = { senate: "Senate", house: "House", governor: "Governors", measure: "Ballot measures" };
 const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -45,6 +44,7 @@ function raceTip(r: RaceSummary) {
         </div>
       ))}
       <span className="muted">{r.reporting ? `${Math.round(r.reporting)}% reporting` : "No results yet"}</span>
+      <WatchNote race={r} />
     </>
   );
 }
@@ -54,7 +54,7 @@ const hoverTip = (r: RaceSummary, updatedAt: number | null) => (r.total ? raceTi
 
 /** How a district looks on the House map, nationally or zoomed to its state. */
 export function districtFill(r: RaceSummary, updatedAt: number | null, results: boolean): Fill {
-  return { fill: raceFill(r, results), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), tip: hoverTip(r, updatedAt) };
+  return { fill: raceFill(r, results), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), watch: results && isWatch(r), tip: hoverTip(r, updatedAt) };
 }
 
 /** Every House district for the national map, keyed "PA-7" (at-large seats "WY-0"); a district's regular race colors it. */
@@ -76,7 +76,7 @@ export function stateFills(office: Office, races: RaceSummary[], updatedAt: numb
     const name = STATE_NAMES[state] ?? state;
     if (office === "senate" || office === "governor") {
       const r = [...list].sort(regularFirst)[0];
-      out.set(state, { fill: raceFill(r, results), tip: hoverTip(r, updatedAt), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner) });
+      out.set(state, { fill: raceFill(r, results), tip: hoverTip(r, updatedAt), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), watch: results && isWatch(r) });
     } else if (office === "house") {
       const ahead = leading(list, "house");
       const won = { D: 0, R: 0 };
@@ -190,7 +190,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
         <span className="mt-kicker">{races.length ? `${races.length} races` : ""}</span>
         {data && (
           <span className="mt-updated small">
-            <span className={`mt-dot${data.stale ? " stale" : ""}`} aria-hidden /> Checked <CheckedAgo at={data.fetchedAt} />
+            <LiveDot at={data.fetchedAt} stale={data.stale} /> Checked <CheckedAgo at={data.fetchedAt} />
             {data.stale && " · source is slow"}
           </span>
         )}
@@ -245,10 +245,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
               )}
             </aside>
           </div>
-          <p className="muted small mt-source">
-            Live results from <a href="https://civicapi.org">civicAPI</a>, collected from state and county election offices. Winners are marked only when civicAPI&apos;s decision desk calls a race; &ldquo;leading&rdquo; counts uncalled races by who is ahead. Ratings come from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades.{office === "house" && <> District lines from the <a href="https://www.census.gov/programs-surveys/decennial-census/about/rdo/congressional-districts.html">Census Bureau</a>, as drawn for 2026.</>}{office === "measure" && <> Measure summaries come from <a href="https://ballotpedia.org/2026_ballot_measures">Ballotpedia</a>.</>}
-            {office !== "measure" && <PhotoCredit />}
-          </p>
+          <p className="muted small mt-source"><Link href="/midterms/credits">Sources and credits</Link></p>
         </>
       )}
     </div>

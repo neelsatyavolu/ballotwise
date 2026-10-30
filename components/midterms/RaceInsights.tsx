@@ -16,7 +16,7 @@ const LINE = { D: "var(--dem-ink)", R: "var(--rep-ink)", I: "var(--oth)" } as co
 const PARTY = /^democrat/i;
 const day = (t: number) => new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const surname = (name: string) => name.replace(/["“][^"”]*["”]/g, " ").replace(/\b(Jr|Sr|II|III|IV)\.?$/i, "").trim().split(/\s+/).at(-1) ?? name;
-const POLL_ROWS = 8;
+const POLL_ROWS = 5;
 
 /** "Cooper +4.2": a left-minus-Republican margin in the nominees' names. */
 function lead(margin: number, names: { left: string; right: string }): string {
@@ -54,7 +54,7 @@ function ForecastCard({ race, forecast, history }: { race: RaceSummary; forecast
         <p className="mt-mk-q">{race.total > 0 ? "Pre-election forecast" : "Forecasted win probability"}</p>
         <RatingTag rating={race.rating} signal={race.signal} />
       </div>
-      {fav ? <p className="mt-mk-lead">{fav.name} {share(fav.p)}</p> : <p className="mt-mk-lead">Even</p>}
+      {fav ? <p className="mt-mk-lead">{fav.name} {Math.round(fav.p * 100)}%</p> : <p className="mt-mk-lead">Even</p>}
       {lines.length > 0 && points.length >= 2 ? (
         <LineChart lines={lines} ticks={[0, 0.5, 1]} value={(p) => `${Math.round(p * 100)}%`} date={day} label={`Forecast history for ${leftName}`} empty="" />
       ) : (
@@ -66,6 +66,8 @@ function ForecastCard({ race, forecast, history }: { race: RaceSummary; forecast
         )
       )}
       {names && (
+        <details className="mt-fc-more">
+        <summary>How we got this</summary>
         <dl className="mt-fc-parts">
           {forecast.lean !== null && (
             <div>
@@ -83,6 +85,12 @@ function ForecastCard({ race, forecast, history }: { race: RaceSummary; forecast
             <div>
               <dt>Incumbent running</dt>
               <dd>{lead(forecast.incumbency, names)}</dd>
+            </div>
+          )}
+          {forecast.personal !== undefined && forecast.personal !== null && Math.abs(forecast.personal) >= 0.05 && (
+            <div>
+              <dt>Incumbent&apos;s own vote</dt>
+              <dd>{lead(forecast.personal, names)}</dd>
             </div>
           )}
           {forecast.fundraising !== undefined && forecast.fundraising !== null && Math.abs(forecast.fundraising) >= 0.05 && (
@@ -111,11 +119,20 @@ function ForecastCard({ race, forecast, history }: { race: RaceSummary; forecast
               </dd>
             </div>
           )}
+          {forecast.expert !== undefined && forecast.expert !== null && (forecast.expertWeight ?? 0) > 0 && (
+            <div>
+              <dt>Expert ratings · {Math.round((forecast.expertWeight ?? 0) * 100)}% of the chance</dt>
+              <dd>
+                {Math.abs(forecast.expert - 0.5) < 0.005 ? "Even" : `${surname(forecast.expert >= 0.5 ? names.left : names.right)} ${Math.round(Math.max(forecast.expert, 1 - forecast.expert) * 100)}%`}
+              </dd>
+            </div>
+          )}
         </dl>
+        <Link className="mt-mk-src small" href="/midterms/methodology">
+          How the forecast works →
+        </Link>
+        </details>
       )}
-      <Link className="mt-mk-src small" href="/midterms/methodology">
-        How the forecast works →
-      </Link>
     </div>
   );
 }
@@ -138,7 +155,6 @@ function PollsCard({ polls }: { polls: RacePolls }) {
     { name: surname(polls.leftName), color: LINE[polls.left], points: polls.trend.map((p) => [p[0], p[1]] as const) },
     { name: surname(polls.rightName), color: LINE.R, points: polls.trend.map((p) => [p[0], p[2]] as const) },
   ];
-  const pick = (r: PollRow, side: "left" | "R") => r.answers.find((a) => a.side === (side === "R" ? "R" : polls.left))?.pct;
   return (
     <div className="mt-mk-card">
       <p className="mt-mk-q">Polling average</p>
@@ -155,9 +171,6 @@ function PollsCard({ polls }: { polls: RacePolls }) {
                 {l.name} <span>{(i === 0 ? polls.average!.left : polls.average!.right).toFixed(1)}%</span>
               </li>
             ))}
-            <li>
-              <span>{polls.average.count} polls averaged</span>
-            </li>
           </ul>
         </>
       )}
@@ -167,10 +180,7 @@ function PollsCard({ polls }: { polls: RacePolls }) {
             <tr>
               <th>Pollster</th>
               <th>Dates</th>
-              <th className="num mt-pl-n">Sample</th>
-              <th className="num">{surname(polls.leftName)}</th>
-              <th className="num">{surname(polls.rightName)}</th>
-              <th className="num">Margin</th>
+              <th className="num">Result</th>
             </tr>
           </thead>
           <tbody>
@@ -184,15 +194,10 @@ function PollsCard({ polls }: { polls: RacePolls }) {
                   ) : (
                     r.pollster
                   )}
-                  {r.internal && <span className="mt-pl-tag">Internal</span>}
-                  {r.partisan && <span className="mt-pl-tag">{r.partisan} sponsor</span>}
-                  {r.excluded && <span className="mt-pl-why">{r.excluded}</span>}
+                  {(r.internal || r.partisan) && <span className="mt-pl-tag" title={r.internal ? "Campaign internal poll" : `${r.partisan} sponsor`}>{r.internal ? "Int." : r.partisan}</span>}
                 </td>
                 <td className="mt-pl-d">{dates(r)}</td>
-                <td className="num mt-pl-n">{r.n ? `${r.n.toLocaleString("en-US")}${r.pop ? ` ${r.pop.toUpperCase()}` : ""}` : "—"}</td>
-                <td className="num">{pick(r, "left") ?? "—"}</td>
-                <td className="num">{pick(r, "R") ?? "—"}</td>
-                <td className="num">{r.margin === null ? "—" : lead(r.margin, names)}</td>
+                <td className="num" title={r.excluded ?? undefined}>{r.margin === null ? "—" : lead(r.margin, names)}</td>
               </tr>
             ))}
           </tbody>
@@ -204,8 +209,7 @@ function PollsCard({ polls }: { polls: RacePolls }) {
         </button>
       )}
       <p className="muted small">
-        Polls from <a href="https://votehub.com/polls">VoteHub</a> (CC BY 4.0), averaged the way Decision Desk HQ does: by recency, with a campaign&apos;s later internals folded into its first.{" "}
-        <Link href="/midterms/methodology#polls">How the average works</Link>
+        Polls from <a href="https://votehub.com/polls">VoteHub</a> (CC BY 4.0) · <Link href="/midterms/methodology#polls">How the average works</Link>
       </p>
     </div>
   );

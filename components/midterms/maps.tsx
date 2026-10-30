@@ -226,7 +226,7 @@ export function useDistrictShapes(states: readonly string[] | null): Shape[] | n
   return shapes && shapes.for === wanted ? shapes.list : null;
 }
 
-export type NationFill = { fill: string; tip: ReactNode; label?: string; flip?: boolean };
+export type NationFill = { fill: string; tip: ReactNode; label?: string; flip?: boolean; watch?: boolean };
 
 /**
  * The nation by state, for Senate and Governor overviews, or by House district with `districts` (fills keyed
@@ -284,6 +284,7 @@ export function NationMap({ fills, onPick, label, selected = [], districts = fal
       })}
       {shapes.map((s) => fills.get(s.key)?.flip && <path key={`flip-${s.key}`} d={s.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
       <path d={map.borders} className="mt-borders" />
+      {shapes.map((s) => fills.get(s.key)?.watch && <path key={`watch-${s.key}`} d={s.d} className="mt-watch" vectorEffect="non-scaling-stroke" />)}
     </MapFrame>
   );
 }

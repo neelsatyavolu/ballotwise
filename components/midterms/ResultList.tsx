@@ -1,8 +1,8 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
-import { useContext, useRef, useState } from "react";
+import { memo, useContext, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { EARLY_REPORTING, favoredSide, groupOf, isEarly, leaderOf, statusOf, tierOf, type Group, type Sort } from "@/lib/midterms/explore";
+import { EARLY_REPORTING, favoredSide, groupOf, isEarly, isWatch, leaderOf, statusOf, tierOf, type Group, type Sort } from "@/lib/midterms/explore";
 import { leadingFlip, outcomeOf } from "@/lib/midterms/holders";
 import { stampET, stateFinal } from "@/lib/midterms/polls";
 import { fmt, lead, signalLine, type RaceSummary } from "@/lib/midterms/view";
@@ -11,6 +11,7 @@ import { partyColor } from "./party";
 import { shortLabel } from "./PollClose";
 import { RailContext, useRailSplit } from "./railSplit";
 import { RatingTag } from "./RaceCard";
+import { LeadChanged } from "./SinceBanner";
 
 const PAGE = 50;
 
@@ -46,8 +47,8 @@ function TrendLine({ race, now }: { race: RaceSummary; now: number }) {
   if (ahead && t.prevLeader && t.prevLeader !== ahead.leader.name) parts.push(`${lastName(t.prevLeader)} led then`);
   else if (ahead && t.prevMargin !== null && Math.abs(t.prevMargin - ahead.margin) >= 0.1) parts.push(`lead was ${t.prevMargin.toFixed(1)} then`);
   const minutes = Math.max(0, Math.round((now - t.lastChange) / 60_000));
-  const title = `Compared with the count Ballotwise saved at ${at}. Ballotwise saves a race's count at most every five minutes (right away for a correction or a new leader); the last save was ${minutes < 1 ? "just now" : `${minutes} minutes ago`}.`;
-  parts.push(minutes < 1 ? "saved just now" : `last saved ${minutes}m ago`);
+  const title = `Compared with the count Ballotwise saved at ${at}. Ballotwise saves a race's count at most every five minutes (right away for a correction or a new leader); the count last changed ${minutes < 1 ? "under a minute ago" : `${minutes} minutes ago`}.`;
+  parts.push(minutes < 1 ? "count changed just now" : `count changed ${minutes}m ago`);
   return <span className="mt-res-trend" title={title}>{parts.join(" · ")}</span>;
 }
 
@@ -79,7 +80,7 @@ function StatusText({ race, now }: { race: RaceSummary; now: number }) {
       <span className="mt-res-status">
         Counting
         {isEarly(race) && <span className="mt-flag" title={`Under ${EARLY_REPORTING}% reporting: early leads often change`}>Early</span>}
-        {flip && <span className={`mt-flag lead p-${flip}`} title="Leading for a different party than holds the seat; not a call">{flip} leads flip</span>}
+        {flip && <span className={`mt-flag lead p-${flip}`} title="Leading for a different party than holds the seat; not a call">{flip} leading in a potential flip</span>}
       </span>
     );
   }
@@ -102,12 +103,31 @@ function Lead({ race }: { race: RaceSummary }) {
   );
 }
 
+/** "Ranked choice" on Alaska's and Maine's candidate races until called, with the round once rounds have run. */
+export function RcvFlag({ race }: { race: RaceSummary }) {
+  if (!race.rcv || race.candidates.some((c) => c.winner)) return null;
+  return (
+    <span className="mt-flag" title="Ranked-choice voting: if no one passes 50%, the last-place candidate's ballots move to their voters' next choice, so the leader can change between rounds">
+      Ranked choice{race.round && race.round > 1 ? ` · round ${race.round}` : ""}
+    </span>
+  );
+}
+
+/** Everything a card shows that can change on a poll; an unchanged race keeps its card without re-rendering. */
+function versionOf(r: RaceSummary): string {
+  const c = r.call;
+  return [r.total, r.reporting, r.round, r.calledFor, r.reportingUnknown, r.rating, r.callPending, r.missing, c ? `${c.id}${c.withdrawn}` : "", r.trend?.lastChange, r.trend?.since, ...r.candidates.map((x) => `${x.votes}${x.winner ? "w" : ""}`)].join("|");
+}
+
+type TileProps = { race: RaceSummary; starred: boolean; onStar: (id: number) => void; now: number; changed: boolean };
+
 /** One race as a results card: name and rating, the candidates' table, then status, lead and how much is in. */
-function RaceTile({ race, starred, onStar, now }: { race: RaceSummary; starred: boolean; onStar: () => void; now: number }) {
+const RaceTile = memo(
+  function RaceTile({ race, starred, onStar, now, changed }: TileProps) {
   const leader = leaderOf(race);
   const sub = race.about?.text ?? (race.total ? null : signalLine(race.signal, race));
   return (
-    <article className={`mt-tile s-${statusOf(race)}${leader ? ` p-${leader}` : ""}`} aria-label={shortLabel(race)}>
+    <article className={`mt-tile s-${statusOf(race)}${leader ? ` p-${leader}` : ""}${isWatch(race) ? " watch" : ""}`} aria-label={shortLabel(race)}>
       {race.total > 0 && (
         <span className="mt-tile-share" aria-hidden>
           {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c), opacity: isEarly(race) ? 0.55 : 1 }} />)}
@@ -118,8 +138,10 @@ function RaceTile({ race, starred, onStar, now }: { race: RaceSummary; starred: 
           <Link href={`/midterms/${race.id}`}>{shortLabel(race)}</Link>
           {sub && <span className="mt-tile-sub" title={sub}>{sub}</span>}
         </div>
+        <RcvFlag race={race} />
+        {changed && <span className="mt-flag lead-change" title="Someone else leads than when you last looked">New leader</span>}
         <Tier race={race} />
-        <button type="button" className={`mt-star sm${starred ? " on" : ""}`} aria-pressed={starred} aria-label={`Star ${shortLabel(race)}`} onClick={onStar}>
+        <button type="button" className={`mt-star sm${starred ? " on" : ""}`} aria-pressed={starred} aria-label={`Star ${shortLabel(race)}`} onClick={() => onStar(race.id)}>
           {starred ? "★" : "☆"}
         </button>
       </header>
@@ -140,18 +162,22 @@ function RaceTile({ race, starred, onStar, now }: { race: RaceSummary; starred: 
       </footer>
     </article>
   );
-}
+  },
+  (a, b) => a.starred === b.starred && a.onStar === b.onStar && a.now === b.now && a.changed === b.changed && a.race.id === b.race.id && versionOf(a.race) === versionOf(b.race),
+);
 
 /** The filtered races as results cards in a grid, grouped by count status when sorted by closeness. */
-export function ResultList({ races, stars, sort, now }: { races: RaceSummary[]; stars: Stars; sort: Sort; now: number }) {
+/** With the order frozen, rows no longer follow their count status, so the status headings would repeat; they're dropped. */
+export function ResultList({ races, stars, sort, now, frozen = false }: { races: RaceSummary[]; stars: Stars; sort: Sort; now: number; frozen?: boolean }) {
   const [shown, setShown] = useState(PAGE);
+  const changed = useContext(LeadChanged);
   const beside = useRef<HTMLOListElement>(null);
   const { slot } = useContext(RailContext);
   const split = useRailSplit(beside, `${races.map((r) => r.id).join()}|${shown}|${sort}`);
   if (!races.length) return <p className="muted mt-res-empty">No races match these filters.</p>;
   const groupCounts = races.reduce((acc, r) => ({ ...acc, [groupOf(r)]: (acc[groupOf(r)] ?? 0) + 1 }), {} as Partial<Record<Group, number>>);
   const items = races.slice(0, shown).flatMap((r, i) => {
-    const group = sort === "close" ? groupOf(r) : null;
+    const group = sort === "close" && !frozen ? groupOf(r) : null;
     const header =
       group && (i === 0 || groupOf(races[i - 1]) !== group) ? (
         <li key={`g-${group}`} className="mt-res-group">
@@ -160,7 +186,7 @@ export function ResultList({ races, stars, sort, now }: { races: RaceSummary[]; 
       ) : null;
     const tile = (
       <li key={r.id}>
-        <RaceTile race={r} starred={!!stars.ids?.includes(r.id)} onStar={() => stars.toggle(r.id)} now={now} />
+        <RaceTile race={r} starred={!!stars.ids?.includes(r.id)} onStar={stars.toggle} now={now} changed={changed.has(r.id)} />
       </li>
     );
     return header ? [header, tile] : [tile];

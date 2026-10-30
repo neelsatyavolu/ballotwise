@@ -33,20 +33,42 @@ export function RaceStatus({ race, now }: { race: RaceDetail; now: number }) {
   );
 }
 
-/** What the count so far does and doesn't tell you: freshness, county coverage, and turnout and margin against 2024 in the counties that have reported. */
-export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetchedAt: number }) {
-  const regions = race.counties;
-  const withVotes = regions.filter((c) => c.total > 0);
-  const updated = race.updated ? Date.parse(race.updated) : NaN;
-  const statewide = race.office !== "house";
-  // 2024 comparisons only make sense for statewide races: a House district covers parts of counties.
-  const base = statewide ? withVotes.filter((c) => c.pres2024) : [];
+/** Votes counted so far in the reporting counties against their final 2024 presidential vote, statewide races only. */
+function against2024(race: RaceDetail) {
+  // A House district covers parts of counties, so whole-county 2024 totals don't compare.
+  const base = race.office !== "house" ? race.counties.filter((c) => c.total > 0 && c.pres2024) : [];
   const pres = sum(base.map((c) => c.pres2024!.total));
   const counted = sum(base.map((c) => c.total));
   const votesOf = (c: (typeof base)[number], p: "D" | "R") => sum(c.candidates.filter((x) => partyOf(x.party) === p).map((x) => x.votes));
   const nowMargin = counted ? ((sum(base.map((c) => votesOf(c, "D"))) - sum(base.map((c) => votesOf(c, "R")))) / counted) * 100 : null;
   const then = pres ? ((sum(base.map((c) => c.pres2024!.harris)) - sum(base.map((c) => c.pres2024!.trump))) / pres) * 100 : null;
   const partisan = race.office !== "measure" && race.candidates.some((c) => partyOf(c.party) === "D") && race.candidates.some((c) => partyOf(c.party) === "R");
+  return { counties: base.length, pres, counted, nowMargin: partisan ? nowMargin : null, then: partisan ? then : null };
+}
+
+/**
+ * The headline under the candidates: how the count so far compares with 2024's final vote in the counties that have
+ * reported. Context, never a projection of what's left.
+ */
+export function TurnoutLine({ race }: { race: RaceDetail }) {
+  const t = against2024(race);
+  if (!t.counted || !t.pres) return null;
+  return (
+    <div className="mt-turnout">
+      <p>
+        <b>{Math.round((t.counted / t.pres) * 100)}% of 2024&apos;s vote</b> is counted in the {t.counties} {t.counties === 1 ? "county" : "counties"} reporting ({fmt(t.counted)} of {fmt(t.pres)}).
+        {t.nowMargin !== null && t.then !== null && <> The partial margin there is {marginLabel(t.nowMargin)}; 2024&apos;s final presidential margin was {marginLabel(t.then)}.</>}
+      </p>
+      <p className="muted small">Not a projection. The votes in so far may not be the same mix of precincts or ballot types as 2024&apos;s final count, so this is neither a swing nor an estimate of the vote still out.</p>
+    </div>
+  );
+}
+
+/** What the count so far does and doesn't tell you: freshness and county coverage. */
+export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetchedAt: number }) {
+  const regions = race.counties;
+  const withVotes = regions.filter((c) => c.total > 0);
+  const updated = race.updated ? Date.parse(race.updated) : NaN;
 
   return (
     <section className="mt-context" aria-labelledby="context">
@@ -56,24 +78,12 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
           {Number.isFinite(updated) ? `civicAPI last updated this race at ${stampET(updated)} ET` : "civicAPI gives no update time for this race"}; Ballotwise checked at {stampET(fetchedAt)} ET.
         </li>
         <li>
-          {race.total === 0 ? "No votes counted yet." : race.reportingUnknown ? "civicAPI has votes but no reporting figure for this race." : `${Math.round(race.reporting)}% reporting, civicAPI's estimate of precincts or ballot batches in. It isn't the share of the expected vote.`}
+          {race.total === 0 ? "No votes counted yet." : race.reportingUnknown || !race.reporting ? "civicAPI has votes but gives no reporting figure for this race." : `${Math.round(race.reporting)}% reporting, civicAPI's estimate of precincts or ballot batches in. It isn't the share of the expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? "; mail, provisional and late ballots can still come in" : ""}.`}
         </li>
         {regions.length > 1 && (
           <li>
             {withVotes.length} of {regions.length} {regions.some((c) => c.fips) ? "counties" : "towns"} have reported votes
             {withVotes.length ? `; civicAPI reports 100% for ${regions.filter((c) => c.reporting >= 100).length} of them` : ""}.
-          </li>
-        )}
-        {counted > 0 && pres > 0 && (
-          <li>
-            <details>
-              <summary>Against 2024, in the {base.length} {base.length === 1 ? "county" : "counties"} with votes</summary>
-              <p>
-                {fmt(counted)} votes are recorded in this race there, {Math.round((counted / pres) * 100)}% of those counties&apos; final 2024 presidential vote.
-                {partisan && nowMargin !== null && then !== null && <> The current partial margin there is {marginLabel(nowMargin)}; the final 2024 presidential margin was {marginLabel(then)}.</>}
-              </p>
-              <p className="muted">Historical context only. The votes counted so far may not be the same mix of precincts or ballot types as the final 2024 count, so this is neither a swing nor an estimate of the vote still out.</p>
-            </details>
           </li>
         )}
         <li className="muted">civicAPI doesn&apos;t estimate how many votes remain, so this page doesn&apos;t either.</li>

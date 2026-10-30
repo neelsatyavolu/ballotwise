@@ -13,7 +13,6 @@ import { Explorer } from "./Explorer";
 import { useClock, type useStars } from "./hooks";
 import { NextClose, PollSchedule, shortLabel } from "./PollClose";
 import { SeatBoard, type FillMode } from "./SeatBoard";
-import { PhotoCredit } from "./Avatar";
 import { RailContext } from "./railSplit";
 
 const OFFICES: (Office | "all")[] = ["senate", "house", "governor", "measure", "all"];
@@ -124,13 +123,23 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
   const counts = useMemo(() => Object.fromEntries(OFFICES.map((o) => [o, o === "all" ? data.races.length : data.races.filter((r) => r.office === o).length])), [data.races]);
   const mapOffice: Office = f.office === "all" ? "senate" : f.office;
   const pickState = (state: string) => set({ states: toggle(f.states, state) });
+  // "D needs 7 more" opens that chamber's uncalled toss-up and lean races, closest first: the races that decide control.
+  const showPath = (office: Office) => {
+    set({ ...CLEARED, office, view: "uncalled", tiers: ["tossup", "lean"], sort: "close" });
+    document.querySelector(".mt-el-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const matching = useMemo(() => new Set(explore(data.races, { ...f, office: "house" }, stars.ids).map((r) => r.id)), [data.races, f, stars.ids]);
 
   return (
     <div className="mt-el">
-      <ControlStrip data={data}>
+      <ControlStrip data={data} onNeed={showPath}>
         <NextClose races={data.races} onPick={(at) => set({ ...CLEARED, office: "all", waves: [at] })} />
       </ControlStrip>
+      <nav className="mt-el-jump small" aria-label="Jump to">
+        <a href="#el-races">Races</a>
+        <a href="#el-map">Map</a>
+        <a href="#latest-calls">Calls</a>
+      </nav>
 
       <div className="mt-el-offices" role="tablist" aria-label="Office">
         {OFFICES.map((o) => (
@@ -143,11 +152,11 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
 
       <RailContext.Provider value={rail}>
       <div className="mt-el-grid">
-        <div className="mt-el-list">
+        <div className="mt-el-list" id="el-races">
           <LatestLink races={data.races} />
           <Explorer races={data.races} f={f} set={set} stars={stars} />
         </div>
-        <div className="mt-el-mapbox" ref={setMapbox}>
+        <div className="mt-el-mapbox" id="el-map" ref={setMapbox}>
           <div className="mt-section-head tight">
             <h2>{mapOffice === "house" ? "Every House seat" : `${OFFICE_LABEL[mapOffice]} map`}</h2>
             {mapOffice !== "measure" && (
@@ -175,8 +184,7 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
       </RailContext.Provider>
 
       <p className="muted small mt-source">
-        Live results and calls from <a href="https://civicapi.org">civicAPI</a> and its own decision desk, collected from state and county election offices; not AP or Decision Desk HQ. &ldquo;Reporting&rdquo; is precincts or ballot batches in, not the share of the expected vote. Ratings come from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a>, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades. Seat holders from <a href="https://github.com/unitedstates/congress-legislators">congress-legislators</a>.
-        <PhotoCredit />
+        <Link href="/midterms/credits">Sources and credits</Link>
         {stars.guest && <> Your stars are saved in this browser; <Link href="/signin?next=/midterms">sign in</Link> to keep them on every device.</>}
       </p>
     </div>

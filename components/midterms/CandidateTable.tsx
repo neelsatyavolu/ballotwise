@@ -5,6 +5,7 @@ import { isEarly } from "@/lib/midterms/explore";
 import { fmt, partyTag, type RaceSummary } from "@/lib/midterms/view";
 import { Avatar } from "./Avatar";
 import { partyColor } from "./party";
+import { reportingText } from "./reporting";
 
 export const lastName = (name: string) => {
   const parts = name.replace(/,? (Jr|Sr|II|III|IV)\.?$/i, "").split(" ");
@@ -32,11 +33,12 @@ function partyCode(party: string): string {
 
 /** How much of the count is in, as a percentage over a thin track. */
 function Reporting({ race }: { race: RaceSummary }) {
-  const unknown = race.total > 0 && race.reportingUnknown;
-  const pct = race.total > 0 && !unknown ? Math.min(100, race.reporting) : 0;
+  const text = reportingText(race);
+  const known = race.total > 0 && !race.reportingUnknown && race.reporting > 0;
+  const pct = known ? Math.min(100, race.reporting) : 0;
   return (
-    <div className="mt-ct-in" title={unknown ? "civicAPI has votes for this race but no reporting figure" : "civicAPI's estimate of precincts or ballot batches reported. Not the share of the expected vote."}>
-      <span className="num">{unknown ? "Reporting unknown" : `${Math.round(pct)}%`}</span>
+    <div className="mt-ct-in" title={text.title ?? "civicAPI's estimate of precincts or ballot batches reported. Not the share of the expected vote."}>
+      <span className="num">{known && text.short !== "99%+" ? `${Math.round(pct)}%` : text.long}</span>
       <span className="mt-ct-track" aria-hidden>
         <span style={{ width: `${pct}%` }} />
       </span>

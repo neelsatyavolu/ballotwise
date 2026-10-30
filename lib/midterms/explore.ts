@@ -1,7 +1,9 @@
 // Filtering and sorting for the election-night results explorer. Every choice round-trips through the URL.
 import { holderOf, leadingFlip, outcomeOf } from "./holders";
-import { closeWaves, stateFinal } from "./polls";
-import { colorOf, compareRaces, lead, partyOf, raceLabel, ratingFill, safeFill, STATE_NAMES, type Office, type RaceSummary } from "./view";
+import { closeWaves, stateCloses } from "./polls";
+import { colorOf, compareRaces, isEarly, lead, partyOf, raceLabel, ratingFill, safeFill, STATE_NAMES, type Office, type RaceSummary } from "./view";
+
+export { EARLY_REPORTING, isEarly } from "./view";
 
 export type Status = "awaiting" | "counting" | "called";
 /** How competitive a race is: a rating tier, "safe" when markets or polls exist but no rating applies, "unrated" with no evidence at all. */
@@ -23,7 +25,7 @@ export type Filters = {
   maxMargin: number | null;
   /** Smallest share reporting shown; null for any. */
   minReporting: number | null;
-  /** Poll-closing times (ms): shows races in states whose last polls close then. */
+  /** Poll-closing times (ms): shows races in states whose first polls close then. */
   waves: number[];
   sort: Sort;
 };
@@ -32,12 +34,11 @@ export const DEFAULT_FILTERS: Filters = { office: "senate", view: "all", q: "", 
 
 /** A lead under this many points with votes counted makes a race "close". */
 export const CLOSE_MARGIN = 5;
-/** Under this share reporting, a count is early: its lead says little, so it sorts after fuller counts and stays pale on maps. */
-export const EARLY_REPORTING = 25;
-
-export const isEarly = (r: RaceSummary) => r.total > 0 && !r.candidates.some((c) => c.winner) && !r.reportingUnknown && r.reporting < EARLY_REPORTING;
 
 export const isCalled = (r: RaceSummary) => r.candidates.some((c) => c.winner);
+
+/** A race the forecast rated a toss-up that hasn't been called yet: the ones to watch on election night. */
+export const isWatch = (r: RaceSummary) => r.rating === "tossup" && !isCalled(r);
 
 export function statusOf(r: RaceSummary): Status {
   if (isCalled(r)) return "called";
@@ -154,7 +155,8 @@ function matches(r: RaceSummary, f: Filters): boolean {
     if (m === null || m > f.maxMargin) return false;
   }
   if (f.minReporting !== null && r.reporting < f.minReporting) return false;
-  if (f.waves.length && !f.waves.includes(stateFinal(r.state) ?? -1)) return false;
+  // Filed under the state's first closing, as in the poll schedule.
+  if (f.waves.length && !f.waves.includes(stateCloses(r.state) ?? -1)) return false;
   const q = f.q.trim().toLowerCase();
   if (q && !`${raceLabel(r)} ${r.title} ${STATE_NAMES[r.state] ?? ""} ${r.state} ${r.candidates.map((c) => c.name).join(" ")}`.toLowerCase().includes(q)) return false;
   return true;
@@ -182,7 +184,7 @@ const SORTS: Record<Sort, (a: RaceSummary, b: RaceSummary) => number> = {
   competitive: compareRaces,
   called: (a, b) => (b.call?.at ?? -1) - (a.call?.at ?? -1) || compareRaces(a, b),
   reporting: (a, b) => b.reporting - a.reporting || compareRaces(a, b),
-  closing: (a, b) => (stateFinal(a.state) ?? Infinity) - (stateFinal(b.state) ?? Infinity) || compareRaces(a, b),
+  closing: (a, b) => (stateCloses(a.state) ?? Infinity) - (stateCloses(b.state) ?? Infinity) || compareRaces(a, b),
   state: (a, b) => (STATE_NAMES[a.state] ?? a.state).localeCompare(STATE_NAMES[b.state] ?? b.state) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title, undefined, { numeric: true }),
 };
 

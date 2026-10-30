@@ -77,7 +77,8 @@ export function LineChart({ lines, domain = [0, 1], ticks, step = 5, value, date
         {hoverT !== null && <line className="mt-mk-cross" x1={x(hoverT)} x2={x(hoverT)} y1={PAD.top} y2={H - PAD.bottom} />}
       </svg>
       {hoverT !== null && values.length > 0 && (
-        <div className="mt-mk-tip" style={{ left: `${(x(hoverT) / W) * 100}%` }} role="status">
+        // Opens away from the nearer edge, so it never runs off the card and hides the values.
+        <div className="mt-mk-tip" style={{ left: `${(x(hoverT) / W) * 100}%`, transform: x(hoverT) / W > 0.5 ? "translateX(calc(-100% - 10px))" : "translateX(10px)" }} role="status">
           <b>{date(hoverT)}</b>
           {values.map(({ l, v }) => (
             <div key={l.name}>

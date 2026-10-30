@@ -14,7 +14,9 @@ const LINE_COLOR = { D: "var(--dem-ink)", R: "var(--rep-ink)", I: "var(--oth)" }
 /** An outcome with no known party, such as someone who lost the primary but still trades: neutral, not "independent". */
 const NO_PARTY = "var(--muted)";
 
-const pct = (p: number) => `${(p * 100).toFixed(2)}%`;
+const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
+/** Candidates under this share are left off the chart and legend (primary losers Polymarket still lists at 0.1%). */
+const MIN_SHOWN = 0.02;
 const day = (t: number) => new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 const hour = (t: number) => new Date(t * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric" });
 
@@ -44,8 +46,9 @@ function Chart({ lines, range }: { lines: readonly Line[]; range: Range }) {
 }
 
 function Book({ book, range, setRange }: { book: MarketBook; range: Range; setRange: (r: Range) => void }) {
-  const lead = book.lines[0];
-  const look = styles(book.lines);
+  const lines = book.lines.filter((l, i) => i < 2 || l.now >= MIN_SHOWN);
+  const lead = lines[0];
+  const look = styles(lines);
   return (
     <div className="mt-mk-card">
       <div className="mt-mk-top">
@@ -59,9 +62,9 @@ function Book({ book, range, setRange }: { book: MarketBook; range: Range; setRa
         </div>
       </div>
       {lead && <p className="mt-mk-lead">{lead.name} {pct(lead.now)}</p>}
-      <Chart lines={book.lines} range={range} />
+      <Chart lines={lines} range={range} />
       <ul className="mt-mk-legend">
-        {book.lines.map((l, i) => (
+        {lines.map((l, i) => (
           <li key={l.name}>
             <svg width="16" height="8" aria-hidden><line x1="0" x2="16" y1="4" y2="4" style={{ stroke: look[i].color }} strokeWidth="2" strokeDasharray={look[i].dash} /></svg>
             {l.name} <span>{pct(l.now)}</span>

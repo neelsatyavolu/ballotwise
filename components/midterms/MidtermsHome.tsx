@@ -3,16 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { flipTo, raceFill } from "@/lib/midterms/explore";
+import { DEFAULT_FILTERS, explore, flipTo, isWatch, raceFill } from "@/lib/midterms/explore";
 import { holderOf } from "@/lib/midterms/holders";
 import { colorOf, compareRaces, OFFICE_LABEL, pct, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { AiDashboards } from "./AiDashboard";
 import { BalanceBar } from "./Balance";
-import { PhotoCredit } from "./Avatar";
 import { ChatDock, type ChatHandle } from "./ChatDock";
 import { ElectionMode, ElectionToggle, useElectionMode } from "./ElectionMode";
 import { useClock, useDashboards, useLive, useStars } from "./hooks";
-import { ForecastTip } from "./ForecastTip";
+import { ForecastTip, WatchNote } from "./ForecastTip";
 import { electionModeDefault } from "@/lib/midterms/polls";
 import { NationMap, type NationFill } from "./maps";
 import { ModeNav } from "./ModeNav";
@@ -20,7 +19,9 @@ import { RaceCard } from "./RaceCard";
 import { RaceSearch } from "./RaceSearch";
 import { RaceRows, type Star } from "./RaceRows";
 import { useSimulation } from "./useSimulation";
-import { CheckedAgo } from "./CheckedAgo";
+import { CheckedAgo, LiveDot } from "./CheckedAgo";
+import { SinceBanner } from "./SinceBanner";
+import { reportingText } from "./reporting";
 
 type Tab = "key" | "mine" | "ai" | "all";
 const TABS: { id: Tab; label: string }[] = [
@@ -31,6 +32,25 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 const OFFICES: Office[] = ["senate", "governor", "house", "measure"];
 const PAGE = 60;
+/** Cards per office in the overview's key races before "Show more". */
+const SECTION = 10;
+
+/** One office's key races as cards, the first ten with the rest a tap away. */
+function Section({ title, races, star }: { title: string; races: RaceSummary[]; star: Star }) {
+  const [all, setAll] = useState(false);
+  if (!races.length) return null;
+  return (
+    <section className="mt-group">
+      <h2>{title}</h2>
+      <Grid races={all ? races : races.slice(0, SECTION)} star={star} />
+      {races.length > SECTION && (
+        <button type="button" className="btn quiet small" onClick={() => setAll((v) => !v)}>
+          {all ? "Show fewer" : `Show ${races.length - SECTION} more`}
+        </button>
+      )}
+    </section>
+  );
+}
 
 function Grid({ races, star }: { races: RaceSummary[]; star: Star }) {
   return (
@@ -40,6 +60,13 @@ function Grid({ races, star }: { races: RaceSummary[]; star: Star }) {
       ))}
     </ul>
   );
+}
+
+/** What kind of flip a race shows: a called gain, a lead in an uncalled count, or only the pre-election favorite. */
+function flipLabel(r: RaceSummary, holder: string, to: string): string {
+  if (r.candidates.some((c) => c.winner)) return `Called gain, ${holder} → ${to}`;
+  if (r.total > 0) return `Leading in a potential flip, ${holder} → ${to}`;
+  return `Pre-election favorite would flip it, ${holder} → ${to}`;
 }
 
 function mapTip(r: RaceSummary) {
@@ -53,8 +80,9 @@ function mapTip(r: RaceSummary) {
           <span className="swatch" style={{ background: colorOf(c) }} /> {c.name} {r.total ? pct(c.pct) : ""}
         </div>
       ))}
-      {flip && holder && <div>Projected to flip {holder} → {flip}</div>}
-      <span className="muted">{r.reporting ? `${Math.round(r.reporting)}% reporting` : "No results yet"}</span>
+      {flip && holder && <div>{flipLabel(r, holder, flip)}</div>}
+      <span className="muted">{reportingText(r).long}</span>
+      <WatchNote race={r} />
     </>
   );
 }
@@ -76,7 +104,7 @@ function RaceMap({ races, updatedAt }: { races: RaceSummary[]; updatedAt: number
     // Ohio and Florida hold Senate specials; a state's regular race, if any, sets its color.
     for (const r of races.filter((x) => x.office === office).sort((a, b) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title)))) {
       if (out.has(mapKey(r))) continue;
-      out.set(mapKey(r), { fill: raceFill(r, results), tip: r.total ? mapTip(r) : <ForecastTip race={r} updatedAt={updatedAt} />, flip: !!flipTo(r) });
+      out.set(mapKey(r), { fill: raceFill(r, results), tip: r.total ? mapTip(r) : <ForecastTip race={r} updatedAt={updatedAt} />, flip: !!flipTo(r) && (!results || r.total > 0), watch: results && isWatch(r) });
     }
     return out;
   }, [races, office, results, updatedAt]);
@@ -95,14 +123,24 @@ function RaceMap({ races, updatedAt }: { races: RaceSummary[]; updatedAt: number
         </div>
       </div>
       <NationMap fills={fills} districts={office === "house"} label={`Map of 2026 ${office} races`} onPick={(key) => idByKey.has(key) && router.push(`/midterms/${idByKey.get(key)}`)} />
-      <p className="muted small mt-legend">
-        <span><i style={{ background: "var(--dem)" }} /> Dem</span>
-        <span><i style={{ background: "var(--rep)" }} /> Rep</span>
-        <span><i style={{ background: "var(--tossup)" }} /> Toss-up</span>
-        <span><i style={{ background: "var(--rule-strong)" }} /> No market or polls</span>
-        <span><i className="flip" /> Projected to change party</span>
-        <span>Before votes: market/poll rating, paler = less certain, full color = safe. After: who leads, darker = wider lead.</span>
-      </p>
+      {results ? (
+        <p className="muted small mt-legend">
+          <span><i style={{ background: "var(--rate-safe-d)" }} /> Dem won</span>
+          <span><i style={{ background: "var(--rate-safe-r)" }} /> Rep won</span>
+          <span><i style={{ background: "var(--rule-strong)" }} /> No votes yet</span>
+          <span><i className="flip" /> Called gain or leading in a potential flip</span>
+          <span>Called races in full color; uncalled ones by who leads, darker = wider lead, early counts palest.</span>
+        </p>
+      ) : (
+        <p className="muted small mt-legend">
+          <span><i style={{ background: "var(--dem)" }} /> Dem</span>
+          <span><i style={{ background: "var(--rep)" }} /> Rep</span>
+          <span><i style={{ background: "var(--tossup)" }} /> Toss-up</span>
+          <span><i style={{ background: "var(--rule-strong)" }} /> No market or polls</span>
+          <span><i className="flip" /> Pre-election favorite would change party</span>
+          <span>Market or poll rating: paler = less certain, full color = safe.</span>
+        </p>
+      )}
     </section>
   );
 }
@@ -170,7 +208,11 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
 
   const races = data?.races;
   const counting = !!races?.some((r) => r.total > 0);
-  const key = useMemo(() => (races ?? []).filter((r) => r.rating).sort(compareRaces), [races]);
+  // Once votes are in, uncalled races come first, closest first, and called ones last: the explorer's "closest first".
+  const key = useMemo(() => {
+    const rated = (races ?? []).filter((r) => r.rating);
+    return counting ? explore(rated, { ...DEFAULT_FILTERS, office: "all" }, null) : rated.sort(compareRaces);
+  }, [races, counting]);
   const mine = useMemo(() => {
     const byId = new Map((races ?? []).map((r) => [r.id, r]));
     return (favorites.ids ?? []).map((id) => byId.get(id)).filter((r): r is RaceSummary => !!r);
@@ -185,10 +227,10 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       <ModeNav current="/midterms" />
       <header className="mt-hero">
         <h1>Midterms 2026</h1>
-        <span className="mt-kicker">{counting ? "Live results, updated every 30 seconds" : "Tuesday, Nov 3 · first polls close at 6:00 PM ET"}</span>
+        <span className="mt-kicker">{counting ? `Live results, checked every ${Math.round(live.interval / 1000)} seconds` : "Tuesday, Nov 3 · first polls close at 6:00 PM ET"}</span>
         {data && (
           <span className="mt-updated small">
-            <span className={`mt-dot${data.stale ? " stale" : ""}${counting ? "" : " idle"}`} aria-hidden /> {counting ? "" : "No votes counted yet · "}Checked <CheckedAgo at={data.fetchedAt} />
+            <LiveDot at={data.fetchedAt} stale={data.stale} idle={!counting} /> {counting ? "" : "No votes counted yet · "}Checked <CheckedAgo at={data.fetchedAt} />
             {data.stale && " · source is slow"}
           </span>
         )}
@@ -202,8 +244,10 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       {error && <p className="error">{data ? `${error} Showing the last results we got.` : error}</p>}
       {!data && !error && <p className="muted">Loading every race…</p>}
 
-      {data && races && election.on && <ElectionMode data={data} stars={favorites} />}
-      {data && races && !election.on && (
+      {data && races && (
+        <SinceBanner races={races}>
+      {election.on && <ElectionMode data={data} stars={favorites} />}
+      {!election.on && (
         <>
           <div className="mt-balances">
             <BalanceBar title="Senate" office="senate" tally={data.balance.senate} />
@@ -245,10 +289,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
                 </section>
               </div>
               {(["senate", "governor", "house"] as const).map((o) => (
-                <section key={o} className="mt-group">
-                  <h2>{OFFICE_LABEL[o]}</h2>
-                  <Grid races={key.filter((r) => r.office === o)} star={star} />
-                </section>
+                <Section key={o} title={OFFICE_LABEL[o]} races={key.filter((r) => r.office === o)} star={star} />
               ))}
             </div>
           )}
@@ -300,11 +341,11 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
           {tab === "all" && <AllRaces races={races} star={star} initialState={initialState} />}
 
           <p className="muted small mt-source">
-            Live results from <a href="https://civicapi.org">civicAPI</a>, which collects them from state and county election offices. Winners are marked only when civicAPI&apos;s decision desk calls a race. 2024 county results from{" "}
-            <a href="https://github.com/tonmcg/US_County_Level_Election_Results_08-24">tonmcg/US_County_Level_Election_Results</a>.
-            <PhotoCredit />
+            <Link href="/midterms/credits">Sources and credits</Link>
           </p>
         </>
+      )}
+        </SinceBanner>
       )}
 
       <ChatDock

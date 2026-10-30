@@ -1,5 +1,5 @@
 // Rendered inside the tracker's map tooltips.
-import { safeSide } from "@/lib/midterms/explore";
+import { isWatch, safeSide } from "@/lib/midterms/explore";
 import { chances, partyOf, RATING_LABEL, ratingFill, safeFill, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { partyColor } from "./party";
 
@@ -70,4 +70,9 @@ export function ForecastTip({ race, updatedAt }: { race: RaceSummary; updatedAt:
       {updatedAt && <div className="mt-ft-foot">Last updated {STAMP.format(updatedAt)}</div>}
     </div>
   );
+}
+
+/** On election night, the line that flags a race the forecast rated a toss-up and that hasn't been called. */
+export function WatchNote({ race }: { race: RaceSummary }) {
+  return isWatch(race) ? <div className="mt-watch-note">Pre-election toss-up · one to watch</div> : null;
 }
