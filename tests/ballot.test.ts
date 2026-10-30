@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { signUp } from "../lib/auth/accounts";
 import { districtsFrom } from "../lib/ballot/census";
 import { failJob, readableError, runJob, type Job, type JobDeps } from "../lib/ballot/jobs";
-import { addContestGuides, contestGuideId, getBallot, saveBallot } from "../lib/ballot/store";
+import { addContestGuides, contestGuideId, getBallot, GROK_MISSING, saveAddress, saveBallot } from "../lib/ballot/store";
 import { profileKey } from "../lib/cache";
 import { storeGrokTokens } from "../lib/grok/vault";
 import { claimableGuideIds, getGuide, listGuides } from "../lib/guides";
@@ -91,6 +91,27 @@ describe("districtsFrom", () => {
       "Elementary School Districts": [{ NAME: "Mountain View Whisman Elementary School District" }],
       "Secondary School Districts": [{ NAME: "Mountain View-Los Altos Union School District" }],
     })).toMatchObject({ schoolDistrict: "Mountain View Whisman Elementary School District", highSchoolDistrict: "Mountain View-Los Altos Union School District" });
+  });
+});
+
+describe("saveAddress", () => {
+  it("keeps an address without finding contests, as a ballot that waits on Grok", async () => {
+    const db = testDb();
+    const { user } = await signUp(db, "a@example.com", "a long password", 1);
+    await saveAddress(db, user.id, "250 Hamilton Ave, Palo Alto", "250 HAMILTON AVE, PALO ALTO, CA", districts, 5);
+    expect(await getBallot(db, user.id)).toMatchObject({ address: "250 Hamilton Ave, Palo Alto", districts, status: "failed", error: GROK_MISSING, updatedAt: 5 });
+  });
+
+  it("replaces an address saved before", async () => {
+    const { db, user } = await setup();
+    await saveAddress(db, user.id, "250 Hamilton Ave, Palo Alto", "250 HAMILTON AVE, PALO ALTO, CA", { ...districts, county: "Santa Clara County" }, 9);
+    expect(await getBallot(db, user.id)).toMatchObject({ address: "250 Hamilton Ave, Palo Alto", districts: { county: "Santa Clara County" }, status: "failed" });
+  });
+
+  it("is what a ballot job leaves when Grok isn't connected", async () => {
+    const { db, user, deps } = await setup();
+    await failJob({ type: "ballot", userId: user.id }, GROK_MISSING, deps);
+    expect((await getBallot(db, user.id))?.error).toBe(GROK_MISSING);
   });
 });
 

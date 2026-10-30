@@ -10,7 +10,7 @@ import { alignPositions, balanceSides, keepRetrievedRaceSources, keepRetrievedSo
 import { BALLOT_INSTRUCTIONS, ballotPrompt, PROFILE_INSTRUCTIONS, profilePrompt, RACE_INSTRUCTIONS, racePrompt } from "../prompts";
 import { asJudicial, ballotContestsSchema, isJudicial, profileSchema, raceResultSchema, type CandidateRef, type Profile, type Race } from "../schema";
 import { alignToIssues, getValues, releaseAlignment, saveSuggested, scheduleAlignment } from "../values";
-import { addContestGuides, getBallot, noteBallotActivity, setBallotStatus, setJudgesChecked } from "./store";
+import { addContestGuides, getBallot, GROK_MISSING, noteBallotActivity, setBallotStatus, setJudgesChecked } from "./store";
 
 export const jobSchema = z.discriminatedUnion("type", [
   // "judges" looks for judges alone, for a ballot found before they were covered.
@@ -76,7 +76,7 @@ async function enqueueAlignment(deps: JobDeps, userId: string, guideIds: string[
 
 async function tokensFor(deps: JobDeps, userId: string) {
   const tokens = await usableGrokTokens(deps.db, deps.tokenKey, userId, refreshGrokTokens);
-  if (!tokens) throw new PermanentJobError("Grok isn't connected. Connect Grok, then refresh your ballot.");
+  if (!tokens) throw new PermanentJobError(GROK_MISSING);
   return tokens;
 }
 

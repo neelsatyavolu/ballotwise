@@ -32,6 +32,19 @@ export async function saveBallot(db: Db, userId: string, address: string, matche
     .run();
 }
 
+/** Why a ballot's contests weren't looked for: research runs on the voter's Grok account. */
+export const GROK_MISSING = "Grok isn't connected. Connect Grok, then refresh your ballot.";
+
+/**
+ * Saves the voting address without finding contests, for a voter who hasn't connected Grok: the Near you screen needs
+ * only its districts. The ballot reads as a ballot job leaves it when Grok is missing, so the ballot page says to
+ * connect Grok, and trying again then finds the contests.
+ */
+export async function saveAddress(db: Db, userId: string, address: string, matchedAddress: string, districts: Districts, now: number): Promise<void> {
+  await saveBallot(db, userId, address, matchedAddress, districts, now);
+  await setBallotStatus(db, userId, "failed", GROK_MISSING, now);
+}
+
 export async function getBallot(db: Db, userId: string): Promise<Ballot | null> {
   const row = await db
     .prepare(

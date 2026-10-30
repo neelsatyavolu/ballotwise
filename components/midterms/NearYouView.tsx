@@ -1,10 +1,12 @@
 "use client";
 
-// The Near you screen: every race on the ballot at the address saved on the voter's ballot page, live, with a map of
-// their state framed on their county.
+// The Near you screen: every race on the ballot at the voter's saved address, live, with a map of their state framed
+// on their county. The address is the one the ballot page keeps, and can be added or changed here.
 import Link from "next/link";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useAccount } from "@/components/AccountProvider";
+import { AddressInput } from "@/components/AddressInput";
+import { api, ApiError } from "@/lib/client";
 import type { LocalAnswer } from "@/lib/midterms/local";
 import { SANTA_CLARA_RESULTS, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
@@ -32,6 +34,45 @@ function Ask({ title, text, href, action }: { title: string; text: string; href:
         <Link href={href} className="btn">{action}</Link>
       </p>
     </div>
+  );
+}
+
+/** Adds or changes the saved address. It doesn't need Grok: without it only the districts are kept. */
+function AddressForm({ onSaved, onCancel }: { onSaved: () => void; onCancel?: () => void }) {
+  const [address, setAddress] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/api/midterms/local", { method: "PUT", body: { address } });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save your address.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="panel stack mt-in" onSubmit={submit}>
+      <h2>{onCancel ? "Change your address" : "Add your address"}</h2>
+      <div className="field">
+        <label htmlFor="ny-address">Your home address (where you&apos;re registered to vote)</label>
+        <AddressInput id="ny-address" value={address} onChange={setAddress} />
+        <span className="hint">
+          We use it to find your districts and the races on your ballot. It&apos;s saved to your account, it&apos;s the same address your ballot page uses, and no one else can see it.
+        </span>
+      </div>
+      {error && <p className="error" role="alert">{error}</p>}
+      <div style={{ display: "flex", gap: 10 }}>
+        <button className="btn" type="submit" disabled={busy || address.trim().length < 8}>{busy ? "Finding your districts…" : "Show my races"}</button>
+        {onCancel && <button type="button" className="btn secondary" onClick={onCancel}>Cancel</button>}
+      </div>
+    </form>
   );
 }
 
@@ -90,7 +131,10 @@ function Shell({ children, head }: { children: ReactNode; head?: ReactNode }) {
 
 export function NearYouView() {
   const { user, loading } = useAccount();
-  const live = useLive<LocalAnswer>(user ? "/api/midterms/local" : null);
+  // Saving an address bumps `version`, so the next answer is fetched fresh rather than revalidated.
+  const [version, setVersion] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const live = useLive<LocalAnswer>(user ? `/api/midterms/local${version ? `?v=${version}` : ""}` : null);
   const overview = useLive<Overview>(user ? "/api/midterms" : null);
   const favorites = useStars();
 
@@ -99,7 +143,11 @@ export function NearYouView() {
   if (!live.data) return <Shell>{live.error ? <p className="error">{live.error}</p> : <OfficeSkeleton />}</Shell>;
 
   const { local, fetchedAt, stale } = live.data;
-  if (!local) return <Shell><Ask title="Add your address" text="Your governor, Senate, House, legislative, city and school races show here once your account has your home address. It stays private to you." href="/ballot" action="Add your address" /></Shell>;
+  const saved = () => {
+    setEditing(false);
+    setVersion((v) => v + 1);
+  };
+  if (!local) return <Shell><AddressForm onSaved={saved} /></Shell>;
 
   const county = local.source === "county";
   const mine = (overview.data?.races ?? []).filter((r) => r.state === local.state && (r.office !== "house" || r.district === local.house));
@@ -132,6 +180,11 @@ export function NearYouView() {
       head={
         <>
           <span className="mt-kicker">{local.area}</span>
+          {!editing && (
+            <button type="button" className="btn quiet small" onClick={() => setEditing(true)}>
+              Change address
+            </button>
+          )}
           <span className="mt-updated small">
             <LiveDot at={fetchedAt} stale={stale} idle={!counting} /> {counting ? "" : "No votes counted yet · "}Checked <CheckedAgo at={fetchedAt} />
             {stale && " · source is slow"}
@@ -140,13 +193,14 @@ export function NearYouView() {
       }
     >
       {live.error && <p className="error small">{live.error} Showing the last results we got.</p>}
+      {editing && <AddressForm onSaved={saved} onCancel={() => setEditing(false)} />}
       <Tally parts={shown.filter((p) => p.races.length)} />
       {local.state && <NearYouMap state={local.state} fips={local.countyFips} raceId={ticket[0]?.id ?? null} />}
       {shown.map((p) => (
         <Section key={p.key} part={p} stars={favorites.ids} onStar={favorites.toggle} />
       ))}
       <p className="muted small mt-source">
-        Matched from the address on your <Link href="/ballot">ballot page</Link>, where you can change it. Local results from{" "}
+        Matched from your saved address, which your <Link href="/ballot">ballot page</Link> uses too. Local results from{" "}
         {county ? <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a> : <a href="https://civicapi.org">civicAPI</a>}; the rest from civicAPI. <Link href="/midterms/credits">Sources and credits</Link>
       </p>
     </Shell>
