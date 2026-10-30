@@ -55,7 +55,8 @@ export class LiveError extends Error {
 export async function fetchLive<T>(path: string, etag: string | null, signal: AbortSignal): Promise<LiveAnswer<T>> {
   let res: Response;
   try {
-    res = await fetch(path, { headers: etag ? { "if-none-match": etag } : undefined, signal });
+    // "no-cache" sends every poll to the server: a copy the browser kept under max-age could be a poll behind on election night.
+    res = await fetch(path, { headers: etag ? { "if-none-match": etag } : undefined, cache: "no-cache", signal });
   } catch {
     throw new LiveError(signal.aborted ? "Results are taking too long to load." : "You appear to be offline. Check your connection and try again.", 0);
   }

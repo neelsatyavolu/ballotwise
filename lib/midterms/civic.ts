@@ -52,8 +52,9 @@ async function civicOnce(path: string, deadline: number): Promise<unknown> {
   let res: Response;
   const timeout = timeLeft(deadline);
   try {
-    // On Cloudflare, `cf.cacheTtl` shares one fetch per data center among every visitor polling at once.
-    res = await fetch(BASE + path, { cf: { cacheTtl: 20, cacheEverything: true }, signal: AbortSignal.timeout(timeout) } as RequestInit);
+    // On Cloudflare, `cf.cacheTtl` shares one fetch per data center among every visitor polling at once. It's kept
+    // under civicAPI's own 15s cache, so the edge adds little delay on top of it on election night.
+    res = await fetch(BASE + path, { cf: { cacheTtl: 10, cacheEverything: true }, signal: AbortSignal.timeout(timeout) } as RequestInit);
   } catch {
     throw new CivicError("Couldn't reach civicAPI.");
   }

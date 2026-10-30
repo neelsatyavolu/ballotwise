@@ -79,6 +79,17 @@ describe("polling", () => {
       expect(seen).toEqual(['W/"a"']);
     });
 
+    it("always asks the server, never a browser-cached copy that may be up to max-age behind", async () => {
+      const modes: (RequestCache | undefined)[] = [];
+      vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+        modes.push(init.cache);
+        return new Response(null, { status: 304, headers: { etag: 'W/"a"' } });
+      });
+      await fetchLive("/x", 'W/"a"', new AbortController().signal);
+      await fetchLive("/x", null, new AbortController().signal);
+      expect(modes).toEqual(["no-cache", "no-cache"]);
+    });
+
     it("reads a 200 with the held ETag as unchanged, and a new one as data", async () => {
       vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ fetchedAt: 7 }), { headers: { etag: 'W/"b"' } }));
       expect(await fetchLive("/x", 'W/"b"', new AbortController().signal)).toMatchObject({ same: true, fetchedAt: 7 });
