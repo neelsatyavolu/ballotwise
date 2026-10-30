@@ -1,0 +1,50 @@
+name: Ballotwise
+options:
+  bundleIdPrefix: co.xanom
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    DEVELOPMENT_TEAM: VTQW687WBQ
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Ballotwise:
+    type: application
+    platform: iOS
+    sources:
+      - path: Ballotwise
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.xanom.ballotwise
+        INFOPLIST_FILE: Ballotwise/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Ballotwise/Resources/Ballotwise.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+  BallotwiseTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: BallotwiseTests
+    dependencies:
+      - target: Ballotwise
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.xanom.ballotwise.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Ballotwise.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ballotwise"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  Ballotwise:
+    build:
+      targets:
+        Ballotwise: all
+        BallotwiseTests: [test]
+    test:
+      targets:
+        - BallotwiseTests
