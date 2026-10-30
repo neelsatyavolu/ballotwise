@@ -17,7 +17,7 @@ async function digest(text: string): Promise<string> {
 
 /** The weak ETag liveJson would send for `payload`, so a page can seed the client and the first poll is a 304. */
 export async function liveEtag(payload: { fetchedAt: number }): Promise<string> {
-  const { fetchedAt: _fetchedAt, ...content } = payload;
+  const content = Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "fetchedAt"));
   return `W/"${await digest(JSON.stringify(content))}"`;
 }
 

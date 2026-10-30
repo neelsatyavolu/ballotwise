@@ -289,7 +289,7 @@ export function useDashboards() {
  */
 export function useClock(ms = 1000) {
   const stamped = useRenderedAt();
-  const serverNow = useRef(stamped ?? clockNow()).current;
+  const [serverNow] = useState(() => stamped ?? clockNow());
   const live = useRef(typeof window === "undefined" ? serverNow : clockNow());
   const getSnapshot = useCallback(() => live.current, []);
   const getServerSnapshot = useCallback(() => serverNow, [serverNow]);

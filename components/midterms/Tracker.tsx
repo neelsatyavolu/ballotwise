@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from "react";
+import { cache, Suspense, type ReactNode } from "react";
 import { headers } from "next/headers";
 import { isDocumentRequest } from "@/lib/midterms/documentRequest";
 import { loadSeeds, type SeedKind } from "@/lib/midterms/pageData";
@@ -18,10 +18,12 @@ export function TrackerFallback({ current, skeleton = "slim" }: { current?: Mode
   );
 }
 
+/** One timestamp per request for every "checked Ns ago" on the page, taken as the HTML is rendered. */
+const renderTime = cache(() => Date.now());
+
 async function Seeds({ kind, arg, children }: { kind: SeedKind; arg: string; children: ReactNode }) {
   const seeds = await loadSeeds(kind, arg);
-  // One timestamp for every "checked Ns ago" on this page, taken as the HTML is rendered.
-  return <SeedProvider value={seeds} renderedAt={Date.now()}>{children}</SeedProvider>;
+  return <SeedProvider value={seeds} renderedAt={renderTime()}>{children}</SeedProvider>;
 }
 
 /**
