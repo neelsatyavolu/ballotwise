@@ -10,6 +10,7 @@ const MODES = [
   { href: "/midterms/house", label: "House" },
   { href: "/midterms/governor", label: "Governor" },
   { href: "/midterms/measures", label: "Ballot measures" },
+  { href: "/midterms/early-vote", label: "Early vote" },
   { href: "/midterms/forecast", label: "Forecast" },
   { href: "/midterms/dashboards", label: "Dashboards" },
   { href: "/midterms/search", label: "Search" },

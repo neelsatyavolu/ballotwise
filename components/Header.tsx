@@ -25,8 +25,8 @@ export function Header() {
         {/* Pages can put their own section tabs here (the midterms tracker does, on wide screens). */}
         <div id="header-slot" className="header-slot" />
         <nav className="nav" aria-label="Main">
-          <Link href="/midterms">Midterms</Link>
-          <Link href="/method" className="wide-only">How it works</Link>
+          <Link href="/midterms" className="section-link">Midterms</Link>
+          <Link href="/method" className="wide-only section-link">How it works</Link>
           {loading ? null : user ? (
             <>
             <Link href="/ballot">My ballot</Link>

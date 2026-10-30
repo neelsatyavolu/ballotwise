@@ -1114,6 +1114,8 @@ body:has(.wrap.mt.mt-sbs-page) .site-footer .wrap { max-width: none; padding: 0 
   .mt-modes.in-header a:hover { color: #fff; background: rgb(255 255 255 / 0.08); }
   .mt-modes.in-header a[aria-current="page"] { color: #fff; background: rgb(255 255 255 / 0.14); }
   .mt-modes.moved { display: none; }
+  /* With the tabs up there, only the account links stay: "Midterms" is the page itself, and "How it works" is in the footer. */
+  .site-header:has(.mt-modes.in-header) .nav .section-link { display: none; }
 }
 
 /* Race page cards, simplified: the forecast breakdown sits behind a toggle, and the poll table is pollster, dates, result. */
@@ -1406,3 +1408,31 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
 .mt-legend i.watch.lean { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rate-tossup) 70%, transparent); }
 /* The balance and seat rows never wrap their parts: each number keeps its label on its own line. */
 .mt-balance-nums > span, .mt-seats-nums > .d, .mt-seats-nums > .r { white-space: nowrap; }
+
+/* Early vote tab. */
+.mt-ev-summary { margin-top: 10px; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px 24px; align-items: end; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px 16px; }
+.mt-ev-summary p { margin: 0 0 6px; }
+.mt-ev-stats { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
+.mt-ev-stats dt { font-size: 13px; color: var(--muted); }
+.mt-ev-stats dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mt-ev-stats .lead dd { font-family: var(--serif); font-size: 26px; line-height: 1.1; }
+.mt-ev-bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--rule); }
+.mt-ev-bar > span { display: block; height: 100%; }
+.mt-ev-party .mt-legend b { font-variant-numeric: tabular-nums; }
+.mt-ev-block h3, .mt-ev-state h3 { font-size: 16px; margin: 0 0 6px; }
+.mt-ev-block p { margin: 6px 0 0; }
+.mt-ev-demos { display: grid; gap: 10px; }
+.mt-ev-demo h4 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 2px; }
+.mt-ev-demo .mt-table td { padding: 4px 6px; }
+.mt-ev-tip { display: grid; gap: 2px; }
+.mt-ev-rows { font-size: 14px; }
+.mt-ev-rows th { position: sticky; top: 0; background: var(--sheet); z-index: 2; padding: 6px 8px; }
+.mt-ev-rows td { padding: 6px 8px; white-space: nowrap; }
+.mt-ev-rows th:first-child, .mt-ev-rows td:first-child { padding-left: 12px; width: 100%; }
+.mt-ev-rows.pick tbody tr { cursor: pointer; }
+.mt .mt-ev-rows tbody tr:hover td { background: var(--el-hover); }
+.mt-ev-pick { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.mt-ev-page .mt-legend { margin-top: 6px; }
+@media (max-width: 760px) {
+  .mt-ev-summary { grid-template-columns: 1fr; }
+}

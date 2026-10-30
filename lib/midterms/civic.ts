@@ -70,7 +70,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * civicAPI answers 503 now and then under load, so each request is retried twice after a short pause, as long as
  * `deadline` (epoch ms) leaves time for it.
  */
-async function civic(path: string, deadline = Infinity): Promise<unknown> {
+export async function civic(path: string, deadline = Infinity): Promise<unknown> {
   for (const delay of RETRY_DELAYS_MS) {
     try {
       return await civicOnce(path, deadline);
@@ -84,7 +84,7 @@ async function civic(path: string, deadline = Infinity): Promise<unknown> {
 }
 
 /** Runs `work` over `items` with at most `limit` in flight, keeping results in order. */
-async function pooled<T, R>(items: readonly T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
+export async function pooled<T, R>(items: readonly T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   const lane = async () => {
