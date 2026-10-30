@@ -12,6 +12,7 @@ const MODES = [
   { href: "/midterms/measures", label: "Ballot measures" },
   { href: "/midterms/forecast", label: "Forecast" },
   { href: "/midterms/dashboards", label: "Dashboards" },
+  { href: "/midterms/search", label: "Search" },
   // Only offered on wide screens (see .mt-mode-wide), where the three dashboards fit side by side.
   { href: "/midterms/side-by-side", label: "Side by side", wide: true },
 ] as const;

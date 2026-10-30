@@ -9,8 +9,11 @@ import { calledWinner } from "./SeatBoard";
 
 export type Star = { ids: number[] | null; toggle: (id: number) => void };
 
-/** The key races as dense one-line rows: who leads, by how much, and how much is counted. */
-export function RaceRows({ races, star, onPick, selectedId }: { races: RaceSummary[]; star: Star; onPick?: (race: RaceSummary) => void; selectedId?: number | null }) {
+/**
+ * The key races as dense one-line rows: who leads, by how much, and how much is counted. `note` adds a grey line
+ * under a race's name (Search uses it to say which candidate matched).
+ */
+export function RaceRows({ races, star, onPick, selectedId, note }: { races: RaceSummary[]; star: Star; onPick?: (race: RaceSummary) => void; selectedId?: number | null; note?: (race: RaceSummary) => string | null }) {
   return (
     <div className="mt-rows-wrap">
       <table className={`mt-table mt-rows${races.some((r) => r.total > 0) ? " counting" : ""}`}>
@@ -40,7 +43,7 @@ export function RaceRows({ races, star, onPick, selectedId }: { races: RaceSumma
                   ) : (
                     <Link href={`/midterms/${r.id}`}>{raceLabel(r)}</Link>
                   )}
-                  {r.about && <span className="mt-row-about" title={r.about.text}>{r.about.text}</span>}
+                  {note?.(r) ? <span className="mt-row-about">{note(r)}</span> : r.about && <span className="mt-row-about" title={r.about.text}>{r.about.text}</span>}
                 </td>
                 <td><RatingTag rating={r.rating} signal={r.signal} /></td>
                 <td className="mt-leader">

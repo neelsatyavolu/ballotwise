@@ -7,17 +7,14 @@ import { STATE_NAMES } from "@/lib/midterms/view";
 
 /** How long typing pauses before a search goes out. */
 const DEBOUNCE_MS = 300;
-const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+export const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 /**
- * "Find any race": searches civicAPI for races outside the tracked offices (mayors, county seats, school boards,
- * judges, local questions). Each result opens the same race page as tracked races.
+ * civicAPI's races matching `q` (two letters or more), searched once typing pauses. `current` is null while a search
+ * for the latest query is still out; then it holds that query's races, or an error to show.
  */
-export function RaceSearch({ autoFocus = false }: { autoFocus?: boolean }) {
-  const [q, setQ] = useState("");
+export function useRaceSearch(q: string) {
   const [state, setState] = useState<{ q: string; races: FoundRace[] | null; error: string | null }>({ q: "", races: null, error: null });
-  const listId = useId();
-
   useEffect(() => {
     const query = q.trim();
     if (query.length < 2) return;
@@ -37,9 +34,18 @@ export function RaceSearch({ autoFocus = false }: { autoFocus?: boolean }) {
       ctrl.abort();
     };
   }, [q]);
-
   const query = q.trim();
-  const current = query.length >= 2 && state.q === query ? state : null;
+  return { query, current: query.length >= 2 && state.q === query ? state : null };
+}
+
+/**
+ * "Find any race": searches civicAPI for races outside the tracked offices (mayors, county seats, school boards,
+ * judges, local questions). Each result opens the same race page as tracked races.
+ */
+export function RaceSearch({ autoFocus = false }: { autoFocus?: boolean }) {
+  const [q, setQ] = useState("");
+  const { query, current } = useRaceSearch(q);
+  const listId = useId();
   return (
     <div className="mt-find">
       <input

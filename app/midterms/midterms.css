@@ -1334,3 +1334,18 @@ body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
 .mt-tour-actions .btn.quiet.small { padding: 0; color: var(--muted); }
 .mt-tour-actions .btn.quiet.small:hover { color: var(--ink); }
 .mt-source .mt-tour-replay { margin-left: 16px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+
+/* Search tab: one wide field, starting suggestions, then tracked races and civicAPI's other races in the race-list table. */
+.mt-search-box .input { width: 100%; max-width: 760px; min-height: 48px; padding: 10px 14px; font-size: 17px; }
+.mt-search-start { display: grid; gap: 12px; max-width: 760px; }
+.mt-search-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.mt-search-chips .btn.small { min-height: 34px; padding: 0 14px; font-size: 14px; }
+.mt-seg-count { margin-left: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mt-search-page .mt-rows-wrap { max-height: none; }
+.mt .mt-found td:first-child { white-space: normal; min-width: 16ch; }
+.mt .mt-found td:nth-child(2) { color: var(--muted); }
+.mt-found-where { display: none; }
+@media (max-width: 720px) {
+  .mt .mt-found th:nth-child(2), .mt .mt-found td:nth-child(2), .mt .mt-found th:nth-child(3), .mt .mt-found td:nth-child(3) { display: none; }
+  .mt-found-where { display: block; max-width: none; white-space: normal; }
+}
