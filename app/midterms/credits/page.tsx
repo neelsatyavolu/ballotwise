@@ -70,8 +70,9 @@ export default function Credits() {
       <h2>Candidate photos</h2>
       <p>
         From <a href="https://commons.wikimedia.org">Wikimedia Commons</a>, each under its own free license, and the official congressional portraits collected by{" "}
-        <a href="https://github.com/unitedstates/images">unitedstates/images</a> (public domain). A photo is shown only when we&apos;re certain it&apos;s the right person;
-        everyone else is shown by initials.
+        <a href="https://github.com/unitedstates/images">unitedstates/images</a> (public domain). Candidates with neither are shown by the campaign headshot on their{" "}
+        <a href="https://ballotpedia.org">Ballotpedia</a> race page; those photos belong to the campaigns or their photographers. A photo is shown only when we&apos;re
+        certain it&apos;s the right person; everyone else is shown by initials.
       </p>
     </article>
   );

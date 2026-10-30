@@ -1,5 +1,6 @@
 // Candidate photos found by scripts/build-photos.mjs, only where the person's identity is certain: official
-// congressional portraits (public domain, github.com/unitedstates/images) and Wikimedia Commons images.
+// congressional portraits (public domain, github.com/unitedstates/images), Wikimedia Commons images, and campaign
+// headshots from Ballotpedia, resized and served from public/midterms/photos/.
 import photos from "./photos.json";
 import type { RaceSummary } from "./view";
 
@@ -13,5 +14,7 @@ export function photoOf(race: Pick<RaceSummary, "office" | "state" | "district">
   const entry = table[photoKey(race, name)];
   if (!entry) return null;
   const ref = entry.slice(2);
-  return entry.startsWith("c:") ? `https://unitedstates.github.io/images/congress/225x275/${ref}.jpg` : `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(ref)}?width=96`;
+  if (entry.startsWith("c:")) return `https://unitedstates.github.io/images/congress/225x275/${ref}.jpg`;
+  if (entry.startsWith("b:")) return `/midterms/photos/${ref}`;
+  return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(ref)}?width=96`;
 }

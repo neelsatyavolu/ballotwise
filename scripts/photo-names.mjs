@@ -67,6 +67,14 @@ export function sameLast(a, b) {
   return !!a.last && squash(a.last) === squash(b.last);
 }
 
+/**
+ * Last names for someone already known to hold the seat in question: the same last name, or the same final word of
+ * it, since civicAPI may spell "Leger Fernández" as "Fernandez". Too loose for anyone not tied to the seat.
+ */
+export function seatSurname(a, b) {
+  return sameLast(a, b) || (!!a.last && !!b.last && squash(a.last.split(" ").at(-1)) === squash(b.last.split(" ").at(-1)));
+}
+
 function sameFirst(x, y) {
   if (x === y) return true;
   // "Chris" for "Christopher": a prefix of at least three letters.
@@ -77,6 +85,11 @@ function sameFirst(x, y) {
 /** Whether two name records can be the same person: same last name and a compatible first name. */
 export function sameName(a, b) {
   return sameLast(a, b) && a.firsts.some((x) => b.firsts.some((y) => sameFirst(x, y)));
+}
+
+/** The first letter of a person's name, quoted nicknames aside: "J. D. Ford" and "J.D. Ford" both give "j". */
+export function firstInitial(name) {
+  return fold(name).replace(/"[^"]*"/g, " ").replace(/[^a-z\s]/g, " ").trim()[0] ?? "";
 }
 
 /** The spellings to look a candidate up by, with their own capitals: "First Last", the nickname and middle-name forms. */

@@ -6,3 +6,7 @@
 # Map shapes keep their names across deploys but rarely change: served from cache, refreshed in the background.
 /midterms/maps/*
   Cache-Control: public, max-age=3600, stale-while-revalidate=604800
+
+# Candidate headshots keep their names across deploys and rarely change: same treatment as the map shapes.
+/midterms/photos/*
+  Cache-Control: public, max-age=3600, stale-while-revalidate=604800

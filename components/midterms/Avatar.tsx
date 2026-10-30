@@ -20,11 +20,11 @@ export function Avatar({ race, candidate, className, children }: { race: Pick<Ra
   );
 }
 
-/** Credit for the candidate photos, for a page's source note. Commons images carry their own free licenses. */
+/** Credit for the candidate photos, for a page's source note. Commons images carry their own free licenses; campaign headshots belong to the campaigns. */
 export function PhotoCredit() {
   return (
     <>
-      {" "}Candidate photos from <a href="https://commons.wikimedia.org">Wikimedia Commons</a> (each under its own free license) and the official congressional portraits collected by <a href="https://github.com/unitedstates/images">unitedstates/images</a>.
+      {" "}Candidate photos from <a href="https://commons.wikimedia.org">Wikimedia Commons</a> (each under its own free license), the official congressional portraits collected by <a href="https://github.com/unitedstates/images">unitedstates/images</a>, and campaign headshots via <a href="https://ballotpedia.org">Ballotpedia</a>.
     </>
   );
 }
