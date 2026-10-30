@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FoundRace } from "../lib/midterms/civic";
-import { foundGroup, matchedCandidates, matchTracked, untracked } from "../lib/midterms/search";
+import { foundGroup, matchedCandidates, matchTracked, splitPlace, untracked } from "../lib/midterms/search";
 import type { RaceSummary } from "../lib/midterms/view";
 
 const race = (id: number, office: RaceSummary["office"], state: string, title: string, names: string[], district: number | null = null) =>
@@ -52,5 +52,18 @@ describe("matchedCandidates", () => {
   it("names the candidates a search matched, and none when it matched the race itself", () => {
     expect(matchedCandidates(races[0], "ossoff")).toEqual(["Jon Ossoff"]);
     expect(matchedCandidates(races[2], "georgia governor")).toEqual([]);
+  });
+});
+
+describe("splitPlace", () => {
+  it("splits a search into its place and its office, to retry each alone", () => {
+    expect(splitPlace("palo alto city council")).toEqual({ place: "palo alto", office: "city council" });
+    expect(splitPlace("Mayor of Austin")).toEqual({ place: "Austin", office: "Mayor" });
+    expect(splitPlace("Greenville County school board")).toEqual({ place: "Greenville County", office: "school board" });
+  });
+
+  it("has nothing to split when the search is only a place or only an office", () => {
+    expect(splitPlace("palo alto")).toBeNull();
+    expect(splitPlace("city council")).toBeNull();
   });
 });

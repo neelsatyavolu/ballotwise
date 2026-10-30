@@ -31,6 +31,20 @@ export function matchedCandidates(race: RaceSummary, query: string): string[] {
   return race.candidates.map((c) => c.name).filter((name) => want.some((w) => name.toLowerCase().includes(w)));
 }
 
+/** Local offices people search for, longest first so "city council" wins over "council". */
+const OFFICES = /\b(city council|town council|county commission(?:er)?|board of supervisors|school board|board of education|city attorney|district attorney|county judge|justice of the peace|council|mayor|sheriff|judge|clerk|treasurer|assessor|supervisor|alderman|selectboard)\b/i;
+
+/**
+ * A search that names both a place and an office ("palo alto city council"), split into the two, so each can be
+ * searched alone when the whole finds nothing. Null when there's only one of them.
+ */
+export function splitPlace(query: string): { place: string; office: string } | null {
+  const hit = OFFICES.exec(query);
+  if (!hit) return null;
+  const place = `${query.slice(0, hit.index)} ${query.slice(hit.index + hit[0].length)}`.replace(/\b(of|for|in)\b/gi, " ").replace(/\s+/g, " ").trim();
+  return place ? { place, office: hit[0] } : null;
+}
+
 /** Which filter a civicAPI result falls under: a ballot question, a local race, or another statewide or county one. */
 export function foundGroup(r: FoundRace): Exclude<SearchGroup, "all" | "tracked"> {
   if (/referendum|measure|proposition|initiative|question|amendment/i.test(r.type)) return "measures";

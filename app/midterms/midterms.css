@@ -1349,3 +1349,7 @@ body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
   .mt .mt-found th:nth-child(2), .mt .mt-found td:nth-child(2), .mt .mt-found th:nth-child(3), .mt .mt-found td:nth-child(3) { display: none; }
   .mt-found-where { display: block; max-width: none; white-space: normal; }
 }
+.mt-search-none { display: grid; gap: 8px; justify-items: center; }
+.mt-search-none p { margin: 0; max-width: 64ch; }
+.mt-search-none b { color: var(--ink); }
+.mt-search-none .mt-search-chips { align-items: center; justify-content: center; }

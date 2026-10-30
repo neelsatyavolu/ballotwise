@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { foundGroup, matchedCandidates, matchTracked, untracked, type SearchGroup } from "@/lib/midterms/search";
+import { foundGroup, matchedCandidates, matchTracked, splitPlace, untracked, type SearchGroup } from "@/lib/midterms/search";
 import { STATE_NAMES, type Overview } from "@/lib/midterms/view";
 import type { FoundRace } from "@/lib/midterms/civic";
 import { useLive, useStars } from "./hooks";
@@ -100,6 +100,9 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
   const showFound = group !== "tracked";
   const searching = query.length >= 2;
   const settled = !!data && !!current;
+  // When nothing at all matches, one message replaces both empty sections.
+  const nothing = settled && !current?.error && counts.all === 0;
+  const parts = nothing ? splitPlace(query) : null;
 
   return (
     <div className="wrap mt mt-search-page">
@@ -143,7 +146,7 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
           </div>
 
           {/* Under "All", the tracked block only appears when something in it matches. */}
-          {showTracked && (group !== "all" || !data || trackedShown.length > 0) && (
+          {!nothing && showTracked && (group !== "all" || !data || trackedShown.length > 0) && (
             <section aria-labelledby="search-tracked">
               <div className="mt-section-head tight">
                 <h2 id="search-tracked">Tracked live</h2>
@@ -158,7 +161,7 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
             </section>
           )}
 
-          {showFound && (
+          {!nothing && showFound && (
             <section aria-labelledby="search-found">
               <div className="mt-section-head tight">
                 <h2 id="search-found">Local, county and state races</h2>
@@ -175,7 +178,27 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
             </section>
           )}
 
-          {settled && !current?.error && counts.all === 0 && <p className="mt-empty">Nothing matches &ldquo;{query}&rdquo;. Try an office (mayor, sheriff) or a city or county name.</p>}
+          {nothing && (
+            <div className="mt-empty mt-search-none">
+              <p>
+                <b>Nothing matches &ldquo;{query}&rdquo;.</b>
+              </p>
+              <p className="small">
+                City, county and school races come from civicAPI, which lists a place&apos;s races once its results feed is loaded. Coverage varies by state and fills in as counties publish, so a race can be missing for now.
+              </p>
+              {parts && (
+                <div className="mt-search-chips">
+                  <span className="small">Search for</span>
+                  <button type="button" className="btn secondary small" onClick={() => setQ(parts.place)}>
+                    {parts.place}
+                  </button>
+                  <button type="button" className="btn secondary small" onClick={() => setQ(parts.office)}>
+                    {parts.office}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <p className="muted small">
             Results from <a href="https://civicapi.org">civicAPI</a>, up to 25 at a time; add a place to narrow them.
           </p>
