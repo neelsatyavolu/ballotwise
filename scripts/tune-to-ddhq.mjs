@@ -13,9 +13,10 @@
 //     "ratings": { "house": [Safe D, Likely D, Lean D, Toss-up, Lean R, Likely R, Safe R], ... },
 //     "races": { "<race key>": { "side": "D" | "R" | null, "p": favorite's chance }, ... } }
 //
-// The objective, in order of weight: the exact toss-up set per office, chamber control within the target range, then
-// the rating of each listed race and the mean gap in their chances (a point of mean gap weighs as much as a race with
-// the wrong rating), then the rating counts; ties go to settings whose matched ratings sit furthest from a rating line
+// The objective, in order of weight: the exact toss-up set per office, chamber control within the target range, each
+// listed race more than 10 points from the benchmark's chance, then the rating of each listed race and the mean gap in
+// their chances (a point of mean gap weighs as much as a race with the wrong rating), each race more than 5 points off,
+// then the rating counts; ties go to settings whose matched ratings sit furthest from a rating line
 // and whose k is nearest the backtest's. A grid over the shared settings, each office searched on its own within it,
 // then a coordinate search at finer steps until nothing improves.
 //
@@ -43,6 +44,9 @@ if (ONLY && !OFFICES.includes(ONLY)) throw new Error(`--office must be one of ${
 /** The offices whose settings are searched. */
 const SEARCHED = ONLY ? [ONLY] : OFFICES;
 const BUCKETS = ["safeD", "likelyD", "leanD", "tossup", "leanR", "likelyR", "safeR"];
+/** A listed race more than FAR from the benchmark's chance is a miss the search works hardest to avoid; past OFF, a lesser one. */
+const FAR = 0.1;
+const OFF = 0.05;
 
 // ---------- The app's forecast code ----------
 
@@ -125,16 +129,24 @@ function officeScore(office, forecasts, chamber, t) {
   let ratingMiss = 0;
   let gap = 0;
   let listed = 0;
+  let far = 0;
+  let off = 0;
+  // A race's gap counts toward the mean, and once past FAR or OFF also as a race that isn't close.
+  const miss = (d) => {
+    gap += d;
+    far += d > FAR ? 1 : 0;
+    off += d > OFF ? 1 : 0;
+  };
   for (const [k, want] of Object.entries(bench.races ?? {})) {
     if (officeOf(k) !== office) continue;
     const fav = favoriteOf(forecasts.get(k));
     if (!fav) continue;
     listed += 1;
     if (want.side === null) {
-      gap += Math.abs(fav.p - want.p);
+      miss(Math.abs(fav.p - want.p));
       continue;
     }
-    gap += Math.abs((fav.side === want.side ? fav.p : 1 - fav.p) - want.p);
+    miss(Math.abs((fav.side === want.side ? fav.p : 1 - fav.p) - want.p));
     if (fav.side !== want.side || M.ratingOf(forecasts.get(k)) !== ratingAt(want.side, want.p)) ratingMiss += 1;
     else edge = Math.min(edge, edgeDistance(fav.p));
   }
@@ -153,8 +165,8 @@ function officeScore(office, forecasts, chamber, t) {
   // Matched toss-ups closer than 2 points to the 60 line would flip as data refreshes: 10 a point short of that.
   const edgeMiss = 1000 * Math.max(0, 0.02 - tossEdge);
   const tieBreak = 20 * (0.1 - Math.max(0, Math.min(edge, tossEdge))) + 3 * Math.abs(t.k[office] - BACKTEST_K[office]);
-  const total = 100 * tossMiss + 100 * tossSoft + 20 * controlMiss + edgeMiss + 5 * ratingMiss + countsMiss + (5 * 100 * gap) / Math.max(1, listed) + tieBreak;
-  return { total, tossMiss, controlMiss, ratingMiss, countsMiss, gap: (100 * gap) / Math.max(1, listed), listed, edge: tossEdge };
+  const total = 100 * tossMiss + 100 * tossSoft + 20 * controlMiss + edgeMiss + 50 * far + 5 * ratingMiss + 2 * off + countsMiss + (5 * 100 * gap) / Math.max(1, listed) + tieBreak;
+  return { total, tossMiss, controlMiss, ratingMiss, countsMiss, far, off, gap: (100 * gap) / Math.max(1, listed), listed, edge: tossEdge };
 }
 
 function score(t, runs = 2000) {
@@ -164,7 +176,7 @@ function score(t, runs = 2000) {
   });
   const sum = (k) => parts.reduce((s, p) => s + p[k], 0);
   const listed = sum("listed");
-  return { total: sum("total"), tossMiss: sum("tossMiss"), controlMiss: sum("controlMiss"), ratingMiss: sum("ratingMiss"), countsMiss: sum("countsMiss"), gap: parts.reduce((s, p) => s + p.gap * p.listed, 0) / Math.max(1, listed) };
+  return { total: sum("total"), tossMiss: sum("tossMiss"), controlMiss: sum("controlMiss"), ratingMiss: sum("ratingMiss"), countsMiss: sum("countsMiss"), far: sum("far"), off: sum("off"), gap: parts.reduce((s, p) => s + p.gap * p.listed, 0) / Math.max(1, listed) };
 }
 
 // ---------- Search ----------

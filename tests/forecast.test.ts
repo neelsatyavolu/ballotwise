@@ -72,7 +72,7 @@ describe("forecastRace", () => {
     const without = forecastRace(contest, inputs({ office: "house", lean: 0, genericBallot: 0 }))!;
     const withMoney = forecastRace(contest, inputs({ office: "house", lean: 0, genericBallot: 0, fundraising: 1 }))!;
     expect(without.fundraising).toBeNull();
-    expect(withMoney.fundraising).toBeCloseTo(modelFor("house", true).coefficients.fundraising!, 1);
+    expect(withMoney.fundraising).toBeCloseTo(modelFor("house", true).coefficients.fundraising! * Math.min(1, TUNING.fundraisingCap.house), 1);
     expect(withMoney.sigma).toBeLessThan(without.sigma!);
   });
 
