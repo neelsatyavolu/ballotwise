@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { parseWeights, resize } from "@/lib/midterms/columns";
 import { electionModeDefault } from "@/lib/midterms/polls";
+import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { STATE_NAMES, type Office, type Overview } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
@@ -31,7 +32,7 @@ const COLUMNS: { office: Column; title: string; href: string }[] = [
  * state, a district or a race zooms this column's map in and opens the race right here, with its counties shaded,
  * the way the office screens do; the full page is a link away.
  */
-function OfficeColumn({ office, title, href, data, results, star, status, handle, toggle }: { office: Column; title: string; href: string; data: Overview; results: boolean; star: Star; status?: ReactNode; handle?: ReactNode; toggle?: ReactNode }) {
+function OfficeColumn({ office, title, href, data, forecast, results, star, status, handle, toggle }: { office: Column; title: string; href: string; data: Overview; forecast: ForecastOverview | null; results: boolean; star: Star; status?: ReactNode; handle?: ReactNode; toggle?: ReactNode }) {
   const [focus, setFocus] = useState<string | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
   const races = useMemo(() => data.races.filter((r) => r.office === office), [data, office]);
@@ -73,7 +74,7 @@ function OfficeColumn({ office, title, href, data, results, star, status, handle
         </span>
         {toggle}
       </div>
-      <SeatHeader office={office} data={data} />
+      <SeatHeader office={office} data={data} forecast={forecast} />
       <ZoomMap
         fills={fills}
         focus={focus}
@@ -272,6 +273,7 @@ function ColumnHandle({ i, label, grid, widths }: { i: number; label: string; gr
 /** Senate, House and Governor dashboards in columns for wide and ultrawide screens, sharing one live feed. */
 export function SideBySide() {
   const { data, error } = useLive<Overview>("/api/midterms");
+  const forecast = useLive<ForecastOverview>("/api/midterms/forecast").data;
   const favorites = useStars();
   const results = electionModeDefault(useClock(60_000));
   const star: Star = { ids: favorites.ids, toggle: favorites.toggle };
@@ -300,7 +302,7 @@ export function SideBySide() {
             const handle = <ColumnHandle i={i} label={`Resize ${i === 2 ? next[1] : c.title} and ${next[i]}`} grid={grid} widths={widths} />;
             // The third column can swap the governors for the toss-ups; the switch sits in its heading either way.
             if (c.office === "governor" && third === "tossups") return <TossupColumn key="tossups" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} />;
-            return <OfficeColumn key={c.office} {...c} data={data} results={results} star={star} status={i === 0 ? status : undefined} handle={handle} toggle={c.office === "governor" ? <ThirdSwitch third={third} /> : undefined} />;
+            return <OfficeColumn key={c.office} {...c} data={data} forecast={forecast} results={results} star={star} status={i === 0 ? status : undefined} handle={handle} toggle={c.office === "governor" ? <ThirdSwitch third={third} /> : undefined} />;
           })}
           <aside className="mt-sbs-side" aria-label="Latest calls and poll closings">
             <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" />

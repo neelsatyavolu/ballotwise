@@ -13,11 +13,18 @@ const CONTROL = { senate: "51 D · 50 R for control", house: "218 for control", 
 const tick = (office: keyof typeof NOTE, tally: Tally) => (office === "governor" ? null : <i aria-hidden style={{ left: `${(tally.majority / tally.total) * 100}%` }} />);
 
 type Seats = Record<Party, number>;
+/** The forecast's seats beyond those decided, and Democrats' chance of control, until votes are counted (see projection). */
+export type Projected = { ahead: Seats; dControl: number | null } | null;
+
+/** "Rep 62% to win control", the favorite's chance; nothing for governors or before the simulation has run. */
+const controlOdds = (d: number | null) => (d === null ? null : `${d >= 0.5 ? "Dem" : "Rep"} ${Math.round(Math.max(d, 1 - d) * 100)}% to win control`);
+const PROJECTED_NOTE = "Lighter shades are the forecast's projected seats until votes are counted.";
 
 /** One chamber's seats: Democrats from the left, Republicans from the right, undecided in between. */
-export function BalanceBar({ title, office, tally }: { title: string; office: keyof typeof NOTE; tally: Tally }) {
+export function BalanceBar({ title, office, tally, projected = null }: { title: string; office: keyof typeof NOTE; tally: Tally; projected?: Projected }) {
   const share = (n: number) => `${(n / tally.total) * 100}%`;
   const open = tally.total - tally.D - tally.R - tally.other;
+  const ahead = projected?.ahead ?? { D: 0, R: 0, other: 0 };
   return (
     <section className="mt-balance">
       <div className="mt-balance-head">
@@ -26,50 +33,58 @@ export function BalanceBar({ title, office, tally }: { title: string; office: ke
       </div>
       <div className="mt-balance-nums">
         <span className="d">
-          <b>{tally.D}</b> Dem
+          <b>{tally.D}</b> Dem{ahead.D > 0 && <em> +{ahead.D} projected</em>}
         </span>
         {tally.other > 0 && (
           <span className="o">
             <b>{tally.other}</b> Other
           </span>
         )}
-        <span className="u">{open} undecided</span>
+        <span className="u">{projected ? controlOdds(projected.dControl) : `${open} undecided`}</span>
         <span className="r">
-          Rep <b>{tally.R}</b>
+          {ahead.R > 0 && <em>{ahead.R} projected + </em>}Rep <b>{tally.R}</b>
         </span>
       </div>
-      <div className="mt-balance-bar" role="img" aria-label={`${tally.D} Democratic, ${tally.R} Republican, ${tally.other} other, ${open} undecided`}>
+      <div className="mt-balance-bar" role="img" aria-label={`${tally.D} Democratic, ${tally.R} Republican, ${tally.other} other, ${open} undecided${projected ? `; projected ${tally.D + ahead.D} Democratic, ${tally.R + ahead.R} Republican` : ""}`}>
         <span style={{ width: share(tally.D), background: "var(--dem)" }} />
+        <span style={{ width: share(ahead.D), background: "color-mix(in srgb, var(--dem) 45%, var(--sheet))" }} />
         <span style={{ width: share(tally.other), background: "var(--oth)" }} />
         <span style={{ flex: 1 }} />
+        <span style={{ width: share(ahead.R), background: "color-mix(in srgb, var(--rep) 45%, var(--sheet))" }} />
         <span style={{ width: share(tally.R), background: "var(--rep)" }} />
         {tick(office, tally)}
       </div>
-      <p className="muted small">{NOTE[office]}</p>
+      <p className="muted small">
+        {NOTE[office]}
+        {projected && ` ${PROJECTED_NOTE}`}
+      </p>
     </section>
   );
 }
 
 /** Election-night seat count: seats won (solid) and races led but not called (light), from each end toward the majority line. */
-export function SeatBar({ tally, ahead, office }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE }) {
+/** Before votes, `projected` takes the place of the leaders: the forecast's expected seats, and the chance of control. */
+export function SeatBar({ tally, ahead: leading, office, projected = null }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE; projected?: Projected }) {
   const share = (n: number) => `${(n / tally.total) * 100}%`;
+  const ahead = projected?.ahead ?? leading;
+  const word = projected ? "projected" : "leading";
   const open = tally.total - tally.D - tally.R - tally.other - ahead.D - ahead.R - ahead.other;
   return (
     <section className="mt-seats">
       <div className="mt-seats-nums">
         <span className="d">
-          <b>{tally.D}</b> Dem{ahead.D > 0 && <em> +{ahead.D} leading</em>}
+          <b>{tally.D}</b> Dem{ahead.D > 0 && <em> +{ahead.D} {word}</em>}
         </span>
         <span className="mt-seats-mid">
           {CONTROL[office]}
           {tally.other + ahead.other > 0 && ` · Other ${tally.other}${ahead.other ? ` +${ahead.other}` : ""}`}
-          {` · ${open} uncounted`}
+          {projected ? (controlOdds(projected.dControl) ? ` · ${controlOdds(projected.dControl)}` : "") : ` · ${open} uncounted`}
         </span>
         <span className="r">
-          {ahead.R > 0 && <em>{ahead.R} leading + </em>}Rep <b>{tally.R}</b>
+          {ahead.R > 0 && <em>{ahead.R} {word} + </em>}Rep <b>{tally.R}</b>
         </span>
       </div>
-      <div className="mt-balance-bar mt-seats-bar" role="img" aria-label={`Democrats ${tally.D} won and ${ahead.D} leading; Republicans ${tally.R} won and ${ahead.R} leading; ${open} uncounted`}>
+      <div className="mt-balance-bar mt-seats-bar" role="img" aria-label={`Democrats ${tally.D} won and ${ahead.D} ${word}; Republicans ${tally.R} won and ${ahead.R} ${word}; ${open} uncounted`}>
         <span style={{ width: share(tally.D), background: "var(--dem)" }} />
         <span style={{ width: share(ahead.D), background: "color-mix(in srgb, var(--dem) 45%, var(--sheet))" }} />
         <span style={{ width: share(tally.other + ahead.other), background: "var(--oth)" }} />
@@ -78,7 +93,10 @@ export function SeatBar({ tally, ahead, office }: { tally: Tally; ahead: Seats; 
         <span style={{ width: share(tally.R), background: "var(--rep)" }} />
         {tick(office, tally)}
       </div>
-      <p className="muted small">{NOTE[office]}</p>
+      <p className="muted small">
+        {NOTE[office]}
+        {projected && ` ${PROJECTED_NOTE}`}
+      </p>
     </section>
   );
 }

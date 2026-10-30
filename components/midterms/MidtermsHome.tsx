@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isWatch, raceFill } from "@/lib/midterms/explore";
+import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
+import { projection } from "@/lib/midterms/forecastTab";
 import { holderOf } from "@/lib/midterms/holders";
 import { colorOf, compareRaces, OFFICE_LABEL, pct, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { AiDashboards } from "./AiDashboard";
@@ -200,6 +202,7 @@ function AllRaces({ races, star, initialState }: { races: RaceSummary[]; star: S
 
 export function MidtermsHome({ initialState }: { initialState: string | null }) {
   const live = useLive<Overview>("/api/midterms");
+  const forecast = useLive<ForecastOverview>("/api/midterms/forecast").data;
   const { error, now } = live;
   const data = useSimulation(live.data);
   const favorites = useStars();
@@ -254,9 +257,9 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       {!election.on && (
         <>
           <div className="mt-balances mt-in" data-tour="balance">
-            <BalanceBar title="Senate" office="senate" tally={data.balance.senate} />
-            <BalanceBar title="House" office="house" tally={data.balance.house} />
-            <BalanceBar title="Governors" office="governor" tally={data.balance.governor} />
+            {(["senate", "house", "governor"] as const).map((o) => (
+              <BalanceBar key={o} title={o === "governor" ? "Governors" : OFFICE_LABEL[o]} office={o} tally={data.balance[o]} projected={projection(data.races, o, data.balance[o], forecast?.chambers?.[o])} />
+            ))}
           </div>
 
           <div className="tabs" role="tablist" data-tour="tabs">

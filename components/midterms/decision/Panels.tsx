@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { clockNow } from "@/lib/midterms/clock";
 import type { ChamberOffice, Panel } from "@/lib/midterms/decisionView";
+import { projection } from "@/lib/midterms/forecastTab";
 import { stampET, stateFinal, electionModeDefault } from "@/lib/midterms/polls";
 import { fmt, lead, leading, raceLabel, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "../Balance";
@@ -173,9 +174,10 @@ function SeatsChart({ office }: { office?: ChamberOffice }) {
 }
 
 function BalanceTopline({ office }: { office?: ChamberOffice }) {
-  const { overview } = useDashboardData();
+  const { overview, forecast } = useDashboardData();
   if (!overview || !office) return <Empty>Loading…</Empty>;
-  return <SeatBar office={office} tally={overview.balance[office]} ahead={leading(overview.races, office)} />;
+  const tally = overview.balance[office];
+  return <SeatBar office={office} tally={tally} ahead={leading(overview.races, office)} projected={projection(overview.races, office, tally, forecast?.chambers?.[office])} />;
 }
 
 function BalanceMap({ office }: { office?: ChamberOffice }) {

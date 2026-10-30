@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Forecast } from "../lib/midterms/forecast";
-import { chamberFromRaces, confidenceWord, headline, weekChange, withServer, type ChamberView } from "../lib/midterms/forecastTab";
+import { chamberFromRaces, confidenceWord, headline, projection, weekChange, withServer, type ChamberView } from "../lib/midterms/forecastTab";
+import type { ChamberView as ServerView } from "../lib/midterms/forecast";
 import type { RaceSummary, Rating, Tally } from "../lib/midterms/view";
 
 let nextId = 1;
@@ -82,5 +83,24 @@ describe("chamber fallback from race forecasts", () => {
     const day = 86_400;
     expect(weekChange([[0, 0.5], [3 * day, 0.6]])).toBeNull();
     expect(weekChange([[0, 0.5], [3 * day, 0.55], [8 * day, 0.6]])).toBeCloseTo(0.1);
+  });
+});
+
+describe("projection", () => {
+  const senate = tally({ D: 34, R: 31, total: 100, majority: 51 });
+
+  it("adds each race's win chances to the seats already decided, before any votes", () => {
+    const races = [race("senate", { D: 0.6, R: 0.4 }), race("senate", { D: 0.5, R: 0.5 }), race("house", { D: 0.9, R: 0.1 })];
+    expect(projection(races, "senate", senate, null)).toEqual({ ahead: { D: 1, R: 1, other: 0 }, dControl: null });
+  });
+
+  it("takes the server's simulated seats and chance of control once it has run", () => {
+    const server = { dControl: 0.3, dSeats: 49.4, rSeats: 50.6, ratings: view({}).ratings, distribution: [], notUp: { D: 34, R: 31, other: 0 }, majority: 51 } as ServerView;
+    expect(projection([race("senate", { D: 0.5, R: 0.5 })], "senate", senate, server)).toEqual({ ahead: { D: 15, R: 20, other: 0 }, dControl: 0.3 });
+  });
+
+  it("steps aside once votes are being counted, for won and leading seats", () => {
+    const counting = { ...race("senate", { D: 0.5, R: 0.5 }), total: 120 };
+    expect(projection([counting], "senate", senate, null)).toBeNull();
   });
 });

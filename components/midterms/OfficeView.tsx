@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
+import { projection } from "@/lib/midterms/forecastTab";
 import { flipTo, isCompetitive, isWatch, raceFill } from "@/lib/midterms/explore";
 import { electionModeDefault } from "@/lib/midterms/polls";
 import { colorOf, compareRaces, lead, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
@@ -120,7 +122,8 @@ export function stateFills(office: Office, races: RaceSummary[], updatedAt: numb
   return out;
 }
 
-export function SeatHeader({ office, data }: { office: Office; data: Overview }) {
+/** The office's seat bar: before votes, with the forecast's projected seats (pass `forecast`); after, seats won and led. */
+export function SeatHeader({ office, data, forecast = null }: { office: Office; data: Overview; forecast?: ForecastOverview | null }) {
   if (office === "measure") {
     const c = measureCount(data.races);
     return (
@@ -134,11 +137,12 @@ export function SeatHeader({ office, data }: { office: Office; data: Overview })
     );
   }
   const tally = office === "senate" ? data.balance.senate : office === "house" ? data.balance.house : data.balance.governor;
-  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} />;
+  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} projected={projection(data.races, office, tally, forecast?.chambers?.[office])} />;
 }
 
 export function OfficeView({ office, initialState }: { office: Office; initialState: string | null }) {
   const { data, error } = useLive<Overview>("/api/midterms");
+  const forecast = useLive<ForecastOverview>("/api/midterms/forecast").data;
   const favorites = useStars();
   const [focus, setFocus] = useState<string | null>(initialState);
   const [picked, setPicked] = useState<number | null>(null);
@@ -201,7 +205,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
 
       {data && (
         <>
-          <SeatHeader office={office} data={data} />
+          <SeatHeader office={office} data={data} forecast={forecast} />
           <div className="mt-office mt-in">
             <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (detail.data ? countyFills : undefined) : null} raceId={shownId} districtFills={districtFills} nationDistricts={nationDistricts} onPickNationDistrict={(key) => {
                 const r = races.find((x) => `${x.state}-${x.district ?? 0}` === key);
