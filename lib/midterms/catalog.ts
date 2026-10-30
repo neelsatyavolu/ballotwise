@@ -4,6 +4,7 @@ import { CivicError, fetchCatalog, fetchOtherRace, fetchRace, FRESH_MS } from ".
 import { BASELINE_2024 } from "./data";
 import { raceHistory, recordHistory } from "./history";
 import { evidenceAt, raceKey, ratedRaces, readOdds, refreshOdds } from "./odds";
+import { electionModeDefault } from "./polls";
 import { balance, type RaceSummary } from "./races";
 
 export const UNAVAILABLE = "Live results are unavailable right now. They'll come back on their own; try again in a minute.";
@@ -52,10 +53,12 @@ export const STALE_AFTER_MS = FRESH_MS + 15_000;
 
 /**
  * For viewers, results are stale when served from a fallback (civicAPI failed or was slow) or older than
- * STALE_AFTER_MS, as a catalog served while it refreshes in the background can be. Recording still goes by the
+ * STALE_AFTER_MS on election night, as a catalog served while it refreshes in the background can be. Before then
+ * nothing is counting, so an older copy isn't slow. Recording still goes by the
  * catalog's own `stale`.
  */
-export const isStale = (fetched: { stale: boolean; fetchedAt: number }, now: number) => fetched.stale || now - fetched.fetchedAt > STALE_AFTER_MS;
+export const isStale = (fetched: { stale: boolean; fetchedAt: number }, now: number) =>
+  fetched.stale || (electionModeDefault(now) && now - fetched.fetchedAt > STALE_AFTER_MS);
 
 /**
  * A race with its recorded call and `calledFor`, or with `callPending` when the call disagrees with the race's current

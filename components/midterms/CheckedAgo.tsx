@@ -1,4 +1,5 @@
 // Rendered inside the tracker's client components.
+import { electionModeDefault } from "@/lib/midterms/polls";
 import { timeAgo } from "@/lib/midterms/view";
 import { useClock } from "./hooks";
 
@@ -17,6 +18,7 @@ const STALE_MS = 50_000;
 /** The live dot: green while results are fresh, amber once the last good check is over 50 seconds old or the source is slow. */
 export function LiveDot({ at, stale, idle }: { at: number; stale?: boolean; idle?: boolean }) {
   const now = useClock(5000);
-  const old = now - at > STALE_MS;
+  // Before election night the server refreshes less often and nothing is counting, so age alone isn't a warning.
+  const old = electionModeDefault(now) && now - at > STALE_MS;
   return <span className={`mt-dot${stale || old ? " stale" : ""}${idle ? " idle" : ""}`} title={old ? `No fresh results for ${timeAgo(at, now).replace(" ago", "")}` : undefined} aria-hidden />;
 }
