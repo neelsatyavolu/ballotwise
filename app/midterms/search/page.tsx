@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SearchView } from "@/components/midterms/SearchView";
+import { TrackerShell } from "@/components/midterms/Tracker";
 import "../midterms.css";
 
 export const metadata: Metadata = {
@@ -9,5 +10,9 @@ export const metadata: Metadata = {
 
 export default async function Page({ searchParams }: PageProps<"/midterms/search">) {
   const q = (await searchParams).q;
-  return <SearchView initialQuery={typeof q === "string" ? q.slice(0, 80) : ""} />;
+  return (
+    <TrackerShell current="/midterms/search">
+      <SearchView initialQuery={typeof q === "string" ? q.slice(0, 80) : ""} />
+    </TrackerShell>
+  );
 }

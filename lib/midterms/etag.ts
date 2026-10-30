@@ -15,6 +15,12 @@ async function digest(text: string): Promise<string> {
   return Array.from(hash.slice(0, 12), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** The weak ETag liveJson would send for `payload`, so a page can seed the client and the first poll is a 304. */
+export async function liveEtag(payload: { fetchedAt: number }): Promise<string> {
+  const { fetchedAt: _fetchedAt, ...content } = payload;
+  return `W/"${await digest(JSON.stringify(content))}"`;
+}
+
 /**
  * `payload` as JSON with a weak ETag over everything but `fetchedAt`, which moves on every refresh even when no
  * number did; or a 304 when the request already holds that ETag. Both carry the fetch time as `x-fetched-at`, so a
@@ -24,7 +30,7 @@ async function digest(text: string): Promise<string> {
 export async function liveJson(req: Request, payload: { fetchedAt: number } & Record<string, unknown>, cache = CACHE): Promise<Response> {
   const { fetchedAt, ...content } = payload;
   const body = JSON.stringify(content);
-  const etag = `W/"${await digest(body)}"`;
+  const etag = await liveEtag(payload);
   const headers = { "cache-control": cache, etag, "x-fetched-at": String(fetchedAt) };
   if (matches(req.headers.get("if-none-match"), etag)) return new NextResponse(null, { status: 304, headers });
   // fetchedAt goes back in front; the rest is the string already hashed.

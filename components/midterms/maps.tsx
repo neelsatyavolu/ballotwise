@@ -13,6 +13,7 @@ export function loadMap<T>(name: string): Promise<T> {
   if (!loaded.has(name)) {
     loaded.set(
       name,
+      // Default credentials ("same-origin") match <link rel="preload" as="fetch" crossorigin="anonymous">.
       fetch(`/midterms/maps/${name}.json`)
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .catch((err) => {

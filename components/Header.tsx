@@ -1,13 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { api } from "@/lib/client";
 import { useAccount } from "./AccountProvider";
 
 export function Header() {
   const { user, loading, refresh } = useAccount();
   const router = useRouter();
+  const path = usePathname();
+
+  // The catalog is what every tracker screen needs. Fetch it once the home page is idle so the click doesn't wait on it.
+  useEffect(() => {
+    if (path !== "/") return;
+    const run = () => {
+      void import("@/components/midterms/hooks").then((m) => m.warmLive(["/api/midterms", "/api/midterms/forecast"]));
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(run, { timeout: 2500 });
+      return () => cancelIdleCallback(id);
+    }
+    const id = setTimeout(run, 1200);
+    return () => clearTimeout(id);
+  }, [path]);
 
   async function signOut() {
     await api("/api/account/signout", { method: "POST" }).catch(() => {});

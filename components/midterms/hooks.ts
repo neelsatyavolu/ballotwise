@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useAccount } from "@/components/AccountProvider";
 import { api, ApiError } from "@/lib/client";
 import { clockNow, simAt } from "@/lib/midterms/clock";
-import { fetchLive, isLagging, isNewer, LIVE_TIMEOUT_MS, LiveError, pollInterval, retryDelay } from "@/lib/midterms/live";
+import { fetchedAtOf, fetchLive, isLagging, isNewer, LIVE_TIMEOUT_MS, LiveError, pollInterval, retryDelay, type LiveAnswer } from "@/lib/midterms/live";
 import type { GridLayout } from "@/lib/midterms/decisionView";
+import { useRenderedAt, useTrackerSeeds } from "./SeedProvider";
+import type { LiveSeed } from "./seeds";
 
 export { ELECTION_POLL_MS, POLL_MS, pollInterval } from "@/lib/midterms/live";
 
@@ -19,10 +21,48 @@ type Held<T> = { path: string; data: T; etag: string | null; fetchedAt: number |
  */
 const CACHED = 40;
 const lastAnswers = new Map<string, Held<unknown>>();
+/** Untagged fetches in flight, shared with warmLive so a hover and a page don't download the catalog twice. */
+const inflight = new Map<string, Promise<LiveAnswer<unknown>>>();
+
 function remember(held: Held<unknown>) {
   lastAnswers.delete(held.path);
   lastAnswers.set(held.path, held);
   if (lastAnswers.size > CACHED) lastAnswers.delete(lastAnswers.keys().next().value!);
+}
+
+function requestLive<T>(path: string, etag: string | null, signal: AbortSignal): Promise<LiveAnswer<T>> {
+  // A revalidation belongs to one screen, so that screen's unmount cancels it.
+  if (etag) return fetchLive<T>(path, etag, signal);
+  const running = inflight.get(path);
+  if (running) return running as Promise<LiveAnswer<T>>;
+  // A first fetch is shared. Its timer is its own: one screen unmounting (or Strict Mode
+  // remounting) must not cancel the request the next screen is waiting on.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LIVE_TIMEOUT_MS);
+  const job = fetchLive<T>(path, null, controller.signal).finally(() => {
+    clearTimeout(timeout);
+    if (inflight.get(path) === job) inflight.delete(path);
+  });
+  inflight.set(path, job as Promise<LiveAnswer<unknown>>);
+  return job;
+}
+
+/** Starts the shared catalog fetches once the browser is idle, so opening the tracker doesn't start from nothing. */
+export function warmLive(paths: readonly string[]) {
+  for (const path of paths) {
+    if (lastAnswers.has(path) || inflight.has(path)) continue;
+    void requestLive(path, null, new AbortController().signal)
+      .then(async (answer) => {
+        if (answer.same || lastAnswers.has(path)) return;
+        const data = await previewed(path, answer.data);
+        remember({ path, data, etag: answer.etag, fetchedAt: answer.fetchedAt });
+      })
+      .catch(() => {});
+  }
+}
+
+function heldFrom<T>(path: string, seed: LiveSeed): Held<T> {
+  return { path, data: seed.data as T, etag: seed.etag, fetchedAt: fetchedAtOf(seed.data) };
 }
 
 /** Development previews (`?sim=`) run every live answer through the made-up election night, on every page. */
@@ -44,19 +84,37 @@ async function previewed<T>(path: string, data: T): Promise<T> {
  * `fetchedAt` is when the server last fetched these results (even when the answer was unchanged), and `lagging` is
  * set once that's LAG_MS or more ago.
  */
+function seedFor<T>(path: string | null, seeds: ReturnType<typeof useTrackerSeeds>): Held<T> | null {
+  if (!path) return null;
+  const seed = path === "/api/midterms" ? seeds.overview : path === "/api/midterms/forecast" ? seeds.forecast : seeds.extra[path];
+  return seed ? heldFrom<T>(path, seed) : null;
+}
+
 export function useLive<T>(path: string | null) {
+  // A full page load embeds the answer (see pageData.ts). State starts there so the server HTML already shows it.
+  const seeds = useTrackerSeeds();
+  const renderedAt = useRenderedAt();
+  const seeded = seedFor<T>(path, seeds);
   // Data is kept with the path it came from, so switching paths never shows the previous one's numbers.
-  const [state, setState] = useState<Held<T> | null>(null);
+  const [state, setState] = useState<Held<T> | null>(seeded);
   const [error, setError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  // The server's timestamp, so a relative time in the HTML matches hydration. The poll below moves it forward.
+  const [now, setNow] = useState(() => renderedAt ?? clockNow());
   const [interval, setIntervalMs] = useState(() => pollInterval(clockNow()));
   // The same as `state`, readable from the polling loop without restarting it.
-  const held = useRef<Held<T> | null>(null);
+  const held = useRef<Held<T> | null>(seeded);
 
   useEffect(() => {
     if (!path) return;
-    // Start from another screen's copy, so the first poll sends its ETag and only counts newer than it replace it.
-    if (held.current?.path !== path) held.current = (lastAnswers.get(path) as Held<T> | undefined) ?? null;
+    // Keep a server seed, including its ETag, so the first poll is a 304. A newer copy already in this tab
+    // (back to a page whose HTML was older) wins, so the seed doesn't paint over it.
+    if (held.current?.path === path) {
+      const cached = lastAnswers.get(path) as Held<T> | undefined;
+      if (cached && isNewer(held.current.data, cached.data, cached.etag !== held.current.etag)) {
+        held.current = cached;
+        setState(cached);
+      } else remember(held.current);
+    } else held.current = (lastAnswers.get(path) as Held<T> | undefined) ?? null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let inFlight: AbortController | null = null;
     let failures = 0;
@@ -86,7 +144,7 @@ export function useLive<T>(path: string | null) {
       const timeout = setTimeout(() => controller.abort(), LIVE_TIMEOUT_MS);
       try {
         const etag = held.current?.path === path ? held.current.etag : null;
-        const answer = await fetchLive<T>(path, etag, controller.signal);
+        const answer = await requestLive<T>(path, etag, controller.signal);
         const data = answer.same ? null : await previewed(path, answer.data);
         if (done) return;
         take(answer, data);
@@ -224,14 +282,29 @@ export function useDashboards() {
   return { list: user ? list : null, openId, setOpenId, error, rename, remove, applyChat };
 }
 
-/** The current time, ticking every `ms` (every second by default) for countdowns and "polls close" labels. */
+/**
+ * The current time, ticking every `ms` (every second by default).
+ * The server render and hydration both use the page's `renderedAt`, so "12s ago" is the same text in the HTML
+ * and in the hydrated tree. After that, the live clock takes over. A clock mounted only on the client starts live.
+ */
 export function useClock(ms = 1000) {
-  const [now, setNow] = useState(clockNow);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(clockNow()), ms);
-    return () => clearInterval(timer);
+  const stamped = useRenderedAt();
+  const serverNow = useRef(stamped ?? clockNow()).current;
+  const live = useRef(typeof window === "undefined" ? serverNow : clockNow());
+  const getSnapshot = useCallback(() => live.current, []);
+  const getServerSnapshot = useCallback(() => serverNow, [serverNow]);
+  const subscribe = useCallback((onChange: () => void) => {
+    const tick = () => {
+      const next = clockNow();
+      if (next === live.current) return;
+      live.current = next;
+      onChange();
+    };
+    tick();
+    const id = setInterval(tick, ms);
+    return () => clearInterval(id);
   }, [ms]);
-  return now;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 const GUEST_KEY = "mt-guest-stars";

@@ -1,72 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { clockNow } from "@/lib/midterms/clock";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { explore, fromQuery, QUERY_KEYS, toQuery, type Filters } from "@/lib/midterms/explore";
-import { electionModeDefault, stampET } from "@/lib/midterms/polls";
+import { stampET } from "@/lib/midterms/polls";
 import { OFFICE_LABEL, partyTag, type Office, type Overview } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
 import { ControlStrip } from "./ControlStrip";
 import { ElectionMap } from "./ElectionMap";
 import { Explorer } from "./Explorer";
-import { useClock, type useStars } from "./hooks";
+import { type useStars } from "./hooks";
 import { NextClose, PollSchedule, shortLabel } from "./PollClose";
 import { SeatBoard, type FillMode } from "./SeatBoard";
 import { RailContext } from "./railSplit";
 
 const OFFICES: (Office | "all")[] = ["senate", "house", "governor", "measure", "all"];
 const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
-const CHANGED = "mt-election-mode";
-
-// A choice made before Nov 3 doesn't carry into election day, so the switch turns on by itself that morning.
-const storageKey = (now: number) => `mt-election-mode:${electionModeDefault(now) ? "night" : "before"}`;
-
-function readChoice(): boolean | null {
-  try {
-    const v = localStorage.getItem(storageKey(clockNow()));
-    return v === "on" ? true : v === "off" ? false : null;
-  } catch {
-    return null;
-  }
-}
-
-function subscribe(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  window.addEventListener(CHANGED, onChange);
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener(CHANGED, onChange);
-  };
-}
-
-/**
- * Whether election mode is on: the viewer's own choice, or on by default from Nov 3. The clock ticks each minute
- * so a tab left open overnight switches on by itself that morning (the choice read then is election day's).
- */
-export function useElectionMode() {
-  const now = useClock(60_000);
-  const choice = useSyncExternalStore(subscribe, readChoice, () => null);
-  const on = choice ?? electionModeDefault(now);
-  const set = (next: boolean) => {
-    try {
-      localStorage.setItem(storageKey(clockNow()), next ? "on" : "off");
-    } catch {
-      // Private windows can refuse storage; the switch then lasts only until reload.
-    }
-    window.dispatchEvent(new Event(CHANGED));
-  };
-  return { on, set };
-}
-
-export function ElectionToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
-  return (
-    <button type="button" role="switch" aria-checked={on} className="mt-el-switch" onClick={() => onChange(!on)}>
-      <span className="mt-el-knob" aria-hidden />
-      Election mode
-    </button>
-  );
-}
 
 /** Filters live in the URL so a view can be shared or bookmarked; other query parameters are left alone. */
 function useUrlFilters() {

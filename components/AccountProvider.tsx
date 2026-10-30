@@ -13,6 +13,9 @@ type Account = Me & { loading: boolean; refresh: () => Promise<void> };
 const SIGNED_OUT: Me = { user: null, grok: "disconnected", provider: null, values: "none", terms: "accepted" };
 const AccountContext = createContext<Account>({ ...SIGNED_OUT, loading: true, refresh: async () => {} });
 
+// Starts as the layout script evaluates, before effects, so the header doesn't wait an extra turn to know who's signed in.
+const boot: Promise<Me> | null = typeof window === "undefined" ? null : api<Me>("/api/account/me").catch(() => SIGNED_OUT);
+
 export function AccountProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me>(SIGNED_OUT);
   const [loading, setLoading] = useState(true);
@@ -28,9 +31,15 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    api<Me>("/api/account/me")
-      .then(setMe, () => setMe(SIGNED_OUT))
-      .finally(() => setLoading(false));
+    let live = true;
+    (boot ?? api<Me>("/api/account/me").catch(() => SIGNED_OUT)).then((next) => {
+      if (live) setMe(next);
+    }).finally(() => {
+      if (live) setLoading(false);
+    });
+    return () => {
+      live = false;
+    };
   }, []);
 
   return <AccountContext.Provider value={{ ...me, loading, refresh }}>{children}</AccountContext.Provider>;

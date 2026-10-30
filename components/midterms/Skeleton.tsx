@@ -1,4 +1,6 @@
-// Rendered inside the tracker's client components.
+"use client";
+
+// Rendered inside the tracker's client components, and as the shell's streamed fallback.
 import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { loadMap, NationMap } from "./maps";
 

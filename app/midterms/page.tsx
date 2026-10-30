@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { MidtermsHome } from "@/components/midterms/MidtermsHome";
+import { TrackerShell } from "@/components/midterms/Tracker";
 import "./midterms.css";
 
 export const metadata: Metadata = {
@@ -9,5 +10,9 @@ export const metadata: Metadata = {
 
 export default async function Page({ searchParams }: PageProps<"/midterms">) {
   const state = (await searchParams).state;
-  return <MidtermsHome initialState={typeof state === "string" && /^[A-Z]{2}$/.test(state) ? state : null} />;
+  return (
+    <TrackerShell map skeleton="overview" current="/midterms">
+      <MidtermsHome initialState={typeof state === "string" && /^[A-Z]{2}$/.test(state) ? state : null} />
+    </TrackerShell>
+  );
 }

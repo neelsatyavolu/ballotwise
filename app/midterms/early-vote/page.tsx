@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { EarlyVoteView } from "@/components/midterms/EarlyVoteView";
+import { TrackerShell } from "@/components/midterms/Tracker";
 import { isState } from "@/lib/midterms/earlyVote";
 import "../midterms.css";
 
@@ -10,5 +11,10 @@ export const metadata: Metadata = {
 
 export default async function Page({ searchParams }: PageProps<"/midterms/early-vote">) {
   const state = (await searchParams).state;
-  return <EarlyVoteView initialState={typeof state === "string" && isState(state.toUpperCase()) ? state.toUpperCase() : null} />;
+  const postal = typeof state === "string" && isState(state.toUpperCase()) ? state.toUpperCase() : null;
+  return (
+    <TrackerShell kind="early" arg={postal ?? ""} current="/midterms/early-vote">
+      <EarlyVoteView initialState={postal} />
+    </TrackerShell>
+  );
 }

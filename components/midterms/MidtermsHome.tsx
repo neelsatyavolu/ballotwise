@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isWatch, raceFill } from "@/lib/midterms/explore";
@@ -8,10 +9,9 @@ import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { projection } from "@/lib/midterms/forecastTab";
 import { holderOf } from "@/lib/midterms/holders";
 import { colorOf, compareRaces, OFFICE_LABEL, pct, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
-import { AiDashboards } from "./AiDashboard";
 import { BalanceBar } from "./Balance";
-import { ChatDock, type ChatHandle } from "./ChatDock";
-import { ElectionMode, ElectionToggle, useElectionMode } from "./ElectionMode";
+import { type ChatHandle } from "./ChatDock";
+import { ElectionToggle, useElectionMode } from "./electionModeState";
 import { useClock, useDashboards, useLive, useStars } from "./hooks";
 import { ForecastTip, WatchNote } from "./ForecastTip";
 import { electionModeDefault } from "@/lib/midterms/polls";
@@ -26,6 +26,11 @@ import { SinceBanner } from "./SinceBanner";
 import { reportingText } from "./reporting";
 import { OverviewSkeleton } from "./Skeleton";
 import { replayTour, Tour } from "./Tour";
+
+// Election night, the chat dock and dashboards stay out of the first script. The overview doesn't need them to paint.
+const ElectionNight = dynamic(() => import("./ElectionMode").then((m) => m.ElectionMode), { loading: () => <p className="muted">Loading election mode…</p> });
+const AiDashboards = dynamic(() => import("./AiDashboard").then((m) => m.AiDashboards));
+const ChatDock = dynamic(() => import("./ChatDock").then((m) => m.ChatDock), { ssr: false });
 
 type Tab = "key" | "mine" | "ai" | "all";
 const TABS: { id: Tab; label: string }[] = [
@@ -253,7 +258,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
 
       {data && races && (
         <SinceBanner races={races}>
-      {election.on && <ElectionMode data={data} stars={favorites} />}
+      {election.on && <ElectionNight data={data} stars={favorites} />}
       {!election.on && (
         <>
           <div className="mt-balances mt-in" data-tour="balance">
