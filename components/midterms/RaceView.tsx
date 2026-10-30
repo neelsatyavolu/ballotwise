@@ -13,6 +13,7 @@ import { CountyTable } from "./CountyTable";
 import { useLive, useStars } from "./hooks";
 import { CountyMap, type CountyFill } from "./maps";
 import { MarketPanel } from "./MarketPanel";
+import { RaceInsights } from "./RaceInsights";
 import { ModeNav } from "./ModeNav";
 import { RatingTag, StarButton } from "./RaceCard";
 import { CountingContext, RaceStatus, VoteUpdates } from "./RaceContext";
@@ -50,15 +51,16 @@ export function RaceView({ id }: { id: number }) {
 
   return (
     <div className="wrap mt">
-      <ModeNav current={SCREEN[race.office]} />
+      <ModeNav current={race.local ? "/midterms" : SCREEN[race.office]} />
       <nav className="mt-crumbs small" aria-label="Breadcrumb">
-        <Link href="/midterms">Midterms 2026</Link> › <Link href={`${SCREEN[race.office]}?state=${race.state}`}>{STATE_NAMES[race.state] ?? race.state}</Link> › {OFFICE_LABEL[race.office]}
+        {/* A race found by search has no office screen; it sits under the overview's other races. */}
+        <Link href="/midterms">Midterms 2026</Link> › {race.local ? STATE_NAMES[race.state] ?? race.state : <Link href={`${SCREEN[race.office]}?state=${race.state}`}>{STATE_NAMES[race.state] ?? race.state}</Link>} › {race.local ? race.local.type || "Other races" : OFFICE_LABEL[race.office]}
       </nav>
       <header className="mt-race-head">
         <div className="mt-race-title">
           <h1>{label}</h1>
           <RatingTag rating={race.rating} signal={race.signal} />
-          {favorites.ids !== null && <StarButton starred={favorites.ids.includes(race.id)} label={label} onToggle={() => favorites.toggle(race.id)} />}
+          {favorites.ids !== null && !race.local && <StarButton starred={favorites.ids.includes(race.id)} label={label} onToggle={() => favorites.toggle(race.id)} />}
         </div>
         {race.about && (
           <p className="mt-race-about">
@@ -70,11 +72,11 @@ export function RaceView({ id }: { id: number }) {
             )}
           </p>
         )}
-        {race.office === "measure" && <p className="muted small">{race.title}</p>}
-        {signalLine(race.signal) && (
+        {race.office === "measure" && !race.local && <p className="muted small">{race.title}</p>}
+        {signalLine(race.signal, race) && (
           <p className="mt-meta small">
             <span>
-              Forecast · {signalLine(race.signal)}
+              {signalLine(race.signal, race)}
               {race.signal?.market && ` (${race.signal.market.sources.join(" and ")})`}
               {race.signal?.polls && `, polls through ${race.signal.polls.latest}`}
             </span>
@@ -109,6 +111,7 @@ export function RaceView({ id }: { id: number }) {
             Results from <a href="https://civicapi.org">civicAPI</a>, which collects them from state and county election offices. * Incumbent.
             {race.office !== "measure" && <PhotoCredit />}
           </p>
+          {race.office !== "measure" && <RaceInsights race={race} />}
           {race.office !== "measure" && <MarketPanel raceId={race.id} />}
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
           {data.history && <VoteUpdates history={data.history} />}
@@ -131,7 +134,13 @@ export function RaceView({ id }: { id: number }) {
             <CountyMap state={race.state} fills={fills} selected={selected} onSelect={setSelected} />
           ) : (
             <p className="muted small">
-              {race.counties.length > 1 ? `${STATE_NAMES[race.state] ?? race.state} reports by town, so there's no county map. Every town is in the table below.` : "This state reports one statewide total, so there's no county map."}
+              {race.local
+                ? race.counties.length > 1
+                  ? "civicAPI reports this race by town, ward or precinct rather than county, so there's no map. Every area is in the table below."
+                  : "civicAPI reports this race as one total, so there's no map."
+                : race.counties.length > 1
+                  ? `${STATE_NAMES[race.state] ?? race.state} reports by town, so there's no county map. Every town is in the table below.`
+                  : "This state reports one statewide total, so there's no county map."}
             </p>
           )}
           {mapped && race.office === "house" && <p className="muted small">Shaded counties are all or partly in this district.</p>}

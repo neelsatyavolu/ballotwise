@@ -160,6 +160,7 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
               </div>
             )}
             <Link href={HREF[mapOffice]} className="small">County maps →</Link>
+            <Link href="/midterms/side-by-side" className="small mt-mode-wide">Side by side →</Link>
           </div>
           {mapOffice === "house" ? <SeatBoard races={data.races} selected={f.states} onState={pickState} matching={matching} mode={fillMode} /> : <ElectionMap office={mapOffice} races={data.races} selected={f.states} onState={pickState} mode={fillMode} />}
         </div>

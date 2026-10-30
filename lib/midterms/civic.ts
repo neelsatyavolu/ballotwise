@@ -1,6 +1,7 @@
 import type { Db } from "../auth/accounts";
 import { coverageOf, type Coverage } from "./coverage";
-import { applyRatings, blankResults, ELECTION_DATE, FIRST_POLLS_OPEN, raceDetail, summarize, type Office, type RaceDetail, type RaceSummary, type RatedRace } from "./races";
+import { z } from "zod";
+import { applyRatings, blankResults, ELECTION_DATE, FIRST_POLLS_OPEN, raceDetail, summarize, summarizeOther, type Office, type RaceDetail, type RaceSummary, type RatedRace } from "./races";
 import { STATE_NAMES } from "./view";
 
 // civicAPI (civicapi.org): free, keyless live results sourced from each Secretary of State. Its terms ask for attribution.
@@ -32,6 +33,8 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const STUCK_MS = 45_000;
 
 export class CivicError extends Error {}
+/** civicAPI has no race with that id: not worth retrying. */
+export class CivicNotFound extends CivicError {}
 
 async function civicOnce(path: string): Promise<unknown> {
   let res: Response;
@@ -41,6 +44,7 @@ async function civicOnce(path: string): Promise<unknown> {
   } catch {
     throw new CivicError("Couldn't reach civicAPI.");
   }
+  if (res.status === 404) throw new CivicNotFound("civicAPI has no such race.");
   if (!res.ok) throw new CivicError(`civicAPI returned ${res.status}.`);
   return res.json();
 }
@@ -53,7 +57,8 @@ async function civic(path: string): Promise<unknown> {
   for (const delay of RETRY_DELAYS_MS) {
     try {
       return await civicOnce(path);
-    } catch {
+    } catch (err) {
+      if (err instanceof CivicNotFound) throw err;
       await sleep(delay);
     }
   }
@@ -129,6 +134,8 @@ export function resetCivicMemo() {
   lastWriteAt = 0;
   written.clear();
   registryMemo = null;
+  otherMemo.clear();
+  searchMemo.clear();
 }
 
 /** `stored` marks a catalog pieced together from D1's snapshots: shown to viewers, but not recorded as an observation. */
@@ -364,4 +371,100 @@ export async function fetchRace(summary: RaceSummary, now: number, baseline: Rea
     if (memo) return { race: memo.value, fetchedAt: memo.at, stale: true };
     throw err;
   }
+}
+
+// ---------- Any race (search) ----------
+
+/** Races fetched for the search path, by id. Kept apart from the tracked catalog so they never reach the overview. */
+const otherMemo = new Map<number, { at: number; value: RaceDetail | null }>();
+/** Searches by query, briefly, so typing and repeat searches don't each reach civicAPI. */
+const searchMemo = new Map<string, { at: number; value: FoundRace[] }>();
+/** Most entries either memo keeps; the oldest goes first. */
+const MEMO_CAP = 300;
+/** An id civicAPI doesn't know is remembered this long, so a crawler walking ids can't make us ask again and again. */
+const MISSING_MS = 5 * 60_000;
+const SEARCH_MS = 5 * 60_000;
+
+function remember<K, V>(memo: Map<K, V>, key: K, value: V) {
+  memo.delete(key);
+  memo.set(key, value);
+  if (memo.size > MEMO_CAP) memo.delete(memo.keys().next().value as K);
+}
+
+/** Puts each candidate's civicAPI color back on the race and its counties, which raceDetail rebuilds without it. */
+function withColors(detail: RaceDetail, colors: ReadonlyMap<string, string | undefined>): RaceDetail {
+  const paint = <T extends { name: string }>(c: T): T => (colors.get(c.name) ? { ...c, color: colors.get(c.name) } : c);
+  return { ...detail, candidates: detail.candidates.map(paint), counties: detail.counties.map((c) => ({ ...c, candidates: c.candidates.map(paint) })) };
+}
+
+/**
+ * Any US race on civicAPI by id, for races outside the tracked offices: a mayor, a school board seat, a local
+ * question. Null when civicAPI has no such race or it isn't a US race. Fresh for FRESH_MS like tracked races;
+ * on a civicAPI failure the last good copy is served marked stale.
+ */
+export async function fetchOtherRace(id: number, now: number, baseline: Readonly<Record<string, readonly [number, number, number]>>): Promise<Fetched<{ race: RaceDetail }> | null> {
+  const memo = otherMemo.get(id);
+  if (memo && now - memo.at < (memo.value ? FRESH_MS : MISSING_MS)) return memo.value ? { race: memo.value, fetchedAt: memo.at, stale: false } : null;
+  let input: unknown;
+  try {
+    input = await civic(`race/${id}`);
+  } catch (err) {
+    if (err instanceof CivicNotFound) {
+      remember(otherMemo, id, { at: now, value: null });
+      return null;
+    }
+    if (memo?.value) return { race: memo.value, fetchedAt: memo.at, stale: true };
+    throw err;
+  }
+  const summary = summarizeOther({ ...(input as object), id });
+  if (!summary) {
+    remember(otherMemo, id, { at: now, value: null });
+    return null;
+  }
+  const detail = withColors(raceDetail(summary, input, baseline), new Map(summary.candidates.map((c) => [c.name, c.color])));
+  // Like tracked races, a Nov 3 race shows no numbers before polls open: civicAPI posts test counts beforehand.
+  const race = summary.local?.date === ELECTION_DATE && now < FIRST_POLLS_OPEN ? { ...blankResults(detail), counties: detail.counties.map((c) => ({ ...c, reporting: 0, total: 0, candidates: c.candidates.map((x) => ({ ...x, votes: 0, pct: 0 })) })) } : detail;
+  remember(otherMemo, id, { at: now, value: race });
+  return { race, fetchedAt: now, stale: false };
+}
+
+/** One search result: enough to list a race and link to its page. */
+export type FoundRace = { id: number; title: string; state: string; type: string; date: string; kind: "local" | "statewide" | "other" };
+
+const searchAnswer = z.object({
+  races: z
+    .array(z.object({ id: z.number().int().positive(), type: z.string().nullish(), country: z.string().nullish(), province: z.string().nullish(), election_name: z.string(), election_date: z.string(), election_type: z.string().nullish() }).passthrough())
+    .default([]),
+});
+/** Most results a search returns. */
+const SEARCH_LIMIT = 25;
+
+/**
+ * US races matching `query` on civicAPI, for "find any race". civicAPI ignores its date filter on text searches,
+ * so this keeps races from 2026 on itself: Nov 3 races first, then the rest newest first.
+ */
+export function searchResults(answer: unknown): FoundRace[] {
+  const parsed = searchAnswer.safeParse(answer);
+  if (!parsed.success) return [];
+  return parsed.data.races
+    .filter((r) => (!r.country || r.country === "US") && r.election_date.slice(0, 4) >= "2026")
+    .map((r) => ({
+      id: r.id,
+      title: r.election_name.replace(/\s+/g, " ").trim(),
+      state: r.province ?? "",
+      type: r.type ?? "",
+      date: r.election_date.slice(0, 10),
+      kind: (r.election_type === "Local" ? "local" : r.election_type === "Statewide" ? "statewide" : "other") as FoundRace["kind"],
+    }))
+    .sort((a, b) => Number(b.date === ELECTION_DATE) - Number(a.date === ELECTION_DATE) || b.date.localeCompare(a.date))
+    .slice(0, SEARCH_LIMIT);
+}
+
+export async function searchRaces(query: string, now: number): Promise<FoundRace[]> {
+  const key = query.toLowerCase();
+  const memo = searchMemo.get(key);
+  if (memo && now - memo.at < SEARCH_MS) return memo.value;
+  const value = searchResults(await civic(`race/search?query=${encodeURIComponent(query)}&country=US&limit=100`));
+  remember(searchMemo, key, { at: now, value });
+  return value;
 }

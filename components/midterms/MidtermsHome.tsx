@@ -11,10 +11,13 @@ import { BalanceBar } from "./Balance";
 import { PhotoCredit } from "./Avatar";
 import { ChatDock, type ChatHandle } from "./ChatDock";
 import { ElectionMode, ElectionToggle, useElectionMode } from "./ElectionMode";
-import { useDashboards, useLive, useStars } from "./hooks";
+import { useClock, useDashboards, useLive, useStars } from "./hooks";
+import { ForecastTip } from "./ForecastTip";
+import { electionModeDefault } from "@/lib/midterms/polls";
 import { NationMap, type NationFill } from "./maps";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
+import { RaceSearch } from "./RaceSearch";
 import { RaceRows, type Star } from "./RaceRows";
 import { useSimulation } from "./useSimulation";
 import { CheckedAgo } from "./CheckedAgo";
@@ -63,18 +66,20 @@ const MAP_TITLE = { senate: "Senate map", governor: "Governor map", house: "Hous
 const mapKey = (r: RaceSummary) => (r.office === "house" ? `${r.state}-${r.district ?? 0}` : r.state);
 
 /** Senate, governor or House races on a US map, each state or district shaded by who leads, striped where it would change party. */
-function RaceMap({ races }: { races: RaceSummary[] }) {
+function RaceMap({ races, updatedAt }: { races: RaceSummary[]; updatedAt: number | null }) {
   const router = useRouter();
   const [office, setOffice] = useState<(typeof MAP_OFFICES)[number]>("senate");
+  // From election day on, the map drops the forecast and fills in only as results arrive.
+  const results = electionModeDefault(useClock(60_000));
   const fills = useMemo(() => {
     const out = new Map<string, NationFill>();
     // Ohio and Florida hold Senate specials; a state's regular race, if any, sets its color.
     for (const r of races.filter((x) => x.office === office).sort((a, b) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title)))) {
       if (out.has(mapKey(r))) continue;
-      out.set(mapKey(r), { fill: raceFill(r), tip: mapTip(r), flip: !!flipTo(r) });
+      out.set(mapKey(r), { fill: raceFill(r, results), tip: r.total ? mapTip(r) : <ForecastTip race={r} updatedAt={updatedAt} />, flip: !!flipTo(r) });
     }
     return out;
-  }, [races, office]);
+  }, [races, office, results, updatedAt]);
   const idByKey = useMemo(() => new Map(races.filter((r) => r.office === office).map((r) => [mapKey(r), r.id])), [races, office]);
 
   return (
@@ -119,6 +124,11 @@ function AllRaces({ races, star, initialState }: { races: RaceSummary[]; star: S
 
   return (
     <div className="stack">
+      <section className="mt-other" aria-labelledby="other-races">
+        <h2 id="other-races">Other races</h2>
+        <p className="muted small">Mayors, county seats, school boards, judges and local questions: anything civicAPI covers, with the same live results.</p>
+        <RaceSearch />
+      </section>
       <div className="mt-filters">
         <div className="mt-seg" role="group" aria-label="Office">
           {(["any", ...OFFICES] as const).map((o) => (
@@ -217,7 +227,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
           {tab === "key" && (
             <div className="stack">
               <div className="mt-overview">
-                <RaceMap races={races} />
+                <RaceMap races={races} updatedAt={data.ratings.updatedAt} />
                 <section className="mt-closest">
                   <div className="mt-section-head tight">
                     <h2>Key races</h2>

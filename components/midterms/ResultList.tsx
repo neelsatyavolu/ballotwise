@@ -31,7 +31,7 @@ const CARD_CANDIDATES = 3;
 function Tier({ race }: { race: RaceSummary }) {
   if (race.rating) return <RatingTag rating={race.rating} signal={race.signal} />;
   const side = favoredSide(race);
-  if (tierOf(race) === "safe") return <span className="mt-rating r-safe" title={signalLine(race.signal) ?? undefined}>Safe{side ? ` ${side}` : ""}</span>;
+  if (tierOf(race) === "safe") return <span className="mt-rating r-safe" title={signalLine(race.signal, race) ?? undefined}>Safe{side ? ` ${side}` : ""}</span>;
   return race.office === "measure" ? null : <span className="mt-rating r-none" title="No market or poll covers this race">Unrated</span>;
 }
 
@@ -105,7 +105,7 @@ function Lead({ race }: { race: RaceSummary }) {
 /** One race as a results card: name and rating, the candidates' table, then status, lead and how much is in. */
 function RaceTile({ race, starred, onStar, now }: { race: RaceSummary; starred: boolean; onStar: () => void; now: number }) {
   const leader = leaderOf(race);
-  const sub = race.about?.text ?? (race.total ? null : signalLine(race.signal));
+  const sub = race.about?.text ?? (race.total ? null : signalLine(race.signal, race));
   return (
     <article className={`mt-tile s-${statusOf(race)}${leader ? ` p-${leader}` : ""}`} aria-label={shortLabel(race)}>
       {race.total > 0 && (

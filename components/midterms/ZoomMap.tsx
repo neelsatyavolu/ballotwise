@@ -1,13 +1,13 @@
 // Rendered inside OfficeView.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CityLabels, FlipStripes, usePatternId, type City } from "./maps";
+import { CityLabels, FlipStripes, useDistrictShapes, usePatternId, type City } from "./maps";
 import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zoom";
 
 type Nation = { viewBox: string; borders: string; states: { state: string; name: string; d: string; box: [number, number, number, number] }[] };
 type Layer = { counties: { fips: string; name: string; d: string }[]; cities?: City[] };
 type Districts = { districts: { district: number; d: string }[] };
-/** `flip` stripes a state or district projected to change party. */
-export type Fill = { fill: string; tip: ReactNode; flip?: boolean };
+/** `flip` stripes a state or district projected to change party; `called` marks a state's label with a check. */
+export type Fill = { fill: string; tip: ReactNode; flip?: boolean; called?: boolean };
 
 const cache = new Map<string, Promise<unknown>>();
 function load<T>(path: string): Promise<T> {
@@ -25,6 +25,33 @@ function load<T>(path: string): Promise<T> {
 
 const FULL: Box = [0, 0, 975, 610];
 
+/** States whose outline is smaller than this (in map units) are left unlabeled, as DDHQ does in the Northeast; Hawaii is labeled anyway. */
+const MIN_LABEL_AREA = 2000;
+const ALWAYS_LABELED = new Set(["HI"]);
+
+/** Where a state's postal label goes: the centroid of its largest outline, or null when it's too small for one. */
+function labelSpot(state: string, d: string): [number, number] | null {
+  let best: { area: number; x: number; y: number } | null = null;
+  for (const ring of d.split("M").slice(1)) {
+    const pts = ring.replace(/Z/gi, "").split("L").map((p) => p.split(",").map(Number));
+    let a = 0;
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const [x0, y0] = pts[i];
+      const [x1, y1] = pts[(i + 1) % pts.length];
+      const f = x0 * y1 - x1 * y0;
+      a += f;
+      cx += (x0 + x1) * f;
+      cy += (y0 + y1) * f;
+    }
+    if (!a) continue;
+    a /= 2;
+    if (!best || Math.abs(a) > best.area) best = { area: Math.abs(a), x: cx / (6 * a), y: cy / (6 * a) };
+  }
+  return best && (best.area >= MIN_LABEL_AREA || ALWAYS_LABELED.has(state)) ? [best.x, best.y] : null;
+}
+
 /**
  * Where to zoom for a race inside a state. A district that covers only part of a big state gets its own closer
  * view; a statewide race, or a district that fills most of its state, keeps the state view.
@@ -41,7 +68,7 @@ function raceBounds(state: Bounds, race: Bounds): Bounds {
  * States without a fill have no race of this kind and can't be picked. Given `districtFills`, a state with no
  * county results on show draws its congressional districts instead, and picking one calls `onPickDistrict`.
  */
-export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, districtFills, district, onPickDistrict }: {
+export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, districtFills, district, onPickDistrict, nationDistricts, onPickNationDistrict }: {
   fills: Map<string, Fill>;
   focus: string | null;
   onFocus: (state: string | null) => void;
@@ -55,11 +82,15 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   /** The picked district, outlined and zoomed to. */
   district?: number | null;
   onPickDistrict?: (district: number) => void;
+  /** Every House district, keyed "PA-7", drawn on the national view instead of whole states. */
+  nationDistricts?: Map<string, Fill>;
+  /** A district picked on the national view, by its key. */
+  onPickNationDistrict?: (key: string) => void;
 }) {
   const [nation, setNation] = useState<Nation | null | "error">(null);
   const [layer, setLayer] = useState<{ state: string; data: Layer } | null>(null);
   const [lines, setLines] = useState<{ state: string; data: Districts } | null>(null);
-  const [tip, setTip] = useState<{ x: number; y: number; content: ReactNode } | null>(null);
+  const [tip, setTip] = useState<{ x: number; y: number; right: boolean; low: boolean; content: ReactNode } | null>(null);
   const patternId = usePatternId();
   // Outlines are drawn in a layer above every shape, so neighbors can't cover part of them.
   const [hover, setHover] = useState<string | null>(null);
@@ -82,6 +113,15 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
     };
   }, [focus]);
   const wantsDistricts = !!districtFills;
+  const nationStates = useMemo(() => (nationDistricts ? [...new Set([...nationDistricts.keys()].map((k) => k.split("-")[0]))].sort() : null), [nationDistricts]);
+  const allDistricts = useDistrictShapes(nationStates);
+  const labels = useMemo(
+    () => (nation && nation !== "error" ? nation.states.filter((s) => fills.has(s.state)).flatMap((s) => {
+      const at = labelSpot(s.state, s.d);
+      return at ? [{ state: s.state, at, called: !!fills.get(s.state)?.called }] : [];
+    }) : []),
+    [nation, fills],
+  );
   useEffect(() => {
     if (!focus || !wantsDistricts) return;
     let live = true;
@@ -124,7 +164,8 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
 
   const showTip = (e: React.PointerEvent, content: ReactNode) => {
     const r = wrap.current!.getBoundingClientRect();
-    setTip({ x: e.clientX - r.left, y: e.clientY - r.top, content });
+    // In the right or bottom half, the card opens toward the middle so it never runs off the map.
+    setTip({ x: e.clientX - r.left, y: e.clientY - r.top, right: e.clientX - r.left > r.width / 2, low: e.clientY - r.top > r.height / 2, content });
   };
   const focusedPath = focused?.d;
   const cities = focus && layer?.state === focus ? layer.data.cities : undefined;
@@ -169,6 +210,31 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
         })}
         {nation.states.map((s) => fills.get(s.state)?.flip && <path key={`flip-${s.state}`} d={s.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
         <path d={nation.borders} className="mt-borders" vectorEffect="non-scaling-stroke" />
+        {!focus &&
+          nationDistricts &&
+          allDistricts?.map((d) => {
+            const f = nationDistricts.get(d.key);
+            return (
+              <path
+                key={d.key}
+                d={d.d}
+                vectorEffect="non-scaling-stroke"
+                className={`mt-nation-district${f ? " active" : ""}`}
+                style={{ fill: f?.fill }}
+                onPointerMove={(e) => {
+                  showTip(e, f?.tip ?? <b>{d.name}</b>);
+                  setHover(d.d);
+                }}
+                onPointerLeave={() => {
+                  setTip(null);
+                  setHover(null);
+                }}
+                onClick={() => f && onPickNationDistrict?.(d.key)}
+              />
+            );
+          })}
+        {!focus && nationDistricts && allDistricts?.map((d) => nationDistricts.get(d.key)?.flip && <path key={`flip-${d.key}`} d={d.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
+        {!focus && nationDistricts && <path d={nation.borders} className="mt-borders strong" vectorEffect="non-scaling-stroke" />}
         {showDistricts?.map((d) => {
           const f = districtFills?.get(d.district);
           return (
@@ -216,11 +282,18 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
         {pickedDistrict && <path d={pickedDistrict.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
         {focusedPath && <path d={focusedPath} className="mt-line focus" vectorEffect="non-scaling-stroke" />}
         {hover && <path d={hover} className="mt-line hover" vectorEffect="non-scaling-stroke" />}
+        {!focus &&
+          labels.map((l) => (
+            <text key={l.state} x={l.at[0]} y={l.at[1]} className="mt-state-label" textAnchor="middle" dominantBaseline="central" aria-hidden>
+              {l.state}
+              {l.called && <tspan className="mt-state-check"> ✓</tspan>}
+            </text>
+          ))}
         {/* Laid out for where the zoom is heading, so labels don't reshuffle on every frame. */}
         {cities && <CityLabels cities={cities} view={target} />}
       </svg>
       {tip && (
-        <div className="mt-tip" style={{ left: tip.x, top: tip.y }} role="status">
+        <div className="mt-tip" style={{ left: tip.x, top: tip.y }} data-right={tip.right || undefined} data-low={tip.low || undefined} role="status">
           {tip.content}
         </div>
       )}

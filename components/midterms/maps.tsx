@@ -38,8 +38,8 @@ function useMap<T>(name: string): T | null | "error" {
   return map;
 }
 
-/** `right` says the pointer is in the map's right half, so a stylesheet can open the card toward the middle. */
-type Tip = { x: number; y: number; right?: boolean; content: ReactNode } | null;
+/** `right` and `low` say the pointer is in the map's right or bottom half, so a stylesheet can open the card toward the middle. */
+type Tip = { x: number; y: number; right?: boolean; low?: boolean; content: ReactNode } | null;
 
 /** `outlines` are drawn above every shape, so neighbors can't cover part of a hovered or selected border. */
 /** `aspect` holds the map's shape while its view box zooms. */
@@ -54,7 +54,7 @@ function MapFrame({ viewBox, children, tip, label, outlines, back, aspect }: { v
         ))}
       </svg>
       {tip && (
-        <div className="mt-tip" style={{ left: tip.x, top: tip.y }} data-right={tip.right || undefined} role="status">
+        <div className="mt-tip" style={{ left: tip.x, top: tip.y }} data-right={tip.right || undefined} data-low={tip.low || undefined} role="status">
           {tip.content}
         </div>
       )}
@@ -65,7 +65,7 @@ function MapFrame({ viewBox, children, tip, label, outlines, back, aspect }: { v
 /** Tooltip position relative to the map box, from a pointer event on one of its shapes. */
 function tipAt(e: React.PointerEvent<SVGElement>) {
   const box = (e.currentTarget.ownerSVGElement ?? e.currentTarget).parentElement!.getBoundingClientRect();
-  return { x: e.clientX - box.left, y: e.clientY - box.top, right: e.clientX - box.left > box.width / 2 };
+  return { x: e.clientX - box.left, y: e.clientY - box.top, right: e.clientX - box.left > box.width / 2, low: e.clientY - box.top > box.height / 2 };
 }
 
 const MAX_LABELS = 8;
@@ -208,7 +208,7 @@ export const usePatternId = () => `flip${useId().replace(/[^a-zA-Z0-9_-]/g, "")}
 type Shape = { key: string; name: string; d: string };
 
 /** Every House district in the given states, in the nation map's coordinates; null until all have loaded. */
-function useDistrictShapes(states: readonly string[] | null): Shape[] | null {
+export function useDistrictShapes(states: readonly string[] | null): Shape[] | null {
   const [shapes, setShapes] = useState<{ for: string; list: Shape[] } | null>(null);
   const wanted = states?.join(",") ?? null;
   useEffect(() => {

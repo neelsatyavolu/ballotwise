@@ -51,7 +51,8 @@ function Reporting({ race }: { race: RaceSummary }) {
  * bar beside each percentage; `fill` stretches the table to its card's height, keeping the footer rows at the bottom.
  */
 export function CandidateTable({ race, status, limit, short = false, share = false, fill = false }: { race: RaceSummary; status: ReactNode; limit?: number; short?: boolean; share?: boolean; fill?: boolean }) {
-  const measure = race.office === "measure";
+  // A local race found by search is carried as a "measure", but a contest between candidates still gets their columns.
+  const measure = race.office === "measure" && race.local?.kind !== "candidates";
   const shown = limit ? race.candidates.slice(0, limit) : race.candidates;
   const hidden = race.candidates.length - shown.length;
   const early = isEarly(race);

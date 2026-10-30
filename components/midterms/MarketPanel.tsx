@@ -1,17 +1,14 @@
 "use client";
 
-import { useMemo, useState, type PointerEvent } from "react";
-import type { Line, MarketBook, Point, RaceMarkets } from "@/lib/midterms/marketHistory";
+import { useMemo, useState } from "react";
+import type { Line, MarketBook, RaceMarkets } from "@/lib/midterms/marketHistory";
 import { useLive } from "./hooks";
+import { LineChart } from "./LineChart";
 
 type Source = "polymarket" | "kalshi";
 type Range = "all" | "live";
 const SOURCE_LABEL: Record<Source, string> = { polymarket: "Polymarket", kalshi: "Kalshi" };
 
-// Chart box in SVG units; the SVG scales to the panel's width.
-const W = 560;
-const H = 190;
-const PAD = { left: 52, right: 8, top: 8, bottom: 24 };
 /** Brighter party hues for 2px lines on the dark card (the base party colors fall under 3:1 there). */
 const LINE_COLOR = { D: "var(--dem-ink)", R: "var(--rep-ink)", I: "var(--oth)" } as const;
 /** An outcome with no known party, such as someone who lost the primary but still trades: neutral, not "independent". */
@@ -32,63 +29,17 @@ function styles(lines: readonly Line[]) {
   });
 }
 
-/** The point at or just before `t`. */
-function at(points: readonly Point[], t: number): Point | null {
-  let found: Point | null = null;
-  for (const p of points) {
-    if (p[0] > t) break;
-    found = p;
-  }
-  return found;
-}
-
 function Chart({ lines, range }: { lines: readonly Line[]; range: Range }) {
-  const [hoverT, setHoverT] = useState<number | null>(null);
-  const series = lines.map((l) => (range === "all" ? l.all : l.live));
-  const times = series.flat().map((p) => p[0]);
   const look = styles(lines);
-  if (!times.length) return <p className="muted small mt-mk-empty">No trades {range === "live" ? "in the last two days" : "yet"}.</p>;
-  const t0 = Math.min(...times);
-  const t1 = Math.max(...times);
-  const x = (t: number) => PAD.left + ((t - t0) / Math.max(1, t1 - t0)) * (W - PAD.left - PAD.right);
-  const y = (p: number) => PAD.top + (1 - p) * (H - PAD.top - PAD.bottom);
-  const fmt = range === "all" ? day : hour;
-
-  function move(e: PointerEvent<SVGSVGElement>) {
-    const box = e.currentTarget.getBoundingClientRect();
-    const sx = ((e.clientX - box.left) / box.width) * W;
-    const ratio = Math.min(1, Math.max(0, (sx - PAD.left) / (W - PAD.left - PAD.right)));
-    setHoverT(t0 + ratio * (t1 - t0));
-  }
-  const values = hoverT === null ? [] : lines.map((l, i) => ({ l, i, p: at(series[i], hoverT)?.[1] ?? null })).filter((v) => v.p !== null).sort((a, b) => b.p! - a.p!);
-
   return (
-    <div className="mt-mk-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Price history: ${lines.map((l) => `${l.name} ${pct(l.now)}`).join(", ")}`} onPointerMove={move} onPointerLeave={() => setHoverT(null)}>
-        {[0, 0.5, 1].map((g) => (
-          <g key={g}>
-            <line className="mt-mk-grid" x1={PAD.left} x2={W - PAD.right} y1={y(g)} y2={y(g)} />
-            <text className="mt-mk-axis" x={PAD.left - 6} y={y(g)} textAnchor="end" dominantBaseline="middle">{g * 100}%</text>
-          </g>
-        ))}
-        <text className="mt-mk-axis" x={PAD.left} y={H - 4} textAnchor="start">{fmt(t0)}</text>
-        <text className="mt-mk-axis" x={W - PAD.right} y={H - 4} textAnchor="end">{fmt(t1)}</text>
-        {series.map((pts, i) => (
-          <polyline key={lines[i].name} className="mt-mk-line" points={pts.map((p) => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ")} style={{ stroke: look[i].color }} strokeDasharray={look[i].dash} />
-        ))}
-        {hoverT !== null && <line className="mt-mk-cross" x1={x(hoverT)} x2={x(hoverT)} y1={PAD.top} y2={H - PAD.bottom} />}
-      </svg>
-      {hoverT !== null && values.length > 0 && (
-        <div className="mt-mk-tip" style={{ left: `${(x(hoverT) / W) * 100}%` }} role="status">
-          <b>{fmt(hoverT)}</b>
-          {values.map(({ l, i, p }) => (
-            <div key={l.name}>
-              <i style={{ background: look[i].color }} /> {l.name} <span>{pct(p!)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <LineChart
+      lines={lines.map((l, i) => ({ name: l.name, color: look[i].color, dash: look[i].dash, points: range === "all" ? l.all : l.live }))}
+      ticks={[0, 0.5, 1]}
+      value={(p) => (p === 0 || p === 0.5 || p === 1 ? `${p * 100}%` : pct(p))}
+      date={range === "all" ? day : hour}
+      label={`Price history: ${lines.map((l) => `${l.name} ${pct(l.now)}`).join(", ")}`}
+      empty={`No trades ${range === "live" ? "in the last two days" : "yet"}.`}
+    />
   );
 }
 

@@ -1,6 +1,6 @@
 // County shading and hover cards shared by the race page and the zoomable office maps.
 import type { CountyResult } from "@/lib/midterms/races";
-import { colorOf, fmt, lead, marginLabel, pct, shade } from "@/lib/midterms/view";
+import { fmt, lead, marginLabel, pct, shade } from "@/lib/midterms/view";
 import { partyColor } from "./party";
 
 export type Mode = "results" | "reporting" | "2024";
@@ -13,7 +13,7 @@ export function fillFor(county: CountyResult, mode: Mode): string {
     return m === null ? "var(--rule)" : shade(m > 0 ? "var(--dem)" : "var(--rep)", Math.abs(m));
   }
   const ahead = lead(county.candidates);
-  return ahead ? shade(colorOf(ahead.leader), ahead.margin) : "var(--in-race)";
+  return ahead ? shade(partyColor(ahead.leader), ahead.margin) : "var(--in-race)";
 }
 
 /** Hover card for a county: this race's count, or in "2024" mode the 2024 presidential vote. */

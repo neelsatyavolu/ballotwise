@@ -36,7 +36,7 @@ function CardStatus({ race }: { race: RaceSummary }) {
 /** One race at a glance: the top candidates as a results table, a stacked vote bar once votes are in, and how much is counted. */
 export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void }) {
   const label = raceLabel(race);
-  const sub = race.total ? null : signalLine(race.signal);
+  const sub = race.total ? null : signalLine(race.signal, race);
   return (
     <li className="mt-card">
       <div className="mt-card-top">

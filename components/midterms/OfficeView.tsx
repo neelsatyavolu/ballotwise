@@ -3,24 +3,27 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { flipTo, raceFill, safeSide } from "@/lib/midterms/explore";
-import { colorOf, compareRaces, lead, leading, measureCount, pct, raceLabel, RATING_LABEL, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { flipTo, raceFill } from "@/lib/midterms/explore";
+import { electionModeDefault } from "@/lib/midterms/polls";
+import { colorOf, compareRaces, lead, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
-import { useLive, useStars } from "./hooks";
+import { useClock, useLive, useStars } from "./hooks";
 import { PhotoCredit } from "./Avatar";
 import { MarketPanel } from "./MarketPanel";
+import { RaceInsights } from "./RaceInsights";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
 import { RaceRows } from "./RaceRows";
 import { ZoomMap, type Fill } from "./ZoomMap";
 import { CheckedAgo } from "./CheckedAgo";
+import { ForecastTip } from "./ForecastTip";
 
 const TITLE: Record<Office, string> = { senate: "Senate", house: "House", governor: "Governors", measure: "Ballot measures" };
 const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
 
 /** Specials sort after a state's regular race, so the regular one colors the state. */
-const regularFirst = (a: RaceSummary, b: RaceSummary) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title));
+export const regularFirst = (a: RaceSummary, b: RaceSummary) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title));
 
 /** Closest counted races first; before any votes, the most competitive by rating. */
 export function byCloseness(a: RaceSummary, b: RaceSummary) {
@@ -46,24 +49,26 @@ function raceTip(r: RaceSummary) {
   );
 }
 
-/** How a district looks on a zoomed state map, with its projection in the hover card. */
-function districtFill(r: RaceSummary): Fill {
-  const safe = safeSide(r);
-  const projection = r.rating ? RATING_LABEL[r.rating] : safe ? `Safe ${safe}` : "No projection";
-  return {
-    fill: raceFill(r),
-    flip: !!flipTo(r),
-    tip: (
-      <>
-        {raceTip(r)}
-        <div className="muted">Projection: {projection}</div>
-      </>
-    ),
-  };
+/** A race's hover card: the forecast card before votes, the count after. */
+const hoverTip = (r: RaceSummary, updatedAt: number | null) => (r.total ? raceTip(r) : <ForecastTip race={r} updatedAt={updatedAt} />);
+
+/** How a district looks on the House map, nationally or zoomed to its state. */
+export function districtFill(r: RaceSummary, updatedAt: number | null, results: boolean): Fill {
+  return { fill: raceFill(r, results), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), tip: hoverTip(r, updatedAt) };
+}
+
+/** Every House district for the national map, keyed "PA-7" (at-large seats "WY-0"); a district's regular race colors it. */
+export function nationDistrictFills(races: RaceSummary[], updatedAt: number | null, results: boolean): Map<string, Fill> {
+  const out = new Map<string, Fill>();
+  for (const r of [...races].sort(regularFirst)) {
+    const key = `${r.state}-${r.district ?? 0}`;
+    if (!out.has(key)) out.set(key, districtFill(r, updatedAt, results));
+  }
+  return out;
 }
 
 /** How each state looks on this office's national map. */
-export function stateFills(office: Office, races: RaceSummary[]): Map<string, Fill> {
+export function stateFills(office: Office, races: RaceSummary[], updatedAt: number | null = null, results = false): Map<string, Fill> {
   const byState = new Map<string, RaceSummary[]>();
   for (const r of races) byState.set(r.state, [...(byState.get(r.state) ?? []), r]);
   const out = new Map<string, Fill>();
@@ -71,7 +76,7 @@ export function stateFills(office: Office, races: RaceSummary[]): Map<string, Fi
     const name = STATE_NAMES[state] ?? state;
     if (office === "senate" || office === "governor") {
       const r = [...list].sort(regularFirst)[0];
-      out.set(state, { fill: raceFill(r), tip: raceTip(r), flip: !!flipTo(r) });
+      out.set(state, { fill: raceFill(r, results), tip: hoverTip(r, updatedAt), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner) });
     } else if (office === "house") {
       const ahead = leading(list, "house");
       const won = { D: 0, R: 0 };
@@ -139,7 +144,11 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const [query, setQuery] = useState("");
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
-  const fills = useMemo(() => stateFills(office, races), [office, races]);
+  const updatedAt = data?.ratings.updatedAt ?? null;
+  // From election day on, maps drop the forecast and fill in only as results arrive.
+  const results = electionModeDefault(useClock(60_000));
+  const fills = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
+  const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
   // House districts go closest to a toss-up first; other offices keep the regular race first, then ballot order.
   const inState = useMemo(
     () => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || (office === "house" ? byCloseness(a, b) : 0) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title, undefined, { numeric: true })),
@@ -153,9 +162,9 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
     if (office !== "house") return undefined;
     const out = new Map<number, Fill>();
     // inState lists a district's regular race before any special, so the regular one colors it.
-    for (const r of inState) if (r.district !== null && !out.has(r.district)) out.set(r.district, districtFill(r));
+    for (const r of inState) if (r.district !== null && !out.has(r.district)) out.set(r.district, districtFill(r, updatedAt, results));
     return out;
-  }, [office, inState]);
+  }, [office, inState, updatedAt, results]);
   const countyFills = useMemo(() => {
     if (!detail.data) return null;
     const out = new Map<string, Fill>();
@@ -193,7 +202,10 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
         <>
           <SeatHeader office={office} data={data} />
           <div className="mt-office">
-            <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (detail.data ? countyFills : undefined) : null} raceId={shownId} districtFills={districtFills} district={shown?.district ?? null} onPickDistrict={(d) => setPicked(shown?.district === d ? null : (inState.find((r) => r.district === d)?.id ?? null))} label={`Map of 2026 ${TITLE[office].toLowerCase()} races${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}`} />
+            <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (detail.data ? countyFills : undefined) : null} raceId={shownId} districtFills={districtFills} nationDistricts={nationDistricts} onPickNationDistrict={(key) => {
+                const r = races.find((x) => `${x.state}-${x.district ?? 0}` === key);
+                if (r) zoomTo(r.state, r.id);
+              }} district={shown?.district ?? null} onPickDistrict={(d) => setPicked(shown?.district === d ? null : (inState.find((r) => r.district === d)?.id ?? null))} label={`Map of 2026 ${TITLE[office].toLowerCase()} races${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}`} />
 
             <aside className="mt-panel" aria-label={focus ? `${STATE_NAMES[focus]} races` : "All races"}>
               {!focus ? (
@@ -222,6 +234,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                         <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>
                       </p>
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
+                      {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} />}
                       {shown.office !== "measure" && <MarketPanel key={shown.id} raceId={shown.id} />}
                     </>
                   )}

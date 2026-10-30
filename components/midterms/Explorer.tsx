@@ -5,6 +5,7 @@ import { activeCount, DEFAULT_FILTERS, explore, viewCounts, type Filters, type L
 import { closeWaves, formatET } from "@/lib/midterms/polls";
 import { STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { useClock } from "./hooks";
+import { RaceSearchButton } from "./RaceSearch";
 import { ResultList, type Stars } from "./ResultList";
 
 const VIEWS: { id: View; label: string; title: string }[] = [
@@ -147,6 +148,7 @@ export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary
         <button type="button" className="btn secondary small mt-fx-freeze" aria-pressed={!!held} onClick={() => setHeld((h) => (h ? null : list.map((r) => r.id)))} title="Stop rows moving as new votes come in">
           {held ? "Unfreeze" : "Freeze"}
         </button>
+        <RaceSearchButton />
       </div>
 
       <div className="mt-fx-row">

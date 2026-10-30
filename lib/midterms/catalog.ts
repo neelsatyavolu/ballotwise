@@ -1,6 +1,6 @@
 import type { Db } from "../auth/accounts";
 import { agrees, recordCalls, type Call } from "./calls";
-import { CivicError, fetchCatalog, fetchRace } from "./civic";
+import { CivicError, fetchCatalog, fetchOtherRace, fetchRace } from "./civic";
 import { BASELINE_2024 } from "./data";
 import { raceHistory, recordHistory } from "./history";
 import { evidenceAt, raceKey, ratedRaces, readOdds, refreshOdds } from "./odds";
@@ -54,6 +54,15 @@ export async function race(db: Db, id: number, now: number, background?: (work: 
   const call = calls.get(id) ?? null;
   const callPending = !agrees(call, found.race);
   return { ...found, race: { ...found.race, signal: odds?.signals[raceKey(summary.office, summary.state, summary.district)] ?? null, call: callPending ? null : call }, callPending, history };
+}
+
+/**
+ * A race outside the tracked offices (a mayor, a school board seat, a local question), straight from civicAPI by id,
+ * shaped like race() for the race page: no ratings, calls feed, or vote history. Null when civicAPI has no such US race.
+ */
+export async function otherRace(id: number, now: number) {
+  const found = await fetchOtherRace(id, now, BASELINE_2024);
+  return found && { ...found, race: { ...found.race, signal: null, call: null }, callPending: false as const };
 }
 
 /** Records race calls and vote history from the current catalog, for the cron job, so recording doesn't wait on page views. */
