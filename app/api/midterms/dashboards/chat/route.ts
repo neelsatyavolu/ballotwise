@@ -6,9 +6,12 @@ import { ResearchError } from "@/lib/grok/research";
 import { activeGrokSession } from "@/lib/grok/session";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { overview, UNAVAILABLE } from "@/lib/midterms/catalog";
-import { applyAction, chatMessageSchema, chatTurn, DashboardError, listDashboards } from "@/lib/midterms/dashboard";
+import { chatTurn } from "@/lib/midterms/chat";
+import { chatMessageSchema, listDashboards, type Dashboard } from "@/lib/midterms/dashboard";
+import { listFavorites } from "@/lib/midterms/favorites";
+import { ndjsonResponse } from "@/lib/stream";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   openId: z.string().max(64).nullable(),
@@ -16,10 +19,15 @@ const bodySchema = z.object({
   messages: z.array(chatMessageSchema).min(1).max(16),
 });
 
-/** One chat turn: Grok answers and may create, edit or delete one of the voter's dashboards. */
+export type ChatResult = { reply: string; changed: boolean; focusId: string | null; dashboards: Dashboard[] };
+
+/**
+ * One chat turn, streamed as progress lines then the result: the assistant looks up what it needs across the
+ * tracker's data (and the web), may create, edit or delete the voter's dashboards, and answers.
+ */
 export async function POST(req: NextRequest) {
   const user = await currentUser();
-  if (!user) return NextResponse.json({ error: "Sign in to build dashboards." }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Sign in to chat about the races." }, { status: 401 });
   const body = bodySchema.safeParse(await req.json().catch(() => null));
   if (!body.success || body.data.messages.at(-1)?.role !== "user") return NextResponse.json({ error: "Type a message first." }, { status: 400 });
 
@@ -29,24 +37,21 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Grok session error." }, { status: 401 });
   }
-  if (!tokens) return NextResponse.json({ error: "Connect Grok to build dashboards." }, { status: 401 });
+  if (!tokens) return NextResponse.json({ error: "Connect Grok to chat about the races." }, { status: 401 });
 
-  let races;
-  try {
-    races = (await overview(db(), Date.now(), (work) => getCloudflareContext().ctx.waitUntil(work))).races;
-  } catch {
-    return NextResponse.json({ error: UNAVAILABLE }, { status: 503 });
-  }
-  const d = db();
-  try {
-    const dashboards = await listDashboards(d, user.id);
+  const background = (work: Promise<unknown>) => getCloudflareContext().ctx.waitUntil(work);
+  return ndjsonResponse<ChatResult>(async (progress) => {
+    const d = db();
+    const now = Date.now();
+    let races;
+    try {
+      races = (await overview(d, now, background)).races;
+    } catch {
+      throw new ResearchError(UNAVAILABLE, 503);
+    }
+    const [dashboards, starred] = await Promise.all([listDashboards(d, user.id), listFavorites(d, user.id)]);
     const openId = dashboards.some((x) => x.id === body.data.openId) ? body.data.openId : null;
-    const turn = await chatTurn(tokens, races, dashboards, openId, body.data.messages);
-    const focusId = await applyAction(d, user.id, turn.action, races, openId, Date.now(), dashboards);
-    return NextResponse.json({ reply: turn.reply, changed: turn.action.type !== "none", focusId, dashboards: await listDashboards(d, user.id) });
-  } catch (err) {
-    if (err instanceof DashboardError) return NextResponse.json({ error: err.message }, { status: 400 });
-    const status = err instanceof ResearchError ? err.status : 500;
-    return NextResponse.json({ error: err instanceof ResearchError ? err.message : "Grok couldn't answer. Try again." }, { status });
-  }
+    const turn = await chatTurn(tokens, { db: d, userId: user.id, now, races, dashboards, openId, background, starred }, body.data.messages, progress);
+    return { ...turn, dashboards: turn.changed ? await listDashboards(d, user.id) : dashboards };
+  });
 }

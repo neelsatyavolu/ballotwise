@@ -5,7 +5,8 @@ import { CODEX_RESPONSES_URL, GROK_API_BASE, grokModel, PROVIDER_LABEL, type Gro
 
 const TIMEOUT_MS = 280_000;
 
-export type Progress = { type: "search"; query: string } | { type: "writing" };
+/** `lookup` is the chat assistant reading the site's own data, labeled for the person ("Pennsylvania Senate polls"). */
+export type Progress = { type: "search"; query: string } | { type: "lookup"; label: string } | { type: "writing" };
 
 export class ResearchError extends Error {
   constructor(message: string, readonly status = 500) {
@@ -13,14 +14,21 @@ export class ResearchError extends Error {
   }
 }
 
+/** A function the model asked to run, as the Responses API sends it and expects it back in the next input. */
+export type FunctionCall = { type: "function_call"; call_id: string; name: string; arguments: string };
+
+type OutputItem = { type?: string; content?: { text?: string }[]; call_id?: string; name?: string; arguments?: string };
 type StreamEvent = {
   type?: string;
-  item?: { type?: string; action?: { query?: string; url?: string; sources?: { url?: string }[] } };
+  item?: OutputItem & { action?: { query?: string; url?: string; sources?: { url?: string }[] } };
   annotation?: { url?: string };
-  response?: { output?: { type?: string; content?: { text?: string }[] }[] };
+  response?: { output?: OutputItem[] };
 };
 
-type GrokReply = { text: string; retrieved: Set<string> };
+type GrokReply = { text: string; retrieved: Set<string>; calls: FunctionCall[] };
+
+const asCall = (o: OutputItem): FunctionCall | null =>
+  o.type === "function_call" && o.call_id && o.name ? { type: "function_call", call_id: o.call_id, name: o.name, arguments: o.arguments ?? "{}" } : null;
 
 async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
   const decoder = new TextDecoder();
@@ -46,6 +54,9 @@ async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<Stre
 }
 
 type InputMessage = { role: string; content: string };
+/** A message, or a function call and its output when the chat assistant uses tools. */
+export type InputItem = InputMessage | FunctionCall | { type: "function_call_output"; call_id: string; output: string };
+const isMessage = (item: InputItem): item is InputMessage => "role" in item;
 
 /** The Responses request for the account's provider. ChatGPT's backend takes the system prompt as `instructions` and typed content parts. */
 async function request(tokens: GrokTokens, body: Record<string, unknown>): Promise<[string, RequestInit]> {
@@ -60,7 +71,7 @@ async function request(tokens: GrokTokens, body: Record<string, unknown>): Promi
       signal,
     }];
   }
-  const input = (body.input as InputMessage[]) ?? [];
+  const input = (body.input as InputItem[]) ?? [];
   const headers: Record<string, string> = {
     "content-type": "application/json",
     accept: "text/event-stream",
@@ -75,17 +86,18 @@ async function request(tokens: GrokTokens, body: Record<string, unknown>): Promi
     body: JSON.stringify({
       ...common,
       ...body,
-      instructions: input.filter((m) => m.role === "system").map((m) => m.content).join("\n\n"),
-      input: input.filter((m) => m.role !== "system").map((m) => ({
+      instructions: input.filter(isMessage).filter((m) => m.role === "system").map((m) => m.content).join("\n\n"),
+      // Function calls and their outputs go through as they are.
+      input: input.filter((m) => !isMessage(m) || m.role !== "system").map((m) => (isMessage(m) ? {
         role: m.role,
         content: [{ type: m.role === "assistant" ? "output_text" : "input_text", text: m.content }],
-      })),
+      } : m)),
     }),
     signal,
   }];
 }
 
-async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onProgress: (p: Progress) => void): Promise<GrokReply> {
+export async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onProgress: (p: Progress) => void): Promise<GrokReply> {
   const name = PROVIDER_LABEL[tokens.provider];
   let res: Response;
   try {
@@ -107,11 +119,19 @@ async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onPro
   }
 
   const retrieved = new Set<string>();
+  // By call id: a call arrives both as its own item and again in the completed response.
+  const calls = new Map<string, FunctionCall>();
+  const addCall = (o: OutputItem) => {
+    const call = asCall(o);
+    if (call) calls.set(call.call_id, call);
+  };
   let text = "";
   let announcedWriting = false;
   try {
     for await (const ev of sseEvents(res.body)) {
-      if (ev.type === "response.output_item.done" && ev.item?.type === "web_search_call") {
+      if (ev.type === "response.output_item.done" && ev.item?.type === "function_call") {
+        addCall(ev.item);
+      } else if (ev.type === "response.output_item.done" && ev.item?.type === "web_search_call") {
         const action = ev.item.action ?? {};
         if (action.query) onProgress({ type: "search", query: action.query });
         if (action.url) retrieved.add(normalizeUrl(action.url));
@@ -122,6 +142,7 @@ async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onPro
         announcedWriting = true;
         onProgress({ type: "writing" });
       } else if (ev.type === "response.completed") {
+        for (const o of ev.response?.output ?? []) addCall(o);
         text = (ev.response?.output ?? [])
           .filter((o) => o.type === "message")
           .flatMap((o) => o.content ?? [])
@@ -136,8 +157,8 @@ async function callGrok(tokens: GrokTokens, body: Record<string, unknown>, onPro
     if (err instanceof ResearchError) throw err;
     throw new ResearchError(`${name} took too long or the connection dropped. Try again.`, 504);
   }
-  if (!text) throw new ResearchError(`${name} returned an empty answer. Try again.`, 502);
-  return { text, retrieved };
+  if (!text && !calls.size) throw new ResearchError(`${name} returned an empty answer. Try again.`, 502);
+  return { text, retrieved, calls: [...calls.values()] };
 }
 
 /** A request (Grok or ChatGPT) without web search, for conversation and reasoning over text the app already has. */

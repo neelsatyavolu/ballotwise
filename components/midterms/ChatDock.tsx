@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { useAccount } from "@/components/AccountProvider";
 import { GrokConnect } from "@/components/GrokConnect";
-import { api, ApiError } from "@/lib/client";
+import { ApiError, streamResearch } from "@/lib/client";
+import type { Progress } from "@/lib/grok/research";
 import type { Dashboard } from "./hooks";
 
 type Message = { role: "user" | "assistant"; content: string };
@@ -13,7 +14,13 @@ const HISTORY = 12;
 /** Lets the page start the chat: `ask("", true)` opens it for a new dashboard; with text, it also sends it. */
 export type ChatHandle = { ask: (text: string, fresh: boolean) => void };
 
-/** A chat with Grok, docked bottom-right, that builds and edits the voter's dashboards. */
+/** What the assistant is doing while it works. */
+function progressText(p: Progress): string {
+  if (p.type === "search") return `Searching the web: ${p.query}`;
+  return p.type === "lookup" ? p.label : "Writing";
+}
+
+/** A chat with Grok, docked bottom-right, that answers questions from all the tracker's data and builds the voter's dashboards. */
 export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: {
   ref: Ref<ChatHandle>;
   open: boolean;
@@ -26,6 +33,7 @@ export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: 
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [target, setTarget] = useState<"open" | "new">("open");
   const scroller = useRef<HTMLDivElement>(null);
   const editing = target === "open" ? openDashboard : null;
@@ -37,9 +45,11 @@ export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: 
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ reply: string; focusId: string | null; dashboards: Dashboard[]; changed: boolean }>("/api/midterms/dashboards/chat", {
-        body: { openId: fresh ? null : (openDashboard?.id ?? null), messages: next.slice(-HISTORY) },
-      });
+      const r = await streamResearch<{ reply: string; focusId: string | null; dashboards: Dashboard[]; changed: boolean }>(
+        "/api/midterms/dashboards/chat",
+        { openId: fresh ? null : (openDashboard?.id ?? null), messages: next.slice(-HISTORY) },
+        (p) => setStatus(progressText(p)),
+      );
       setMessages([...next, { role: "assistant", content: r.reply }]);
       if (r.changed) {
         onChanged(r.dashboards, r.focusId);
@@ -49,6 +59,7 @@ export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: 
       setError(err instanceof ApiError ? err.message : "Grok couldn't answer. Try again.");
     } finally {
       setBusy(false);
+      setStatus(null);
     }
   }
 
@@ -62,12 +73,12 @@ export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: 
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
-  }, [messages, busy, open]);
+  }, [messages, busy, open, status]);
 
   return (
     <>
       {open && (
-        <section className="mt-chat" aria-label="Chat with Grok about your dashboards">
+        <section className="mt-chat" aria-label="Chat with Grok about the races and your dashboards">
           <header>
             <div>
               <b>Grok</b>
@@ -86,7 +97,7 @@ export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: 
           </header>
           {loading ? null : !user ? (
             <div className="mt-chat-body stack">
-              <p>Sign in to have Grok build dashboards of the races you care about.</p>
+              <p>Sign in to ask Grok about any race, forecast, poll or result, and have it build dashboards of the races you care about.</p>
               <p>
                 <Link href="/signin?next=/midterms" className="btn">Sign in</Link>
               </p>
@@ -101,8 +112,8 @@ export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: 
                 {messages.length === 0 && (
                   <p className="muted small">
                     {editing
-                      ? `Ask for changes to “${editing.layout.title}”: “add the Arizona governor race”, “split this by region”, “drop anything Likely”. Or ask about the results.`
-                      : "Describe a dashboard: “every toss-up in the Rust Belt”, “California House races and propositions”, “the 20 closest House races”."}
+                      ? `Ask for changes to “${editing.layout.title}”: “add the Arizona governor race”, “split this by region”, “drop anything Likely”. Or ask anything: “which of these moved most in the markets this week?”`
+                      : "Ask anything: “what's driving the Maine Senate forecast?”, “which House seats are flipping right now?”, “how does Georgia's early vote compare to 2024?” Or describe a dashboard: “every toss-up in the Rust Belt”."}
                   </p>
                 )}
                 <ul className="messages">
@@ -118,6 +129,11 @@ export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: 
                       <span />
                     </li>
                   )}
+                  {busy && status && (
+                    <li className="mt-chat-status muted small" aria-live="polite">
+                      {status}…
+                    </li>
+                  )}
                 </ul>
                 {error && <p className="error small">{error}</p>}
               </div>
@@ -128,7 +144,7 @@ export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: 
                   if (text.trim() && !busy) void send(text.trim());
                 }}
               >
-                <input className="input" value={text} maxLength={2000} onChange={(e) => setText(e.target.value)} placeholder={editing ? "Change this dashboard…" : "Describe a dashboard…"} aria-label="Message Grok" />
+                <input className="input" value={text} maxLength={2000} onChange={(e) => setText(e.target.value)} placeholder={editing ? "Ask, or change this dashboard…" : "Ask about the races…"} aria-label="Message Grok" />
                 <button className="btn" disabled={busy || !text.trim()}>
                   Send
                 </button>

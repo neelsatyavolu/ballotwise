@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../auth/accounts";
-import { ask } from "../grok/research";
-import type { GrokTokens } from "../grok/oauth";
 import { gridLayoutSchema, isGrid, type GridLayout } from "./decisionView";
 import type { RaceSummary } from "./races";
 
@@ -21,34 +19,14 @@ export const storedLayoutSchema = z.union([gridLayoutSchema, layoutSchema]);
 export type StoredLayout = Layout | GridLayout;
 export type Dashboard = { id: string; layout: StoredLayout; updatedAt: number };
 
-export const chatMessageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(2000) });
+/** A voter types up to 2000 characters; the assistant's replies, sent back as history, run longer. */
+export const chatMessageSchema = z
+  .object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(6000) })
+  .refine((m) => m.role === "assistant" || m.content.length <= 2000, "A message can be up to 2000 characters.");
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
-const actionSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("none") }),
-  z.object({ type: z.literal("create"), layout: layoutSchema }),
-  z.object({ type: z.literal("update"), dashboardId: z.string(), layout: layoutSchema }),
-  z.object({ type: z.literal("delete"), dashboardId: z.string() }),
-]);
-const turnSchema = z.object({ reply: z.string().max(1500), action: actionSchema });
-export type Action = z.infer<typeof actionSchema>;
-
-const INSTRUCTIONS = `You manage a voter's election-night dashboards for the 2026 US midterms (Nov 3, 2026) in a chat.
-You get the tracked races, one per line: id|office|state|district|rating|leader|reporting|title.
-Office is senate, house, governor, or measure. District is blank except for House seats (0 = at-large).
-Rating comes live from prediction-market prices (or the polling average where no market trades): tossup, lean-d/r/i, likely-d/r/i; blank when the race isn't competitive.
-Leader is the current leader and their share, blank before votes. Reporting is percent of the expected vote counted.
-You also get the voter's dashboards as JSON and which one is open.
-
-Each turn, answer the voter briefly and, if they asked for a change, return exactly one action:
-- {"type":"create","layout":{...}} for a new dashboard (also when nothing is open and they describe one),
-- {"type":"update","dashboardId":"...","layout":{...}} to change one; return its FULL new layout, keeping what they didn't ask to change,
-- {"type":"delete","dashboardId":"..."} only when they clearly ask to delete it,
-- {"type":"none"} for questions or chat. Answer questions about results from the race list.
-A layout is {"title": string (short), "sections": [{"title": string, "note": one short neutral sentence, "raceIds": number[]}]}.
-Use only race ids from the list; 1-8 sections, each under 40 races, most important first.
-Stay neutral: never predict winners, root for, or favor a party.
-Reply with only JSON: {"reply": string, "action": {...}}`;
+/** A change the chat assistant makes to the voter's dashboards. */
+export type Action = { type: "none" } | { type: "create"; layout: Layout } | { type: "update"; dashboardId: string; layout: Layout } | { type: "delete"; dashboardId: string };
 
 /** The race list in the compact form the model reads. */
 export function racesPrompt(races: readonly RaceSummary[]): string {
@@ -69,14 +47,6 @@ export function sanitizeLayout(layout: Layout, races: readonly RaceSummary[]): L
       .map((s) => ({ ...s, raceIds: [...new Set(s.raceIds)].filter((id) => known.has(id)) }))
       .filter((s) => s.raceIds.length > 0),
   };
-}
-
-export async function chatTurn(tokens: GrokTokens, races: readonly RaceSummary[], dashboards: readonly Dashboard[], openId: string | null, messages: readonly ChatMessage[]) {
-  // Grok arranges section dashboards; Decision View grids are edited by hand, so it doesn't see them.
-  const sections = dashboards.filter((d) => !isGrid(d.layout));
-  const open = sections.some((d) => d.id === openId) ? openId : null;
-  const context = `Races:\n${racesPrompt(races)}\n\nDashboards:\n${JSON.stringify(sections.map((d) => ({ id: d.id, ...d.layout })))}\n\nOpen dashboard: ${open ?? "none"}`;
-  return ask(tokens, INSTRUCTIONS, [{ role: "user", content: context }, { role: "assistant", content: '{"reply":"Got it.","action":{"type":"none"}}' }, ...messages], turnSchema);
 }
 
 export async function listDashboards(db: Db, userId: string): Promise<Dashboard[]> {

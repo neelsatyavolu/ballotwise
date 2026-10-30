@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { signUp } from "../lib/auth/accounts";
-import { applyAction, chatTurn, createDashboard, listDashboards, MAX_DASHBOARDS, racesPrompt, renameDashboard, sanitizeLayout } from "../lib/midterms/dashboard";
+import { chatTurn } from "../lib/midterms/chat";
+import { applyAction, createDashboard, listDashboards, MAX_DASHBOARDS, racesPrompt, renameDashboard, sanitizeLayout } from "../lib/midterms/dashboard";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/midterms/favorites";
 import { balance, raceDetail, summarize, type RaceSummary } from "../lib/midterms/races";
 import { fetchCatalog, resetCivicMemo } from "../lib/midterms/civic";
@@ -208,22 +209,40 @@ describe("AI dashboards", () => {
     expect(await listDashboards(db, user.id)).toEqual([]);
   });
 
-  it("sends Grok the races, dashboards and conversation, and reads back its reply and action", async () => {
+  it("sends Grok the races, dashboards and conversation, runs its dashboard tool call, and returns its answer", async () => {
+    const db = testDb();
+    const { user } = await signUp(db, "chat@example.com", "a long password", NOW);
+    const id = await createDashboard(db, user.id, layout("Close", [10]), NOW);
     const bodies: string[] = [];
-    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+    const sse = (output: unknown[]) =>
+      new Response(`data: ${JSON.stringify({ type: "response.completed", response: { output } })}\n\n`, { headers: { "content-type": "text/event-stream" } });
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (String(url).includes("models.json")) return new Response("{}", { status: 404 });
       bodies.push(String(init?.body));
-      const text = JSON.stringify({ reply: "Added Ohio.", action: { type: "update", dashboardId: "d1", layout: layout("Close", [10, 11]) } });
-      const done = { type: "response.completed", response: { output: [{ type: "message", content: [{ text }] }] } };
-      return new Response(`data: ${JSON.stringify(done)}\n\n`, { headers: { "content-type": "text/event-stream" } });
+      if (bodies.length === 1) {
+        const args = JSON.stringify({ dashboardId: id, layout: layout("Close", [10, 11]) });
+        return sse([{ type: "function_call", call_id: "c1", name: "update_dashboard", arguments: args }]);
+      }
+      return sse([{ type: "message", content: [{ text: "Added Ohio." }] }]);
     });
-    const turn = await chatTurn({ accessToken: "t", refreshToken: "r", expiresAt: NOW * 2 } as never, races, [{ id: "d1", layout: layout("Close", [10]), updatedAt: NOW }], "d1", [{ role: "user", content: "add Ohio governor" }]);
+    const progress: unknown[] = [];
+    const dashboards = await listDashboards(db, user.id);
+    const ctx = { db, userId: user.id, now: NOW, races, dashboards, openId: id, background: () => {}, starred: [11] };
+    const turn = await chatTurn({ accessToken: "t", refreshToken: "r", expiresAt: NOW * 2 } as never, ctx, [{ role: "user", content: "add Ohio governor" }], (p) => progress.push(p));
     vi.unstubAllGlobals();
-    expect(turn).toMatchObject({ reply: "Added Ohio.", action: { type: "update", dashboardId: "d1" } });
-    // Grok's model lookup goes first; the prompt is in the request that has an input.
-    const sent = bodies.find((b) => b.includes('"input"')) ?? "";
-    expect(sent).toContain("11|governor|OH");
-    expect(sent).toContain("Open dashboard: d1");
-    expect(sent).toContain("add Ohio governor");
+
+    expect(turn).toEqual({ reply: "Added Ohio.", changed: true, focusId: id });
+    expect((await listDashboards(db, user.id))[0].layout).toMatchObject({ sections: [{ raceIds: [10, 11] }] });
+    expect(progress).toContainEqual({ type: "lookup", label: "Updating “Close”" });
+    expect(bodies[0]).toContain("11|governor|OH");
+    expect(bodies[0]).toContain(`Open dashboard: ${id}`);
+    expect(bodies[0]).toContain("Starred races: 11");
+    expect(bodies[0]).toContain("add Ohio governor");
+    expect(JSON.parse(bodies[0]).tools.map((t: { name?: string; type: string }) => t.name ?? t.type)).toContain("web_search");
+    // The second request replays the call and carries its result.
+    const second = JSON.parse(bodies[1]).input;
+    expect(second).toContainEqual(expect.objectContaining({ type: "function_call", call_id: "c1", name: "update_dashboard" }));
+    expect(second).toContainEqual({ type: "function_call_output", call_id: "c1", output: JSON.stringify({ ok: true, dashboardId: id }) });
   });
 
   it("refuses a chat update to a dashboard renamed while Grok was working", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { signUp } from "../lib/auth/accounts";
-import { applyAction, chatTurn, createGrid, listDashboards, MAX_DASHBOARDS, saveGrid } from "../lib/midterms/dashboard";
+import { chatTurn } from "../lib/midterms/chat";
+import { applyAction, createGrid, listDashboards, MAX_DASHBOARDS, saveGrid } from "../lib/midterms/dashboard";
 import { blank, decodeShare, encodeShare, fitted, fromSections, GRID_SIZES, gridLayoutSchema, openSpot, place, template, type GridLayout, type Panel } from "../lib/midterms/decisionView";
 import type { RaceSummary } from "../lib/midterms/view";
 import { testDb } from "./sqlite-db";
@@ -108,12 +109,14 @@ describe("saved grid dashboards", () => {
     const bodies: string[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
       bodies.push(String(init?.body));
-      const text = JSON.stringify({ reply: "ok", action: { type: "none" } });
+      const text = "ok";
       const done = { type: "response.completed", response: { output: [{ type: "message", content: [{ text }] }] } };
       return new Response(`data: ${JSON.stringify(done)}\n\n`, { headers: { "content-type": "text/event-stream" } });
     });
     try {
-      await chatTurn({ accessToken: "t", refreshToken: "r", expiresAt: NOW * 2 } as never, races, await listDashboards(db, user.id), id, [{ role: "user", content: "hi" }]);
+      const dashboards = await listDashboards(db, user.id);
+      const ctx = { db, userId: user.id, now: NOW, races, dashboards, openId: id, background: () => {}, starred: [] };
+      await chatTurn({ accessToken: "t", refreshToken: "r", expiresAt: NOW * 2 } as never, ctx, [{ role: "user", content: "hi" }], () => {});
     } finally {
       vi.unstubAllGlobals();
     }
