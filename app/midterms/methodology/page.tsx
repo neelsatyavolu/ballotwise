@@ -344,9 +344,9 @@ export default function Methodology() {
       </p>
       <p>
         Democrats&apos; chance of controlling the House or Senate is the chance Republicans fall short of what they need to keep it:
-        218 House seats, or 50 Senate seats, since the vice president breaks a 50–50 tie. An independent who wins, such as Dan
-        Osborn in Nebraska, counts toward neither party&apos;s seats but against Republican control, so the two parties&apos; chances
-        add to 100%.
+        218 House seats, or 50 Senate seats, since the vice president breaks a 50–50 tie. An independent who beats the
+        Republican, such as Dan Osborn in Nebraska, counts with the Democrats&apos; seats, as in Decision Desk HQ&apos;s seat totals,
+        and so against Republican control; the two parties&apos; chances add to 100%.
       </p>
 
       <h2>On election night</h2>

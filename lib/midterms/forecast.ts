@@ -394,8 +394,8 @@ function bucket(odds: Odds | null): keyof RatingCounts {
  * national miss per simulation (the generic ballot's polling error and the backtest's cycle-wide bias, as a share of
  * each race's uncertainty) moves every race in every chamber together, so seats aren't independent coin flips.
  * Democrats control the House and Senate when Republicans fall short of 218 and 50 (the vice president breaks a tie);
- * a governors' majority is 26 of 50. Independents who win count toward neither party's seats, but against Republican
- * control.
+ * a governors' majority is 26 of 50. An independent who beats the Republican counts with the Democrats' seats, as in
+ * DDHQ's seat totals, and so against Republican control.
  */
 export function chamberViews(races: readonly { office: Office; forecast: Pick<Forecast, "odds"> | null; region?: string; bucket?: number }[], runs = 10_000, t: Tuning = TUNING): Chambers {
   const next = rng(2026);
@@ -437,7 +437,7 @@ export function chamberViews(races: readonly { office: Office; forecast: Pick<Fo
       const shared = r.parts.national * national + (r.region >= 0 ? r.parts.region * regional[r.region] + r.parts.bucket * waves[r.leanBucket] : 0);
       const leftWins = r.certain ?? r.z + shared + r.parts.own * gauss(next) > 0;
       const winner = leftWins ? r.left : r.loser;
-      if (winner === "D") tally[r.office].D += 1;
+      if (winner === "D" || winner === "I") tally[r.office].D += 1;
       else if (winner === "R") tally[r.office].R += 1;
     }
     for (const b of bodies) {

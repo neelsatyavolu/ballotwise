@@ -186,6 +186,11 @@ describe("chamberViews", () => {
     expect(mixed.senate.ratings).toMatchObject({ likelyD: 1, leanR: 1 });
     expect(mixed.governor.ratings.other).toBe(1);
   });
+
+  it("counts an independent who beats the Republican with the Democrats' seats, as DDHQ does", () => {
+    const v = chamberViews([{ office: "senate", forecast: { odds: { I: 1, R: 0 } } }], 100).senate;
+    expect(v).toMatchObject({ dSeats: 35, rSeats: 31 });
+  });
 });
 
 describe("polling average", () => {
