@@ -82,7 +82,8 @@ function Section({ part, stars, onStar }: { part: Part; stars: number[] | null; 
   const [all, setAll] = useState(false);
   const shown = all ? part.races : part.races.slice(0, SHOWN);
   return (
-    <section id={`ny-${part.key}`} className="ny-section" style={tint(part.key)}>
+    // --n lets short sections share a row, each as wide as its cards.
+    <section id={`ny-${part.key}`} className="ny-section" style={{ ...tint(part.key), "--n": Math.max(1, shown.length) } as CSSProperties}>
       <h2>
         <i aria-hidden /> {part.title} <span className="ny-count">{part.races.length}</span>
       </h2>
@@ -199,7 +200,7 @@ export function NearYouView() {
       {editing && <AddressForm onSaved={saved} onCancel={() => setEditing(false)} />}
       <Tally parts={shown.filter((p) => p.races.length)} />
       {local.state && <NearYouMap state={local.state} fips={local.countyFips} raceId={ticket[0]?.id ?? null} side={beside && section(beside)} />}
-      {shown.filter((p) => p !== beside).map(section)}
+      <div className="ny-flow">{shown.filter((p) => p !== beside).map(section)}</div>
       <p className="muted small mt-source">
         Matched from your saved address, which your <Link href="/ballot">ballot page</Link> uses too. Local results from{" "}
         {county ? <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a> : <a href="https://civicapi.org">civicAPI</a>}; the rest from civicAPI. <Link href="/midterms/credits">Sources and credits</Link>

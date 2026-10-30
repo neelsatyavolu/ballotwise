@@ -18,6 +18,10 @@
 .ny-county-race i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 
 .ny-section { margin-top: 28px; }
+/* Sections with a few cards share a row; one with more cards than fit takes a row of its own. */
+.ny-flow { display: flex; flex-wrap: wrap; gap: 28px 16px; margin-top: 28px; }
+.ny-flow > .ny-section { margin-top: 0; flex: var(--n) 1 calc(var(--n) * 240px - 10px); min-width: 0; max-width: calc(var(--n) * 440px); }
+.ny-flow .mt-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
 .ny-section > h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 18px; }
 .ny-section > h2 i { width: 10px; height: 10px; border-radius: 2px; background: var(--ny); }
 .ny-section > h2 .ny-count { color: var(--muted); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
