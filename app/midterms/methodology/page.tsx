@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FIT, modelFor, PARAMS, phi, sigmaOf } from "@/lib/midterms/forecast";
+import { backtestShare, FIT, modelFor, PARAMS, phi, sigmaOf, TUNING } from "@/lib/midterms/forecast";
 import { AGGREGATES_SOURCE } from "@/lib/midterms/genericAggregates";
 import "../midterms.css";
 
@@ -15,6 +15,9 @@ const MODELS = [
   ["Senate", FIT.senate],
   ["Senate and governors, no FEC data", FIT.senateNoFundraising],
 ] as const;
+const BODIES = ["house", "senate", "governor"] as const;
+const BACKTEST_SHARE = Object.fromEntries(BODIES.map((b) => [b, backtestShare(modelFor(b, b !== "governor"), b)])) as Record<(typeof BODIES)[number], number>;
+const SHARE = Object.fromEntries(BODIES.map((b) => [b, Math.max(BACKTEST_SHARE[b], TUNING.shared[b])])) as Record<(typeof BODIES)[number], number>;
 const signed = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}`;
 
 export default function Methodology() {
@@ -53,6 +56,14 @@ export default function Methodology() {
           <strong>Incumbency:</strong> whether the Democrat or the Republican holds the seat, or it&apos;s open.
         </li>
         <li>
+          <strong>The incumbent&apos;s own vote:</strong> how far a sitting member ran ahead of their seat the last time they won it:
+          their margin, minus the seat&apos;s presidential lean that year plus that year&apos;s national House vote, capped at 25 points.
+          Susan Collins, for one, won Maine by 9 points in 2020 while Biden carried it by 9, so she carries about 17 points of her own
+          into 2026. House seats are measured on the lines of the member&apos;s last race, from The Downballot&apos;s district results;
+          senators and governors against their state. Governors&apos; past results come from Wikipedia&apos;s 2022 and 2024 results
+          tables. Ossoff, who won Georgia in a January runoff, and appointed incumbents have no measured personal vote.
+        </li>
+        <li>
           <strong>Fundraising:</strong> the log of the Democrat&apos;s receipts over the Republican&apos;s, from FEC candidate summaries,
           capped at a 20-to-1 ratio. Races missing either side&apos;s FEC data use the fit without it.
         </li>
@@ -70,6 +81,7 @@ export default function Methodology() {
               <th className="num">Lean</th>
               <th className="num">Environment</th>
               <th className="num">Incumbent</th>
+              <th className="num">Own vote</th>
               <th className="num">Fundraising</th>
               <th className="num">Races</th>
             </tr>
@@ -81,6 +93,7 @@ export default function Methodology() {
                 <td className="num">{m.coefficients.lean.toFixed(2)} ± {m.standardErrors.lean.toFixed(2)}</td>
                 <td className="num">{m.coefficients.environment.toFixed(2)} ± {m.standardErrors.environment.toFixed(2)}</td>
                 <td className="num">{signed(m.coefficients.incumbent)} ± {m.standardErrors.incumbent.toFixed(2)}</td>
+                <td className="num">{m.coefficients.personal.toFixed(2)} ± {m.standardErrors.personal.toFixed(2)}</td>
                 <td className="num">{m.coefficients.fundraising === undefined ? "—" : `${signed(m.coefficients.fundraising)} ± ${m.standardErrors.fundraising!.toFixed(2)}`}</td>
                 <td className="num">{m.races}</td>
               </tr>
@@ -89,8 +102,10 @@ export default function Methodology() {
         </table>
       </div>
       <p className="small muted">
-        Points of margin per point of lean or environment, per incumbent, and per natural-log unit of the fundraising ratio (a ratio of
-        about 2.7 to 1), with standard errors. Fundraising lowers the out-of-sample error in both chambers, so it stays in.
+        Points of margin per point of lean, environment or the incumbent&apos;s own past vote, per incumbent, and per natural-log unit
+        of the fundraising ratio (a ratio of about 2.7 to 1), with standard errors. Fundraising and the incumbent&apos;s own vote each
+        lower the out-of-sample error, so both stay in; with the own vote in, the flat incumbency bonus shrinks, since much of it was
+        the members who had always run ahead.
       </p>
 
       <h3>How well it predicts</h3>
@@ -138,9 +153,10 @@ export default function Methodology() {
         We also tried a separate error for midterm years, since 2026 is one; it scored better only for the Senate, where midterm
         misses ran {FIT.senate.calibration.midtermSigma?.toFixed(1)} points against {FIT.senate.calibration.presidentialSigma.toFixed(1)} in
         presidential years, so the Senate uses it. Dropping blowouts (margins over 30 points) from the scoring leaves the multipliers
-        within 0.02.
+        within 0.02. These are the backtest&apos;s own choices; the forecast runs on multipliers tuned to agree with DDHQ (below), and
+        the table shows how those would have scored too.
       </p>
-      <p>How often the favorite won, House races 2018–2024, before and after the multiplier:</p>
+      <p>How often the favorite won, House races 2018–2024: before any multiplier, at the backtest&apos;s, and at the tuned one:</p>
       <div className="mt-method-scroll">
         <table>
           <thead>
@@ -152,11 +168,15 @@ export default function Methodology() {
               <th className="num">Races after</th>
               <th className="num">Predicted after</th>
               <th className="num">Won after</th>
+              <th className="num">Races tuned</th>
+              <th className="num">Predicted tuned</th>
+              <th className="num">Won tuned</th>
             </tr>
           </thead>
           <tbody>
             {FIT.house.calibration.before.reliability.map((b, i) => {
               const a = FIT.house.calibration.after.reliability[i];
+              const t = FIT.house.calibration.tuned?.reliability[i];
               return (
                 <tr key={b.band}>
                   <td>{b.band}%</td>
@@ -166,6 +186,9 @@ export default function Methodology() {
                   <td className="num">{a.races}</td>
                   <td className="num">{pct(a.predicted)}</td>
                   <td className="num">{pct(a.actual)}</td>
+                  <td className="num">{t ? t.races : "—"}</td>
+                  <td className="num">{t ? pct(t.predicted) : "—"}</td>
+                  <td className="num">{t ? pct(t.actual) : "—"}</td>
                 </tr>
               );
             })}
@@ -173,8 +196,9 @@ export default function Methodology() {
         </table>
       </div>
       <p className="small muted">
-        Brier score, House: {FIT.house.calibration.before.brier.toFixed(4)} before, {FIT.house.calibration.after.brier.toFixed(4)} after;
-        Senate: {FIT.senate.calibration.before.brier.toFixed(4)} before, {FIT.senate.calibration.after.brier.toFixed(4)} after. Lower is
+        Brier score, House: {FIT.house.calibration.before.brier.toFixed(4)} before, {FIT.house.calibration.after.brier.toFixed(4)} after,{" "}
+        {FIT.house.calibration.tuned?.brier.toFixed(4) ?? "—"} tuned; Senate: {FIT.senate.calibration.before.brier.toFixed(4)} before,{" "}
+        {FIT.senate.calibration.after.brier.toFixed(4)} after, {FIT.senate.calibration.tuned?.brier.toFixed(4) ?? "—"} tuned. Lower is
         better. Four cycles is a small sample, and the closest band has only a few dozen races, so read the toss-up rows loosely.
       </p>
 
@@ -188,24 +212,82 @@ export default function Methodology() {
       <h2>3. Chance of winning</h2>
       <p>
         The blended margin becomes a chance of winning through a normal curve whose width is the race&apos;s uncertainty: a 5-point
-        favorite in a House race wins about {Math.round(100 * phi(5 / sigmaOf(modelFor("house", true))))}% of the time.
+        favorite in a House race wins about {Math.round(100 * phi(5 / sigmaOf(modelFor("house", true), "house")))}% of the time.
       </p>
 
       <h2>4. Prediction markets</h2>
       <p>
         Prices from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> are then blended into
-        that chance. A market counts for nothing below {money(markets.min)} traded and up to {pct(markets.max)} of the final chance at{" "}
+        that chance. A market counts for nothing below {money(markets.min)} traded and up to a set share of the final chance at{" "}
         {money(markets.full)} or more, growing with the logarithm of volume, because busier markets have been better calibrated.
-        The cap is a third because we couldn&apos;t backtest race-level market prices ourselves, and the evidence there is shows
-        markets called the 2024 presidency well but trailed poll-based models in down-ballot races. Without a fitted weight, markets
-        stay the minority input, a second layer on top of the model, as in DDHQ&apos;s method.
+        We couldn&apos;t backtest race-level market prices ourselves, and the evidence there is shows markets called the 2024 presidency
+        well but trailed poll-based models in down-ballot races, so markets stay the minority input, a second layer on top of the
+        model, as in DDHQ&apos;s method. The cap itself is one of the tuned settings (below).
       </p>
       <p>
         Prices are kept between {pct(markets.clip)} and {pct(1 - markets.clip)}. Near the ends a price says little: trading fees, money
         tied up until November and the long-standing habit of overpaying for long shots keep heavy favorites trading at 95 to 99 cents
-        whatever their real odds. Past about 90 cents the market is only saying &ldquo;fairly safe&rdquo;, and the model decides how
-        safe. A seat the model gives 99% stays Safe with a 99-cent market ({pct((1 - markets.max) * 0.99 + markets.max * (1 - markets.clip))});
-        one the model gives 93% ends up Likely ({pct((1 - markets.max) * 0.93 + markets.max * (1 - markets.clip))}) however high the price.
+        whatever their real odds, so past that range the model decides how safe a seat is.
+      </p>
+
+      <h2>5. Expert ratings</h2>
+      <p>
+        Last, the race ratings of the Cook Political Report, Inside Elections and Sabato&apos;s Crystal Ball, as Wikipedia&apos;s 2026
+        Senate, governor and House election pages reproduce them, are blended into the chance. Each rating stands for a chance for
+        its favorite: Safe or Solid {pct(PARAMS.experts.solid)}, Likely {pct(PARAMS.experts.likely)}, Lean {pct(PARAMS.experts.lean)},
+        Tilt {pct(PARAMS.experts.tilt)} and Toss-up even. The raters who rate a race are averaged, and the average takes{" "}
+        {pct(TUNING.experts.house)} of the final chance in House races, {pct(TUNING.experts.senate)} in Senate races and{" "}
+        {pct(TUNING.experts.governor)} for governors; a race nobody rates gets none. Raters see things a model can&apos;t, like
+        candidate quality and private polling. Decision Desk HQ&apos;s ratings are left out, even where Wikipedia lists them, since
+        theirs is the forecast we tune against. Some House ratings on Wikipedia are months old; we use them as listed.
+      </p>
+
+      <h2>Tuned to agree with DDHQ</h2>
+      <p>
+        <strong>
+          The forecast&apos;s hyperparameters are tuned so that its ratings and chamber odds agree with Decision Desk HQ&apos;s published
+          forecast.
+        </strong>{" "}
+        The fitted model stays as fit; only settings that apply to every race move. We searched them against DDHQ&apos;s public
+        toss-ups, chamber odds and race chances, first for the same toss-ups in each office, then House and Senate control within two
+        points, then the rating of each race they highlight. No race is adjusted on its own, and none of DDHQ&apos;s numbers are stored
+        here. The settings in use:
+      </p>
+      <ul>
+        <li>
+          Uncertainty multiplier: House {TUNING.k.house.toFixed(2)}, Senate {TUNING.k.senate.toFixed(2)}, governors{" "}
+          {TUNING.k.governor.toFixed(2)} (the backtest&apos;s own: {FIT.house.calibration.k.toFixed(2)}, {FIT.senate.calibration.k.toFixed(2)},{" "}
+          {FIT.senateNoFundraising.calibration.k.toFixed(2)}).
+        </li>
+        <li>
+          Markets: up to {pct(TUNING.markets.max.house)} of the chance in House races, {pct(TUNING.markets.max.senate)} in Senate races
+          and {pct(TUNING.markets.max.governor)} for governors, prices clipped to {pct(TUNING.markets.clip)}–{pct(1 - TUNING.markets.clip)}.
+        </li>
+        <li>
+          Expert ratings: {pct(TUNING.experts.house)} of the chance in House races, {pct(TUNING.experts.senate)} in Senate races and{" "}
+          {pct(TUNING.experts.governor)} for governors.
+        </li>
+        <li>
+          The fitted environment coefficient times {TUNING.environment.toFixed(2)}; the incumbent&apos;s own vote times{" "}
+          {TUNING.personal.house.toFixed(2)} for the House, {TUNING.personal.senate.toFixed(2)} for the Senate and{" "}
+          {TUNING.personal.governor.toFixed(2)} for governors.
+        </li>
+        <li>
+          In the chamber simulations, the share of each race&apos;s uncertainty that moves with other races (the national, regional
+          and lean-band errors): {pct(SHARE.house)} for the House, {pct(SHARE.senate)} for the Senate and {pct(SHARE.governor)} for
+          governors, against {pct(BACKTEST_SHARE.house)}, {pct(BACKTEST_SHARE.senate)} and {pct(BACKTEST_SHARE.governor)} from the
+          backtest&apos;s cycle-wide, regional and lean-band errors alone. A race&apos;s total uncertainty, and so its chance, is the
+          same either way; a larger shared share makes races swing together, so chamber control follows the tipping-point races
+          more closely, as in DDHQ&apos;s correlated simulations.
+        </li>
+      </ul>
+      <p>
+        On our own backtest the tuned multipliers score about as well as the backtest&apos;s: House Brier{" "}
+        {FIT.house.calibration.after.brier.toFixed(3)} against {FIT.house.calibration.tuned?.brier.toFixed(3)} tuned, Senate{" "}
+        {FIT.senate.calibration.after.brier.toFixed(3)} against {FIT.senate.calibration.tuned?.brier.toFixed(3)}. The personal-vote
+        scales are a bigger departure from the fit: {TUNING.personal.house.toFixed(2)} times the fitted coefficient for the House, {TUNING.personal.senate.toFixed(2)} for the Senate (where the expert ratings carry what it measured) and {TUNING.personal.governor.toFixed(2)} for governors. So this is a forecast built on DDHQ&apos;s
+        method and kept in line with their published numbers, not an independent check on them. Where the two still differ,
+        it&apos;s because our inputs differ: our polling averages, our generic ballot, or the market prices we read.
       </p>
 
       <h2>Ratings</h2>
@@ -223,8 +305,8 @@ export default function Methodology() {
       <ul>
         <li>
           <strong>A national error</strong> that moves every race, sized from how far whole cycles ran from the model in the backtest
-          (about {FIT.house.cycleBias.toFixed(1)} points for the House): the generic ballot&apos;s miss shows up there, as in 2018 and
-          2020.
+          (about {FIT.house.cycleBias.toFixed(1)} points for the House, before the tuned scale): the generic ballot&apos;s miss shows up
+          there, as in 2018 and 2020.
         </li>
         <li>
           <strong>A regional error</strong> for each of the nine census divisions, about {FIT.correlation.region} points, so seats in
@@ -300,6 +382,10 @@ export default function Methodology() {
         <li>
           Generic-ballot aggregates: FiftyPlusOne, NBC News, RealClearPolitics, Silver Bulletin and others as tabulated on{" "}
           <a href={AGGREGATES_SOURCE}>Wikipedia</a> (CC BY-SA).
+        </li>
+        <li>
+          Expert ratings: the Cook Political Report, Inside Elections and Sabato&apos;s Crystal Ball, as reproduced on Wikipedia&apos;s
+          2026 election pages (CC BY-SA).
         </li>
         <li>Markets: Kalshi and Polymarket.</li>
         <li>

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { combineMarkets, evidenceAt, kalshiRace, kalshiTickers, officePolls, parseKalshi, parsePolymarket, ratedRaces, readOdds, refreshOdds } from "../lib/midterms/odds";
+import { combineMarkets, evidenceAt, genericMargin, kalshiRace, kalshiTickers, officePolls, parseKalshi, parsePolymarket, personalOf, ratedRaces, readOdds, refreshOdds } from "../lib/midterms/odds";
 import { summarize, type RaceSummary } from "../lib/midterms/races";
+import { ratingOf } from "../lib/midterms/forecast";
 import { testDb } from "./sqlite-db";
 
 const NOW = Date.parse("2026-10-20T12:00:00Z");
@@ -186,15 +187,18 @@ describe("refreshOdds", () => {
     const db = testDb();
     stub();
     const snap = await refreshOdds(db, races, NOW);
-    expect(snap.signals["senate:GA:"]).toMatchObject({ rating: "likely-d", polls: { margin: 2 } });
-    // Ossoff's incumbency carries Georgia to Likely D on the fitted fundamentals (no generic ballot in this stub).
-    // Nebraska's 2024 lean makes Osborn a long shot on fundamentals; the busy market (30%) pulls him up to Likely R.
-    expect(snap.signals["senate:NE:"].rating).toBe("likely-r");
+    // Ratings follow the saved forecast (their exact level moves with the tuned settings): Ossoff's incumbency makes
+    // Georgia lean Democratic on the fitted fundamentals (no generic ballot in this stub); Nebraska's 2024 lean makes
+    // Osborn the underdog, with the busy market (30%) keeping him in range.
+    expect(snap.signals["senate:GA:"]).toMatchObject({ polls: { margin: 2 } });
+    expect(snap.signals["senate:GA:"].rating).toBe(ratingOf(snap.signals["senate:GA:"].forecast!));
+    expect(snap.signals["senate:GA:"].rating).toMatch(/-d$/);
+    expect(snap.signals["senate:NE:"].rating).toMatch(/-r$/);
     expect(snap.signals["senate:NE:"].forecast?.left).toBe("I");
     expect(ratedRaces(await readOdds(db, NOW))).toEqual(
       expect.arrayContaining([
-        { office: "senate", state: "GA", district: null, rating: "likely-d" },
-        { office: "senate", state: "NE", district: null, rating: "likely-r" },
+        { office: "senate", state: "GA", district: null, rating: snap.signals["senate:GA:"].rating },
+        { office: "senate", state: "NE", district: null, rating: snap.signals["senate:NE:"].rating },
       ]),
     );
   });
@@ -236,10 +240,28 @@ describe("refreshOdds", () => {
   it("keeps the last good markets and polls when every source is down", async () => {
     const db = testDb();
     stub();
-    await refreshOdds(db, races, NOW);
+    const snap = await refreshOdds(db, races, NOW);
     stub(["kalshi", "polymarket", "votehub"]);
     const later = await refreshOdds(db, races, NOW + 60 * 60 * 1000);
-    expect(later.signals["senate:GA:"]).toMatchObject({ rating: "likely-d", polls: { margin: 2 } });
+    expect(later.signals["senate:GA:"]).toMatchObject({ rating: snap.signals["senate:GA:"].rating, polls: { margin: 2 } });
     expect(later.signals["senate:NE:"].market?.sources).toEqual(["Polymarket"]);
+  });
+});
+
+describe("personalOf", () => {
+  it("gives a running incumbent their measured personal vote, and nothing to an open seat", () => {
+    const maine = race({ province: "ME", election_name: "Maine US Senate", candidates: [{ name: "Susan Collins", party: "Republican", votes: 0 }, { name: "Troy Jackson", party: "Democratic", votes: 0 }] });
+    expect(personalOf(maine)).toBeLessThan(-10);
+    const michigan = race({ province: "MI", election_name: "Michigan US Senate", candidates: [{ name: "Haley Stevens", party: "Democratic", votes: 0 }, { name: "Mike Rogers", party: "Republican", votes: 0 }] });
+    expect(personalOf(michigan)).toBeNull();
+  });
+});
+
+describe("genericMargin", () => {
+  it("counts our own average in full once it has enough recent polls, else leans on the aggregators", () => {
+    expect(genericMargin({ margin: 6, recent: 10 }, { margin: 9 })).toBe(6);
+    expect(genericMargin({ margin: 6, recent: 0 }, { margin: 9 })).toBe(9);
+    expect(genericMargin(null, { margin: 9 })).toBe(9);
+    expect(genericMargin(null, null)).toBeNull();
   });
 });

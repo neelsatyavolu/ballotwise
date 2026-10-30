@@ -79,13 +79,20 @@ for (const m of await (await get(LEGISLATORS)).json()) {
 // ---------- Governors: Wikidata ----------
 
 try {
-  const query = `SELECT ?code ?name WHERE {
+  // Many past governors' terms carry no end date, so an open term alone doesn't mark the holder: the open term that
+  // started last does.
+  const query = `SELECT ?code ?name ?start WHERE {
     ?state wdt:P31 wd:Q35657; wdt:P5086 ?code; wdt:P1313 ?office.
-    ?person p:P39 ?held. ?held ps:P39 ?office. FILTER NOT EXISTS { ?held pq:P582 ?end }
+    ?person p:P39 ?held. ?held ps:P39 ?office; pq:P580 ?start. FILTER NOT EXISTS { ?held pq:P582 ?end }
     ?person rdfs:label ?name. FILTER(LANG(?name) = "en")
   }`;
   const rows = (await (await get(WIKIDATA, { method: "POST", body: new URLSearchParams({ query, format: "json" }), headers: { accept: "application/sparql-results+json" } })).json()).results.bindings;
-  for (const r of rows) incumbents[`governor:${r.code.value.replace(/^US-/, "")}:`] = r.name.value;
+  const latest = {};
+  for (const r of rows) {
+    const key = `governor:${r.code.value.replace(/^US-/, "")}:`;
+    if (!latest[key] || r.start.value > latest[key].start) latest[key] = { name: r.name.value, start: r.start.value };
+  }
+  for (const [key, { name }] of Object.entries(latest)) incumbents[key] = name;
 } catch (err) {
   console.error("Governors from Wikidata failed; governor incumbency is left out:", err.message);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chamberViews, forecastRace, marketWeight, matchup, modelFor, PARAMS, phi, phiInverse, pollWeight, ratingOf, sigmaOf, type Inputs } from "../lib/midterms/forecast";
+import { chamberViews, forecastRace, marketWeight, matchup, modelFor, PARAMS, phi, phiInverse, pollWeight, ratingOf, sigmaOf, TUNING, type Inputs } from "../lib/midterms/forecast";
 import { aggregateMedian, parseAggregates } from "../lib/midterms/genericAggregates";
 import { averageAt, genericBallot, racePolls, type VoteHubPoll } from "../lib/midterms/pollAverage";
 
@@ -39,17 +39,25 @@ describe("forecastRace", () => {
   it("builds the fundamentals margin from the fitted lean, environment and incumbency terms", () => {
     const f = forecastRace(contest, inputs({ lean: -2, genericBallot: 6.5, incumbent: "D" }))!;
     const c = modelFor("senate", false).coefficients;
-    expect(f.environment).toBeCloseTo(c.environment * 6.5, 1);
-    expect(f.fundamentals).toBeCloseTo(c.intercept + c.lean * (-2 - PARAMS.national2024) + c.environment * 6.5 + c.incumbent, 1);
-    expect(f.odds.D).toBeCloseTo(phi(f.fundamentals! / sigmaOf(modelFor("senate", false))), 2);
+    expect(f.environment).toBeCloseTo(TUNING.environment * c.environment * 6.5, 1);
+    expect(f.fundamentals).toBeCloseTo(c.intercept + c.lean * (-2 - PARAMS.national2024) + TUNING.environment * c.environment * 6.5 + c.incumbent, 1);
+    expect(f.odds.D).toBeCloseTo(phi(f.fundamentals! / sigmaOf(modelFor("senate", false), "senate")), 2);
     expect(f.odds.D! + f.odds.R!).toBeCloseTo(1, 6);
   });
 
-  it("scales each model's held-out σ by its calibrated multiplier, using the midterm σ where it scored better", () => {
-    const house = modelFor("house", true);
+  it("scales each model's held-out σ by its office's multiplier, using the midterm σ where it scored better", () => {
     const senate = modelFor("senate", true);
-    expect(sigmaOf(house)).toBeCloseTo(house.calibration.k * house.sigma, 6);
-    expect(sigmaOf(senate)).toBeCloseTo(senate.calibration.k * (senate.calibration.midtermSigma ?? senate.sigma), 6);
+    expect(sigmaOf(senate, "senate")).toBeCloseTo(TUNING.k.senate * (senate.calibration.midtermSigma ?? senate.sigma), 6);
+    expect(sigmaOf(senate, "senate", { ...TUNING, k: { ...TUNING.k, senate: 2 } })).toBeCloseTo(2 * (senate.calibration.midtermSigma ?? senate.sigma), 6);
+  });
+
+  it("adds the incumbent's personal vote only when the incumbent is on the ballot", () => {
+    const c = modelFor("senate", false).coefficients;
+    const open = forecastRace(contest, inputs({ lean: 0, genericBallot: 0, personal: -17 }))!;
+    const held = forecastRace(contest, inputs({ lean: 0, genericBallot: 0, incumbent: "R", personal: -17 }))!;
+    expect(open.personal).toBeNull();
+    expect(held.personal).toBeCloseTo(TUNING.personal.senate * c.personal * -17, 1);
+    expect(held.fundamentals! - open.fundamentals!).toBeCloseTo(-c.incumbent + held.personal!, 0);
   });
 
   it("adds fundraising only when both sides have FEC receipts, using the model fit with it", () => {
@@ -73,13 +81,25 @@ describe("forecastRace", () => {
   });
 
   it("weighs markets by volume on a log scale, clipping extreme prices", () => {
-    expect(marketWeight(undefined)).toBe(0);
-    expect(marketWeight(PARAMS.markets.min - 1)).toBe(0);
-    expect(marketWeight(PARAMS.markets.full * 10)).toBe(PARAMS.markets.max);
+    const max = TUNING.markets.max.senate;
+    expect(marketWeight(undefined, "senate")).toBe(0);
+    expect(marketWeight(PARAMS.markets.min - 1, "senate")).toBe(0);
+    expect(marketWeight(PARAMS.markets.full * 10, "senate")).toBe(max);
     const f = forecastRace(contest, inputs({ lean: 0, market: { odds: { D: 1, R: 0 }, volume: 5_000_000 } }))!;
     const base = phi(f.margin! / f.sigma!);
     expect(f.market).toBe(1 - PARAMS.markets.clip);
-    expect(f.odds.D).toBeCloseTo((1 - PARAMS.markets.max) * base + PARAMS.markets.max * (1 - PARAMS.markets.clip), 2);
+    expect(f.odds.D).toBeCloseTo((1 - max) * base + max * (1 - PARAMS.markets.clip), 2);
+  });
+
+  it("blends the expert raters' average chance in at the office's weight, and uses it alone when nothing else is known", () => {
+    const experts = [{ side: "D" as const, p: 0.68 }, { side: null, p: 0.5 }, { side: "R" as const, p: 0.68 }];
+    const without = forecastRace(contest, inputs({ lean: 4, genericBallot: 0 }))!;
+    const withExperts = forecastRace(contest, inputs({ lean: 4, genericBallot: 0, experts }))!;
+    const w = TUNING.experts.senate;
+    expect(withExperts.expert).toBeCloseTo((0.68 + 0.5 + 0.32) / 3, 3);
+    expect(withExperts.expertWeight).toBe(w);
+    expect(withExperts.odds.D).toBeCloseTo((1 - w) * without.odds.D! + w * withExperts.expert!, 2);
+    expect(forecastRace(contest, inputs({ lean: null, experts: [{ side: "R", p: 0.85 }] }))!.odds.D).toBeCloseTo(0.15, 3);
   });
 
   it("uses the market alone when nothing else is known, and nothing at all with no evidence", () => {

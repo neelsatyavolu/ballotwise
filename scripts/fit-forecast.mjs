@@ -2,7 +2,7 @@
 // (votes-docs.decisiondeskhq.com/forecast-methodology): each race's two-party margin regressed on the seat's partisan
 // lean, the national environment, incumbency and fundraising, separately for House and Senate.
 //
-//   margin = a + b·lean + c·environment + d·incumbent + e·fundraising
+//   margin = a + b·lean + c·environment + d·incumbent + f·personal + e·fundraising
 //
 //   margin       Democrat minus Republican, share of the two-party vote, in points.
 //   lean         the seat's previous presidential margin minus that election's national margin (2016 for 2018 and
@@ -10,6 +10,9 @@
 //   environment  that year's final pre-election generic-ballot average (RealClearPolitics), what a forecaster knew
 //                before the votes, so the backtest's misses include the generic ballot's own polling error.
 //   incumbent    +1 when the Democrat is the incumbent, −1 for the Republican, 0 for an open seat (FEC's flag).
+//   personal     the incumbent's own vote: how far they ran ahead of their seat the last time they won it (their margin
+//                minus the seat's presidential lean that year plus that year's national House vote), capped at ±25,
+//                signed toward the Democrat; 0 for an open seat or when the last race wasn't a two-party contest.
 //   fundraising  ln(Democrat's receipts / Republican's), capped at ±3; 0 when either is missing from FEC's summary.
 //
 // Each cycle is backtested from a fit on the other three (leave one cycle out); σ is the out-of-sample root mean
@@ -19,7 +22,9 @@
 //
 // Sources: MIT Election Data and Science Lab House, Senate and President returns (Harvard Dataverse, CC0);
 // The Downballot's presidential results by congressional district for each map; FEC candidate summaries (weball).
-// Run with `node scripts/fit-forecast.mjs`. It also writes lib/midterms/fec2026.json, this cycle's receipts per race.
+// Wikipedia's 2022 and 2024 gubernatorial election results (CC BY-SA), for sitting governors' personal vote.
+// Run with `node scripts/fit-forecast.mjs`. It also writes lib/midterms/fec2026.json, this cycle's receipts per race, and
+// lib/midterms/personal2026.json, each 2026 incumbent's personal vote.
 import { readFileSync, writeFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";
 
@@ -48,6 +53,28 @@ const DISTRICT_PRES = [
   [2022, "1CKngqOp8fzU22JOlypoxNsxL6KSAH920Whc-rd7ebuM", "1871835782", [3, 4]],
   [2024, "1ng1i_Dm_RMDnEvauH44pgE6JCUsapcuu8F2pCfeLWFo", "620838163", [6, 7]],
 ];
+/**
+ * Presidential margin by district on the lines a past House race was run on, for its incumbent's personal vote: [race
+ * year, sheet, tab, D and R columns, presidential year]. 2016's lines are 2018's except Pennsylvania's, which is skipped.
+ */
+const SEAT_PRES = [
+  [2016, "1zLNAuRqPauss00HDz4XbTH2HqsCzMe0pR8QmD1K8jk8", "0", [3, 4], 2016],
+  [2018, "1zLNAuRqPauss00HDz4XbTH2HqsCzMe0pR8QmD1K8jk8", "0", [3, 4], 2016],
+  [2020, "1XbUXnI9OyfAuhP5P3vWtMuGc5UJlrhXbzZo3AwMuHtk", "0", [3, 4], 2020],
+  [2022, "1CKngqOp8fzU22JOlypoxNsxL6KSAH920Whc-rd7ebuM", "1871835782", [3, 4], 2020],
+  [2024, "1ng1i_Dm_RMDnEvauH44pgE6JCUsapcuu8F2pCfeLWFo", "620838163", [3, 4], 2024],
+];
+const PERSONAL_CAP = 25;
+/** How far back a senator's or governor's last win can be. */
+const TERM = { senate: 6, governor: 4 };
+const TUNED = (() => {
+  try {
+    return JSON.parse(readFileSync(new URL("../lib/midterms/tuning.json", import.meta.url), "utf8"));
+  } catch {
+    return null;
+  }
+})();
+const STATE_CODE = Object.fromEntries(JSON.parse(readFileSync(new URL("../lib/midterms/states.json", import.meta.url), "utf8")).map(([, code, name]) => [name, code]));
 const CYCLES = [2018, 2020, 2022, 2024];
 const MIDTERMS = new Set([2018, 2022]);
 /**
@@ -78,8 +105,9 @@ function csvFields(line, sep = ",") {
 }
 /**
  * Rows of a MEDSL file as objects. The separator is whatever the header uses; the House file wraps each whole row in
- * quotes, which are stripped first. Rows that don't split into as many fields as the header (a comma inside a name
- * in an unquoted row) are dropped.
+ * quotes, which are stripped first, along with the escaped quotes around nicknames inside it (`\"ROBERT \\"\"ROCKY\\"\"
+ * ROCHFORD\"`), which would otherwise drop the row and with it that candidate's race. Rows that don't split into as
+ * many fields as the header (a comma inside a name) are dropped.
  */
 function table(text) {
   const [head, ...rows] = text.split(/\r?\n/).filter(Boolean);
@@ -87,7 +115,7 @@ function table(text) {
   const cols = csvFields(head, sep).map((c) => c.replace(/"/g, ""));
   const out = [];
   for (let r of rows) {
-    if (sep === "," && /^".*"$/.test(r) && !r.slice(1, -1).includes('"')) r = r.slice(1, -1);
+    if (sep === "," && /^".*"$/.test(r)) r = r.slice(1, -1).includes('"') ? r.slice(1, -1).replace(/[\\"]/g, "") : r.slice(1, -1);
     const f = csvFields(r, sep);
     if (f.length !== cols.length) continue;
     out.push(Object.fromEntries(f.map((v, i) => [cols[i], v.replace(/^"|"$/g, "")])));
@@ -129,7 +157,7 @@ const sideOf = (party) => (/^democrat/i.test(party) ? "D" : /^republican/i.test(
  * Two-party contests from MEDSL returns: one row per race with the Democrat's and Republican's names and votes.
  * A candidate's votes on every line they ran on (New York's fusion tickets) count toward them.
  */
-function contests(rows, office) {
+function contests(rows, office, years = CYCLES) {
   const races = new Map();
   // Where a race reports votes by mode as well as a total, only the total rows count.
   const hasTotal = new Set(rows.filter((r) => /^total$/i.test(r.mode ?? "")).map((r) => `${r.year}|${r.state_po}|${r.district}|${r.special}`));
@@ -137,7 +165,7 @@ function contests(rows, office) {
     if (!general(r) || yes(r.writein) || !r.candidate) continue;
     if (hasTotal.has(`${r.year}|${r.state_po}|${r.district}|${r.special}`) && !/^total$/i.test(r.mode ?? "")) continue;
     const year = Number(r.year);
-    if (!CYCLES.includes(year)) continue;
+    if (!years.includes(year)) continue;
     const district = office === "house" ? Number(r.district) : yes(r.special) ? "special" : "";
     const key = `${year}|${r.state_po}|${district}`;
     const race = races.get(key) ?? { year, state: r.state_po, district, candidates: new Map(), total: 0 };
@@ -251,10 +279,10 @@ function invert(m) {
   }
   return a.map((row) => row.slice(n));
 }
-const ALL_TERMS = ["intercept", "lean", "environment", "incumbent", "fundraising"];
+const ALL_TERMS = ["intercept", "lean", "environment", "incumbent", "personal", "fundraising"];
 /** The model's terms: with fundraising, or without it (races FEC doesn't cover, and governors). */
 let TERMS = ALL_TERMS;
-const x = (row) => [1, row.lean, row.environment, row.incumbent, row.fundraising].slice(0, TERMS.length);
+const x = (row) => [1, row.lean, row.environment, row.incumbent, row.personal, row.fundraising].slice(0, TERMS.length);
 
 function ols(rows) {
   const X = rows.map(x);
@@ -320,7 +348,7 @@ const rmseOf = (rs) => Math.sqrt(rs.reduce((s, r) => s + r.e * r.e, 0) / Math.ma
  * The σ multiplier k that maximizes the held-out log score, searched on a grid; also whether giving midterm cycles
  * their own σ (each cycle's σ from the other cycles of its kind) scores better.
  */
-function calibrate(residuals, sigma) {
+function calibrate(residuals, sigma, tunedK) {
   const grid = Array.from({ length: 111 }, (_, i) => 0.4 + i * 0.02);
   const best = (sigmaFor) => grid.reduce((b, k) => {
     const score = logScore(chancesOf(residuals, (r) => k * sigmaFor(r)));
@@ -333,7 +361,8 @@ function calibrate(residuals, sigma) {
   };
   const byKind = best(kindSigma);
   const midterm = rmseOf(residuals.filter((r) => MIDTERMS.has(r.year)));
-  const useKind = byKind.score > pooled.score;
+  // A gain under 0.002 a race is noise at this sample size.
+  const useKind = byKind.score > pooled.score + 0.002;
   const chosen = useKind ? (r) => byKind.k * kindSigma(r) : () => pooled.k * sigma;
   // The same search on competitive races only, as a check that blowouts don't drive k.
   const close = residuals.filter((r) => Math.abs(r.margin) <= 30);
@@ -349,6 +378,8 @@ function calibrate(residuals, sigma) {
     kCompetitiveOnly: closeK,
     before: summary(chancesOf(residuals, () => sigma)),
     after: summary(chancesOf(residuals, chosen)),
+    // How the backtest would have scored at the multiplier tuned to agree with DDHQ (scripts/tune-to-ddhq.mjs).
+    tuned: tunedK === undefined ? null : { k: tunedK, ...summary(chancesOf(residuals, useKind ? (r) => tunedK * kindSigma(r) : () => tunedK * sigma)) },
   };
 }
 
@@ -394,17 +425,60 @@ const [houseRows, senateRows, presRows] = await Promise.all([
 const pres = presidential(presRows);
 const national = nationalHouse(houseRows);
 
-const districtPres = {};
-for (const [cycle, id, gid, [di, ri]] of DISTRICT_PRES) {
-  const map = (districtPres[cycle] = {});
-  for (const line of (await (await get(SHEET(id, gid))).text()).split(/\r?\n/)) {
+const sheets = new Map();
+/** A Downballot sheet's presidential margin (D minus R) per district, from the given columns. */
+async function sheetMargins(id, gid, [di, ri]) {
+  if (!sheets.has(`${id}|${gid}`)) sheets.set(`${id}|${gid}`, await (await get(SHEET(id, gid))).text());
+  const map = {};
+  for (const line of sheets.get(`${id}|${gid}`).split(/\r?\n/)) {
     const f = csvFields(line);
     const m = f[0]?.match(/^([A-Z]{2})-(\d{2}|AL)$/);
     const d = Number(f[di]);
     const r = Number(f[ri]);
     if (m && Number.isFinite(d) && Number.isFinite(r) && f[di] !== "") map[`${m[1]}|${m[2] === "AL" ? 0 : Number(m[2])}`] = d - r;
   }
+  return map;
 }
+const districtPres = {};
+for (const [cycle, id, gid, cols] of DISTRICT_PRES) districtPres[cycle] = await sheetMargins(id, gid, cols);
+const seatPres = {};
+for (const [year, id, gid, cols, presYear] of SEAT_PRES) seatPres[year] = { presYear, margins: await sheetMargins(id, gid, cols) };
+
+// ---------- Personal vote ----------
+
+const clampPersonal = (v) => Math.max(-PERSONAL_CAP, Math.min(PERSONAL_CAP, v));
+/** The presidential year a race's seat is measured against: that year's, or the one before in a midterm. */
+const presYearOf = (year) => (year % 4 === 0 ? year : year - 2);
+/** What a seat's lean and the national environment alone gave a past race, Democrat minus Republican. */
+function expectedMargin(office, race) {
+  if (office === "house") {
+    if (race.year === 2016 && race.state === "PA") return null;
+    const seat = seatPres[race.year];
+    const margin = seat?.margins[`${race.state}|${race.district}`];
+    return margin === undefined ? null : margin - pres.nation[seat.presYear] + national[race.year];
+  }
+  const py = presYearOf(race.year);
+  const margin = pres.state[py]?.[race.state];
+  return margin === undefined || national[race.year] === undefined ? null : margin - pres.nation[py] + national[race.year];
+}
+/**
+ * A candidate's personal vote: how far they ran ahead of what their seat's lean and the national environment gave them
+ * the last time they won it, signed toward the Democrat. House members' last race is two years back (on that map;
+ * the same district first, else another in the state after redistricting); senators' is within six years.
+ */
+function personalOf(office, past, race, side, name) {
+  const last = lastName(name);
+  const won = (c) => (side === "D" ? c.margin > 0 : c.margin < 0) && lastName(side === "D" ? c.dName : c.rName) === last;
+  const prior = past
+    .filter((c) => c.state === race.state && c.year < race.year && (office === "house" ? c.year === race.year - 2 : c.year >= race.year - TERM[office]) && won(c))
+    .sort((a, b) => b.year - a.year || Number(b.district === race.district) - Number(a.district === race.district));
+  const prev = prior[0];
+  const expected = prev ? expectedMargin(office, prev) : null;
+  return expected === null ? 0 : clampPersonal(prev.margin - expected);
+}
+const pastHouse = contests(houseRows, "house", [2016, ...CYCLES]);
+const pastSenate = contests(senateRows, "senate", Array.from({ length: 2024 - 1976 + 1 }, (_, i) => 1976 + i));
+const PAST = { house: pastHouse, senate: pastSenate };
 
 const fecByCycle = {};
 for (const c of [...CYCLES, 2026]) fecByCycle[c] = await fec(c);
@@ -418,11 +492,13 @@ function features(office, list) {
     const summary = fecByCycle[c.year];
     const d = fecFor(summary, office, c.state, c.district, "D", c.dName);
     const r = fecFor(summary, office, c.state, c.district, "R", c.rName);
+    const incumbent = d?.ici === "I" ? 1 : r?.ici === "I" ? -1 : 0;
     rows.push({
       ...c,
       lean: raw - pres.nation[prior],
       environment: PRE_ELECTION_GENERIC[c.year],
-      incumbent: d?.ici === "I" ? 1 : r?.ici === "I" ? -1 : 0,
+      incumbent,
+      personal: incumbent === 0 ? 0 : personalOf(office, PAST[office], c, incumbent === 1 ? "D" : "R", incumbent === 1 ? c.dName : c.rName),
       fundraising: fundraising(d, r),
       matched: !!(d && r),
     });
@@ -434,7 +510,7 @@ const result = { fitted: new Date().toISOString().slice(0, 10), national: { hous
 for (const [office, rows] of [["house", houseRows], ["senate", senateRows]]) {
   const data = features(office, contests(rows, office));
   for (const withFund of [true, false]) {
-    TERMS = withFund ? ALL_TERMS : ALL_TERMS.slice(0, 4);
+    TERMS = withFund ? ALL_TERMS : ALL_TERMS.slice(0, 5);
     const fit = ols(data);
     const bt = backtest(data);
     const name = withFund ? office : `${office}NoFundraising`;
@@ -445,7 +521,7 @@ for (const [office, rows] of [["house", houseRows], ["senate", senateRows]]) {
       result.correlation = { region: region.sd, bucket: bucket.sd, regionGroups: region.groups, bucketGroups: bucket.groups, leanEdges: LEAN_EDGES };
       console.log("correlation", JSON.stringify(result.correlation));
     }
-    const cal = calibrate(bt.residuals, bt.rmse);
+    const cal = calibrate(bt.residuals, bt.rmse, TUNED?.k[office]);
     const biases = Object.values(bt.cycles).map((b) => b.bias);
     result[name] = {
       calibration: cal,
@@ -458,6 +534,7 @@ for (const [office, rows] of [["house", houseRows], ["senate", senateRows]]) {
       backtest: bt.cycles,
       races: data.length,
       fundraisingMatched: data.filter((r) => r.matched).length,
+      personalMeasured: data.filter((r) => r.personal !== 0).length,
     };
     console.log(name, JSON.stringify({ c: result[name].coefficients, se: result[name].standardErrors, sigma: bt.rmse, cycleBias: result[name].cycleBias, bt: Object.fromEntries(Object.entries(bt.cycles).map(([y, b]) => [y, `${b.rmse} rmse, bias ${b.bias}, ${b.wrongWinner}/${b.races} wrong`])) }));
     console.log(`${name} calibration`, JSON.stringify(cal));
@@ -468,7 +545,8 @@ console.log("national", JSON.stringify(result.national));
 
 // ---------- 2026 receipts per race ----------
 
-const races = (await (await get(RACES_URL)).json()).races.filter((r) => r.office === "house" || r.office === "senate");
+const allRaces = (await (await get(RACES_URL)).json()).races;
+const races = allRaces.filter((r) => r.office === "house" || r.office === "senate");
 const receipts = {};
 for (const race of races) {
   const key = `${race.office}:${race.state}:${race.office === "house" ? (race.district ?? 0) : ""}`;
@@ -483,3 +561,42 @@ for (const race of races) {
 }
 writeFileSync(new URL("../lib/midterms/fec2026.json", import.meta.url), `${JSON.stringify(receipts)}\n`);
 console.log("2026 races with both sides' receipts:", Object.keys(receipts).length, "of", races.length);
+
+// ---------- 2026 personal votes ----------
+
+/**
+ * Governors' races from Wikipedia's results summary for a year: the leading Democrat and Republican in each state,
+ * by share of the vote. MEDSL publishes no governor returns.
+ */
+async function governorResults(year) {
+  const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${year}_United_States_gubernatorial_elections&prop=wikitext&format=json&formatversion=2`;
+  const text = (await (await get(url)).json()).parse.wikitext;
+  const out = [];
+  for (const block of text.split(/\n\|-\n/)) {
+    const state = STATE_CODE[block.match(/^! \[\[\d{4} ([^\]|]+?) gubernatorial election\|/)?.[1]];
+    if (!state) continue;
+    const top = {};
+    for (const m of block.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]'*\s*\((Democratic|Republican)[^)]*\)\s*([\d.]+)%/g)) {
+      const side = m[2] === "Democratic" ? "D" : "R";
+      if (!top[side] || Number(m[3]) > top[side].pct) top[side] = { name: m[1], pct: Number(m[3]) };
+    }
+    if (top.D && top.R) out.push({ year, state, district: "", dName: top.D.name, rName: top.R.name, margin: ((top.D.pct - top.R.pct) / (top.D.pct + top.R.pct)) * 100 });
+  }
+  return out;
+}
+const pastGovernor = [...(await governorResults(2022)), ...(await governorResults(2024))];
+console.log("governor results parsed:", pastGovernor.length);
+const PAST_2026 = { house: pastHouse, senate: pastSenate, governor: pastGovernor };
+/** Per race, the personal vote of each side's nominee who last won the seat; the forecast uses the incumbent's. */
+const personal = {};
+for (const race of allRaces.filter((r) => r.office in PAST_2026)) {
+  const key = `${race.office}:${race.state}:${race.office === "house" ? (race.district ?? 0) : ""}`;
+  for (const c of race.candidates) {
+    const side = sideOf(c.party);
+    if (!side) continue;
+    const value = personalOf(race.office, PAST_2026[race.office], { year: 2026, state: race.state, district: race.district ?? 0 }, side, c.name);
+    if (value !== 0) personal[key] = { ...personal[key], [side]: { last: lastName(c.name), value: Math.round(value * 10) / 10 } };
+  }
+}
+writeFileSync(new URL("../lib/midterms/personal2026.json", import.meta.url), `${JSON.stringify(personal)}\n`);
+console.log("2026 races with a measured personal vote:", Object.keys(personal).length, JSON.stringify(Object.fromEntries(["senate:ME:", "senate:NC:", "governor:PA:", "governor:NV:", "governor:TX:", "house:ME:2"].map((k) => [k, personal[k]]))));

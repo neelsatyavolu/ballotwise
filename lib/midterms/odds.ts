@@ -1,9 +1,11 @@
 import type { Db } from "../auth/accounts";
 import { getCached, putCached } from "../cache";
-import { chamberViews, forecastRace, leanBucket, matchup, PARAMS, ratingOf, type Chambers, type Forecast, type Side } from "./forecast";
+import { chamberViews, forecastRace, leanBucket, matchup, PARAMS, ratingOf, TUNING, type Chambers, type Forecast, type Inputs, type Matchup, type Side, type Tuning } from "./forecast";
 import divisions from "./divisions.json";
 import fec2026 from "./fec2026.json";
 import lean2026 from "./lean2026.json";
+import experts2026 from "./experts2026.json";
+import personal2026 from "./personal2026.json";
 import { aggregateMedian, fetchAggregates, type Aggregate } from "./genericAggregates";
 import { genericBallot, lastName, racePolls, RECENT_FULL, type RacePolls, type TrendPoint, type VoteHubPoll } from "./pollAverage";
 import type { Office, RaceSummary, RatedRace, Rating } from "./races";
@@ -74,12 +76,24 @@ const STATE_BY_NAME = new Map(Object.entries(STATE_NAMES).map(([postal, name]) =
 
 const sideOf = (party: string): Side | null => (/^democrat/i.test(party) ? "D" : /^republican/i.test(party) ? "R" : /independent/i.test(party) ? "I" : null);
 
-/** The side whose incumbent is on the ballot: a candidate sharing the seat holder's last name. */
+const firstInitial = (name: string) => name.trim().toLowerCase().normalize("NFD").replace(/[^a-z]/g, " ").trim()[0] ?? "";
+/** Each state's sitting House members, for members running in another district after redistricting. */
+const HOUSE_MEMBERS = Object.entries(LEAN.incumbents).reduce<Record<string, string[]>>((acc, [k, name]) => {
+  const [office, state] = k.split(":");
+  return office === "house" ? { ...acc, [state]: [...(acc[state] ?? []), name] } : acc;
+}, {});
+
+/**
+ * The side whose incumbent is on the ballot: a candidate sharing the seat holder's last name, or, in a House race, a
+ * sitting member from another district of the state (same first initial and last name) running after redistricting.
+ */
 export function incumbentSide(r: Pick<RaceSummary, "office" | "state" | "district" | "candidates">): Side | null {
   const holder = LEAN.incumbents[raceKey(r.office, r.state, r.district)];
-  if (!holder) return null;
-  const running = r.candidates.find((c) => lastName(c.name) === lastName(holder));
-  return running ? sideOf(running.party) : null;
+  const running = holder ? r.candidates.find((c) => lastName(c.name) === lastName(holder)) : undefined;
+  if (running) return sideOf(running.party);
+  if (r.office !== "house") return null;
+  const moved = r.candidates.find((c) => (HOUSE_MEMBERS[r.state] ?? []).some((m) => lastName(m) === lastName(c.name) && firstInitial(m) === firstInitial(c.name)));
+  return moved ? sideOf(moved.party) : null;
 }
 
 /** The seat's 2024 presidential margin: the district's for House races, the state's otherwise. */
@@ -95,10 +109,33 @@ export function fundraisingOf(r: Pick<RaceSummary, "office" | "state" | "distric
   return Math.max(-3, Math.min(3, Math.log(Math.max(m.D, 5000) / Math.max(m.R, 5000))));
 }
 
+const PERSONAL = personal2026 as Record<string, Partial<Record<Side, { last: string; value: number }>>>;
+
+/** The running incumbent's personal vote from their last win in the seat (scripts/fit-forecast.mjs); null without one. */
+export function personalOf(r: Pick<RaceSummary, "office" | "state" | "district" | "candidates">): number | null {
+  const side = incumbentSide(r);
+  return side ? (PERSONAL[raceKey(r.office, r.state, r.district)]?.[side]?.value ?? null) : null;
+}
+
+type ExpertRating = { category: keyof typeof PARAMS.experts; side: Side | null; date: string | null };
+const EXPERTS = experts2026 as Record<string, Partial<Record<"cook" | "insideElections" | "sabato", ExpertRating>>>;
+
+/** The Cook Political Report's, Inside Elections' and Sabato's Crystal Ball's ratings of a race (scripts/build-experts.mjs), as chances. */
+export function expertsOf(r: Pick<RaceSummary, "office" | "state" | "district">): { side: Side | null; p: number }[] | null {
+  const ratings = Object.values(EXPERTS[raceKey(r.office, r.state, r.district)] ?? {});
+  return ratings.length ? ratings.map((e) => ({ side: e.side, p: PARAMS.experts[e.category] })) : null;
+}
+
+/** What the forecast of one race is computed from: who it's between, and its inputs. */
+export function raceInputs(r: RaceSummary, market: Market | null, polls: Polls | null, generic: number | null): { matchup: Matchup; inputs: Inputs } {
+  return { matchup: matchup(r, LEAN.incumbents[raceKey(r.office, r.state, r.district)]), inputs: { office: r.office, lean: leanOf(r), genericBallot: generic, incumbent: incumbentSide(r), personal: personalOf(r), fundraising: fundraisingOf(r), polls, market, experts: expertsOf(r) } };
+}
+
 /** One race's forecast from its market, polls and the generic ballot; null for measures and races nothing separates. */
-export function raceForecast(r: RaceSummary, market: Market | null, polls: Polls | null, generic: number | null): Forecast | null {
+export function raceForecast(r: RaceSummary, market: Market | null, polls: Polls | null, generic: number | null, t: Tuning = TUNING): Forecast | null {
   if (r.office === "measure") return null;
-  return forecastRace(matchup(r, LEAN.incumbents[raceKey(r.office, r.state, r.district)]), { office: r.office, lean: leanOf(r), genericBallot: generic, incumbent: incumbentSide(r), fundraising: fundraisingOf(r), polls, market });
+  const { matchup: m, inputs } = raceInputs(r, market, polls, generic);
+  return forecastRace(m, inputs, t);
 }
 
 // ---------- Kalshi ----------
@@ -360,6 +397,12 @@ async function fetchPolymarket(): Promise<Book> {
 
 type PollsResult = { averages: Record<string, Polls>; generic: (Generic & { trend: TrendPoint[] }) | null; detail: Record<string, RacePolls> };
 
+/** Our own generic-ballot average, counted in full once it has enough recent polls, with the aggregators' median making up the rest. */
+export function genericMargin(own: { margin: number; recent: number } | null, aggregate: { margin: number } | null): number | null {
+  const ownWeight = own ? Math.min(1, own.recent / RECENT_FULL) : 0;
+  return own && aggregate ? ownWeight * own.margin + (1 - ownWeight) * aggregate.margin : (own?.margin ?? aggregate?.margin ?? null);
+}
+
 async function fetchPolls(races: readonly RaceSummary[], now: number): Promise<PollsResult> {
   const types: [Office, string][] = [["senate", "us-senator"], ["governor", "governor"], ["house", "us-representative"]];
   const averages: Record<string, Polls> = {};
@@ -378,8 +421,7 @@ async function fetchPolls(races: readonly RaceSummary[], now: number): Promise<P
       console.error("midterms generic-ballot aggregates failed:", err instanceof Error ? err.message : err);
       return null;
     });
-  const ownWeight = own ? Math.min(1, own.recent / RECENT_FULL) : 0;
-  const margin = own && aggregate ? ownWeight * own.margin + (1 - ownWeight) * aggregate.margin : (own?.margin ?? aggregate?.margin ?? null);
+  const margin = genericMargin(own, aggregate);
   const generic = margin === null ? null : { margin: Math.round(margin * 10) / 10, count: own?.count ?? 0, own: own?.margin, recent: own?.recent ?? 0, aggregate, trend: own?.trend ?? [] };
   return { averages, generic, detail };
 }
@@ -460,7 +502,7 @@ async function rebuild(db: Db, races: readonly RaceSummary[], now: number): Prom
 }
 
 /** Every race's forecast for the chamber simulations; a race between two candidates of one party goes to that party. */
-function chamberEntries(races: readonly RaceSummary[], forecastOf: (r: RaceSummary) => Pick<Forecast, "odds"> | null) {
+export function chamberEntries(races: readonly RaceSummary[], forecastOf: (r: RaceSummary) => Pick<Forecast, "odds"> | null) {
   return races.flatMap((r) => {
     if (r.office === "measure") return [];
     const sides = new Set(r.candidates.map((c) => sideOf(c.party)).filter((s) => s === "D" || s === "R"));
