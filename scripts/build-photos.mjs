@@ -5,6 +5,9 @@
 //   2. They serve or served in Congress for the same state (same full name), so the official portrait applies.
 //   3. Wikidata has exactly one person by that name tied to the same state through an office, a congressional
 //      district or a 2026 candidacy, and that person has an image on Wikimedia Commons.
+//   4. Wikipedia's article on that very election (the state's Senate or governor's race, or its House elections)
+//      links exactly one person by that name, and that person's article has a freely licensed Commons image.
+// When several members of Congress share a candidate's name, the one serving now is taken.
 // Official congressional portraits (public domain) come from github.com/unitedstates/images.
 // Run with `node scripts/build-photos.mjs` (RACES_URL points it at another copy of /api/midterms).
 import { createHash } from "node:crypto";
@@ -12,6 +15,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fold, lookupNames, nameParts, raceKey, sameLast, sameName } from "./photo-names.mjs";
 
 const RACES_URL = process.env.RACES_URL ?? "https://ballotwise.xanom.co/api/midterms";
+const WIKIPEDIA = "https://en.wikipedia.org/w/api.php";
+const STATES = new Map(JSON.parse(readFileSync(new URL("../lib/midterms/states.json", import.meta.url), "utf8")).map(([, postal, name]) => [postal, name]));
 const LEGISLATORS = "https://unitedstates.github.io/congress-legislators";
 const PORTRAIT = (id) => `https://unitedstates.github.io/images/congress/225x275/${id}.jpg`;
 const WIKIDATA = "https://query.wikidata.org/sparql";
@@ -164,7 +169,10 @@ for (const c of candidates) {
     photos[key] = `c:${seat.id}`;
     continue;
   }
-  const ids = [...new Set(members.filter((m) => m.state === c.race.state && sameName(m.parts, c.parts)).map((m) => m.id))];
+  const named = [...new Set(members.filter((m) => m.state === c.race.state && sameName(m.parts, c.parts)).map((m) => m.id))];
+  // Two members by one name (a Jr. and his father, say): the one serving now is the one running.
+  const serving = named.filter((id) => sitting.some((m) => m.id === id));
+  const ids = named.length > 1 && serving.length === 1 ? serving : named;
   if (ids.length === 1 && (await hasPortrait(ids[0]))) {
     photos[key] = `c:${ids[0]}`;
     continue;
@@ -188,6 +196,55 @@ for (const c of needWikidata) {
   const file = decodeURIComponent(hits[0].image.split("Special:FilePath/")[1] ?? "");
   if (file) photos[c.key] = `w:${file}`;
 }
+
+// ---------- Wikipedia election articles ----------
+
+/** The English Wikipedia articles on the election a race belongs to. */
+function articlesFor(race) {
+  const state = STATES.get(race.state);
+  if (!state) return [];
+  if (race.office === "governor") return [`2026 ${state} gubernatorial election`];
+  if (race.office === "senate") return [/special/i.test(race.title) ? `2026 United States Senate special election in ${state}` : `2026 United States Senate election in ${state}`];
+  return [`2026 United States House of Representatives elections in ${state}`, `2026 United States House of Representatives election in ${state}`];
+}
+
+/** Every person an article links who has a freely licensed Commons image: their article title and the file. */
+async function linkedPeople(title) {
+  const out = [];
+  let more = {};
+  for (let page = 0; page < 10; page++) {
+    const params = new URLSearchParams({ action: "query", format: "json", formatversion: "2", redirects: "1", titles: title, generator: "links", gplnamespace: "0", gpllimit: "max", prop: "pageimages", piprop: "name|thumbnail", pithumbsize: "96", pilicense: "free", ...more });
+    const res = await fetch(`${WIKIPEDIA}?${params}`, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(TIMEOUT_MS.json) }).catch(() => null);
+    if (!res?.ok) break;
+    const body = await res.json();
+    for (const p of body.query?.pages ?? []) {
+      // Only Commons files: a free file kept on English Wikipedia itself wouldn't load from Commons.
+      if (p.pageimage && p.thumbnail?.source?.includes("/wikipedia/commons/")) out.push({ title: p.title, file: p.pageimage.replace(/_/g, " ") });
+    }
+    if (!body.continue) break;
+    more = body.continue;
+  }
+  return out;
+}
+
+const stillMissing = candidates.filter((c) => !photos[`${raceKey(c.race.office, c.race.state, c.race.district)}|${c.name}`]);
+const titles = [...new Set(stillMissing.flatMap((c) => articlesFor(c.race)))];
+const linked = new Map();
+for (let i = 0; i < titles.length; i += PARALLEL) {
+  await Promise.all(titles.slice(i, i + PARALLEL).map(async (t) => linked.set(t, await linkedPeople(t))));
+  console.error(`  Wikipedia: ${Math.min(i + PARALLEL, titles.length)} of ${titles.length} election articles`);
+}
+let fromArticles = 0;
+for (const c of stillMissing) {
+  const people = articlesFor(c.race).flatMap((t) => linked.get(t) ?? []);
+  // "Jane Smith (politician)" is matched as "Jane Smith".
+  const hits = [...new Map(people.filter((p) => sameName(nameParts(p.title.replace(/\s*\(.*\)$/, "")), c.parts)).map((p) => [p.title, p])).values()];
+  if (hits.length > 1) dropped.push(`${c.name} (${c.race.state}): ${hits.length} people by that name in the election article`);
+  if (hits.length !== 1) continue;
+  photos[`${raceKey(c.race.office, c.race.state, c.race.district)}|${c.name}`] = `w:${hits[0].file}`;
+  fromArticles += 1;
+}
+console.log(`${fromArticles} more from Wikipedia's election articles`);
 
 writeFileSync(new URL("../lib/midterms/photos.json", import.meta.url), `${JSON.stringify(photos, Object.keys(photos).sort())}\n`);
 
