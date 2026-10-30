@@ -7,7 +7,7 @@ import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { flipTo } from "@/lib/midterms/explore";
 import { chamberFromRaces, withServer, type ChamberView, type ForecastOffice } from "@/lib/midterms/forecastTab";
 import { ratingFill, type Overview, type RaceSummary } from "@/lib/midterms/view";
-import { ForecastHero, ControlCard, SeatsByRating } from "./ForecastHero";
+import { ForecastHero, ForecastOdds, SeatsByRating } from "./ForecastHero";
 import { forecastFill, ForecastRaces } from "./ForecastRaces";
 import { ForecastTip } from "./ForecastTip";
 import { useLive } from "./hooks";
@@ -27,6 +27,7 @@ const CHAMBER: Record<ForecastOffice, string> = { house: "House", senate: "Senat
 const regularFirst = (a: RaceSummary, b: RaceSummary) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title));
 const day = (iso: string) => Date.parse(`${iso}T12:00:00Z`) / 1000;
 const DAY_LABEL = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const STAMP = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /** One office's chart series from the daily history: Democrats' chance of control and each party's mean seats. */
 function series(office: ForecastOffice, forecast: ForecastOverview | null): { control: ChartPoint[]; seats: { D: ChartPoint[]; R: ChartPoint[] } } {
@@ -91,93 +92,94 @@ function ForecastMap({ office, races, updatedAt, flips }: { office: ForecastOffi
   );
 }
 
-/** One office's full forecast: the hero, seats by rating, the map and every race. */
+/** One office's full forecast: the hero, seats by rating, then the map beside every race. */
 function OfficeForecast({ office, data, view, forecast }: { office: ForecastOffice; data: Overview; view: ChamberView; forecast: ForecastOverview | null }) {
   const [flips, setFlips] = useState(false);
   const { control, seats } = series(office, forecast);
   const unit = office === "house" ? "district" : "state";
   return (
     <>
-      <ForecastHero office={office} view={view} updatedAt={forecast?.updatedAt ?? data.ratings.updatedAt} control={control} seats={seats} marker={marketsJoined(forecast, office)} />
-      <section className="mt-fc-section">
-        <h2>Mapping the forecast</h2>
-        <p className="muted">
-          Each {unit} is shaded by the party favored to win and how safe the race is. Hover a {unit} for its forecast, and select it to
-          open the full race.
-        </p>
-        <SeatsByRating view={view} office={office} />
-        <label className="mt-fc-switch">
-          <input type="checkbox" checked={flips} onChange={(e) => setFlips(e.target.checked)} />
-          <span aria-hidden />
-          Show forecasted flips
-        </label>
-        <ForecastMap office={office} races={data.races} updatedAt={data.ratings.updatedAt} flips={flips} />
-      </section>
-      <section className="mt-fc-section">
-        <h2>Every {office === "governor" ? "governor's" : CHAMBER[office]} race</h2>
-        <ForecastRaces office={office} races={data.races} limit={25} />
-      </section>
+      <ForecastHero office={office} view={view} control={control} seats={seats} marker={marketsJoined(forecast, office)} />
+      <SeatsByRating view={view} office={office} />
+      <div className="mt-office">
+        <div className="mt-fc-mapcol">
+          <div className="mt-section-head tight">
+            <h2>Forecast map</h2>
+            <label className="mt-fc-switch">
+              <input type="checkbox" checked={flips} onChange={(e) => setFlips(e.target.checked)} />
+              <span aria-hidden />
+              Show forecasted flips
+            </label>
+          </div>
+          <ForecastMap office={office} races={data.races} updatedAt={data.ratings.updatedAt} flips={flips} />
+          <p className="muted small">
+            Each {unit} is shaded by the party favored to win and how safe the race is. Hover a {unit} for its forecast, and select it to open
+            the full race.
+          </p>
+        </div>
+        <aside className="mt-panel" aria-label={`Every ${CHAMBER[office]} race`}>
+          <div className="mt-section-head tight">
+            <h2>Every {office === "governor" ? "governor's" : CHAMBER[office]} race</h2>
+          </div>
+          <ForecastRaces office={office} races={data.races} limit={25} />
+        </aside>
+      </div>
     </>
   );
 }
 
-/** The sentence over each overview card: the chance of control and projected seats. */
-function summary(office: ForecastOffice, view: ChamberView): string {
-  if (office === "governor") return `Ballotwise's model projects Democrats to hold ${view.dSeats} governorships and Republicans ${view.rSeats}. The table lists the most competitive races, closest to a toss-up first.`;
-  const lead = view.dControl === null ? `projects Democrats to win ${view.dSeats} seats` : `gives Democrats a ${Math.round(view.dControl * 100)}% chance of winning the ${CHAMBER[office]}, with a projected ${view.dSeats} seats`;
-  return `Ballotwise's model ${lead}. The table lists the most competitive races, closest to a toss-up first.`;
-}
+/** Where control sits, at the right of each overview card's head. */
+const CONTROL_LINE: Record<ForecastOffice, string> = { house: "218 for control", senate: "51 D · 50 R for control", governor: "No majority to win" };
 
-/** The overview: one chamber's hero (House or Senate), then a card of competitive races and a control card for each office. */
+/** The overview: one chamber's hero (House or Senate), then a card per office with its odds and closest races. */
 function OverviewPage({ data, views, forecast }: { data: Overview; views: Record<ForecastOffice, ChamberView>; forecast: ForecastOverview | null }) {
   const [chamber, setChamber] = useState<"house" | "senate">("house");
   const { control, seats } = series(chamber, forecast);
   return (
     <>
-      <div className="mt-fc-chambers">
-        <span>Chambers</span>
-        <div className="mt-seg" role="group" aria-label="Chamber">
-          {(["house", "senate"] as const).map((c) => (
-            <button key={c} type="button" aria-pressed={chamber === c} onClick={() => setChamber(c)}>
-              {CHAMBER[c]}
-            </button>
-          ))}
-        </div>
-      </div>
       <ForecastHero
         office={chamber}
         view={views[chamber]}
-        updatedAt={forecast?.updatedAt ?? data.ratings.updatedAt}
         control={control}
         seats={seats}
         marker={marketsJoined(forecast, chamber)}
+        controls={
+          <div className="mt-seg" role="group" aria-label="Chamber">
+            {(["house", "senate"] as const).map((c) => (
+              <button key={c} type="button" aria-pressed={chamber === c} onClick={() => setChamber(c)}>
+                {CHAMBER[c]}
+              </button>
+            ))}
+          </div>
+        }
         action={
-          <Link className="btn secondary small mt-fc-full" href={HREF[chamber]}>
-            View full {CHAMBER[chamber]} forecast →
+          <Link className="mt-fc-full" href={HREF[chamber]}>
+            Full {CHAMBER[chamber]} forecast →
           </Link>
         }
       />
       <div className="mt-fc-grid">
         {OFFICES.map((o) => (
           <section key={o} className="mt-fc-card">
-            <h2>
-              <Link href={HREF[o]}>2026 {o === "governor" ? "Governor" : CHAMBER[o]} Forecast ›</Link>
-            </h2>
-            <p className="muted small">{summary(o, views[o])}</p>
-            <ForecastRaces office={o} races={data.races} limit={10} />
+            <div className="mt-fc-card-head">
+              <h2>
+                <Link href={HREF[o]}>{o === "governor" ? "Governors" : CHAMBER[o]}</Link>
+              </h2>
+              <span className="muted small">{CONTROL_LINE[o]}</span>
+            </div>
+            <div className="mt-fc-card-body">
+              <ForecastOdds office={o} view={views[o]} control={series(o, forecast).control} />
+              <p className="mt-fc-label">Closest races</p>
+              <ForecastRaces office={o} races={data.races} limit={10} />
+            </div>
           </section>
         ))}
-      </div>
-      <div className="mt-fc-grid">
-        <ControlCard title="House control" view={views.house} href={HREF.house} office="house" control={series("house", forecast).control} />
-        <ControlCard title="Senate control" view={views.senate} href={HREF.senate} office="senate" control={series("senate", forecast).control} />
-        <ControlCard title="Governorships" view={views.governor} href={HREF.governor} office="governor" control={[]} />
       </div>
     </>
   );
 }
 
-/** The Forecast tab, after DDHQ's forecast pages: an overview and one page each for the House, Senate and governors. */
+/** The Forecast tab: an overview and one page each for the House, Senate and governors. */
 export function ForecastTab({ view }: { view: ForecastView }) {
   const { data, error } = useLive<Overview>("/api/midterms");
   const live = useLive<ForecastOverview>("/api/midterms/forecast");
@@ -187,24 +189,28 @@ export function ForecastTab({ view }: { view: ForecastView }) {
     if (!data) return null;
     return Object.fromEntries(OFFICES.map((o) => [o, withServer(chamberFromRaces(data.races, o, data.balance[o]), forecast?.chambers?.[o], o)])) as Record<ForecastOffice, ChamberView>;
   }, [data, forecast]);
+  const updatedAt = forecast?.updatedAt ?? data?.ratings.updatedAt ?? null;
+  const count = view === "overview" ? 0 : (data?.races.filter((r) => r.office === view).length ?? 0);
+  const kicker = view === "overview" ? "Ballotwise model for the House, Senate and governors" : count ? `${count} races` : "";
 
   return (
     <div className="wrap mt mt-fc">
       <ModeNav current="/midterms/forecast" />
-      <header className="mt-fc-top">
-        <p className="mt-fc-crumb">
-          <Link href={HREF.overview}>Forecast</Link>
-          <span aria-hidden>›</span>
-          <b>{TITLE[view]}</b>
-        </p>
-        <nav className="mt-fc-nav" aria-label="Forecast pages">
-          {(Object.keys(TITLE) as ForecastView[]).map((v) => (
-            <Link key={v} href={HREF[v]} aria-current={v === view ? "page" : undefined}>
-              {TITLE[v]}
-            </Link>
-          ))}
-        </nav>
+      <header className="mt-hero">
+        <h1>{view === "overview" ? "Forecast" : `${TITLE[view]} forecast`}</h1>
+        <span className="mt-kicker">{kicker}</span>
+        <span className="mt-updated small">
+          {updatedAt && `Updated ${STAMP.format(updatedAt)} · `}
+          <Link href="/midterms/methodology">How it works</Link>
+        </span>
       </header>
+      <nav className="mt-seg mt-fc-pages" aria-label="Forecast pages">
+        {(Object.keys(TITLE) as ForecastView[]).map((v) => (
+          <Link key={v} href={HREF[v]} aria-current={v === view ? "page" : undefined}>
+            {TITLE[v]}
+          </Link>
+        ))}
+      </nav>
       {error && !data && <p className="error">{error}</p>}
       {!data && !error && <ForecastSkeleton />}
       {data && views && (view === "overview" ? <OverviewPage data={data} views={views} forecast={forecast} /> : <OfficeForecast office={view} data={data} view={views[view]} forecast={forecast} />)}

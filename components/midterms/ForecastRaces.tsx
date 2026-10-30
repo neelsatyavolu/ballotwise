@@ -1,4 +1,4 @@
-// Rendered inside the Forecast tab: the most competitive races, closest to a coin flip first, as DDHQ lists them.
+// Rendered inside the Forecast tab: the most competitive races, closest to a coin flip first.
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { safeSide } from "@/lib/midterms/explore";
@@ -37,20 +37,35 @@ const FILTERS = [
   { id: "Safe R", label: "Safe R" },
 ] as const;
 
-/**
- * Where a race's dot sits on the Democratic ← | → Republican axis (0 to 100, 50 is a coin flip), and the favorite's
- * chance. Independents favored over a Republican sit on the left with the Democrats.
- */
-export function dotOf(r: RaceSummary): { x: number; p: number } | null {
-  const odds = chances(r.signal);
-  if (!odds) return null;
-  const rep = odds.R ?? 0;
-  const left = Math.max(odds.D ?? 0, odds.I ?? 0);
-  const p = Math.max(rep, left);
-  return { x: rep >= left ? 50 + (p - 0.5) * 100 : 50 - (p - 0.5) * 100, p };
+/** The favorite and its chance, for the table's percentage column. */
+function favoriteOf(odds: Partial<Record<"D" | "R" | "I", number>>): { party: "D" | "R" | "I"; p: number } {
+  const [party, p] = (Object.entries(odds) as ["D" | "R" | "I", number][]).reduce((a, b) => (b[1] > a[1] ? b : a));
+  return { party, p };
 }
 
-/** The office's races, most competitive first, with a search box, a rating filter and a dot plot of each favorite's chance. */
+const INK = { D: "var(--dem-ink)", R: "var(--rep-ink)", I: "var(--oth)" } as const;
+
+/** The race's rating as a chip, in the same style as the race lists: dotted for Safe, a dash with no forecast. */
+function RatingChip({ race }: { race: RaceSummary }) {
+  if (race.rating) return <span className={`mt-rating r-${race.rating}`}>{RATING_LABEL[race.rating]}</span>;
+  const safe = safeSide(race);
+  return safe ? <span className="mt-rating r-safe">Safe {safe}</span> : <span className="mt-rating r-none">—</span>;
+}
+
+/** Each side's chance as one split bar, Democrats from the left and Republicans from the right, a tick at even. */
+function ChanceBar({ odds }: { odds: Partial<Record<"D" | "R" | "I", number>> }) {
+  return (
+    <span className="mt-fc-chance" aria-hidden>
+      <span style={{ width: `${(odds.D ?? 0) * 100}%`, background: "var(--dem)" }} />
+      <span style={{ width: `${(odds.I ?? 0) * 100}%`, background: "var(--oth)" }} />
+      <span style={{ flex: 1 }} />
+      <span style={{ width: `${(odds.R ?? 0) * 100}%`, background: "var(--rep)" }} />
+      <i />
+    </span>
+  );
+}
+
+/** The office's races, most competitive first, with a search box, a rating filter and each side's chance as a split bar. */
 export function ForecastRaces({ office, races, limit }: { office: ForecastOffice; races: readonly RaceSummary[]; limit: number }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("all");
@@ -76,43 +91,38 @@ export function ForecastRaces({ office, races, limit }: { office: ForecastOffice
           ))}
         </select>
       </div>
-      <table className="mt-fc-table">
-        <thead>
-          <tr>
-            <th>{office === "house" ? "District" : "State"}</th>
-            <th className="axis">
-              <span>← Democratic</span>
-              <span>Republican →</span>
-            </th>
-            <th className="rating">Rating</th>
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((r) => {
-            const dot = dotOf(r);
-            const fill = forecastFill(r);
-            return (
-              <tr key={r.id}>
-                <td>
-                  <Link href={`/midterms/${r.id}`}>{forecastName(r)} ›</Link>
-                </td>
-                <td className="axis">
-                  <span className="mt-fc-track" aria-hidden>
-                    <i className="mid" />
-                    {dot && (
-                      <span className={`mt-fc-dot${dot.x > 50 ? " right" : ""}`} style={{ left: `${dot.x}%` }}>
-                        <b style={{ background: fill }} />
-                        <em style={{ color: fill }}>{Math.round(dot.p * 100)}%</em>
-                      </span>
-                    )}
-                  </span>
-                </td>
-                <td className="rating" style={{ color: r.rating === "tossup" ? "var(--ink)" : fill }}>{ratingText(r)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="mt-rows-wrap">
+        <table className="mt-table mt-rows mt-fc-table">
+          <thead>
+            <tr>
+              <th>{office === "house" ? "District" : "State"}</th>
+              <th>Chance</th>
+              <th className="num">Favorite</th>
+              <th className="rating">Rating</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r) => {
+              const odds = chances(r.signal);
+              const fav = odds && Object.keys(odds).length ? favoriteOf(odds) : null;
+              return (
+                <tr key={r.id} className={r.rating === "tossup" ? "watch" : undefined}>
+                  <td>
+                    <Link href={`/midterms/${r.id}`}>{forecastName(r)}</Link>
+                  </td>
+                  <td className="chance">{odds && <ChanceBar odds={odds} />}</td>
+                  <td className="num" style={fav ? { color: INK[fav.party] } : undefined}>
+                    {fav ? `${fav.party} ${Math.round(fav.p * 100)}%` : "—"}
+                  </td>
+                  <td className="rating">
+                    <RatingChip race={r} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {!list.length && <p className="muted small">No races match.</p>}
       {list.length > limit && (
         <button type="button" className="btn secondary small mt-fc-more" onClick={() => setAll((v) => !v)}>

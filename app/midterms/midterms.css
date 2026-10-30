@@ -958,118 +958,92 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
   .mt-find .mt-search { font-size: 16px; }
 }
 
-/* Forecast tab: DDHQ-style forecast pages for the House, Senate and governors. */
-.mt-fc-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-.mt-fc-crumb { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 22px; }
-.mt-fc-crumb a { color: var(--accent); font-weight: 700; text-decoration: none; }
-.mt-fc-crumb span { color: var(--muted); }
-.mt-fc-crumb b { color: var(--ink); }
-.mt-fc-nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
-.mt-fc-nav a { padding: 6px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 500; white-space: nowrap; }
-.mt-fc-nav a:hover { color: var(--ink); background: var(--el-hover); }
-.mt-fc-nav a[aria-current="page"] { color: var(--ink); background: var(--el-raised); }
-.mt-fc-chambers { display: grid; justify-items: center; gap: 6px; }
-.mt-fc-chambers > span { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+/* Forecast tab: the House, Senate and governor forecasts in the same panels, bars and race tables as the office pages. */
+.mt .mt-fc-pages { margin-top: 10px; }
+.mt .mt-fc-pages a { border-radius: 6px; padding: 4px 10px; font-size: 13px; font-weight: 500; color: var(--muted); text-decoration: none; }
+.mt .mt-fc-pages a:hover { color: var(--ink); }
+.mt .mt-fc-pages a[aria-current="page"] { background: var(--el-raised); color: var(--ink); }
+.mt-fc .mt-updated a { color: var(--accent); }
+.mt-fc-label { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 
-.mt-fc-hero { display: grid; gap: 10px; padding: 28px 28px 20px; border-radius: 10px; background: linear-gradient(180deg, #14254a 0%, #101a30 55%, var(--paper) 100%); text-align: center; }
-.mt-fc-brand { margin: 0; font-size: 18px; font-weight: 700; color: var(--ink); }
-.mt-fc-head { margin: 0; font-size: clamp(26px, 3.2vw, 40px); font-weight: 800; line-height: 1.15; letter-spacing: -0.01em; }
+.mt-fc-hero { margin-top: 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
+.mt-fc-hero-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+.mt-fc-head { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; color: var(--ink); }
 .mt-fc-head .t-d { color: var(--dem-ink); }
 .mt-fc-head .t-r { color: var(--rep-ink); }
-.mt-fc-head .t-word { color: var(--accent); }
-.mt-fc-head .t-strong { color: #fff; }
-.mt-fc-head .t-plain { color: color-mix(in srgb, var(--ink) 72%, transparent); }
-.mt-fc-stamp { margin: 0; color: var(--ink); font-size: 14px; }
-.mt-fc-how { margin: 0; color: var(--ink); font-size: 14px; }
-.mt-fc-how a { color: var(--accent); }
-.mt-fc-full { justify-self: center; }
-.mt-fc-hero .mt-fc-tabs { justify-self: center; margin-top: 4px; }
-.mt-fc-hero .mt-mk-chart { text-align: left; margin-top: 4px; }
+.mt-fc-hero-body { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); }
+.mt-fc-hero-side { display: grid; gap: 14px; align-content: start; padding: 14px; border-right: 1px solid var(--rule); }
+.mt-fc-hero-chart { min-width: 0; padding: 12px 14px; }
+.mt-fc-hero .mt-fc-parts { margin: 0; }
+.mt-fc-full { justify-self: start; font-size: 14px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.mt-fc-full:hover { text-decoration: underline; }
+.mt-fc-odds { display: grid; gap: 8px; }
+.mt-fc-sub { margin: 0; font-size: 12px; color: var(--muted); }
+.mt-fc-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.mt-mk-marker line { stroke: var(--muted); stroke-dasharray: 3 3; }
+.mt-mk-marker text { fill: var(--muted); font-size: 10px; }
 
-.mt-fc-odds { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-top: 10px; text-align: left; }
-.mt-fc-party { display: flex; align-items: center; gap: 12px; }
-.mt-fc-party.r { justify-content: flex-end; text-align: right; }
-.mt-fc-party > div { display: grid; }
-.mt-fc-badge { display: grid; place-items: center; flex: none; width: 56px; height: 56px; border-radius: 8px; color: #fff; }
-.mt-fc-badge.d { background: var(--rate-safe-d); }
-.mt-fc-badge.r { background: var(--rate-safe-r); }
-.mt-fc-icon { width: 36px; height: 36px; fill: #fff; }
-.mt-fc-name { font-size: 14px; color: var(--ink); }
-.mt-fc-p { display: inline-flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
-.mt-fc-party.r .mt-fc-p { justify-content: flex-end; }
-.mt-fc-sub { font-size: 13px; color: var(--muted); }
-.mt-fc-week { padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
-.mt-fc-week.up { color: #3fd07a; background: color-mix(in srgb, #3fd07a 16%, transparent); }
-.mt-fc-week.down { color: #ff5fa2; background: color-mix(in srgb, #ff5fa2 16%, transparent); }
-.mt-fc-split { grid-column: 1 / -1; height: 10px; border-radius: 6px; background: var(--rate-safe-r); overflow: hidden; }
-.mt-fc-split span { display: block; height: 100%; background: var(--rate-safe-d); }
-
-.mt-fc-section { display: grid; gap: 12px; }
-.mt-fc-section h2 { margin: 0; font-size: 24px; }
-.mt-fc-section > p { margin: 0; max-width: 72ch; }
-.mt-fc-seats { display: grid; gap: 8px; }
-.mt-fc-seats-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
-.mt-fc-total { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink); }
-.mt-fc-total b { padding: 2px 12px; border-radius: 6px; font-size: 26px; font-variant-numeric: tabular-nums; }
-.mt-fc-total.d b { color: var(--dem-ink); background: color-mix(in srgb, var(--rate-safe-d) 22%, transparent); }
-.mt-fc-total.r b { color: var(--rep-ink); background: color-mix(in srgb, var(--rate-safe-r) 22%, transparent); }
-.mt-fc-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 14px; color: var(--ink); }
-.mt-fc-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
-.mt-fc-seatbar { position: relative; display: flex; height: 30px; border-radius: 6px; overflow: hidden; background: var(--rule-strong); }
+.mt .mt-fc-seats { margin-top: 12px; }
+.mt-fc-legend { margin: 0; align-self: center; justify-content: center; }
+.mt-fc-seatbar { position: relative; display: flex; height: 22px; overflow: hidden; background: var(--el-track); }
 .mt-fc-seatbar span { display: grid; place-items: center; min-width: 0; overflow: hidden; color: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mt-fc-seatbar span.dark { color: #111; }
-.mt-fc-majority { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed #fff; }
-.mt-fc-control { margin: 0; font-size: 13px; color: var(--muted); }
-.mt-fc-control span { display: inline-block; transform: translateX(-50%); white-space: nowrap; }
-.mt-fc-switch { display: inline-flex; align-items: center; gap: 10px; justify-self: center; cursor: pointer; font-weight: 500; color: var(--ink); }
+.mt-fc-majority { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink); }
+
+.mt-fc-mapcol { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.mt-fc-mapcol > p { margin: 0; }
+.mt-fc .mt-office, .mt-fc .mt-zoom { border: 0; background: none; padding: 0; }
+.mt-fc-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--muted); }
+.mt-fc-switch:hover { color: var(--ink); }
 .mt-fc-switch input { position: absolute; opacity: 0; pointer-events: none; }
-.mt-fc-switch span { position: relative; width: 38px; height: 22px; border-radius: 999px; background: var(--el-raised); border: 1px solid var(--el-line); transition: background 0.2s; }
-.mt-fc-switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.mt-fc-switch span { position: relative; width: 32px; height: 18px; border-radius: 999px; background: var(--el-raised); border: 1px solid var(--el-line); transition: background 0.2s; }
+.mt-fc-switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
 .mt-fc-switch input:checked + span { background: var(--accent); }
-.mt-fc-switch input:checked + span::after { transform: translateX(16px); }
+.mt-fc-switch input:checked + span::after { transform: translateX(14px); }
 .mt-fc-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.mt-fc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
-.mt-fc-card { display: grid; gap: 10px; align-content: start; padding: 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--sheet); min-width: 0; }
-.mt-fc-card h2 { margin: 0; font-size: 22px; }
-.mt-fc-card h2 a { color: var(--accent); text-decoration: none; }
-.mt-fc-card h2 a:hover { text-decoration: underline; }
-.mt-fc-card p { margin: 0; }
-.mt-fc-card .mt-fc-odds { margin-top: 0; }
+.mt-fc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; margin-top: 16px; }
+.mt-fc-card { display: grid; align-content: start; min-width: 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+.mt-fc-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding: 8px 12px; border-bottom: 1px solid var(--rule); }
+.mt-fc-card-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.mt-fc-card-head h2 a { color: var(--ink); text-decoration: none; }
+.mt-fc-card-head h2 a:hover { text-decoration: underline; }
+.mt-fc-card-body { display: grid; gap: 12px; min-width: 0; padding: 12px; }
+.mt-fc-card .mt-rows-wrap { max-height: none; }
+
 .mt-fc-races { display: grid; gap: 8px; min-width: 0; }
 .mt-fc-filters { display: flex; gap: 8px; }
 .mt-fc-filters input { flex: 1; min-width: 0; }
 .mt-fc-filters select { flex: none; width: auto; }
-.mt-fc-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.mt-fc-table th { padding: 6px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-align: left; }
-.mt-fc-table th.axis { display: flex; justify-content: center; gap: 12px; white-space: nowrap; overflow: hidden; font-size: 10px; }
-.mt-fc-table td { padding: 7px 0; vertical-align: middle; }
-.mt-fc-table td:first-child { width: 34%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mt-fc-table td a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
-.mt-fc-table .rating { width: 22%; text-align: right; font-weight: 700; white-space: nowrap; }
-.mt-fc-track { position: relative; display: block; height: 22px; margin: 0 8px; }
-.mt-fc-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--rule); }
-.mt-fc-track .mid { position: absolute; left: 50%; top: -4px; bottom: -4px; border-left: 1px solid var(--el-line); }
-.mt-fc-dot { position: absolute; top: 50%; display: flex; align-items: center; gap: 4px; flex-direction: row-reverse; transform: translate(calc(-100% + 6px), -50%); }
-.mt-fc-dot.right { flex-direction: row; transform: translate(-6px, -50%); }
-.mt-fc-dot b { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgb(0 0 0 / 0.4); }
-.mt-fc-dot em { font-style: normal; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mt-fc-table { table-layout: fixed; }
+.mt-fc-table td:first-child { overflow: hidden; text-overflow: ellipsis; }
+.mt-fc-table th:first-child { width: 36%; }
+.mt-fc-table .num { width: 64px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mt-fc-table .rating { width: 84px; text-align: right; }
+/* The office rail hides its race list's third and fourth columns before votes; here they're the favorite and rating. */
+.mt .mt-panel .mt-rows.mt-fc-table th:nth-child(n + 3), .mt .mt-panel .mt-rows.mt-fc-table td:nth-child(n + 3) { display: table-cell; }
+.mt-fc-chance { position: relative; display: flex; height: 8px; background: var(--el-track); }
+.mt-fc-chance span { display: block; height: 100%; }
+.mt-fc-chance i { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--muted); }
 .mt-fc-more { justify-self: start; }
-.mt-fc-note { margin: 0; font-size: 12px; color: var(--muted); text-align: left; }
-.mt-mk-marker line { stroke: var(--muted); stroke-dasharray: 3 3; }
-.mt-mk-marker text { fill: var(--muted); font-size: 10px; }
-.mt-fc .mt-office, .mt-fc .mt-zoom { border: 0; background: none; padding: 0; }
+@media (min-width: 1001px) {
+  /* In the rail beside the map, the race list takes the room left under its heading and scrolls inside it. */
+  .mt-office > .mt-panel > .mt-fc-races { flex: 1 1 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
+}
+/* The race page's forecast split (components/midterms/RaceInsights.tsx). */
+.mt-fc-split { grid-column: 1 / -1; border-radius: 6px; background: var(--rate-safe-r); }
 
+@media (max-width: 860px) {
+  .mt-fc-hero-body { grid-template-columns: minmax(0, 1fr); }
+  .mt-fc-hero-side { border-right: 0; border-bottom: 1px solid var(--rule); }
+}
 @media (max-width: 720px) {
-  .mt-fc-hero { padding: 20px 14px 14px; }
-  .mt-fc-crumb { font-size: 18px; }
-  .mt-fc-badge { width: 44px; height: 44px; }
-  .mt-fc-icon { width: 28px; height: 28px; }
-  .mt-fc-p { font-size: 22px; gap: 6px; }
-  .mt-fc-week { display: none; }
+  .mt-fc-head { font-size: 18px; }
   .mt-fc-filters input { font-size: 16px; }
-  .mt-fc-table td:first-child { width: 40%; }
-  .mt-fc-table th.axis span { display: none; }
+}
+@media (max-width: 420px) {
+  .mt-fc-table th:nth-child(2), .mt-fc-table td.chance { display: none; }
+  .mt-fc-table th:first-child { width: auto; }
 }
 
 /* Senate, House and Governor pages: the map takes the full window, with the race list beside it at a fixed width. */
