@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SANTA_CLARA_RESULTS } from "@/lib/midterms/view";
 import "../midterms.css";
 
 export const metadata: Metadata = { title: "Sources and credits: 2026 midterms" };
@@ -18,6 +19,11 @@ export default function Credits() {
         Live results and race calls come from <a href="https://civicapi.org">civicAPI</a>, which collects them from state and county election offices. A race is marked won
         only when civicAPI&apos;s own decision desk calls it; these are not AP or Decision Desk HQ calls. &ldquo;Leading&rdquo; counts uncalled races by who is ahead, and
         &ldquo;reporting&rdquo; is precincts or ballot batches in, not the share of the expected vote.
+      </p>
+      <p>
+        Santa Clara County&apos;s city, school and district races and local measures come from the county Registrar of Voters&apos;{" "}
+        <a href={SANTA_CLARA_RESULTS}>election-night results</a>, since civicAPI doesn&apos;t carry them. The
+        county doesn&apos;t mark winners there, so those races show who leads and are never called.
       </p>
 
       <h2>Forecast and ratings</h2>

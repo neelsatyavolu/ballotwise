@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { foundGroup, matchedCandidates, matchTracked, splitPlace, untracked, type SearchGroup } from "@/lib/midterms/search";
-import { STATE_NAMES, type Overview } from "@/lib/midterms/view";
+import { SANTA_CLARA_RESULTS, STATE_NAMES, type Overview } from "@/lib/midterms/view";
 import type { FoundRace } from "@/lib/midterms/civic";
 import { useLive, useStars } from "./hooks";
 import { ModeNav } from "./ModeNav";
@@ -33,7 +33,7 @@ function Loading({ n }: { n: number }) {
   );
 }
 
-/** civicAPI's races outside the tracked offices, each opening the same race page as tracked ones. */
+/** civicAPI's and Santa Clara County's races outside the tracked offices, each opening the same race page as tracked ones. */
 function FoundRows({ races }: { races: FoundRace[] }) {
   return (
     <div className="mt-rows-wrap">
@@ -125,7 +125,7 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
 
       {!searching ? (
         <section className="mt-search-start" aria-label="Suggestions">
-          <p className="muted small">Search by office or place for any race civicAPI covers: mayors, city councils, school boards, judges, sheriffs and local measures. Candidate names work for Senate, House and governor races.</p>
+          <p className="muted small">Search by office or place for any race civicAPI or Santa Clara County covers: mayors, city councils, school boards, judges, sheriffs and local measures. Candidate names work for Senate, House and governor races.</p>
           <div className="mt-search-chips">
             {SUGGESTIONS.map((s) => (
               <button key={s} type="button" className="btn secondary small" onClick={() => setQ(s)}>
@@ -184,7 +184,7 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
                 <b>Nothing matches &ldquo;{query}&rdquo;.</b>
               </p>
               <p className="small">
-                City, county and school races come from civicAPI, which lists a place&apos;s races once its results feed is loaded. Coverage varies by state and fills in as counties publish, so a race can be missing for now.
+                City, county and school races come from civicAPI, which lists a place&apos;s races once its results feed is loaded, and from Santa Clara County&apos;s own results. Coverage varies by state and fills in as counties publish, so a race can be missing for now.
               </p>
               {parts && (
                 <div className="mt-search-chips">
@@ -200,7 +200,7 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
             </div>
           )}
           <p className="muted small">
-            Results from <a href="https://civicapi.org">civicAPI</a>, up to 25 at a time; add a place to narrow them.
+            Results from <a href="https://civicapi.org">civicAPI</a> and <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a>, up to 25 at a time; add a place to narrow them.
           </p>
         </div>
       )}

@@ -156,6 +156,7 @@ export function resetCivicMemo() {
   registryMemo = null;
   otherMemo.clear();
   searchMemo.clear();
+  areaMemo.clear();
 }
 
 /**
@@ -431,6 +432,8 @@ export async function fetchRace(summary: RaceSummary, now: number, baseline: Rea
 const otherMemo = new Map<number, { at: number; value: RaceDetail | null }>();
 /** Searches by query, briefly, so typing and repeat searches don't each reach civicAPI. */
 const searchMemo = new Map<string, { at: number; value: FoundRace[] }>();
+/** civicAPI's answers to the "Near you" tab's place searches, by query. They carry live numbers, so they're fresh for FRESH_MS. */
+const areaMemo = new Map<string, { at: number; value: unknown }>();
 /** Most entries either memo keeps; the oldest goes first. */
 const MEMO_CAP = 300;
 /** An id civicAPI doesn't know is remembered this long, so a crawler walking ids can't make us ask again and again. */
@@ -489,7 +492,7 @@ const searchAnswer = z.object({
     .default([]),
 });
 /** Most results a search returns. */
-const SEARCH_LIMIT = 25;
+export const SEARCH_LIMIT = 25;
 
 /**
  * US races matching `query` on civicAPI, for "find any race". civicAPI ignores its date filter on text searches,
@@ -519,4 +522,31 @@ export async function searchRaces(query: string, now: number): Promise<FoundRace
   const value = searchResults(await civic(`race/search?query=${encodeURIComponent(query)}&country=US&limit=100`));
   remember(searchMemo, key, { at: now, value });
   return value;
+}
+
+/**
+ * civicAPI's Nov 3 races matching `query`, with their numbers, for the races near an address. Fresh for FRESH_MS; on a
+ * civicAPI failure the last answer is used, marked stale. Like race pages, no numbers show before polls open.
+ */
+export async function searchLive(query: string, now: number): Promise<{ races: RaceSummary[]; stale: boolean }> {
+  const key = query.toLowerCase();
+  const memo = areaMemo.get(key);
+  let answer = memo?.value;
+  let stale = false;
+  if (!memo || now - memo.at >= FRESH_MS) {
+    try {
+      answer = await civic(`race/search?query=${encodeURIComponent(query)}&country=US&limit=100`);
+      remember(areaMemo, key, { at: now, value: answer });
+    } catch (err) {
+      if (!memo) throw err;
+      stale = true;
+    }
+  }
+  const found = (answer as { races?: unknown } | null)?.races;
+  const races = (Array.isArray(found) ? found : []).flatMap((input) => {
+    const race = summarizeOther(input, now);
+    if (race?.local?.date !== ELECTION_DATE) return [];
+    return [now < FIRST_POLLS_OPEN ? blankResults(race) : race];
+  });
+  return { races, stale };
 }

@@ -69,16 +69,17 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
   const regions = race.counties;
   const withVotes = regions.filter((c) => c.total > 0);
   const updated = race.updated ? Date.parse(race.updated) : NaN;
+  const source = race.source?.name ?? "civicAPI";
 
   return (
     <section className="mt-context" aria-labelledby="context">
       <h2 id="context">Counting so far</h2>
       <ul>
         <li>
-          {Number.isFinite(updated) ? `civicAPI last updated this race at ${stampET(updated)} ET` : "civicAPI gives no update time for this race"}; Ballotwise checked at {stampET(fetchedAt)} ET.
+          {Number.isFinite(updated) ? `${source} last updated ${race.source ? "its results" : "this race"} at ${stampET(updated)} ET` : `${source} gives no update time for this race`}; Ballotwise checked at {stampET(fetchedAt)} ET.
         </li>
         <li>
-          {race.total === 0 ? "No votes counted yet." : race.reportingUnknown || !race.reporting ? "civicAPI has votes but gives no reporting figure for this race." : `${Math.round(race.reporting)}% reporting, civicAPI's estimate of precincts or ballot batches in. It isn't the share of the expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? "; mail, provisional and late ballots can still come in" : ""}.`}
+          {race.total === 0 ? "No votes counted yet." : race.reportingUnknown || !race.reporting ? `${source} has votes but gives no reporting figure for this race.` : `${Math.round(race.reporting)}% reporting, ${race.source ? `${source}'s count of precincts` : "civicAPI's estimate of precincts or ballot batches"} in. It isn't the share of the expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? "; mail, provisional and late ballots can still come in" : ""}.`}
         </li>
         {regions.length > 1 && (
           <li>
@@ -86,7 +87,7 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
             {withVotes.length ? `; civicAPI reports 100% for ${regions.filter((c) => c.reporting >= 100).length} of them` : ""}.
           </li>
         )}
-        <li className="muted">civicAPI doesn&apos;t estimate how many votes remain, so this page doesn&apos;t either.</li>
+        <li className="muted">{source} doesn&apos;t estimate how many votes remain here, so this page doesn&apos;t either.</li>
       </ul>
     </section>
   );

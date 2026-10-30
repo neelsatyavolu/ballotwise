@@ -9,6 +9,8 @@ export const districtsSchema = z.object({
   stateSenate: z.string().nullable(),
   stateHouse: z.string().nullable(),
   schoolDistrict: z.string().nullable(),
+  /** Where elementary and high schools have separate districts, the high school one. Absent on addresses saved before it was kept. */
+  highSchoolDistrict: z.string().nullable().optional(),
 });
 export type Districts = z.infer<typeof districtsSchema>;
 
@@ -34,6 +36,7 @@ export function districtsFrom(geos: Geo): Districts | null {
     stateSenate: pick(geos, /State Legislative Districts - Upper$/),
     stateHouse: pick(geos, /State Legislative Districts - Lower$/),
     schoolDistrict: pick(geos, /^Unified School Districts$/) ?? pick(geos, /^Elementary School Districts$/),
+    highSchoolDistrict: pick(geos, /^Secondary School Districts$/),
   };
 }
 

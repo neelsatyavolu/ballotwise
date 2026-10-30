@@ -84,6 +84,14 @@ describe("districtsFrom", () => {
     })).toMatchObject({ state: "California", congressional: "Congressional District 34", stateHouse: "Assembly District 54", county: null });
     expect(districtsFrom({})).toBeNull();
   });
+
+  it("keeps a high school district alongside an elementary one", () => {
+    expect(districtsFrom({
+      States: [{ NAME: "California" }],
+      "Elementary School Districts": [{ NAME: "Mountain View Whisman Elementary School District" }],
+      "Secondary School Districts": [{ NAME: "Mountain View-Los Altos Union School District" }],
+    })).toMatchObject({ schoolDistrict: "Mountain View Whisman Elementary School District", highSchoolDistrict: "Mountain View-Los Altos Union School District" });
+  });
 });
 
 describe("contest guides", () => {

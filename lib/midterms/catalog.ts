@@ -1,6 +1,7 @@
 import type { Db } from "../auth/accounts";
 import { agrees, recordCalls, type Call } from "./calls";
 import { CivicError, fetchCatalog, fetchOtherRace, fetchRace, FRESH_MS } from "./civic";
+import { fetchCountyRace, isCountyRace } from "./county";
 import { BASELINE_2024 } from "./data";
 import { raceHistory, recordHistory } from "./history";
 import { evidenceAt, raceKey, ratedRaces, readOdds, refreshOdds } from "./odds";
@@ -89,11 +90,12 @@ export async function race(db: Db, id: number, now: number, background?: (work: 
 }
 
 /**
- * A race outside the tracked offices (a mayor, a school board seat, a local question), straight from civicAPI by id,
- * shaped like race() for the race page: no ratings, calls feed, or vote history. Null when civicAPI has no such US race.
+ * A race outside the tracked offices (a mayor, a school board seat, a local question), straight from civicAPI by id
+ * or from a county's own results (Santa Clara's), shaped like race() for the race page: no ratings, calls feed, or
+ * vote history. Null when there's no such US race.
  */
 export async function otherRace(id: number, now: number) {
-  const found = await fetchOtherRace(id, now, BASELINE_2024);
+  const found = isCountyRace(id) ? await fetchCountyRace(id, now) : await fetchOtherRace(id, now, BASELINE_2024);
   return found && { ...found, race: { ...found.race, signal: null, call: null }, callPending: false as const };
 }
 

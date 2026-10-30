@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import type { FoundRace } from "@/lib/midterms/civic";
-import { STATE_NAMES } from "@/lib/midterms/view";
+import { SANTA_CLARA_RESULTS, STATE_NAMES } from "@/lib/midterms/view";
 
 /** How long typing pauses before a search goes out. */
 const DEBOUNCE_MS = 300;
@@ -106,7 +106,7 @@ export function RaceSearchButton() {
           </button>
         </div>
         {open && <RaceSearch autoFocus />}
-        <p className="muted small">Results from <a href="https://civicapi.org">civicAPI</a>.</p>
+        <p className="muted small">Results from <a href="https://civicapi.org">civicAPI</a> and <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a>.</p>
       </dialog>
     </>
   );

@@ -115,7 +115,12 @@ export function RaceView({ id }: { id: number }) {
           </div>
           {race.total > 0 && <TurnoutLine race={race} />}
           <p className="muted small mt-source">
-            {called ? `${called.name} was declared the winner by civicAPI's decision desk, not AP or Decision Desk HQ. ` : ""}* Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
+            {race.source && (
+              <>
+                Results from <a href={race.source.url}>{race.source.name}</a>. The county doesn&apos;t mark winners in its results, so this page shows who leads and calls no one.{" "}
+              </>
+            )}
+            {called && !race.source ? `${called.name} was declared the winner by civicAPI's decision desk, not AP or Decision Desk HQ. ` : ""}* Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
           {race.office !== "measure" && <RaceInsights race={race} />}
@@ -142,8 +147,8 @@ export function RaceView({ id }: { id: number }) {
             <p className="muted small">
               {race.local
                 ? race.counties.length > 1
-                  ? "civicAPI reports this race by town, ward or precinct rather than county, so there's no map. Every area is in the table below."
-                  : "civicAPI reports this race as one total, so there's no map."
+                  ? `${race.source?.name ?? "civicAPI"} reports this race by town, ward or precinct rather than county, so there's no map. Every area is in the table below.`
+                  : `${race.source?.name ?? "civicAPI"} reports this race as one total, so there's no map.`
                 : race.counties.length > 1
                   ? `${STATE_NAMES[race.state] ?? race.state} reports by town, so there's no county map. Every town is in the table below.`
                   : "This state reports one statewide total, so there's no county map."}

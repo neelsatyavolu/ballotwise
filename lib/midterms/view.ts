@@ -25,6 +25,8 @@ export type Overview = {
   simulated?: true;
 };
 
+/** Santa Clara County's election-night results page, the source of its local races (see county.ts). */
+export const SANTA_CLARA_RESULTS = "https://results.enr.clarityelections.com/CA/Santa_Clara/127570/web.345435/#/summary";
 export const STATE_NAMES: Record<string, string> = Object.fromEntries(states.map(([, postal, name]) => [postal, name]));
 
 export const OFFICE_LABEL: Record<Office, string> = { senate: "Senate", house: "House", governor: "Governor", measure: "Ballot measures" };

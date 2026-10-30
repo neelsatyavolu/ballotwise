@@ -53,6 +53,8 @@ export type RaceSummary = {
    * whether it's a contest between candidates or a yes/no question, `type` is civicAPI's race type, `date` its election day.
    */
   local?: { kind: "candidates" | "question"; type: string; date: string };
+  /** Who publishes this race's results when it isn't civicAPI (a county's own results site), so the page credits them. */
+  source?: { name: string; url: string };
   /** Market odds and polling behind the rating, attached by the overview; absent on bare catalog entries. */
   signal?: Signal | null;
   /**
