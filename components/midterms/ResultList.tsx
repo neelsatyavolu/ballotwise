@@ -5,6 +5,7 @@ import { EARLY_REPORTING, favoredSide, groupOf, isEarly, leaderOf, statusOf, tie
 import { leadingFlip, outcomeOf } from "@/lib/midterms/holders";
 import { stampET, stateFinal } from "@/lib/midterms/polls";
 import { fmt, lead, partyTag, signalLine, type RaceSummary } from "@/lib/midterms/view";
+import { Avatar } from "./Avatar";
 import { partyColor } from "./party";
 import { shortLabel } from "./PollClose";
 import { RatingTag } from "./RaceCard";
@@ -67,7 +68,7 @@ function partyCode(party: string): string {
   return partyTag(party).toUpperCase();
 }
 
-const initials = (name: string) => {
+export const initials = (name: string) => {
   const parts = name.replace(/[^\p{L}\s'-]/gu, " ").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "?";
   return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + lastName(name)[0]).toUpperCase();
@@ -93,7 +94,7 @@ function Candidates({ race }: { race: RaceSummary }) {
         {shown.map((c: Cand) => (
           <tr key={c.name} className={c.winner ? "won" : undefined} style={{ "--p": partyColor(c), opacity: early && !c.winner ? 0.85 : undefined } as CSSProperties}>
             <td title={c.name}>
-              {!measure && <span className="mt-av" aria-hidden>{initials(c.name)}</span>}
+              {!measure && <Avatar race={race} candidate={c} className="mt-av">{initials(c.name)}</Avatar>}
               <span className="mt-tile-name">{measure ? c.name : lastName(c.name)}</span>
               {c.incumbent && <span title="Incumbent">*</span>}
               {c.winner && <span className="mt-check" aria-label="winner"> ✓</span>}
@@ -150,13 +151,6 @@ function StatusText({ race, now }: { race: RaceSummary; now: number }) {
   const final = stateFinal(race.state);
   return <span className="mt-res-status muted" title="When the state's last scheduled polls close; some districts may close earlier">{final && final > now ? `Polls close ${stampET(final)} ET` : "Awaiting votes"}</span>;
 }
-
-const SORTS: { by: Sort; label: string }[] = [
-  { by: "state", label: "Race" },
-  { by: "close", label: "Lead" },
-  { by: "reporting", label: "Reporting" },
-  { by: "called", label: "Status" },
-];
 
 /** The lead as a solid party-colored badge ("+4.21% Smith") and the gap in votes. */
 function Lead({ race }: { race: RaceSummary }) {
@@ -220,21 +214,12 @@ function RaceTile({ race, starred, onStar, now }: { race: RaceSummary; starred: 
 }
 
 /** The filtered races as results cards in a grid, grouped by count status when sorted by closeness. */
-export function ResultList({ races, stars, sort, onSort, now }: { races: RaceSummary[]; stars: Stars; sort: Sort; onSort: (s: Sort) => void; now: number }) {
+export function ResultList({ races, stars, sort, now }: { races: RaceSummary[]; stars: Stars; sort: Sort; now: number }) {
   const [shown, setShown] = useState(PAGE);
   if (!races.length) return <p className="muted mt-res-empty">No races match these filters.</p>;
   const groupCounts = races.reduce((acc, r) => ({ ...acc, [groupOf(r)]: (acc[groupOf(r)] ?? 0) + 1 }), {} as Partial<Record<Group, number>>);
   return (
     <div className="mt-res">
-      <div className="mt-res-sort" role="group" aria-label="Sort races by">
-        <span className="mt-res-sort-label">Sort</span>
-        {SORTS.map((s) => (
-          <button key={s.by} type="button" aria-pressed={sort === s.by} onClick={() => onSort(s.by)}>
-            {s.label}
-            {sort === s.by && " ▾"}
-          </button>
-        ))}
-      </div>
       <ol className="mt-res-grid" aria-label="Races">
         {races.slice(0, shown).map((r, i) => {
           const group = sort === "close" ? groupOf(r) : null;

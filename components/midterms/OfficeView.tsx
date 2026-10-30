@@ -8,6 +8,7 @@ import { colorOf, compareRaces, lead, leading, measureCount, pct, projected, rac
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
 import { useLive, useStars } from "./hooks";
+import { PhotoCredit } from "./Avatar";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
 import { RaceRows } from "./RaceRows";
@@ -232,6 +233,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
           </div>
           <p className="muted small mt-source">
             Live results from <a href="https://civicapi.org">civicAPI</a>, collected from state and county election offices. Winners are marked only when civicAPI&apos;s decision desk calls a race; &ldquo;leading&rdquo; counts uncalled races by who is ahead. Ratings come from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades.{office === "house" && <> District lines from the <a href="https://www.census.gov/programs-surveys/decennial-census/about/rdo/congressional-districts.html">Census Bureau</a>, as drawn for 2026.</>}{office === "measure" && <> Measure summaries come from <a href="https://ballotpedia.org/2026_ballot_measures">Ballotpedia</a>.</>}
+            {office !== "measure" && <PhotoCredit />}
           </p>
         </>
       )}

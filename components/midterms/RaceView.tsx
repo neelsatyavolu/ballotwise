@@ -6,7 +6,9 @@ import { stampET, stateFinal } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { fmt, OFFICE_LABEL, partyTag, pct, raceLabel, signalLine, STATE_NAMES, timeAgo } from "@/lib/midterms/view";
+import { Avatar, PhotoCredit } from "./Avatar";
 import { partyColor } from "./party";
+import { initials } from "./ResultList";
 import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
 import { useLive, useStars } from "./hooks";
@@ -106,6 +108,7 @@ export function RaceView({ id }: { id: number }) {
               {race.candidates.map((c) => (
                 <tr key={c.name} className={c.winner ? "won" : undefined}>
                   <td style={{ boxShadow: `inset 4px 0 0 ${partyColor(c)}` }}>
+                    {race.office !== "measure" && <Avatar race={race} candidate={c}>{initials(c.name)}</Avatar>}
                     {c.name}
                     {c.incumbent && <span title="Incumbent">*</span>}
                     {c.winner && <span className="mt-check"> ✓ Winner</span>}
@@ -132,6 +135,7 @@ export function RaceView({ id }: { id: number }) {
           <p className="muted small mt-source">
             {called ? `${called.name} was declared the winner by civicAPI's decision desk, not AP or Decision Desk HQ. ` : "No winner declared yet. "}
             Results from <a href="https://civicapi.org">civicAPI</a>, which collects them from state and county election offices. * Incumbent.
+            {race.office !== "measure" && <PhotoCredit />}
           </p>
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
           {data.history && <VoteUpdates history={data.history} />}

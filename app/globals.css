@@ -339,7 +339,8 @@ button.oval:hover:not(.filled) { background: color-mix(in srgb, var(--red) 14%, 
 @media (max-width: 420px) {
   .site-header .wrap { gap: 10px; }
   .brand { font-size: 17px; gap: 7px; }
-  .nav { gap: 10px; }
+  .nav { gap: 8px; }
+  .nav .btn { padding: 0 9px; }
 }
 @media (max-width: 370px) {
   .brand { font-size: 15px; }

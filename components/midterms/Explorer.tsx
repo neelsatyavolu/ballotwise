@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { activeCount, DEFAULT_FILTERS, explore, statusOf, viewCounts, type Filters, type Leader, type Sort, type Status, type Tier, type View } from "@/lib/midterms/explore";
+import { activeCount, DEFAULT_FILTERS, explore, viewCounts, type Filters, type Leader, type Sort, type Status, type Tier, type View } from "@/lib/midterms/explore";
 import { closeWaves, formatET } from "@/lib/midterms/polls";
 import { STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { useClock } from "./hooks";
@@ -102,6 +102,7 @@ function Panel({ f, set, states, onClose }: { f: Filters; set: (next: Partial<Fi
           ))}
         </select>
       </fieldset>
+      <Chips label="Count" options={STATUSES} picked={f.status} onToggle={(s) => set({ status: toggle(f.status, s) })} />
       <Chips label="Rating before the vote" options={TIERS} picked={f.tiers} onToggle={(t) => set({ tiers: toggle(f.tiers, t) })} />
       <Chips label="Who's ahead" options={LEADERS} picked={f.leaders} onToggle={(l) => set({ leaders: toggle(f.leaders, l) })} />
       <Chips label="Lead at most" options={MARGINS.map((m) => ({ id: m, label: `${m} pts` }))} picked={f.maxMargin === null ? [] : [f.maxMargin]} onToggle={(m) => set({ maxMargin: f.maxMargin === m ? null : m })} />
@@ -112,7 +113,7 @@ function Panel({ f, set, states, onClose }: { f: Filters; set: (next: Partial<Fi
   );
 }
 
-/** Search, quick views, status, more filters and sort over one office's races, all kept in the URL. */
+/** Search, quick views, more filters (count status among them) and sort over one office's races, all kept in the URL. */
 export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary[]; f: Filters; set: (next: Partial<Filters>) => void; stars: Stars }) {
   const [open, setOpen] = useState(false);
   const [held, setHeld] = useState<number[] | null>(null);
@@ -125,17 +126,13 @@ export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary
     return [...list].sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity));
   }, [list, held]);
   const counts = useMemo(() => viewCounts(races, f, stars.ids), [races, f, stars.ids]);
-  const statusCounts = useMemo(() => {
-    const base = explore(races, { ...f, status: [] }, stars.ids);
-    return Object.fromEntries(STATUSES.map((s) => [s.id, base.filter((r) => statusOf(r) === s.id).length])) as Record<Status, number>;
-  }, [races, f, stars.ids]);
   const states = useMemo(() => [...new Set(races.filter((r) => f.office === "all" || r.office === f.office).map((r) => r.state))].sort((a, b) => (STATE_NAMES[a] ?? a).localeCompare(STATE_NAMES[b] ?? b)), [races, f.office]);
   // Choosing a sort means wanting that order, so it releases a frozen one.
   const sortBy = (sort: Sort) => {
     setHeld(null);
     set({ sort });
   };
-  const extra = activeCount(f) - (f.q.trim() ? 1 : 0) - (f.status.length ? 1 : 0);
+  const extra = activeCount(f) - (f.q.trim() ? 1 : 0);
 
   return (
     <section className="mt-fx" aria-label="Races">
@@ -147,23 +144,23 @@ export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary
         <select className="input mt-select" value={f.sort} onChange={(e) => sortBy(e.target.value as Sort)} aria-label="Sort by">
           {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
-        <button type="button" className="btn quiet small" aria-pressed={!!held} onClick={() => setHeld((h) => (h ? null : list.map((r) => r.id)))} title="Stop rows moving as new votes come in">
-          {held ? "Unfreeze order" : "Freeze order"}
+        <button type="button" className="btn secondary small mt-fx-freeze" aria-pressed={!!held} onClick={() => setHeld((h) => (h ? null : list.map((r) => r.id)))} title="Stop rows moving as new votes come in">
+          {held ? "Unfreeze" : "Freeze"}
         </button>
       </div>
 
-      <div className="mt-fx-views" role="group" aria-label="Quick views">
-        {VIEWS.map((v) => (
-          <button key={v.id} type="button" className={`mt-chip${f.view === v.id ? " on" : ""}`} aria-pressed={f.view === v.id} title={v.title} onClick={() => set({ view: v.id })}>
-            {v.label} <span className="mt-chip-n">{counts[v.id]}</span>
-          </button>
-        ))}
-        <span className="mt-fx-sep" aria-hidden />
-        {STATUSES.map((s) => (
-          <button key={s.id} type="button" className={`mt-chip status s-${s.id}${f.status.includes(s.id) ? " on" : ""}`} aria-pressed={f.status.includes(s.id)} onClick={() => set({ status: toggle(f.status, s.id) })}>
-            {s.label} <span className="mt-chip-n">{statusCounts[s.id]}</span>
-          </button>
-        ))}
+      <div className="mt-fx-row">
+        <div className="mt-fx-views" role="group" aria-label="Quick views">
+          {VIEWS.map((v) => (
+            <button key={v.id} type="button" className={`mt-chip${f.view === v.id ? " on" : ""}`} aria-pressed={f.view === v.id} title={v.title} onClick={() => set({ view: v.id })}>
+              {v.label} <span className="mt-chip-n">{counts[v.id]}</span>
+            </button>
+          ))}
+        </div>
+        <p className="muted small mt-fx-count" aria-live="polite">
+          {ordered.length} {ordered.length === 1 ? "race" : "races"}
+          {f.view !== DEFAULT_FILTERS.view || activeCount(f) ? " match" : ""}
+        </p>
       </div>
 
       {open && <Panel f={f} set={set} states={states} onClose={() => setOpen(false)} />}
@@ -176,11 +173,7 @@ export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary
           </button>
         </p>
       )}
-      <p className="muted small mt-fx-count" aria-live="polite">
-        {ordered.length} {ordered.length === 1 ? "race" : "races"}
-        {f.view !== DEFAULT_FILTERS.view || activeCount(f) ? " match" : ""}
-      </p>
-      <ResultList key={`${f.office}${f.view}${f.sort}`} races={ordered} stars={stars} sort={f.sort} onSort={sortBy} now={now} />
+      <ResultList key={`${f.office}${f.view}${f.sort}`} races={ordered} stars={stars} sort={f.sort} now={now} />
     </section>
   );
 }

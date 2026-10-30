@@ -361,14 +361,12 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-fx-bar .btn.small, .mt-fx-panel .btn.small { min-height: 36px; padding: 0 12px; font-size: 14px; }
 .mt-fx-bar .btn.has { border-color: var(--accent); color: var(--accent); }
 .mt-fx-views, .mt-fx-active { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.mt-fx-sep { width: 1px; align-self: stretch; background: var(--rule); margin: 0 4px; }
 .mt-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 999px; background: var(--sheet); color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .mt-chip:hover { border-color: var(--ink); }
 .mt-chip.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .mt-chip.ghost { color: var(--muted); cursor: default; border-style: dashed; }
 .mt-chip.removable span { font-size: 16px; line-height: 1; }
 .mt-chip-n { font-weight: 500; opacity: 0.7; font-variant-numeric: tabular-nums; }
-.mt-chip.status.s-called:not(.on) { border-color: color-mix(in srgb, var(--yes) 50%, var(--rule)); }
 .mt-fx-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 18px; padding: 12px 14px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); align-items: start; }
 .mt-fx-panel > .btn { justify-self: start; align-self: end; }
 .mt-fx-group { border: 0; margin: 0; padding: 0; min-width: 0; }
@@ -461,7 +459,6 @@ a.mt-flag { text-decoration: none; }
   .mt-cs { position: static; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 8px; margin: 0 -16px; padding: 6px 16px; align-items: flex-start; }
   .mt-cs-card { flex: 0 0 82%; scroll-snap-align: start; }
   .mt-fx-views { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
-  .mt-fx-sep { display: none; }
   .mt-fx-bar .mt-search { flex-basis: 100%; }
   .mt-chip { min-height: 36px; }
   .mt-board-seats { grid-template-columns: repeat(var(--cols, 6), 22px); }
@@ -543,7 +540,6 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt .mt-chip.on { background: var(--el-raised); border-color: var(--el-line); color: var(--ink); }
 .mt .mt-chip.ghost:hover { background: var(--sheet); border-color: var(--rule); color: var(--muted); }
 .mt .mt-chip-n { opacity: 1; color: var(--muted); }
-.mt .mt-chip.status.s-called:not(.on) { border-color: var(--rule); }
 .mt-el .mt-fx-panel { background: var(--sheet); border-color: var(--rule); }
 .mt-el .mt-fx-group legend { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 .mt-el .mt-fx-count { font-size: 12px; color: var(--muted); }
@@ -578,11 +574,6 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 }
 
 /* Race list: a sort bar over a grid of results cards. */
-.mt-el .mt-res-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 10px; }
-.mt-el .mt-res-sort-label { margin-right: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
-.mt-el .mt-res-sort button { border: 1px solid transparent; border-radius: 6px; background: none; padding: 3px 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
-.mt-el .mt-res-sort button:hover { color: var(--ink); background: var(--el-hover); }
-.mt-el .mt-res-sort button[aria-pressed="true"] { color: var(--ink); background: var(--el-raised); border-color: var(--el-line); }
 .mt-el .mt-res-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
 .mt-el .mt-res-grid > li { min-width: 0; }
 .mt-el .mt-res-group { grid-column: 1 / -1; padding-top: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
@@ -613,6 +604,10 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-tile-table tr.won td { background: color-mix(in srgb, var(--p) 38%, transparent); font-weight: 600; }
 .mt-el .mt-tile-table .mt-check { color: var(--el-reported); }
 .mt-el .mt-av { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 7px; border-radius: 50%; background: var(--el-raised); box-shadow: inset 0 0 0 1.5px var(--p, var(--muted)); color: var(--ink); font-size: 8.5px; font-weight: 700; letter-spacing: 0.02em; vertical-align: middle; }
+/* Candidate avatar: photo or initials inside a ring of the party's color, a fixed size so nothing shifts as photos load. */
+.mt-avatar { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; margin-right: 7px; border-radius: 50%; overflow: hidden; background: var(--el-raised, var(--rule)); box-shadow: inset 0 0 0 1.5px var(--p, var(--muted)); color: var(--ink); font-size: 8.5px; font-weight: 700; letter-spacing: 0.02em; vertical-align: middle; }
+.mt-avatar img { display: block; width: calc(100% - 3px); height: calc(100% - 3px); border-radius: 50%; object-fit: cover; object-position: center 18%; }
+.mt-card-cands .mt-avatar { margin-right: 6px; }
 .mt-el .mt-tile-party { font-size: 11px; font-weight: 600; }
 .mt-el .mt-tile-more td { height: 26px; }
 .mt-el .mt-tile-more a { color: var(--muted); text-decoration: none; }
@@ -741,3 +736,34 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 @media (max-width: 720px) {
   .mt .mt-search { font-size: 16px; }
 }
+
+/* Race explorer toolbar: one search row, then the quick views as a single segmented control with the count beside it. */
+.mt-fx-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mt .mt-fx-views { display: inline-flex; flex-wrap: nowrap; gap: 2px; margin: 0; padding: 3px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+.mt .mt-fx-views .mt-chip { min-height: 28px; border-color: transparent; background: none; }
+.mt .mt-fx-views .mt-chip.on { background: var(--el-raised); border-color: var(--el-line); color: var(--ink); }
+.mt .mt-fx-count { margin: 0; white-space: nowrap; }
+.mt .mt-fx-freeze[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+@media (max-width: 720px) {
+  .mt-fx-row { flex-wrap: wrap; gap: 8px; }
+  .mt .mt-fx-views { width: 100%; }
+  .mt .mt-fx-views .mt-chip { min-height: 32px; }
+}
+
+/* Alignment pass. Page sections sit on one 16px rhythm, with the source notes 24px below the last section. */
+.mt-modes { margin-bottom: 0; }
+.wrap.mt > * + * { margin-top: 16px; }
+.wrap.mt > .mt-source { margin-top: 24px; }
+/* The explorer's single column never grows to fit a row that's meant to scroll sideways. */
+.mt-fx { grid-template-columns: minmax(0, 1fr); }
+.mt-fx-row, .mt .mt-fx-views { min-width: 0; }
+
+@media (min-width: 1001px) {
+  /* The state panel ends where the map ends: it takes the map's height instead of adding its own, and its race list scrolls inside. */
+  .mt-office { align-items: stretch; }
+  .mt-office > .mt-panel { contain: size; display: flex; flex-direction: column; overflow: hidden; }
+  .mt-office > .mt-panel > * { flex: none; }
+  .mt-office > .mt-panel .mt-rows-wrap { flex: 1 1 0; min-height: 0; max-height: none; }
+}
+.wrap.mt > .tabs { margin-bottom: 0; }

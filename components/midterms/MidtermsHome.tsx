@@ -8,6 +8,7 @@ import { holderOf } from "@/lib/midterms/holders";
 import { colorOf, compareRaces, OFFICE_LABEL, pct, projected, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { AiDashboards } from "./AiDashboard";
 import { BalanceBar } from "./Balance";
+import { PhotoCredit } from "./Avatar";
 import { ChatDock, type ChatHandle } from "./ChatDock";
 import { ElectionMode, ElectionToggle, useElectionMode } from "./ElectionMode";
 import { useDashboards, useLive, useStars } from "./hooks";
@@ -290,6 +291,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
           <p className="muted small mt-source">
             Live results from <a href="https://civicapi.org">civicAPI</a>, which collects them from state and county election offices. Winners are marked only when civicAPI&apos;s decision desk calls a race. 2024 county results from{" "}
             <a href="https://github.com/tonmcg/US_County_Level_Election_Results_08-24">tonmcg/US_County_Level_Election_Results</a>.
+            <PhotoCredit />
           </p>
         </>
       )}

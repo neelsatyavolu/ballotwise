@@ -13,6 +13,7 @@ import { Explorer } from "./Explorer";
 import type { useStars } from "./hooks";
 import { NextClose, PollSchedule, shortLabel } from "./PollClose";
 import { SeatBoard, type FillMode } from "./SeatBoard";
+import { PhotoCredit } from "./Avatar";
 
 const OFFICES: (Office | "all")[] = ["senate", "house", "governor", "measure", "all"];
 const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -161,6 +162,7 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
 
       <p className="muted small mt-source">
         Live results and calls from <a href="https://civicapi.org">civicAPI</a> and its own decision desk, collected from state and county election offices; not AP or Decision Desk HQ. &ldquo;Reporting&rdquo; is precincts or ballot batches in, not the share of the expected vote. Ratings come from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a>, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades. Seat holders from <a href="https://github.com/unitedstates/congress-legislators">congress-legislators</a>.
+        <PhotoCredit />
         {stars.guest && <> Your stars are saved in this browser; <Link href="/signin?next=/midterms">sign in</Link> to keep them on every device.</>}
       </p>
     </div>

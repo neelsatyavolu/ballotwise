@@ -1,7 +1,9 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
 import { fmt, lead, partyTag, pct, raceLabel, RATING_LABEL, signalLine, type RaceSummary } from "@/lib/midterms/view";
+import { Avatar } from "./Avatar";
 import { partyColor } from "./party";
+import { initials } from "./ResultList";
 
 export function StarButton({ starred, onToggle, label }: { starred: boolean; onToggle: () => void; label: string }) {
   return (
@@ -39,7 +41,11 @@ export function RaceCard({ race, starred, onStar }: { race: RaceSummary; starred
       <ul className="mt-card-cands">
         {top.map((c) => (
           <li key={c.name} className={c.winner ? "won" : undefined}>
-            <span className="swatch" style={{ background: partyColor(c) }} aria-hidden />
+            {race.office === "measure" ? (
+              <span className="swatch" style={{ background: partyColor(c) }} aria-hidden />
+            ) : (
+              <Avatar race={race} candidate={c}>{initials(c.name)}</Avatar>
+            )}
             <span className="name">
               {c.name}
               {partyTag(c.party) && <span className="tag"> {partyTag(c.party)}</span>}
