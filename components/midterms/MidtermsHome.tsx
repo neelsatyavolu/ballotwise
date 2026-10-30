@@ -303,7 +303,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
             </div>
           )}
 
-          {tab === "near" && <NearYou />}
+          {tab === "near" && <NearYou races={races} star={star} />}
 
           {tab === "mine" && (
             <div className="stack mt-in">
