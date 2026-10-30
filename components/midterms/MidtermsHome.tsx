@@ -23,6 +23,7 @@ import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { SinceBanner } from "./SinceBanner";
 import { reportingText } from "./reporting";
 import { OverviewSkeleton } from "./Skeleton";
+import { replayTour, Tour } from "./Tour";
 
 type Tab = "key" | "mine" | "ai" | "all";
 const TABS: { id: Tab; label: string }[] = [
@@ -112,7 +113,7 @@ function RaceMap({ races, updatedAt }: { races: RaceSummary[]; updatedAt: number
   const idByKey = useMemo(() => new Map(races.filter((r) => r.office === office).map((r) => [mapKey(r), r.id])), [races, office]);
 
   return (
-    <section className="mt-nation">
+    <section className="mt-nation" data-tour="map">
       <div className="mt-section-head tight">
         <h2>{MAP_TITLE[office]}</h2>
         <div className="mt-seg" role="group" aria-label="Map shows">
@@ -250,13 +251,13 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       {election.on && <ElectionMode data={data} stars={favorites} />}
       {!election.on && (
         <>
-          <div className="mt-balances mt-in">
+          <div className="mt-balances mt-in" data-tour="balance">
             <BalanceBar title="Senate" office="senate" tally={data.balance.senate} />
             <BalanceBar title="House" office="house" tally={data.balance.house} />
             <BalanceBar title="Governors" office="governor" tally={data.balance.governor} />
           </div>
 
-          <div className="tabs" role="tablist">
+          <div className="tabs" role="tablist" data-tour="tabs">
             {TABS.map((t) => (
               <button key={t.id} role="tab" type="button" className="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>
                 {t.label}
@@ -273,7 +274,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
             <div className="stack mt-in">
               <div className="mt-overview">
                 <RaceMap races={races} updatedAt={data.ratings.updatedAt} />
-                <section className="mt-closest">
+                <section className="mt-closest" data-tour="races">
                   <div className="mt-section-head tight">
                     <h2>Key races</h2>
                     {favorites.ids && key.length > 0 && (
@@ -343,11 +344,15 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
 
           <p className="muted small mt-source">
             <Link href="/midterms/credits">Sources and credits</Link>
+            <button type="button" className="mt-tour-replay" onClick={replayTour}>Take the tour</button>
           </p>
         </>
       )}
         </SinceBanner>
       )}
+
+      {/* Outside the fading sections, so its fixed layers aren't placed against one mid-animation. */}
+      {data && !election.on && <Tour />}
 
       <ChatDock
         ref={chat}
