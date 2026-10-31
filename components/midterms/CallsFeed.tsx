@@ -104,7 +104,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
   };
 
   return (
-    <section className="mt-el-calls" id="latest-calls" aria-label="Latest calls">
+    <section className="mt-el-calls" id="latest-calls" aria-label="Latest calls" data-panel="calls">
       <div className="mt-section-head tight">
         <h2>Latest calls</h2>
         <span className="muted small">{total || "None yet"}</span>

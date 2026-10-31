@@ -46,6 +46,18 @@ export function setMock(hours: number | null, speed = 1) {
   window.location.assign(url);
 }
 
+/** Run exactly this mock night (a main screen's, on its companion), reloading only when it differs from this tab's. */
+export function adoptMock(m: Mock | null) {
+  if (JSON.stringify(m) === JSON.stringify(readMock())) return;
+  try {
+    if (m) sessionStorage.setItem(MOCK_KEY, JSON.stringify(m));
+    else sessionStorage.removeItem(MOCK_KEY);
+  } catch {
+    return;
+  }
+  window.location.reload();
+}
+
 // Set as the module loads, so the first render of a preview already runs on the previewed clock. A `?sim=` link
 // outranks a running mock.
 const previewed = fixedPreview();

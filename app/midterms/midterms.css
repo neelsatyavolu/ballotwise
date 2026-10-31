@@ -1402,7 +1402,7 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
   .mt-sbs { grid-template-columns: var(--sbs-3, repeat(3, minmax(0, 1fr))); }
 }
 @media (min-width: 2560px) {
-  .mt-sbs { grid-template-columns: var(--sbs-4, repeat(3, minmax(0, 1fr)) minmax(300px, 0.6fr)); }
+  .mt-sbs { grid-template-columns: var(--sbs-4, repeat(3, minmax(0, 1fr)) minmax(220px, 0.6fr)); }
 }
 .mt-sbs-col { position: relative; }
 .mt-sbs-col > .mt-section-head { justify-content: flex-start; min-height: 36px; }
@@ -1501,3 +1501,26 @@ button.mt-mock:hover { color: var(--ink); }
 .mt-mock.on { border: 1px solid var(--accent); }
 .mt-mock.on b { color: var(--accent); }
 .mt-mock select { font: inherit; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); }
+
+/*
+ * The companion screen: a second tab, on a laptop beside an ultrawide say, covered by the panels the main screen
+ * doesn't show. It sits over that tab's own page, which keeps running underneath.
+ */
+.mt-companion { position: fixed; inset: 0; z-index: 45; overflow-y: auto; display: grid; gap: 16px; align-content: start; padding: 16px 20px 80px; background: var(--paper); color: var(--ink); }
+.mt-companion-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.mt-companion-bar b { color: var(--accent); }
+.mt-companion-bar .mt-bell { margin-left: auto; }
+.mt-companion-grid { display: grid; gap: 20px; align-items: start; }
+.mt-companion-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
+@media (min-width: 1100px) {
+  .mt-companion-grid:has(> .mt-companion-tossups):has(> .mt-companion-side) { grid-template-columns: minmax(0, 1fr) minmax(300px, 0.45fr); }
+}
+.mt-companion .mt-el-calllist { max-height: none; }
+
+/* On the main screen, while the pop-up opens on the companion: a short note in the corner. */
+.mt-moment-note { position: fixed; right: 20px; top: 80px; z-index: 46; max-width: min(360px, calc(100vw - 40px)); margin: 0; padding: 10px 14px; background: var(--sheet); border: 1px solid var(--el-line); border-left: 3px solid var(--accent); border-radius: 8px; animation: mt-moment-in 0.18s ease-out; }
+.mt-moment-note .p-D { color: var(--dem-ink); }
+.mt-moment-note .p-R { color: var(--rep-ink); }
+.mt-moment-note .p-I { color: var(--oth); }
+.mt-moment-note .warn { color: var(--no); }
+@media (prefers-reduced-motion: reduce) { .mt-moment-note { animation: none; } }

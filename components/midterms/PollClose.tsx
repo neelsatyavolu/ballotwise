@@ -73,12 +73,15 @@ export function NextClose({ races, onPick }: { races: readonly RaceSummary[]; on
   );
 }
 
-/** Every closing time of the night as one line each; a line's count filters the races to the states closing then. */
-export function PollSchedule({ races, picked, onPick }: { races: readonly RaceSummary[]; picked: readonly number[]; onPick: (at: number) => void }) {
+/**
+ * Every closing time of the night as one line each; a line's count filters the races to the states closing then.
+ * Without `onPick` (the companion screen, which has no race list to filter) the counts are plain numbers.
+ */
+export function PollSchedule({ races, picked = [], onPick }: { races: readonly RaceSummary[]; picked?: readonly number[]; onPick?: (at: number) => void }) {
   const now = useClock(15_000);
   const next = nextWave(now);
   return (
-    <section className="mt-el-sched" aria-label="Poll closing schedule">
+    <section className="mt-el-sched" aria-label="Poll closing schedule" data-panel="schedule">
       <div className="mt-section-head tight">
         <h2>Poll closings</h2>
         <span className="muted small">Eastern · * part of a state</span>
@@ -100,7 +103,12 @@ export function PollSchedule({ races, picked, onPick }: { races: readonly RaceSu
                 </summary>
                 <p className="small">{closingPlaces(w.states)}.</p>
               </details>
-              {filed.length > 0 ? (
+              {filed.length > 0 && !onPick ? (
+                <span className="mt-chip" title={`${filed.length} races filed under ${formatET(w.at)}`}>
+                  {filed.length}
+                  {partial > 0 && "*"}
+                </span>
+              ) : filed.length > 0 && onPick ? (
                 <button type="button" className={`mt-chip${on ? " on" : ""}`} aria-pressed={on} aria-label={`${on ? "Stop showing" : "Show"} the ${filed.length} races filed under ${formatET(w.at)}${partial ? `, ${partial} in states where only some polls close then` : ""}`} onClick={() => onPick(w.at)}>
                   {filed.length}
                   {partial > 0 && "*"}

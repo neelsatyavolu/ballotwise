@@ -171,7 +171,7 @@ function Mini({ data }: { data: Overview }) {
 export function ControlStrip({ data, children, onNeed }: { data: Overview; children?: React.ReactNode; onNeed?: (office: Chamber) => void }) {
   const phone = usePhone();
   const cards = (
-    <div className="mt-cs">
+    <div className="mt-cs" data-panel="control">
       <ChamberCard office="senate" tally={data.balance.senate} races={data.races} coverage={data.coverage?.senate} onNeed={onNeed} />
       <ChamberCard office="house" tally={data.balance.house} races={data.races} coverage={data.coverage?.house} onNeed={onNeed} />
       <ChamberCard office="governor" tally={data.balance.governor} races={data.races} coverage={data.coverage?.governor} onNeed={onNeed} />

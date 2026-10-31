@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { Companion } from "./Companion";
 import { MockElection } from "./MockElection";
 
 const MODES = [
@@ -46,6 +47,7 @@ export function ModeNav({ current }: { current?: ModeHref }) {
       {tabs(false)}
       {slot && createPortal(tabs(true), slot)}
       <MockElection />
+      <Companion />
     </>
   );
 }

@@ -127,8 +127,8 @@ type Third = "governor" | "tossups";
 const SETTINGS_CHANGED = "mt-sbs-settings";
 /** Each column's share of the width: Senate, House, Governors, then the calls feed on ultrawide screens. */
 const DEFAULT_WIDTHS = [1, 1, 1, 0.6];
-/** The narrowest each column can be dragged to, in pixels. */
-const MIN_PX = [300, 300, 300, 300];
+/** The narrowest each column can be dragged to, in pixels. The calls feed's lines wrap, so it can go narrower. */
+const MIN_PX = [300, 300, 300, 220];
 /** How far an arrow key moves a divider. */
 const KEY_STEP_PX = 40;
 
@@ -195,7 +195,7 @@ function ThirdSwitch({ third }: { third: Third }) {
 function TossupColumn({ data, star, handle, toggle }: { data: Overview; star: Star; handle: ReactNode; toggle: ReactNode }) {
   const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && (r.office === "senate" || r.office === "house")).sort(closestFirst), [data]);
   return (
-    <section className="mt-sbs-col" aria-label="Toss-up races">
+    <section className="mt-sbs-col" aria-label="Toss-up races" data-panel="tossups">
       <div className="mt-section-head tight">
         <h2>Toss-ups</h2>
         <span className="muted small mt-sbs-count">{count(races.length)}</span>
@@ -297,8 +297,9 @@ export function SideBySide() {
       <p className="muted small mt-sbs-note">Made for wide screens: widen the window, or open this on a large or ultrawide monitor, to see all three offices at once.</p>
       {error && <p className="error">{data ? `${error} Showing the last results we got.` : error}</p>}
       {!data && !error && <ColumnsSkeleton />}
+      {/* Each column's seat bar shows who controls its chamber, so the page counts as showing control. */}
       {data && (
-        <div ref={grid} className="mt-sbs mt-in" style={gridVars(widths) as CSSProperties}>
+        <div ref={grid} className="mt-sbs mt-in" style={gridVars(widths) as CSSProperties} data-panel="control">
           {COLUMNS.map((c, i) => {
             const handle = <ColumnHandle i={i} label={`Resize ${i === 2 ? next[1] : c.title} and ${next[i]}`} grid={grid} widths={widths} />;
             // The third column can swap the governors for the toss-ups; the switch sits in its heading either way.
