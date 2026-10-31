@@ -59,6 +59,26 @@ function calledAt(r: RaceSummary, close: number, at: number): number | null {
   return null;
 }
 
+/**
+ * How a race's vote splits at a Democratic (or Yes) lead of `margin` points: each candidate's share, `first` being the
+ * Democrat (or Yes) and `second` the Republican (or No). `partisan` is set when there's a Democrat and a Republican, so
+ * counties can lean the way they did in 2024.
+ */
+function sides(r: RaceSummary) {
+  const yesSide = r.office === "measure";
+  const first = r.candidates.find((c) => (yesSide ? /^yes$/i.test(c.name) : /^Democrat/i.test(c.party)));
+  const second = r.candidates.find((c) => (yesSide ? /^no$/i.test(c.name) : /^Republican/i.test(c.party)));
+  const minor = yesSide ? 0 : 0.02;
+  const share = (margin: number, name: string) => {
+    if (!first && !second) return 1 / r.candidates.length;
+    const m = Math.max(-100, Math.min(100, margin));
+    if (first?.name === name) return (1 - minor) * (0.5 + m / 200);
+    if (second?.name === name) return (1 - minor) * (0.5 - m / 200);
+    return minor / Math.max(1, r.candidates.length - 2);
+  };
+  return { first, second, share, partisan: !yesSide && !!first && !!second };
+}
+
 function simulateRace(r: RaceSummary, at: number): RaceSummary {
   const close = stateCloses(r.state);
   if (close === null || at < close) return r;
@@ -66,20 +86,11 @@ function simulateRace(r: RaceSummary, at: number): RaceSummary {
   if (reporting <= 0) return r;
   const turnout = (r.office === "house" ? 320_000 : 2_600_000) * (0.5 + rand(r.id, 6) * 1.5);
   const total = Math.round((turnout * reporting) / 100);
-  const yesSide = r.office === "measure";
-  const first = r.candidates.find((c) => (yesSide ? /^yes$/i.test(c.name) : /^Democrat/i.test(c.party)));
-  const second = r.candidates.find((c) => (yesSide ? /^no$/i.test(c.name) : /^Republican/i.test(c.party)));
-  const minor = yesSide ? 0 : 0.02;
-  const share = (name: string) => {
-    if (first?.name === name) return (1 - minor) * (0.5 + margin / 200);
-    if (second?.name === name) return (1 - minor) * (0.5 - margin / 200);
-    return minor / Math.max(1, r.candidates.length - 2);
-  };
   const callAt = calledAt(r, close, at);
   const callable = callAt !== null;
   const counted = r.candidates
     .map((c) => {
-      const votes = first || second ? Math.round(total * share(c.name)) : Math.round(total / r.candidates.length);
+      const votes = Math.round(total * sides(r).share(margin, c.name));
       return { ...c, votes, pct: total ? Math.round((votes / total) * 10000) / 100 : 0, winner: false };
     })
     .sort((a, b) => b.votes - a.votes);
@@ -143,27 +154,42 @@ function weights(counties: readonly CountyResult[]): number[] {
   return sum > 0 ? known.map((k) => k / sum) : counties.map(() => 1 / Math.max(1, counties.length));
 }
 
-/** One race page as it might look at `at`: the race simulated as in the overview, its counties counting around it. */
+const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
+
+/**
+ * One race page as it might look at `at`: the race simulated as in the overview, its counties counting around it. Each
+ * county ends at the race's final margin moved by how it leaned against the state in 2024. The early count's wander
+ * from that margin (see progress) comes from which counties are in: those leaning its way have counted more. So the
+ * votes still out lean the way their counties do, and the count heads where the race ends. The counties add up to the
+ * race's count, with any lead left over (counties can't pass 100%) spread evenly across them.
+ */
 export function simulateDetail(race: RaceDetail, at: number): RaceDetail {
   const summary = simulateRace(race, at);
   if (summary === race) return race;
   const share = weights(race.counties);
+  const seeds = race.counties.map((c, i) => Number(c.fips ?? i));
+  const { share: shareAt, partisan } = sides(race);
+  const final = finalMargin(race);
+  const now = progress(race, stateCloses(race.state)!, at).margin;
+  const lean = race.counties.map((c, i) => (partisan ? (c.baseline2024 ?? (rand(seeds[i], 12) - 0.5) * 20) : 0));
+  const stateLean = sum(lean.map((l, i) => l * share[i]));
+  const off = lean.map((l) => l - stateLean);
+  const ends = off.map((d) => final + d);
+  // Counting a county ahead by `tilt` times its lean moves the count's margin by tilt times the spread of leans.
+  const spread = sum(off.map((d, i) => share[i] * d * d));
+  const tilt = spread > 1 ? (now - final) / spread : 0;
+  const reporting = seeds.map((seed, i) => Math.max(0, Math.min(100, Math.round(summary.reporting * (1 + tilt * off[i]) + (rand(seed, 11) - 0.5) * 20))));
+  // Each county's part of the count so far: its part of the vote, as far as it has counted.
+  const parts = share.map((w, i) => w * reporting[i]);
+  const counted = sum(parts) > 0 ? parts : share;
+  const totals = counted.map((x) => (summary.total * x) / sum(counted));
+  const shift = now - sum(ends.map((m, i) => m * totals[i])) / (summary.total || 1);
   const counties = race.counties.map((c, i): CountyResult => {
-    const seed = Number(c.fips ?? i);
-    const reporting = Math.max(0, Math.min(100, Math.round(summary.reporting + (rand(seed, 11) - 0.5) * 40)));
-    const total = Math.round(summary.total * share[i] * (reporting / Math.max(1, summary.reporting)));
-    // Counties lean from the statewide count the way they did in 2024.
-    const tilt = c.baseline2024 === null ? (rand(seed, 12) - 0.5) * 20 : c.baseline2024 / 2;
-    const candidates = summary.candidates.map((x) => {
-      const p = /^Democrat/i.test(x.party) ? x.pct + tilt : /^Republican/i.test(x.party) ? x.pct - tilt : x.pct;
-      return { name: x.name, party: x.party, pct: Math.max(0, p), votes: 0 };
-    });
-    const sum = candidates.reduce((a, x) => a + x.pct, 0) || 1;
-    const counted = candidates.map((x) => {
-      const votes = Math.round((total * x.pct) / sum);
-      return { ...x, votes, pct: total ? Math.round((votes / total) * 10000) / 100 : 0 };
-    });
-    return { ...c, reporting, total: counted.reduce((a, x) => a + x.votes, 0), candidates: counted.sort((a, b) => b.votes - a.votes) };
+    const split = summary.candidates.map((x) => shareAt(ends[i] + shift, x.name));
+    const votes = split.map((p) => Math.round((totals[i] * p) / (sum(split) || 1)));
+    const total = sum(votes);
+    const candidates = summary.candidates.map((x, j) => ({ name: x.name, party: x.party, votes: votes[j], pct: total ? Math.round((votes[j] / total) * 10000) / 100 : 0 }));
+    return { ...c, reporting: sum(parts) > 0 ? reporting[i] : summary.reporting, total, candidates: candidates.sort((a, b) => b.votes - a.votes) };
   });
   return { ...race, ...summary, counties };
 }

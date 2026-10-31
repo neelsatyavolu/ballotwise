@@ -47,6 +47,14 @@ describe("votesLeft", () => {
     expect(est.unknown).toBe(0);
   });
 
+  it("shifts a quiet county's 2024 lean by the swing the counted counties show", () => {
+    // Counted county: 2024 was even, now 60/40, a 20-point swing to Dee. Quiet county: 2024 was 50/25, so 60/15 now.
+    const est = votesLeft(race([county("Counted", 60, 40, 50, [200, 200, 400]), county("Quiet", 0, 0, 0, [400, 200, 800])]))!;
+    expect(est.left).toBe(100 + 400);
+    expect(est.leader).toMatchObject({ name: "Dee", votes: 60 + 240 });
+    expect(est.runnerUp).toMatchObject({ name: "Arr", votes: 40 + 60 });
+  });
+
   it("leaves out House counties with nothing counted, since a district covers only parts of them", () => {
     const est = votesLeft(race([county("Counted", 50, 50, 50, [200, 200, 400]), county("Quiet", 0, 0, 0, [600, 200, 800])], { office: "house", district: 1 }))!;
     expect(est.left).toBe(100);
