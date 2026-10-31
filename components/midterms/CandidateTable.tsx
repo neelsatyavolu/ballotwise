@@ -3,8 +3,10 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { isEarly } from "@/lib/midterms/explore";
 import { ballotOrder, fmt, partyTag, type RaceSummary } from "@/lib/midterms/view";
+import { pickIn } from "@/lib/midterms/picks";
 import { Avatar } from "./Avatar";
 import { partyColor } from "./party";
+import { PickTag, usePicks } from "./picks";
 import { reportingText } from "./reporting";
 
 export const lastName = (name: string) => {
@@ -61,6 +63,9 @@ export function CandidateTable({ race, status, limit, short = false, share = fal
   const hidden = race.candidates.length - shown.length;
   const early = isEarly(race);
   const cols = measure ? 3 : 4;
+  // The voter's best match from their guide for this race, if they have one; tagged even when the row is cut off below.
+  const found = pickIn(race, usePicks());
+  const pickedHidden = found?.names.filter((n) => !shown.some((c) => c.name === n)) ?? [];
   return (
     <table className={`mt-ct${fill ? " fill" : ""}`}>
       <thead>
@@ -80,6 +85,7 @@ export function CandidateTable({ race, status, limit, short = false, share = fal
                 <span className="mt-ct-name">{short && !measure ? lastName(c.name) : c.name}</span>
                 {c.incumbent && <span className="mt-ct-inc" title="Incumbent">*</span>}
                 {c.winner && <span className="mt-check" aria-label="winner"> ✓</span>}
+                {found?.names.includes(c.name) && <PickTag found={found} name={c.name} />}
               </span>
             </td>
             {!measure && <td className="mt-ct-party">{partyCode(c.party)}</td>}
@@ -98,6 +104,7 @@ export function CandidateTable({ race, status, limit, short = false, share = fal
           <tr className="mt-ct-more">
             <td colSpan={cols}>
               <Link href={`/midterms/${race.id}`}>+{hidden} more</Link>
+              {found && pickedHidden.length > 0 && <> <PickTag found={found} name={pickedHidden[0]} label={`Your match: ${pickedHidden.map((n) => (short ? lastName(n) : n)).join(", ")}`} /></>}
             </td>
           </tr>
         )}

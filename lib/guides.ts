@@ -3,6 +3,7 @@ import type { Db } from "./auth/accounts";
 import { getCached, putCached } from "./cache";
 import { needsEstimate } from "./estimate";
 import { effectiveAnswers, headlineMatch, type MatchHeadline } from "./match";
+import type { GuidePick } from "./midterms/picks";
 import { isMeasure, profileSchema, profileStances, raceKindOf, raceSchema, seatsOf, type ContestLevel, type Profile, type Race, type RaceKind } from "./schema";
 import { ALIGN_STALE_MS, type Suggested } from "./values";
 
@@ -116,6 +117,20 @@ export async function listGuides(db: Db, userId: string, origin: "search" | "bal
     .all<GuideRow>();
   const profiles = await backgroundProfiles(db, results.filter((r) => r.status === "ready").map((r) => r.id));
   return results.map((r) => toSummary(r, profiles[r.id] ?? {}));
+}
+
+/** The user's finished guides for one election that have a best match, with every candidate's name, for the tracker. */
+export async function trackedPicks(db: Db, userId: string, date: string): Promise<GuidePick[]> {
+  const { results } = await db
+    .prepare(`SELECT ${SUMMARY_COLUMNS} FROM guides WHERE user_id = ? AND election_date = ? AND status = 'ready' LIMIT 200`)
+    .bind(userId, date)
+    .all<GuideRow>();
+  const profiles = await backgroundProfiles(db, results.map((r) => r.id));
+  return results.flatMap((r) => {
+    const { match, kind } = toSummary(r, profiles[r.id] ?? {});
+    const data = JSON.parse(r.data) as GuideData | null;
+    return match && data ? [{ guideId: r.id, kind, candidates: data.race.candidates.map((c) => c.name), match }] : [];
+  });
 }
 
 export async function getGuide(db: Db, userId: string, id: string): Promise<GuideRecord | null> {

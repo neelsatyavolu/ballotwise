@@ -777,6 +777,12 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-ct-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mt-ct-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink); font-weight: 500; }
 .mt-ct-inc { color: var(--muted); }
+/* The voter's best match from their guide: red, the color of the voter's own marks. */
+.mt-pick { flex: none; padding: 1px 6px; border: 1px solid var(--red); border-radius: 6px; color: var(--red); font-size: 10.5px; font-weight: 600; line-height: 16px; text-decoration: none; white-space: nowrap; }
+.mt-pick:hover { background: color-mix(in srgb, var(--red) 14%, transparent); }
+/* Row and "+N more" links are styled grey or bold ink; the tag keeps its own look there. */
+.mt-ct-more a.mt-pick, .mt-rows td a.mt-pick { color: var(--red); font-weight: 600; text-decoration: none; }
+.mt-row-pick { display: block; margin-top: 3px; }
 .mt-ct .mt-avatar { width: 24px; height: 24px; margin: 0; font-size: 9px; }
 .mt-ct-party { color: var(--ink); font-weight: 500; }
 .mt-ct tbody tr.won td { background: color-mix(in srgb, var(--p) 22%, transparent); font-weight: 600; }

@@ -6,6 +6,9 @@ import { RatingTag } from "./RaceCard";
 import { isCompetitive, isTossup } from "@/lib/midterms/explore";
 import { reportingText } from "./reporting";
 import { calledWinner } from "./SeatBoard";
+import { pickIn } from "@/lib/midterms/picks";
+import { lastName } from "./CandidateTable";
+import { PickTag, usePicks } from "./picks";
 
 export type Star = { ids: number[] | null; toggle: (id: number) => void };
 
@@ -14,6 +17,7 @@ export type Star = { ids: number[] | null; toggle: (id: number) => void };
  * under a race's name (Search uses it to say which candidate matched).
  */
 export function RaceRows({ races, star, onPick, selectedId, note }: { races: RaceSummary[]; star: Star; onPick?: (race: RaceSummary) => void; selectedId?: number | null; note?: (race: RaceSummary) => string | null }) {
+  const picks = usePicks();
   return (
     <div className="mt-rows-wrap">
       <table className={`mt-table mt-rows${races.some((r) => r.total > 0) ? " counting" : ""}`}>
@@ -35,6 +39,7 @@ export function RaceRows({ races, star, onPick, selectedId, note }: { races: Rac
             const shown = winner ?? (ahead ? ahead.leader : null);
             const runnerUp = shown ? r.candidates.find((c) => c !== shown) : undefined;
             const margin = shown && r.total ? shown.pct - (runnerUp?.pct ?? 0) : null;
+            const found = pickIn(r, picks);
             return (
               <tr key={r.id} className={[r.id === selectedId && "selected", isTossup(r) && "watch", isCompetitive(r) && "lean"].filter(Boolean).join(" ") || undefined} aria-current={r.id === selectedId ? "true" : undefined}>
                 <td>
@@ -44,6 +49,11 @@ export function RaceRows({ races, star, onPick, selectedId, note }: { races: Rac
                     <Link href={`/midterms/${r.id}`}>{raceLabel(r)}</Link>
                   )}
                   {note?.(r) ? <span className="mt-row-about">{note(r)}</span> : r.about && <span className="mt-row-about" title={r.about.text}>{r.about.text}</span>}
+                  {found && (
+                    <span className="mt-row-pick">
+                      <PickTag found={found} name={found.names[0]} label={`Your match: ${found.names.map(lastName).join(", ")}`} />
+                    </span>
+                  )}
                 </td>
                 <td><RatingTag rating={r.rating} signal={r.signal} /></td>
                 <td className="mt-leader">
