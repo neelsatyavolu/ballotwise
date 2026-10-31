@@ -1,5 +1,7 @@
 import { z } from "zod";
+import countyNames from "./countyNames.json";
 import { MEASURES } from "./data";
+import { fipsOf } from "./earlyVote";
 import type { Signal } from "./odds";
 import { POLL_CLOSE, stateFinal } from "./polls";
 import { partyOf, STATE_NAMES } from "./view";
@@ -267,6 +269,45 @@ function aboutMeasure(name: string): RaceSummary["about"] {
   return tail ? { text: tail.trim(), url: null } : undefined;
 }
 
+const COUNTY_NAMES = countyNames as Record<string, Record<string, string>>;
+
+/**
+ * Each region's county FIPS code. civicAPI leaves some states' codes out (Alaska's boroughs), so those are matched by
+ * name to the map's counties. A state that reports by town keeps none: most of its places match no county, and a town
+ * can share its county's name (Hartford).
+ */
+function countyCodes(state: string, regions: readonly { name: string; fips?: string | null }[]): (string | null)[] {
+  const given = regions.map((r) => r.fips ?? null);
+  const names = COUNTY_NAMES[state];
+  const missing = regions.filter((r) => !r.fips);
+  if (!names || !missing.length) return given;
+  const found = regions.map((r) => r.fips ?? fipsOf(r.name, names));
+  const unmatched = found.filter((f) => !f).length;
+  return unmatched > missing.length / 2 ? given : found;
+}
+
+/** Regions matched to the same county counted as that county: the map draws Alaska's Chugach and Copper River as one. */
+function mergeShared(state: string, counties: CountyResult[]): CountyResult[] {
+  const groups = Map.groupBy(counties, (c, i) => c.fips ?? `#${i}`);
+  return [...groups.values()].map((group) => {
+    if (group.length === 1) return group[0];
+    const fips = group[0].fips as string;
+    const votes = new Map<string, Omit<Candidate, "incumbent" | "winner">>();
+    for (const c of group.flatMap((g) => g.candidates)) votes.set(c.name, { ...c, votes: (votes.get(c.name)?.votes ?? 0) + c.votes });
+    const total = group.reduce((sum, g) => sum + g.total, 0);
+    return {
+      fips,
+      name: COUNTY_NAMES[state]?.[fips] ?? group[0].name,
+      reporting: total ? group.reduce((sum, g) => sum + g.reporting * g.total, 0) / total : group.reduce((sum, g) => sum + g.reporting, 0) / group.length,
+      ...(group.some((g) => g.reportingUnknown) && { reportingUnknown: true as const }),
+      total,
+      candidates: [...votes.values()].map((c) => ({ ...c, pct: total ? Math.round((c.votes / total) * 10000) / 100 : 0 })).sort((a, b) => b.votes - a.votes),
+      baseline2024: null,
+      pres2024: null,
+    };
+  });
+}
+
 /**
  * One race with its county (or town) breakdown. The detail endpoint doesn't say which office a race is for,
  * so that comes from the race's catalog `summary`; votes come from the fresher detail.
@@ -277,11 +318,16 @@ export function raceDetail(summary: RaceSummary, input: unknown, baseline: Reado
   const race = civicDetail.parse(input);
   const nov3 = race.election_date.startsWith(ELECTION_DATE);
   const list = candidates(race.candidates, !nov3 || pollsClosed(summary.state, now));
-  const counties = Object.values(race.region_results ?? {}).map((region): CountyResult => {
+  const regions = Object.values(race.region_results ?? {});
+  const codes = countyCodes(summary.state, regions);
+  const named = codes.some((code, i) => code !== (regions[i].fips ?? null));
+  const listed = regions.map((region, i): CountyResult => {
     const list = candidates(region.candidates);
+    // Only civicAPI's own codes key the 2024 baseline: it files Alaska's house districts under 02001-02040, which
+    // overlap its borough codes.
     const pres = region.fips ? baseline[region.fips] : undefined;
     return {
-      fips: region.fips ?? null,
+      fips: codes[i],
       name: region.name,
       reporting: region.percent_reporting ?? 0,
       ...(region.percent_reporting == null && list.some((c) => c.votes > 0) && { reportingUnknown: true as const }),
@@ -291,6 +337,7 @@ export function raceDetail(summary: RaceSummary, input: unknown, baseline: Reado
       pres2024: pres ? { harris: pres[0], trump: pres[1], total: pres[2] } : null,
     };
   });
+  const counties = named ? mergeShared(summary.state, listed) : listed;
   // The detail's own answer decides what's unknown about it; the summary's flags came from a different fetch.
   // With no figure of its own, the detail borrows the catalog's, unless that one was unknown too.
   const { reportingUnknown, ...rest } = summary;

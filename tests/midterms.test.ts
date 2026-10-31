@@ -106,6 +106,19 @@ describe("raceDetail", () => {
     const detail = raceDetail(summarize(raw({}), [])!, { ...raw({}), region_results: { abbot: { name: "Abbot", type: "Township", percent_reporting: 0, candidates: [] } } }, {});
     expect(detail.counties[0]).toMatchObject({ name: "Abbot", fips: null, baseline2024: null, pres2024: null });
   });
+
+  it("matches Alaska's boroughs to the map by name, counting Chugach and Copper River as Valdez-Cordova", () => {
+    const region = (name: string, votes: [number, number], reporting: number) => ({ name, type: "Borough", percent_reporting: reporting, candidates: [{ name: "Dee", party: "Democratic", votes: votes[0], percent: 0 }, { name: "Arr", party: "Republican", votes: votes[1], percent: 0 }] });
+    const input = { ...raw({ province: "AK", election_name: "Alaska US Senate" }), region_results: { a: region("Alaska", [0, 0], 0), b: region("Anchorage Municipality", [60, 40], 50), c: region("Chugach Census Area", [10, 30], 100), d: region("Copper River Census Area", [25, 0], 50), e: region("Juneau City and Borough", [5, 5], 20) } };
+    // The baseline's 02020 is a state house district, not Anchorage.
+    const detail = raceDetail(summarize(raw({ province: "AK", election_name: "Alaska US Senate" }), [])!, input, { "02020": [3924, 3041, 6965] });
+    const byFips = new Map(detail.counties.map((c) => [c.fips, c]));
+    expect(byFips.get("02020")).toMatchObject({ name: "Anchorage Municipality", baseline2024: null, pres2024: null });
+    expect(byFips.get("02110")?.total).toBe(10);
+    expect(byFips.get("02261")).toMatchObject({ name: "Valdez-Cordova", total: 65, candidates: [{ name: "Dee", votes: 35, pct: 53.85 }, { name: "Arr", votes: 30, pct: 46.15 }] });
+    expect(byFips.get("02261")?.reporting).toBeCloseTo((100 * 40 + 50 * 25) / 65);
+    expect(detail.counties.find((c) => c.name === "Alaska")?.fips).toBeNull();
+  });
 });
 
 describe("balance", () => {

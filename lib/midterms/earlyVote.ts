@@ -127,6 +127,12 @@ const CITY_BOARDS: Record<string, string> = {
   "City of Rockford": "17201",
 };
 
+/** Alaska's Chugach and Copper River census areas, split from Valdez-Cordova in 2019; the map still draws it whole. */
+const SPLIT: Record<string, string> = {
+  "Chugach Census Area": "02261",
+  "Copper River Census Area": "02261",
+};
+
 const norm = (name: string) => name.toLowerCase().replace(/\b(county|parish|borough|census area|city and borough|municipality)\b/g, "").replace(/\bsaint\b/g, "st").replace(/[^a-z]/g, "");
 /** Virginia's independent cities (and Baltimore, St. Louis) have county codes from 500 up. */
 const isCity = (fips: string) => Number(fips.slice(2)) >= 500;
@@ -135,8 +141,9 @@ const isCity = (fips: string) => Number(fips.slice(2)) >= 500;
  * The FIPS code of the county civicAPI calls `name`, from the map's names. A name shared by a county and a city
  * (Fairfax, Richmond, Baltimore) is the county, and "Fairfax City" the city; null when nothing matches.
  */
-function fipsOf(name: string, names: Record<string, string>): string | null {
-  if (CITY_BOARDS[name] && names[CITY_BOARDS[name]]) return CITY_BOARDS[name];
+export function fipsOf(name: string, names: Record<string, string>): string | null {
+  const alias = CITY_BOARDS[name] ?? SPLIT[name];
+  if (alias && names[alias]) return alias;
   const entries = Object.entries(names);
   const exact = entries.filter(([, n]) => norm(n) === norm(name)).map(([f]) => f);
   if (exact.length) return exact.find((f) => !isCity(f)) ?? exact[0];
