@@ -87,7 +87,7 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
             {withVotes.length ? `; civicAPI reports 100% for ${regions.filter((c) => c.reporting >= 100).length} of them` : ""}.
           </li>
         )}
-        <li className="muted">{source} doesn&apos;t estimate how many votes remain here, so this page doesn&apos;t either.</li>
+        <li className="muted">{source} doesn&apos;t estimate how many votes remain; the votes-left figure above is Ballotwise&apos;s own rough one.</li>
       </ul>
     </section>
   );

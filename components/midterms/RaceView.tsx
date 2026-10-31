@@ -16,6 +16,7 @@ import { RaceInsights } from "./RaceInsights";
 import { ModeNav } from "./ModeNav";
 import { RatingTag, StarButton } from "./RaceCard";
 import { CountingContext, RaceStatus, TurnoutLine, VoteUpdates } from "./RaceContext";
+import { VotesLeftPanel } from "./VotesLeft";
 import { CheckedAgo } from "./CheckedAgo";
 import { reportingText } from "./reporting";
 import { RcvFlag } from "./ResultList";
@@ -114,6 +115,7 @@ export function RaceView({ id }: { id: number }) {
             />
           </div>
           {race.total > 0 && <TurnoutLine race={race} />}
+          <VotesLeftPanel race={race} />
           <p className="muted small mt-source">
             {race.source && (
               <>

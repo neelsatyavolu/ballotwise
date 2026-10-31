@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { projection } from "@/lib/midterms/forecastTab";
-import { closestFirst, flipTo, isCompetitive, isTossup, raceFill } from "@/lib/midterms/explore";
+import { closestFirst, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
 import { electionModeDefault } from "@/lib/midterms/polls";
 import { colorOf, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
@@ -20,6 +20,7 @@ import { OfficeSkeleton } from "./Skeleton";
 import { ZoomMap, type Fill } from "./ZoomMap";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { ForecastTip, WatchNote } from "./ForecastTip";
+import { VotesLeftPanel, VotesLeftTip } from "./VotesLeft";
 
 const TITLE: Record<Office, string> = { senate: "Senate", house: "House", governor: "Governors", measure: "Ballot measures" };
 const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -38,6 +39,7 @@ function raceTip(r: RaceSummary) {
         </div>
       ))}
       <span className="muted">{r.reporting ? `${Math.round(r.reporting)}% reporting` : "No results yet"}</span>
+      {statusOf(r) === "counting" && <VotesLeftTip raceId={r.id} />}
       <WatchNote race={r} />
     </>
   );
@@ -229,6 +231,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                       <p className="small">
                         <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>
                       </p>
+                      {detail.data && <VotesLeftPanel race={detail.data.race} />}
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
                       {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} />}
                     </>

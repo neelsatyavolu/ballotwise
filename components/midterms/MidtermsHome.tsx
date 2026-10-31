@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isTossup, raceFill } from "@/lib/midterms/explore";
+import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { projection } from "@/lib/midterms/forecastTab";
 import { holderOf } from "@/lib/midterms/holders";
@@ -26,6 +26,7 @@ import { SinceBanner } from "./SinceBanner";
 import { reportingText } from "./reporting";
 import { OverviewSkeleton } from "./Skeleton";
 import { replayTour, Tour } from "./Tour";
+import { VotesLeftTip } from "./VotesLeft";
 
 // Election night, the chat dock and dashboards stay out of the first script. The overview doesn't need them to paint.
 const ElectionNight = dynamic(() => import("./ElectionMode").then((m) => m.ElectionMode), { loading: () => <p className="muted">Loading election mode…</p> });
@@ -93,6 +94,7 @@ function mapTip(r: RaceSummary) {
       ))}
       {flip && holder && <div>{flipLabel(r, holder, flip)}</div>}
       <span className="muted">{reportingText(r).long}</span>
+      {statusOf(r) === "counting" && <VotesLeftTip raceId={r.id} />}
       <WatchNote race={r} />
     </>
   );

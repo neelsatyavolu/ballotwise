@@ -7,6 +7,7 @@ import { partyColor } from "./party";
 import { lastName } from "./CandidateTable";
 import { FillLegend, seatFill, seatSummary, type FillMode } from "./SeatBoard";
 import { WatchNote } from "./ForecastTip";
+import { VotesLeftTip } from "./VotesLeft";
 
 type Fill = { fill: string; tip: ReactNode; label: string; watch?: boolean; lean?: boolean };
 
@@ -14,7 +15,10 @@ type Fill = { fill: string; tip: ReactNode; label: string; watch?: boolean; lean
 const regularFirst = (a: RaceSummary, b: RaceSummary) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title));
 
 /** A race in the hover card: its candidates with party bars, votes and shares, and the leader's margin once votes are in. */
-function TipRace({ race }: { race: RaceSummary }) {
+/** A state's hover card loads the votes-left estimate for this many races at most, so a big House delegation doesn't fetch them all. */
+const ESTIMATED_RACES = 2;
+
+function TipRace({ race, estimate }: { race: RaceSummary; estimate: boolean }) {
   const ahead = lead(race.candidates);
   const summary = seatSummary(race);
   return (
@@ -43,6 +47,7 @@ function TipRace({ race }: { race: RaceSummary }) {
         </tbody>
       </table>
       <span className="muted">{summary.slice(summary.indexOf(": ") + 2)}</span>
+      {estimate && statusOf(race) === "counting" && <VotesLeftTip raceId={race.id} />}
       <WatchNote race={race} />
     </div>
   );
@@ -55,7 +60,7 @@ function statewideFills(races: RaceSummary[], mode: FillMode, counting: boolean)
   for (const [state, list] of byState) {
     const sorted = [...list].sort(regularFirst);
     const lines = sorted.map(seatSummary);
-    out.set(state, { fill: seatFill(sorted[0], mode, counting, true), watch: sorted.some(isTossup), lean: !sorted.some(isTossup) && sorted.some(isCompetitive), label: lines.join("; "), tip: <>{sorted.map((r) => <TipRace key={r.id} race={r} />)}</> });
+    out.set(state, { fill: seatFill(sorted[0], mode, counting, true), watch: sorted.some(isTossup), lean: !sorted.some(isTossup) && sorted.some(isCompetitive), label: lines.join("; "), tip: <>{sorted.map((r) => <TipRace key={r.id} race={r} estimate={sorted.length <= ESTIMATED_RACES} />)}</> });
   }
   return out;
 }
