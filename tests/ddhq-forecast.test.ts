@@ -59,6 +59,42 @@ describe("published DDHQ forecast payload", () => {
     expect(readForecastPage(encoded, "senate").updatedAt).toBe(Date.parse("2026-10-30T14:00:00Z"));
   });
 
+  it("resolves shared candidate objects through React element props paths", () => {
+    const lines = page("house").split("\n");
+    const row = JSON.parse(lines[1].slice(2));
+    const shared = structuredClone(row[3].forecasts[0]);
+    shared.raceId = 9002;
+    shared.parties[0].candidates[0] = "$1:props:forecasts:0:parties:0:candidates:0";
+    row[3].forecasts.push(shared);
+    row[3].racesViz.push({ ...row[3].racesViz[0], id: 9002, district: "2" });
+    lines[1] = "1:" + JSON.stringify(row);
+    const result = readForecastPage(lines.join("\n"), "house");
+    expect(result.races).toHaveLength(2);
+    expect(result.races.find((race) => race.id === "9002")?.race.forecast[0]).toEqual({ name: "A Person", party: "D", probability: 0.7 });
+  });
+
+  it("resolves forward row references in parties and chamber history", () => {
+    const lines = page("senate").split("\n");
+    const row = JSON.parse(lines[1].slice(2));
+    const parties = row[3].forecasts[0].parties;
+    const history = row[3].overviews[0].timeseries;
+    row[3].forecasts[0].parties = "$f";
+    row[3].overviews[0].timeseries = "$e";
+    lines[1] = "1:" + JSON.stringify(row);
+    lines.push("f:" + JSON.stringify(parties), "e:" + JSON.stringify(history));
+    const result = readForecastPage(lines.join("\n"), "senate");
+    expect(result.races[0].race.forecast).toHaveLength(2);
+    expect(result.history).toEqual([["2026-10-29", 0.61, 52, 48]]);
+  });
+
+  it.each(["$dead", "$1:props:forecasts:0:parties", "$1:__proto__:forecasts"])("rejects unresolved or cyclic data references: %s", (reference) => {
+    const lines = page("senate").split("\n");
+    const row = JSON.parse(lines[1].slice(2));
+    row[3].forecasts[0].parties = reference;
+    lines[1] = "1:" + JSON.stringify(row);
+    expect(() => readForecastPage(lines.join("\n"), "senate")).toThrowError(expect.objectContaining({ status: 502 }));
+  });
+
   it("does not replace the chamber with a different office or race sparkline", () => {
     const body = page("senate");
     const row = JSON.parse(body.split("\n")[1].slice(2));

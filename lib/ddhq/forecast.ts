@@ -51,26 +51,61 @@ export function readForecastPage(text: string, office: Office): ParsedPage {
   const forecasts = new Map<number, z.infer<typeof raceSchema>>();
   const metadata = new Map<number, z.infer<typeof metaSchema>>();
   const overviews = new Map<number, z.infer<typeof overviewSchema>>();
+  const records = new Map<string, unknown>();
   for (const line of text.split("\n")) {
-    const row = /^[0-9a-f]+:(.+)$/.exec(line);
+    const row = /^([0-9a-f]+):(.+)$/.exec(line);
     if (!row) continue;
-    let parsed: unknown;
-    try { parsed = JSON.parse(row[1]); } catch { continue; }
+    try { records.set(row[1], JSON.parse(row[2])); } catch { continue; }
+  }
+
+  // Flight shares data by row/path, including candidate objects reused across races.
+  // Resolve data references only; module/lazy/action references are never evaluated.
+  function dereference(value: unknown, seen = new Set<string>()): unknown {
+    if (typeof value !== "string") return value;
+    const reference = /^\$([0-9a-f]+)((?::[^:]+)*)$/.exec(value);
+    if (!reference) return value;
+    if (seen.has(value)) return undefined;
+    const visited = new Set(seen).add(value);
+    let target = records.get(reference[1]);
+    for (const key of reference[2].split(":").slice(1)) {
+      target = dereference(target, visited);
+      if (key === "props" && Array.isArray(target) && target[0] === "$") {
+        target = target[3];
+      } else if (target && typeof target === "object" && Object.prototype.hasOwnProperty.call(target, key) && !["__proto__", "constructor", "prototype"].includes(key)) {
+        target = (target as Record<string, unknown>)[key];
+      } else {
+        return undefined;
+      }
+    }
+    return dereference(target, visited);
+  }
+
+  function dataValue(value: unknown, ancestors = new Set<object>()): unknown {
+    const target = dereference(value);
+    if (typeof target === "string") return target.startsWith("$$") ? target.slice(1) : target;
+    if (!target || typeof target !== "object") return target;
+    if (ancestors.has(target)) return undefined;
+    const visited = new Set(ancestors).add(target);
+    if (Array.isArray(target)) return target.map((item) => dataValue(item, visited));
+    return Object.fromEntries(Object.entries(target).map(([key, item]) => [key, dataValue(item, visited)]));
+  }
+
+  for (const parsed of records.values()) {
     const pending: unknown[] = [parsed];
     while (pending.length) {
       const value = pending.pop();
       if (!value || typeof value !== "object") continue;
       if (!Array.isArray(value)) {
         if ("raceId" in value && "parties" in value) {
-          const result = raceSchema.safeParse(value);
+          const result = raceSchema.safeParse(dataValue(value));
           if (result.success) forecasts.set(result.data.raceId, result.data);
         }
         if ("stateAbb" in value && "electionType" in value) {
-          const result = metaSchema.safeParse(value);
+          const result = metaSchema.safeParse(dataValue(value));
           if (result.success && result.data.office === OFFICE_NAME[office] && dateText(result.data.race_date).startsWith("2026-11-03") && /general/i.test(result.data.electionType)) metadata.set(result.data.id, result.data);
         }
         if ("forecast" in value && "simulations" in value && "timeseries" in value) {
-          const result = overviewSchema.safeParse(value);
+          const result = overviewSchema.safeParse(dataValue(value));
           if (result.success) overviews.set(result.data.toplineId, result.data);
         }
       }

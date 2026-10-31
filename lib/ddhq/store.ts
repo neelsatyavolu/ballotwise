@@ -1,13 +1,18 @@
 import type { DdhqForecastBundle } from "./forecast-types";
 import type { DdhqRace, DdhqSeat } from "./votes";
 
-export type DeskData = { races: ReadonlyMap<string, DdhqRace>; forecast: DdhqForecastBundle["overview"] | null };
+export type DeskData = {
+  races: ReadonlyMap<string, DdhqRace>;
+  forecast: DdhqForecastBundle["overview"] | null;
+  forecastStatus: "idle" | "loading" | "ready" | "error";
+  forecastError: string | null;
+};
 type Snapshot = DeskData & { owner: string | null };
 type Request = <T>(path: string, body: unknown | undefined, signal: AbortSignal) => Promise<T>;
 type Run = { owner: string; controller: AbortController; expired: () => Promise<void> };
 type Counts = { races: { key: string; race: DdhqRace | null }[] };
 
-export const EMPTY_DESK: Snapshot = { owner: null, races: new Map(), forecast: null };
+export const EMPTY_DESK: Snapshot = { owner: null, races: new Map(), forecast: null, forecastStatus: "idle", forecastError: null };
 const REFRESH_MS = 60_000;
 const keyOf = (seat: DdhqSeat) => `${seat.office}:${seat.state}:${seat.office === "house" ? (seat.district ?? 0) : ""}:${seat.special ? "s" : "g"}`;
 
@@ -20,6 +25,8 @@ export function createDeskStore(request: Request) {
   let forecasts = new Map<string, DdhqRace>();
   let counts = new Map<string, DdhqRace>();
   let overview: DeskData["forecast"] = null;
+  let forecastStatus: DeskData["forecastStatus"] = "idle";
+  let forecastError: string | null = null;
   let snapshot = EMPTY_DESK;
   let run: Run | null = null;
   let ready = false;
@@ -39,7 +46,7 @@ export function createDeskStore(request: Request) {
         forecast: race.forecast, rating: race.rating, updatedAt: race.updatedAt,
       });
     }
-    snapshot = { owner: run?.owner ?? null, races, forecast: overview };
+    snapshot = { owner: run?.owner ?? null, races, forecast: overview, forecastStatus, forecastError };
     emit();
   }
 
@@ -54,6 +61,8 @@ export function createDeskStore(request: Request) {
     forecasts = new Map();
     counts = new Map();
     overview = null;
+    forecastStatus = "idle";
+    forecastError = null;
     snapshot = EMPTY_DESK;
     emit();
   }
@@ -110,16 +119,26 @@ export function createDeskStore(request: Request) {
   }
 
   async function loadForecast(mine: Run) {
+    if (!active(mine)) return;
+    forecastStatus = "loading";
+    // Keep the last safe error during a retry, until a successful response replaces it.
+    publish();
     try {
       const body = await request<DdhqForecastBundle>("/api/ddhq/forecast", undefined, mine.controller.signal);
       if (!active(mine)) return;
       forecasts = new Map(body.races.map((row) => [row.key, row.race]));
       overview = body.overview;
+      forecastStatus = "ready";
+      forecastError = null;
       publish();
     } catch (error) {
       if (expired(error, mine)) return;
       forecasts = new Map();
       overview = null;
+      forecastStatus = "error";
+      forecastError = error instanceof Error && "status" in error && typeof error.status === "number"
+        ? error.message
+        : "Decision Desk HQ's published forecast is unavailable.";
       publish();
     } finally {
       if (active(mine)) {

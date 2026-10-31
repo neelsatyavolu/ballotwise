@@ -7,6 +7,7 @@ import { useMemo, useRef, useState } from "react";
 import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { useAccount } from "@/components/AccountProvider";
+import { useDeskData } from "./desk";
 import { projection } from "@/lib/midterms/forecastTab";
 import { holderOf } from "@/lib/midterms/holders";
 import { colorOf, compareRaces, OFFICE_LABEL, pct, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
@@ -212,6 +213,7 @@ function AllRaces({ races, star, initialState }: { races: RaceSummary[]; star: S
 
 export function MidtermsHome({ initialState }: { initialState: string | null }) {
   const { ddhq } = useAccount();
+  const desk = useDeskData();
   const live = useLive<Overview>("/api/midterms");
   const forecast = useLive<ForecastOverview>("/api/midterms/forecast").data;
   const { error, now } = live;
@@ -245,7 +247,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       <ModeNav current="/midterms" />
       <header className="mt-hero">
         <h1>Midterms 2026</h1>
-        {ddhq === "connected" && <span className="mt-kicker">{data?.forecastSource === "ddhq" ? "Decision Desk HQ · Your Votes Pro forecast" : "Ballotwise forecast fallback · DDHQ is refreshing"}</span>}
+        {ddhq === "connected" && <span className="mt-kicker">{data?.forecastSource === "ddhq" ? "Decision Desk HQ · Your Votes Pro forecast" : desk.forecastStatus === "error" ? "DDHQ unavailable · Ballotwise forecast fallback" : "Loading DDHQ forecast · Ballotwise fallback"}</span>}
         <span className="mt-kicker">{counting ? `Live results, checked every ${Math.round(live.interval / 1000)} seconds` : `Tuesday, Nov 3 · first polls close at ${formatTime(FIRST_CLOSE)}`}</span>
         {data && (
           <span className="mt-updated small">
@@ -260,6 +262,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
         )}
         <ElectionToggle on={election.on} onChange={election.set} />
       </header>
+      {ddhq === "connected" && desk.forecastStatus === "error" && <p className="error" role="status">{desk.forecastError} Retrying automatically.</p>}
       {error && <p className="error">{data ? `${error} Showing the last results we got.` : error}</p>}
       {!data && !error && <OverviewSkeleton />}
 

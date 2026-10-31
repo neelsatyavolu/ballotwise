@@ -29,6 +29,47 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });
 
 describe("private DDHQ store", () => {
+  it("reports initial failure between retries, then loading and successful recovery", async () => {
+    const { store, calls } = setup();
+    expect(store.getSnapshot()).toMatchObject({ forecastStatus: "idle", forecastError: null });
+    store.connect("A", async () => {});
+    expect(store.getSnapshot()).toMatchObject({ forecastStatus: "loading", forecastError: null });
+    const message = "Decision Desk HQ's published forecast is unavailable.";
+    calls[0].reject(Object.assign(new Error(message), { status: 502 }));
+    await settled();
+    expect(store.getSnapshot()).toMatchObject({ forecast: null, forecastStatus: "error", forecastError: message });
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(calls).toHaveLength(1);
+    expect(store.getSnapshot().forecastStatus).toBe("error");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls).toHaveLength(2);
+    expect(store.getSnapshot()).toMatchObject({ forecastStatus: "loading", forecastError: message });
+    calls[1].resolve(bundle()); await settled();
+    expect(store.getSnapshot()).toMatchObject({ forecastStatus: "ready", forecastError: null, forecast: { source: "ddhq" } });
+  });
+
+  it("does not publish raw transport exception details as a forecast error", async () => {
+    const { store, calls } = setup();
+    store.connect("A", async () => {});
+    calls[0].reject(new Error("transport contains private request details")); await settled();
+    expect(store.getSnapshot().forecastStatus).toBe("error");
+    expect(store.getSnapshot().forecastError).toBe("Decision Desk HQ's published forecast is unavailable.");
+  });
+
+  it("clears loading and errors on disconnect or account switch and ignores late failures", async () => {
+    const { store, calls } = setup();
+    store.connect("A", async () => {});
+    calls[0].reject(Object.assign(new Error("A's safe API error"), { status: 502 })); await settled();
+    expect(store.getForOwner("B")).toMatchObject({ forecastStatus: "idle", forecastError: null });
+    store.connect("B", async () => {});
+    expect(store.getSnapshot()).toMatchObject({ owner: "B", forecastStatus: "loading", forecastError: null });
+    store.disconnect();
+    expect(store.getSnapshot()).toMatchObject({ forecastStatus: "idle", forecastError: null });
+    calls[1].reject(Object.assign(new Error("B's late error"), { status: 502 })); await settled();
+    expect(store.getSnapshot()).toBe(EMPTY_DESK);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("publishes the complete forecast before waiting for counts and merges independent fields", async () => {
     const { store, calls } = setup();
     store.setSeats(Symbol(), [GA]);
@@ -121,6 +162,7 @@ describe("private DDHQ store", () => {
     calls.findLast((call) => call.path === "/api/ddhq/forecast")!.reject({ status: 502 });
     await settled();
     expect(store.getSnapshot().forecast).toBeNull();
+    expect(store.getSnapshot().forecastStatus).toBe("error");
     expect(store.getSnapshot().races.get(keyOf(GA))).toMatchObject({ total: 100, forecast: [] });
     expect(store.getSnapshot().races.get(keyOf(GA))?.rating).toBeUndefined();
   });

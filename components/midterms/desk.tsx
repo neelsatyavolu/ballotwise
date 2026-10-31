@@ -14,7 +14,11 @@ const store = createDeskStore(async <T,>(path: string, body: unknown | undefined
     cache: "no-store",
     signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
   });
-  if (!response.ok) throw new ApiError("Decision Desk HQ did not answer.", response.status);
+  if (!response.ok) {
+    const error = await response.json().catch(() => null) as { error?: unknown } | null;
+    const message = typeof error?.error === "string" && error.error.trim() ? error.error : "Decision Desk HQ did not answer.";
+    throw new ApiError(message, response.status);
+  }
   return response.json() as Promise<T>;
 });
 
