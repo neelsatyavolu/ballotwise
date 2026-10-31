@@ -606,7 +606,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-avatar { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; margin-right: 7px; border-radius: 50%; overflow: hidden; background: var(--el-raised, var(--rule)); box-shadow: inset 0 0 0 1.5px var(--p, var(--muted)); color: var(--ink); font-size: 8.5px; font-weight: 700; letter-spacing: 0.02em; vertical-align: middle; }
 .mt-avatar img { display: block; width: calc(100% - 3px); height: calc(100% - 3px); border-radius: 50%; object-fit: cover; object-position: center 18%; }
 .mt-el .mt-tile-foot { margin-top: auto; display: grid; gap: 5px; padding: 8px 12px 10px; border-top: 1px solid var(--rule); }
-.mt-el .mt-tile-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; color: var(--muted); }
+.mt-el .mt-tile-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted); }
 .mt-el .mt-tile-status .mt-res-status { font-size: 12px; }
 .mt-el .mt-tile-lead { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 /* The vote gap stays one piece: on a narrow card it drops under the badge rather than splitting "97,852 / votes". */

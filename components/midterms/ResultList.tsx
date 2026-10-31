@@ -88,7 +88,7 @@ function StatusText({ race, now }: { race: RaceSummary; now: number }) {
   return <span className="mt-res-status muted" title="When the state's last scheduled polls close; some districts may close earlier">{final && final > now ? `Polls close ${stampTime(final)} ${zoneAbbr(final)}` : "Awaiting votes"}</span>;
 }
 
-/** The lead as a solid party-colored badge ("+4.21% Smith") and the gap in votes. */
+/** The lead as a solid party-colored badge ("+4.21% Smith") and the gap in votes ("by 1,204"). */
 function Lead({ race }: { race: RaceSummary }) {
   const ahead = lead(race.candidates);
   const second = race.candidates[1];
@@ -98,7 +98,7 @@ function Lead({ race }: { race: RaceSummary }) {
       <b className="mt-margin" style={{ background: partyColor(ahead.leader) }}>
         +{ahead.margin.toFixed(2)}% {race.office === "measure" ? ahead.leader.name : lastName(ahead.leader.name)}
       </b>
-      {second && <span className="muted">{fmt(ahead.leader.votes - second.votes)} votes</span>}
+      {second && <span className="muted" title="Lead in votes">by {fmt(ahead.leader.votes - second.votes)}</span>}
     </span>
   );
 }
