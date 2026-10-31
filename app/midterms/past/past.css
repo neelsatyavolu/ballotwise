@@ -1,0 +1,73 @@
+/* Past results: a full-width precinct map with the results sidebar over its left side, after DDHQ's map. */
+.wrap.mt.mt-past-page { max-width: none; }
+.mt-past { position: relative; height: calc(100dvh - 150px); min-height: 560px; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; background: #1a1a1a; }
+.mt-past-map { position: absolute; inset: 0; }
+.mt-past .maplibregl-ctrl-attrib { background: rgba(18, 18, 18, 0.8); color: var(--muted); }
+.mt-past .maplibregl-ctrl-attrib a { color: var(--muted); }
+.mt-past .maplibregl-ctrl-group { background: var(--sheet); border: 1px solid var(--rule); box-shadow: none; }
+.mt-past .maplibregl-ctrl-group button + button { border-top-color: var(--rule); }
+.mt-past .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); }
+
+.mt-past-panel {
+  position: absolute; top: 16px; left: 16px; bottom: 16px; z-index: 2; width: 380px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px; padding: 18px; background: rgba(18, 18, 18, 0.94);
+  border: 1px solid var(--rule); border-radius: var(--radius);
+}
+.mt-past-panel h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.mt-past-crumbs { display: flex; gap: 6px; min-height: 0; }
+.mt-past-crumbs:empty { display: none; }
+.mt-past-crumbs button { border: 0; background: none; padding: 0; color: var(--muted); font-size: 13px; cursor: pointer; }
+.mt-past-crumbs button:hover { color: var(--ink); }
+.mt-past-crumbs button + button::before { content: "›"; margin-right: 6px; color: var(--muted); }
+.mt-past-office { width: 100%; padding: 10px 12px; background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius); font: inherit; font-weight: 600; }
+.mt-past-years { display: flex; gap: 4px; padding: 3px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); }
+.mt-past-years button { flex: 1; border: 0; background: none; padding: 7px 0; border-radius: 6px; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.mt-past-years button:hover { color: var(--ink); }
+.mt-past-years button[aria-pressed="true"] { background: var(--accent); color: #121212; }
+.mt-past-note { margin: 0; font-size: 13px; color: var(--muted); }
+
+/* Results rows carry their candidate's color as a bar on the left (--row). */
+.mt-past-table { width: 100%; border-collapse: collapse; font-size: 14px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.mt-past-table th { text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--rule); }
+.mt-past-table td { padding: 9px 10px; border-bottom: 1px solid var(--rule); }
+.mt-past-table tr:last-child td { border-bottom: 0; }
+.mt-past-table td:first-child, .mt-past-tip-body td:first-child { box-shadow: inset 3px 0 0 var(--row); padding-left: 12px; }
+.mt-past-table th.num, .mt-past-tip-body th.num { text-align: right; }
+
+.mt-past-legend { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.mt-past-legend div { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
+.mt-past-legend i { height: 8px; border-radius: 1px; }
+.mt-past-legend p { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0; font-variant-numeric: tabular-nums; }
+.mt-past-legend small { font-size: 12px; }
+.mt-past-sources { margin: auto 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.mt-past-sources a { color: var(--muted); }
+
+.mt-past-mode { position: absolute; top: 16px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(18, 18, 18, 0.94); border: 1px solid var(--rule); border-radius: var(--radius); font-size: 14px; font-weight: 600; }
+.mt-past-mode select { background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; }
+.mt-past-error { position: absolute; top: 64px; right: 16px; z-index: 2; margin: 0; padding: 8px 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); font-size: 14px; }
+
+.mt-past-tip { position: absolute; z-index: 3; pointer-events: none; }
+.mt-past-tip-body { display: flex; gap: 12px; padding: 8px 10px; background: rgba(23, 23, 23, 0.96); border: 1px solid var(--rule); border-radius: var(--radius); font-size: 14px; white-space: nowrap; }
+.mt-past-tip-body table { border-collapse: collapse; }
+.mt-past-tip-body th { text-align: left; font-weight: 600; color: var(--muted); padding: 0 8px 4px; border-bottom: 1px solid var(--rule); }
+.mt-past-tip-body th:first-child { color: var(--ink); font-size: 15px; font-weight: 700; padding-left: 0; }
+.mt-past-tip-body th small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+.mt-past-tip-body td { padding: 5px 8px; border-bottom: 1px solid var(--rule); }
+.mt-past-tip-body tr:last-child td { border-bottom: 0; }
+.mt-past-tip-margin { display: flex; flex-direction: column; gap: 6px; min-width: 120px; }
+.mt-past-th { text-align: right; color: var(--muted); font-weight: 600; }
+.mt-past-margin { display: grid; justify-items: center; padding: 8px 12px; border-radius: var(--radius); color: #fff; }
+.mt-past-margin b { font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.mt-past-margin span { font-size: 14px; }
+.mt-past-margin.tie { background: var(--el-raised); color: var(--muted); }
+
+/* Narrow screens: the map on top, the sidebar under it. */
+@media (max-width: 899px) {
+  .mt-past { height: auto; min-height: 0; border: 0; overflow: visible; background: none; }
+  .mt-past-map { position: relative; height: 62dvh; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+  .mt-past-panel { position: static; width: auto; margin-top: 12px; }
+  .mt-past-mode { top: 10px; right: 10px; font-size: 13px; }
+  .mt-past-tip-body { font-size: 12px; }
+  .mt-past-tip-margin { min-width: 90px; }
+  .mt-past-margin b { font-size: 17px; }
+}

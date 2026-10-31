@@ -15,6 +15,9 @@ const eslintConfig = defineConfig([
     "cloudflare-env.d.ts",
     ".open-next/**",
     ".wrangler/**",
+    // MapLibre's worker, copied from node_modules (scripts/copy-maplibre-worker.mjs), and the precinct map's sources.
+    "public/midterms/vendor/**",
+    ".cache/**",
   ]),
 ]);
 

@@ -15,6 +15,7 @@ const MODES = [
   { href: "/midterms/measures", label: "Ballot measures" },
   { href: "/midterms/early-vote", label: "Early vote" },
   { href: "/midterms/forecast", label: "Forecast" },
+  { href: "/midterms/past", label: "Past results" },
   { href: "/midterms/dashboards", label: "Dashboards" },
   { href: "/midterms/search", label: "Search" },
   // Only offered on wide screens (see .mt-mode-wide), where the three dashboards fit side by side.

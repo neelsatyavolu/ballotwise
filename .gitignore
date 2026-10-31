@@ -44,3 +44,7 @@ next-env.d.ts
 .open-next
 .wrangler
 .dev.vars
+
+# precinct map sources and tiles (scripts/build-precincts.mjs)
+/.cache
+/public/midterms/vendor

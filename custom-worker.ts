@@ -7,6 +7,7 @@ import type { Db } from "./lib/auth/accounts";
 import { failJob, jobSchema, PermanentJobError, readableError, runJob, type Job, type JobDeps } from "./lib/ballot/jobs";
 import { bareRaces, recordResults } from "./lib/midterms/catalog";
 import { refreshOdds } from "./lib/midterms/odds";
+import { pastTiles } from "./lib/midterms/pastTiles";
 import { apnsConfig, dispatchPushes } from "./lib/push/dispatch";
 
 type Env = CloudflareEnv & { GROK_TOKEN_KEY?: string; APNS_KEY?: string; APNS_KEY_ID?: string; APNS_TEAM_ID?: string; APNS_TOPIC?: string };
@@ -15,6 +16,8 @@ const MAX_ATTEMPTS = 3;
 const ODDS_EVERY_MIN = 5;
 const OLD_HOST = "ballotwise.n3el.dev";
 const NEW_ORIGIN = "https://ballotwise.xanom.co";
+/** Where the past-results map reads its tiles (components/midterms/past/elections.ts). */
+const PAST_TILES_PATH = "/midterms/past-tiles/";
 
 function deps(env: Env): JobDeps {
   return {
@@ -31,6 +34,7 @@ export default {
     // The site moved; keep old links (including emailed reset links) working.
     const url = new URL(request.url);
     if (url.hostname === OLD_HOST) return Response.redirect(NEW_ORIGIN + url.pathname + url.search, 308);
+    if (url.pathname.startsWith(PAST_TILES_PATH)) return pastTiles(request, env.PAST_TILES, url.pathname.slice(PAST_TILES_PATH.length));
     return nextHandler.fetch(request, env, ctx);
   },
 

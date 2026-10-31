@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-maplibre-worker.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -15,7 +17,9 @@
   "dependencies": {
     "@neelsatyavolu/shared-ai-auth": "https://codeload.github.com/neelsatyavolu/shared-ai-auth/tar.gz/7290ee34fab152a3f0f8796e9cef38b94bc6421c",
     "@opennextjs/cloudflare": "^1.20.12",
+    "maplibre-gl": "^6.16.0",
     "next": "16.4.2",
+    "pmtiles": "^4.5.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "^4.6.7"

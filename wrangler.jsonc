@@ -14,6 +14,8 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "ballotwise", "database_id": "a1ff97bd-8cbf-4b4c-8aa8-7efba6a6891e", "migrations_dir": "migrations" }
   ],
+  // Precinct map tiles for past elections, one PMTiles file each (scripts/build-precincts.mjs), served by custom-worker.ts.
+  "r2_buckets": [{ "binding": "PAST_TILES", "bucket_name": "ballotwise-past-tiles" }],
   "queues": {
     "producers": [{ "binding": "RESEARCH_QUEUE", "queue": "ballotwise-research" }],
     // Up to 4 jobs per invocation, run side by side (custom-worker.ts), so a ballot's races start together

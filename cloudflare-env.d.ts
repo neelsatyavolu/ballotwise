@@ -3,6 +3,7 @@
 // Runtime types generated with workerd@1.20261012.1 2026-10-01 global_fetch_strictly_public,nodejs_compat
 interface __BaseEnv_CloudflareEnv {
 	DB: D1Database;
+	PAST_TILES: R2Bucket;
 	RESEARCH_QUEUE: Queue;
 	ASSETS: Fetcher;
 	APP_URL: "https://ballotwise.xanom.co";

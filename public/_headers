@@ -10,3 +10,9 @@
 # Candidate headshots keep their names across deploys and rarely change: same treatment as the map shapes.
 /midterms/photos/*
   Cache-Control: public, max-age=3600, stale-while-revalidate=604800
+
+# Past-results summaries and the map's worker keep their names across deploys and rarely change: same treatment.
+/midterms/past/*
+  Cache-Control: public, max-age=3600, stale-while-revalidate=604800
+/midterms/vendor/*
+  Cache-Control: public, max-age=3600, stale-while-revalidate=604800
