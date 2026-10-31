@@ -5,6 +5,8 @@ import { LineChart, type ChartPoint } from "./LineChart";
 
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
 const whole = (v: number) => `${Math.round(v * 100)}%`;
+/** A chance snapped to a whole percent, so it and its complement print as figures that add to 100. */
+const snap = (v: number) => Math.round(v * 100) / 100;
 /**
  * The hero chart's box in SVG units, matched to its width on screen so labels stay at their normal size on a wide
  * page and on a phone alike.
@@ -54,7 +56,8 @@ function Split({ d, r, dLabel, rLabel, label, caption, middle }: { d: number; r:
 }
 
 /** Both parties' chance of control over one split bar, with the week's move. */
-export function PartyOdds({ dControl, control, middle }: { dControl: number; control: readonly ChartPoint[]; middle?: string }) {
+export function PartyOdds({ dControl: raw, control, middle }: { dControl: number; control: readonly ChartPoint[]; middle?: string }) {
+  const dControl = snap(raw);
   return (
     <Split
       middle={middle}
@@ -155,8 +158,8 @@ export function ForecastHero({ office, view, control, seats, controls, action, m
           {showing === "win" ? (
             <LineChart
               lines={[
-                { name: "Democrats", color: "var(--dem-ink)", points: control },
-                { name: "Republicans", color: "var(--rep-ink)", points: control.map(([t, v]) => [t, 1 - v] as const) },
+                { name: "Democrats", color: "var(--dem-ink)", points: control.map(([t, v]) => [t, snap(v)] as const) },
+                { name: "Republicans", color: "var(--rep-ink)", points: control.map(([t, v]) => [t, 1 - snap(v)] as const) },
               ]}
               domain={[0, 1]}
               ticks={[0, 0.25, 0.5, 0.75, 1]}
