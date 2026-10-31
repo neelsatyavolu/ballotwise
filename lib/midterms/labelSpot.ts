@@ -6,10 +6,10 @@ type Point = [number, number];
 const MIN_LABEL_AREA = 2000;
 const ALWAYS_LABELED = new Set(["HI"]);
 /** Samples per side of the grid laid over a state, and how deep a sample must be, against the deepest, to count as its thick part. */
-const GRID = 40;
+const GRID = 24;
 const CORE = 0.5;
 /** Outlines are thinned to about this many points first: coastlines carry far more detail than a label needs. */
-const MAX_POINTS = 200;
+const MAX_POINTS = 120;
 
 function rings(d: string): Point[][] {
   return d
