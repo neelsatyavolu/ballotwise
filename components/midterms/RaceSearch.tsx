@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
+import { CloseIcon } from "./icons";
 import type { FoundRace } from "@/lib/midterms/civic";
 import { SANTA_CLARA_RESULTS, STATE_NAMES } from "@/lib/midterms/view";
 
@@ -102,7 +103,7 @@ export function RaceSearchButton() {
         <div className="mt-find-head">
           <h2>Find any race</h2>
           <button type="button" className="btn quiet small" onClick={() => dialog.current?.close()} aria-label="Close">
-            ✕
+            <CloseIcon />
           </button>
         </div>
         {open && <RaceSearch autoFocus />}

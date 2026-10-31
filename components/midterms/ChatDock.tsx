@@ -154,7 +154,7 @@ export function ChatDock({ ref, open, onOpenChange, openDashboard, onChanged }: 
         </section>
       )}
       <button type="button" className={`mt-chat-fab${open ? " open" : ""}`} aria-expanded={open} onClick={() => onOpenChange(!open)}>
-        <span aria-hidden>✦</span> {open ? "Close" : "Ask Grok"}
+        {open ? "Close" : "Ask Grok"}
       </button>
     </>
   );

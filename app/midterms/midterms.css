@@ -49,8 +49,8 @@
 
 /* Balance of power */
 .mt-balances { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
-.mt-balance { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 14px; display: grid; gap: 6px; align-content: start; }
-.mt-balance h2 { font-size: 18px; }
+.mt-balance { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 16px; display: grid; gap: 6px; align-content: start; }
+.mt-balance h2 { font-size: 20px; }
 .mt-balance > p { font-size: 12px; line-height: 1.35; }
 .mt-balance-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .mt-balance-nums { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; }
@@ -58,8 +58,8 @@
 .mt-balance-nums .d b { color: var(--dem); }
 .mt-balance-nums .r b { color: var(--rep); }
 .mt-balance-nums .o b { color: var(--oth); font-size: 20px; }
-.mt-balance-nums .u { color: var(--muted); font-size: 13px; }
-.mt-balance-nums em { font-style: normal; font-size: 13px; color: var(--muted); }
+.mt-balance-nums .u { color: var(--muted); font-size: 12px; }
+.mt-balance-nums em { font-style: normal; font-size: 12px; color: var(--muted); }
 .mt-balance-bar { position: relative; display: flex; height: 12px; border-radius: 3px; overflow: hidden; background: var(--rule); }
 .mt-balance-bar span { display: block; height: 100%; transition: width 0.5s ease; }
 .mt-balance-bar i { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--ink); }
@@ -73,12 +73,14 @@
 .mt-section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
 .mt-section-head.tight { margin-bottom: 8px; }
 .mt-group { margin-top: 22px; }
-.mt .tabs { margin: 12px 0 14px; }
+.mt .tabs { margin: 12px 0 16px; }
 .mt-group > h2, .mt-group h3 { margin-bottom: 4px; }
 
 /* Race cards */
 .mt-grid { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
-.mt-card { position: relative; display: grid; gap: 7px; align-content: start; padding: 10px 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); transition: border-color 0.15s; }
+/* "Show N more" under a grid: a quiet button has no padding, so it needs its own gap from the cards. */
+.mt-grid + .btn.quiet { margin-top: 14px; }
+.mt-card { position: relative; display: grid; gap: 8px; align-content: start; padding: 10px 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); transition: border-color 0.15s; }
 .mt-card:hover { border-color: var(--accent); }
 .mt-card-top { display: flex; align-items: center; gap: 8px; }
 .mt-card-title { flex: 1; min-width: 0; font-family: var(--serif); font-size: 16px; font-weight: 600; color: var(--ink); text-decoration: none; line-height: 1.2; }
@@ -93,7 +95,7 @@
 .mt-star:hover { color: var(--tossup); }
 .mt-star.on { color: var(--tossup); }
 
-.mt-rating { flex: none; font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.mt-rating { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
 .mt-rating.r-tossup { color: var(--tossup); }
 .mt-rating.r-lean-d, .mt-rating.r-likely-d { color: var(--dem); }
 .mt-rating.r-lean-r, .mt-rating.r-likely-r { color: var(--rep); }
@@ -115,7 +117,7 @@
 .mt-flip { stroke: none; pointer-events: none; }
 .mt-flip-band { fill: var(--sheet); fill-opacity: 0.6; }
 .mt-legend i.flip { background: repeating-linear-gradient(-45deg, var(--muted) 0 2px, var(--sheet) 2px 4px); }
-.mt-tip { position: absolute; z-index: 5; transform: translate(12px, 12px); pointer-events: none; min-width: 180px; max-width: 280px; padding: 8px 10px; background: var(--sheet); border: 1px solid var(--ink); border-radius: var(--radius); font-size: 13px; display: grid; gap: 4px; }
+.mt-tip { position: absolute; z-index: 5; transform: translate(12px, 12px); pointer-events: none; min-width: 180px; max-width: 280px; padding: 8px 10px; background: var(--sheet); border: 1px solid var(--ink); border-radius: var(--radius); font-size: 12px; display: grid; gap: 4px; }
 .mt-tip table { border-collapse: collapse; width: 100%; }
 .mt-tip td { padding: 1px 0; }
 .mt-tip td + td { padding-left: 10px; }
@@ -136,18 +138,18 @@
 
 /* Race page */
 .mt-crumbs { color: var(--muted); margin-bottom: 10px; }
-.mt-race-head { display: grid; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
-.mt-race-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.mt-race-head { display: grid; gap: 6px; padding-bottom: 16px; border-bottom: 1px solid var(--rule); }
+.mt-race-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .mt-race-title .mt-star { font-size: 28px; }
-.mt-meta { display: flex; flex-wrap: wrap; gap: 4px 18px; color: var(--muted); }
+.mt-meta { display: flex; flex-wrap: wrap; gap: 4px 20px; color: var(--muted); }
 .mt-race-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 28px; margin-top: 20px; align-items: start; }
 .mt-race-grid h2 { margin-bottom: 10px; }
 
-.mt-table { width: 100%; border-collapse: collapse; font-size: 15px; }
-.mt-table th { text-align: left; font-size: 13px; font-weight: 600; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.mt-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.mt-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 .mt-table th button { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .mt-table th.num button { text-align: right; }
-.mt-table td { padding: 9px 10px; border-bottom: 1px solid var(--rule); }
+.mt-table td { padding: 8px 10px; border-bottom: 1px solid var(--rule); }
 .mt-table tbody tr.won td:first-child { font-weight: 700; }
 .mt-table tbody tr.selected td { background: var(--mark); }
 .mt-table tfoot td { font-weight: 600; color: var(--muted); border-bottom: 0; }
@@ -178,38 +180,38 @@
 .mt-rows-wrap { max-height: 470px; overflow-y: auto; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); }
 .mt-rows { font-size: 14px; }
 .mt-rows th { position: sticky; top: 0; background: var(--sheet); z-index: 2; padding: 6px 8px; }
-.mt-rows td { padding: 5px 8px; white-space: nowrap; }
+.mt-rows td { padding: 4px 8px; white-space: nowrap; }
 .mt-rows td a { color: var(--ink); font-weight: 600; text-decoration: none; }
 .mt-rows td a:hover { text-decoration: underline; }
-.mt-rows .mt-rating { font-size: 11px; padding: 1px 6px; }
+.mt-rows .mt-rating { font-size: 10.5px; padding: 1px 6px; }
 .mt-rows td.mt-leader { white-space: nowrap; }
 .mt-row-about { display: block; max-width: 32ch; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); }
-.mt-card-about { margin: 0 0 8px; font-size: 13px; line-height: 1.4; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.mt-card-about { margin: 0 0 8px; font-size: 12px; line-height: 1.4; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .mt-race-about { max-width: 70ch; margin: 4px 0; line-height: 1.5; }
 
 /* Dashboards */
 .mt-dash-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.mt-dash-tabs button { border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 5px 14px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.mt-dash-tabs button { border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 4px 16px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
 .mt-dash-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .mt-dash-tabs .mt-dash-new { border-style: dashed; color: var(--accent); }
-.mt-dash-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.mt-dash-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .mt-dash-tools .btn.secondary { min-height: 34px; padding: 0 12px; font-size: 14px; }
 .mt-danger { color: var(--danger) !important; }
 .mt-rename { display: flex; gap: 8px; align-items: center; }
 .mt-rename .input { min-height: 36px; padding: 6px 10px; max-width: 320px; }
 
 /* Grok chat dock */
-.mt-chat-fab { position: fixed; right: 20px; bottom: 20px; z-index: 40; display: inline-flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--navy); color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 6px 20px rgb(10 49 97 / 0.3); }
+.mt-chat-fab { position: fixed; right: 20px; bottom: 20px; z-index: 40; display: inline-flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--navy); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 6px 20px rgb(10 49 97 / 0.3); }
 .mt-chat-fab span { color: #ff8da1; }
 .mt-chat-fab:hover { filter: brightness(1.15); }
 .mt-chat { position: fixed; right: 20px; bottom: 78px; z-index: 40; width: min(400px, calc(100vw - 32px)); max-height: min(560px, calc(100dvh - 120px)); display: flex; flex-direction: column; background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; box-shadow: 0 16px 48px rgb(10 49 97 / 0.25); overflow: hidden; }
-.mt-chat header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+.mt-chat header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--rule); }
 .mt-chat-actions { display: flex; align-items: center; gap: 10px; }
-.mt-chat-actions .btn.quiet { font-size: 13px; }
+.mt-chat-actions .btn.quiet { font-size: 12px; }
 .mt-chat-close { border: 0; background: none; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 2px; }
-.mt-chat-body { flex: 1; min-height: 96px; overflow-y: auto; padding: 12px 14px; display: grid; align-content: start; gap: 10px; }
-.mt-chat-body .msg { max-width: 90%; font-size: 15px; }
-.mt-chat-body .msg.interviewer { font-family: var(--sans); font-size: 15px; white-space: pre-wrap; }
+.mt-chat-body { flex: 1; min-height: 96px; overflow-y: auto; padding: 12px 16px; display: grid; align-content: start; gap: 10px; }
+.mt-chat-body .msg { max-width: 90%; font-size: 14px; }
+.mt-chat-body .msg.interviewer { font-family: var(--sans); font-size: 14px; white-space: pre-wrap; }
 .mt-chat-status { list-style: none; }
 .mt-chat-form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--rule); }
 .mt-chat-form .input { min-height: 40px; padding: 8px 10px; }
@@ -231,7 +233,7 @@
   --in-race: color-mix(in srgb, var(--ink) 32%, var(--sheet));
 }
 .mt-modes { display: flex; gap: 4px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 2px; }
-.mt-modes a { white-space: nowrap; padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--muted); text-decoration: none; border: 1px solid transparent; }
+.mt-modes a { white-space: nowrap; padding: 6px 16px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--muted); text-decoration: none; border: 1px solid transparent; }
 .mt-modes a:hover { color: var(--ink); border-color: var(--rule); }
 .mt-modes a[aria-current="page"] { background: var(--ink); color: var(--paper); }
 
@@ -249,7 +251,7 @@
 .mt-seats > p { font-size: 12px; }
 
 /* Office screen: zoomable map beside a race panel */
-.mt-office { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 16px; margin-top: 14px; align-items: start; }
+.mt-office { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
 .mt-panel { display: grid; gap: 10px; align-content: start; }
 .mt-panel .mt-rows-wrap { max-height: 520px; }
 .mt-grid.one { grid-template-columns: 1fr; margin: 0; }
@@ -269,7 +271,7 @@
   .mt-panel .mt-rows-wrap { max-height: 380px; }
 }
 @media (max-width: 620px) {
-  .mt-seats-nums b { font-size: 26px; }
+  .mt-seats-nums b { font-size: 24px; }
   .mt-seats-mid { order: 3; flex-basis: 100%; text-align: left; }
 }
 
@@ -305,7 +307,7 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-ask { min-height: 34px; padding: 0 12px; font-size: 14px; }
 .mt-ask span { color: var(--red); }
 
-.mt-el-switch { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 5px 12px 5px 6px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.mt-el-switch { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 4px 12px 4px 6px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
 .mt-el-switch:hover { border-color: var(--ink); }
 .mt-el-knob { position: relative; width: 30px; height: 18px; border-radius: 999px; background: var(--rule-strong); transition: background 0.2s; }
 .mt-el-knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--sheet); transition: transform 0.2s; }
@@ -322,7 +324,7 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-cs-head h2 { font-size: 16px; }
 .mt-cs-head span { color: var(--muted); white-space: nowrap; }
 .mt-cs-nums { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; color: var(--muted); }
-.mt-cs-nums b { font-family: var(--serif); font-size: 26px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.mt-cs-nums b { font-family: var(--serif); font-size: 24px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .mt-cs-nums .d b { color: var(--dem); }
 .mt-cs-nums .r b { color: var(--rep); }
 .mt-cs-nums .o b { color: var(--oth); font-size: 20px; }
@@ -351,15 +353,15 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 /* The 8 PM wave alone names over 20 states: two lines, the full list on hover. */
 .mt-cs-places { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .mt-cs-next { border-left: 4px solid var(--red); }
-.mt-cs-clock { font-family: var(--serif); font-size: 28px; font-weight: 600; line-height: 1.05; color: var(--red); font-variant-numeric: tabular-nums; }
-.mt-cs-clock.done { color: var(--ink); font-size: 22px; }
+.mt-cs-clock { font-family: var(--serif); font-size: 30px; font-weight: 600; line-height: 1.05; color: var(--red); font-variant-numeric: tabular-nums; }
+.mt-cs-clock.done { color: var(--ink); font-size: 24px; }
 
 .mt-el-offices { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--rule); scrollbar-width: none; }
 .mt-el-offices::-webkit-scrollbar, .mt-fx-views::-webkit-scrollbar { display: none; }
 .mt-el-offices .tab-count { margin-left: 6px; }
 
 /* Workspace: the race list beside the map, latest calls and closing schedule. */
-.mt-el-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); grid-template-areas: "list map" "list calls" "list sched" "list ."; grid-template-rows: auto auto auto 1fr; gap: 14px 18px; align-items: start; }
+.mt-el-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); grid-template-areas: "list map" "list calls" "list sched" "list ."; grid-template-rows: auto auto auto 1fr; gap: 16px 20px; align-items: start; }
 .mt-el-list { grid-area: list; min-width: 0; }
 .mt-el-mapbox { grid-area: map; min-width: 0; }
 .mt-el-callbox { grid-area: calls; min-width: 0; }
@@ -379,22 +381,22 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-chip.ghost { color: var(--muted); cursor: default; border-style: dashed; }
 .mt-chip.removable span { font-size: 16px; line-height: 1; }
 .mt-chip-n { font-weight: 500; opacity: 0.7; font-variant-numeric: tabular-nums; }
-.mt-fx-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 18px; padding: 12px 14px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); align-items: start; }
+.mt-fx-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 20px; padding: 12px 16px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); align-items: start; }
 .mt-fx-panel > .btn { justify-self: start; align-self: end; }
 .mt-fx-group { border: 0; margin: 0; padding: 0; min-width: 0; }
-.mt-fx-group legend { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; padding: 0; }
+.mt-fx-group legend { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; padding: 0; }
 .mt-fx-group > div { display: flex; flex-wrap: wrap; gap: 6px; }
-.mt-fx-group .mt-chip { min-height: 30px; font-size: 13px; padding: 0 10px; }
+.mt-fx-group .mt-chip { min-height: 30px; font-size: 12px; padding: 0 10px; }
 .mt-fx-count { margin: 0; }
 
 /* Result rows */
-.mt-res-status { display: inline-flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; font-size: 13px; }
+.mt-res-status { display: inline-flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; font-size: 12px; }
 .mt-res-status.called { color: var(--yes); font-weight: 700; }
 .mt-res-status.warn, .mt-el-call-who.warn { color: var(--no); font-weight: 700; }
 .mt-res-empty { padding: 16px; border: 1px dashed var(--rule); border-radius: var(--radius); }
 .mt-rating.r-safe { color: var(--muted); border-style: dotted; }
 .mt-rating.r-none { color: var(--muted); border-color: transparent; padding-left: 0; font-weight: 600; }
-.mt-flag { font-size: 11px; font-weight: 700; color: var(--muted); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.mt-flag { font-size: 10.5px; font-weight: 700; color: var(--muted); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
 .mt-flag.gain { color: var(--no); }
 .mt-flag.gain.p-D, .mt-flag.lead.p-D { color: var(--dem); }
 .mt-flag.gain.p-R, .mt-flag.lead.p-R { color: var(--rep); }
@@ -409,7 +411,7 @@ a.mt-flag { text-decoration: none; }
 .mt-board-grid { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 10px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); }
 .mt-board-state { display: grid; gap: 2px; align-content: start; padding: 2px; border-radius: 4px; }
 .mt-board-state.on { outline: 2px solid var(--ink); }
-.mt-board-name { border: 0; background: none; padding: 0; font: inherit; font-size: 11px; font-weight: 700; color: var(--muted); cursor: pointer; text-align: left; }
+.mt-board-name { border: 0; background: none; padding: 0; font: inherit; font-size: 10.5px; font-weight: 700; color: var(--muted); cursor: pointer; text-align: left; }
 .mt-board-name:hover, .mt-board-state.on .mt-board-name { color: var(--ink); }
 .mt-board-seats { display: grid; grid-template-columns: repeat(var(--cols, 6), 18px); gap: 2px; }
 .mt-board-state:has(.mt-seat:nth-child(13)) .mt-board-seats { --cols: 8; }
@@ -427,7 +429,7 @@ a.mt-flag { text-decoration: none; }
 .mt-el-calllist li { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 6px 10px; font-size: 14px; }
 .mt-el-calllist li + li { border-top: 1px solid var(--rule); }
 .mt-el-calllist li.new { background: color-mix(in srgb, var(--red) 9%, var(--sheet)); }
-.mt-el-calllist time { font-size: 13px; font-variant-numeric: tabular-nums; padding-top: 1px; }
+.mt-el-calllist time { font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 1px; }
 .mt-el-call-main { min-width: 0; }
 .mt-el-call-main a { color: var(--ink); font-weight: 700; text-decoration: none; }
 .mt-el-call-main a:hover { text-decoration: underline; }
@@ -444,11 +446,11 @@ a.mt-flag { text-decoration: none; }
 .mt-el-sched li.next { box-shadow: inset 3px 0 0 var(--red); }
 .mt-el-sched li summary { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; cursor: pointer; font-size: 14px; list-style: none; }
 .mt-el-sched li summary::-webkit-details-marker { display: none; }
-.mt-el-sched-states { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mt-el-sched-status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mt-el-sched-states { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-el-sched-status { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .mt-el-sched li.next .mt-el-sched-status { color: var(--red); font-weight: 700; }
 .mt-el-sched details p { margin: 4px 0 0; color: var(--muted); }
-.mt-el-sched .mt-chip { min-height: 26px; padding: 0 10px; font-size: 13px; }
+.mt-el-sched .mt-chip { min-height: 26px; padding: 0 10px; font-size: 12px; }
 .mt-el-sched > p { margin: 6px 0 0; }
 
 @media (max-width: 1180px) {
@@ -465,7 +467,7 @@ a.mt-flag { text-decoration: none; }
   .mt-el-on .mt-modes { display: none; }
   .mt-el-on .mt-hero h1 { font-size: 24px; }
   .mt-el-on .mt-kicker { display: none; }
-  .mt-cs-mini { display: grid; gap: 2px; position: sticky; top: 0; z-index: 20; margin: 0 -16px; padding: 6px 16px; background: var(--paper); border-bottom: 1px solid var(--rule); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .mt-cs-mini { display: grid; gap: 2px; position: sticky; top: 0; z-index: 20; margin: 0 -16px; padding: 6px 16px; background: var(--paper); border-bottom: 1px solid var(--rule); font-size: 12px; font-variant-numeric: tabular-nums; }
   .mt-cs-mini span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mt-cs-mini .d { color: var(--dem); font-weight: 700; }
   .mt-cs-mini .r { color: var(--rep); font-weight: 700; }
@@ -482,15 +484,15 @@ a.mt-flag { text-decoration: none; }
 .mt-race-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 2px 0; font-size: 16px; }
 .mt-race-status.called b { color: var(--yes); }
 .mt-race-status.warn b { color: var(--no); }
-.mt-context { margin-top: 18px; }
-.mt-context ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.45; }
+.mt-context { margin-top: 20px; }
+.mt-context ul { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; line-height: 1.45; }
 .mt-cs-details summary { cursor: pointer; padding: 6px 0; font-size: 14px; font-weight: 600; color: var(--accent); }
 .mt-el-latest.warn { border-color: var(--no); }
 .mt-el-latest.warn b { color: var(--no); }
-.mt-res-trend { display: block; margin-top: 3px; font-size: 12px; color: var(--muted); }
+.mt-res-trend { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
 .mt-el-calllist li.old { opacity: 0.7; }
 .mt-updates { font-size: 14px; margin-top: 6px; }
-.mt-updates td { padding: 5px 8px; }
+.mt-updates td { padding: 4px 8px; }
 .mt-cs-gap { color: var(--no); }
 
 /*
@@ -533,13 +535,13 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt .btn.secondary:hover { border-color: var(--el-line); background: var(--el-hover); filter: none; }
 .mt .input { background: var(--sheet); border-color: var(--rule); color: var(--ink); }
 .mt .input:hover { border-color: var(--el-line); }
-.mt-el .mt-fx-row .btn.small, .mt-el .mt-fx-panel .btn.small { min-height: 34px; font-size: 13px; font-weight: 500; }
+.mt-el .mt-fx-row .btn.small, .mt-el .mt-fx-panel .btn.small { min-height: 34px; font-size: 12px; font-weight: 500; }
 .mt-el .mt-fx-bar .mt-search, .mt-el .mt-fx .mt-select { min-height: 34px; padding: 6px 10px; font-size: 14px; }
 .mt-el .mt-fx-row .btn.has { border-color: var(--accent); color: var(--accent); }
 
 /* Segmented groups: a bordered dark container; the selected item lighter with white text, the rest grey. */
 .mt .mt-seg, .mt-el .mt-el-offices { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
-.mt .mt-seg button, .mt-el .mt-el-offices .tab { border: 0; border-radius: 6px; padding: 4px 10px; font-size: 13px; font-weight: 500; color: var(--muted); background: none; }
+.mt .mt-seg button, .mt-el .mt-el-offices .tab { border: 0; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; color: var(--muted); background: none; }
 .mt .mt-seg button + button { border-left: 0; }
 .mt .mt-seg button:hover, .mt-el .mt-el-offices .tab:hover { color: var(--ink); }
 .mt .mt-seg button[aria-pressed="true"], .mt-el .mt-el-offices .tab[aria-selected="true"] { background: var(--el-raised); color: var(--ink); }
@@ -548,7 +550,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-el-offices .tab-count { color: var(--muted); font-weight: 500; }
 
 /* Filter toggles: ghost buttons, lighter when on. */
-.mt .mt-chip { min-height: 28px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); color: var(--muted); font-size: 13px; font-weight: 500; }
+.mt .mt-chip { min-height: 28px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); color: var(--muted); font-size: 12px; font-weight: 500; }
 .mt .mt-chip:hover { color: var(--ink); border-color: var(--el-line); background: var(--el-hover); }
 .mt .mt-chip.on { background: var(--el-raised); border-color: var(--el-line); color: var(--ink); }
 .mt .mt-chip.ghost:hover { background: var(--sheet); border-color: var(--rule); color: var(--muted); }
@@ -567,23 +569,23 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-cs-nums b { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
 .mt-el .mt-cs-nums .d b { color: var(--dem-ink); }
 .mt-el .mt-cs-nums .r b { color: var(--rep-ink); }
-.mt-el .mt-cs-nums .o b { font-size: 22px; }
+.mt-el .mt-cs-nums .o b { font-size: 24px; }
 .mt-el .mt-cs-bar { height: 8px; border-radius: 0; background: var(--el-track); }
 .mt-el .mt-cs-bar i { background: var(--ink); }
 .mt-el .mt-cs-need { font-size: 12px; font-weight: 600; }
 .mt-el .mt-cs-sub, .mt-el .mt-cs-foot, .mt-el .mt-cs-more summary { font-size: 12px; }
 .mt-el .mt-cs-next { border-left-width: 1px; box-shadow: inset 4px 0 0 var(--red); }
 .mt-el .mt-cs-clock { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
-.mt-el .mt-cs-clock.done { font-size: 22px; }
+.mt-el .mt-cs-clock.done { font-size: 24px; }
 .mt-el .mt-cs-mini .d { color: var(--dem-ink); }
 .mt-el .mt-cs-mini .r { color: var(--rep-ink); }
 
 /* Workspace: a hairline rule splits the race list from the side rail, and rules split the rail's sections. */
 @media (min-width: 1001px) {
   .mt-el .mt-el-grid { column-gap: 0; row-gap: 0; }
-  .mt-el .mt-el-list { align-self: stretch; padding-right: 18px; border-right: 1px solid var(--rule); }
-  .mt-el .mt-el-mapbox, .mt-el .mt-el-callbox, .mt-el .mt-el-schedbox { padding: 0 0 18px 18px; }
-  .mt-el .mt-el-callbox, .mt-el .mt-el-schedbox { padding-top: 14px; border-top: 1px solid var(--rule); }
+  .mt-el .mt-el-list { align-self: stretch; padding-right: 20px; border-right: 1px solid var(--rule); }
+  .mt-el .mt-el-mapbox, .mt-el .mt-el-callbox, .mt-el .mt-el-schedbox { padding: 0 0 20px 20px; }
+  .mt-el .mt-el-callbox, .mt-el .mt-el-schedbox { padding-top: 16px; border-top: 1px solid var(--rule); }
 }
 
 /* Race list: a sort bar over a grid of results cards. */
@@ -591,7 +593,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-res-grid > li { min-width: 0; }
 .mt-el .mt-res-group { grid-column: 1 / -1; padding-top: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .mt-el .mt-res-grid > .mt-res-group:first-child { padding-top: 0; }
-.mt-el .mt-res-more { width: 100%; min-height: 36px; margin-top: 10px; font-size: 13px; }
+.mt-el .mt-res-more { width: 100%; min-height: 36px; margin-top: 10px; font-size: 12px; }
 .mt-el .mt-res-empty { border-color: var(--rule); }
 
 /* A results card: header, the candidates' table, then status, lead and reporting. */
@@ -604,12 +606,12 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-tile-title a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; }
 .mt-el .mt-tile-title a:hover { text-decoration: underline; }
 .mt-el .mt-tile-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
-.mt-el .mt-tile-head .mt-rating { font-size: 11px; padding: 0 6px; }
+.mt-el .mt-tile-head .mt-rating { font-size: 10.5px; padding: 0 6px; }
 .mt-el .mt-tile-head .mt-star { font-size: 17px; }
 /* Candidate avatar: photo or initials inside a ring of the party's color, a fixed size so nothing shifts as photos load. */
 .mt-avatar { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; margin-right: 7px; border-radius: 50%; overflow: hidden; background: var(--el-raised, var(--rule)); box-shadow: inset 0 0 0 1.5px var(--p, var(--muted)); color: var(--ink); font-size: 8.5px; font-weight: 700; letter-spacing: 0.02em; vertical-align: middle; }
 .mt-avatar img { display: block; width: calc(100% - 3px); height: calc(100% - 3px); border-radius: 50%; object-fit: cover; object-position: center 18%; }
-.mt-el .mt-tile-foot { margin-top: auto; display: grid; gap: 5px; padding: 8px 12px 10px; border-top: 1px solid var(--rule); }
+.mt-el .mt-tile-foot { margin-top: auto; display: grid; gap: 4px; padding: 8px 12px 10px; border-top: 1px solid var(--rule); }
 .mt-el .mt-tile-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted); }
 .mt-el .mt-tile-status .mt-res-status { font-size: 12px; }
 .mt-el .mt-tile-lead { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
@@ -620,7 +622,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 
 /* Latest calls and poll closings: dark tiles of hairline-ruled rows. */
 .mt-el .mt-el-calllist, .mt-el .mt-el-sched ol { background: var(--sheet); border-color: var(--rule); border-radius: 8px; }
-.mt-el .mt-el-calllist li { padding: 8px 12px; gap: 10px; font-size: 13px; }
+.mt-el .mt-el-calllist li { padding: 8px 12px; gap: 10px; font-size: 12px; }
 .mt-el .mt-el-calllist li:hover, .mt-el .mt-el-sched li:hover { background: var(--el-hover); }
 /* New calls get a thin accent edge only, so a burst of calls doesn't turn the whole list yellow. */
 .mt-el .mt-el-calllist li.new { box-shadow: inset 3px 0 0 var(--accent); }
@@ -628,7 +630,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-el-calls > p, .mt-el .mt-el-sched > p { font-size: 12px; line-height: 1.45; color: var(--muted); }
 .mt-el .mt-el-sched li { padding: 8px 12px; }
 .mt-el .mt-el-sched li.next { box-shadow: inset 4px 0 0 var(--red); }
-.mt-el .mt-el-sched li summary { font-size: 13px; }
+.mt-el .mt-el-sched li summary { font-size: 12px; }
 .mt-el .mt-el-sched summary b { font-weight: 700; color: var(--ink); }
 .mt-el .mt-el-sched li.closed summary b { color: var(--muted); }
 .mt-el .mt-el-sched-states, .mt-el .mt-el-sched-status { font-size: 12px; }
@@ -646,19 +648,19 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt .mt-tip[data-low] { transform: translate(12px, calc(-100% - 12px)); }
 .mt .mt-tip[data-right][data-low] { transform: translate(calc(-100% - 12px), calc(-100% - 12px)); }
 .mt-el .mt-el-tip + .mt-el-tip { border-top: 1px solid var(--el-line); }
-.mt-el .mt-el-tip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); font-size: 13px; }
+.mt-el .mt-el-tip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); font-size: 12px; }
 .mt-el .mt-el-tip table { width: 100%; border-collapse: collapse; }
 .mt-el .mt-el-tip td { height: 24px; padding: 0 10px 0 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 .mt-el .mt-el-tip td:first-child { width: 100%; padding-left: 0; }
 .mt-el .mt-el-tip td i { display: inline-block; width: 4px; height: 24px; margin-right: 8px; vertical-align: middle; }
-.mt-el .mt-el-tip > .muted { padding: 5px 10px; font-size: 11.5px; }
+.mt-el .mt-el-tip > .muted { padding: 4px 10px; font-size: 12px; }
 /* A counting race's rough votes-left estimate in its hover card. */
 .mt-tip-left { font-size: 12px; line-height: 1.35; white-space: normal; }
-.mt-el .mt-el-tip > .mt-tip-left { padding: 5px 10px; border-top: 1px solid var(--rule); }
+.mt-el .mt-el-tip > .mt-tip-left { padding: 4px 10px; border-top: 1px solid var(--rule); }
 
 @media (max-width: 720px) {
   .mt .mt-chip { min-height: 34px; }
-  .mt-el .mt-cs-nums b { font-size: 26px; }
+  .mt-el .mt-cs-nums b { font-size: 24px; }
   .mt-el .mt-res-grid { grid-template-columns: minmax(0, 1fr); }
   /* iOS zooms into fields under 16px on focus. */
   .mt-el .mt-fx-bar .mt-search, .mt-el .mt-fx .mt-select { font-size: 16px; }
@@ -681,7 +683,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt .mt-balance h2 { font-size: 14px; font-weight: 600; color: var(--ink); }
 .mt .mt-balance > p, .mt .mt-seats > p { font-size: 12px; color: var(--muted); }
 .mt .mt-seats { padding: 12px 0; border-radius: 8px; }
-.mt .mt-seats > * { margin-left: 14px; margin-right: 14px; }
+.mt .mt-seats > * { margin-left: 16px; margin-right: 16px; }
 .mt .mt-balance-nums, .mt .mt-seats-nums { font-size: 12px; }
 .mt .mt-balance-nums b, .mt .mt-seats-nums b { font-family: var(--sans); font-weight: 700; letter-spacing: -0.02em; }
 .mt .mt-balance-nums b { font-size: 30px; }
@@ -717,8 +719,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt .mt-zoom-back:hover { border-color: var(--el-line); background: var(--el-hover); }
 
 /* Grok chat and AI dashboards. */
-.mt .mt-chat-fab { background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 20px rgb(0 0 0 / 0.5); }
-.mt .mt-chat-fab span { color: var(--accent-ink); }
+.mt .mt-chat-fab { background: var(--el-raised); color: var(--ink); border: 1px solid var(--el-line); box-shadow: 0 8px 24px rgb(0 0 0 / 0.4); }
 .mt .mt-chat { border-radius: 8px; box-shadow: 0 16px 48px rgb(0 0 0 / 0.6); }
 .mt .mt-chat-body .msg.interviewer { background: var(--el-raised); border-color: var(--rule); }
 .mt .mt-dash-tabs button { border-radius: 8px; font-weight: 500; color: var(--muted); }
@@ -739,7 +740,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-fx-bar .mt-search { min-width: 140px; }
 .mt-el .mt-fx-row .mt-select { width: 128px; }
 .mt-el .mt-fx-row .mt-fx-views .mt-chip { padding: 0 8px; }
-.mt .mt-fx-views { display: inline-flex; flex-wrap: nowrap; gap: 2px; margin: 0; padding: 3px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+.mt .mt-fx-views { display: inline-flex; flex-wrap: nowrap; gap: 2px; margin: 0; padding: 4px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); overflow-x: auto; max-width: 100%; scrollbar-width: none; }
 .mt .mt-fx-views .mt-chip { min-height: 28px; border-color: transparent; background: none; }
 .mt .mt-fx-views .mt-chip.on { background: var(--el-raised); border-color: var(--el-line); color: var(--ink); }
 .mt .mt-fx-count { margin: 0; white-space: nowrap; }
@@ -774,7 +775,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-ct th { padding: 8px; border-bottom: 1px solid var(--rule); color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; text-align: left; white-space: nowrap; }
 .mt-ct th.num, .mt-ct td.num { text-align: right; }
 .mt-ct td { height: 34px; padding: 0 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-.mt-ct th:first-child, .mt-ct td:first-child { padding-left: 14px; }
+.mt-ct th:first-child, .mt-ct td:first-child { padding-left: 16px; }
 .mt-ct th:last-child, .mt-ct td:last-child { padding-right: 12px; }
 .mt-ct tbody tr:not(.mt-ct-more, .mt-ct-fill) td:first-child { box-shadow: inset 4px 0 0 var(--p, var(--muted)); }
 .mt-ct-cand { width: 100%; max-width: 0; }
@@ -786,7 +787,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-pick:hover { background: color-mix(in srgb, var(--red) 14%, transparent); }
 /* Row and "+N more" links are styled grey or bold ink; the tag keeps its own look there. */
 .mt-ct-more a.mt-pick, .mt-rows td a.mt-pick { color: var(--red); font-weight: 600; text-decoration: none; }
-.mt-row-pick { display: block; margin-top: 3px; }
+.mt-row-pick { display: block; margin-top: 4px; }
 /* Several picks (a multi-seat race) run long: the line wraps rather than widening the table past its card. */
 .mt-ct-more td { white-space: normal; }
 .mt-ct-more .mt-pick, .mt-row-pick .mt-pick { display: inline-block; max-width: 100%; white-space: normal; vertical-align: middle; }
@@ -806,7 +807,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
  * The status's first line and the total share one 18px line at the top of the row, so the total reads beside "Counting"
  * (not floating between it and the lead under it). A long status ("Polls close Nov 4, 1:00 AM ET") wraps below.
  */
-.mt-ct-status td { vertical-align: top; padding-top: 9px; padding-bottom: 9px; }
+.mt-ct-status td { vertical-align: top; padding-top: 8px; padding-bottom: 8px; }
 .mt-ct-status td { line-height: 18px; }
 .mt-ct-status td:first-child { white-space: normal; }
 .mt-ct-status .mt-res-status { min-height: 18px; }
@@ -823,12 +824,12 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-card-sub { margin: 8px 12px 0; font-size: 12px; color: var(--muted); }
 .mt .mt-card .mt-stack { margin: 8px 12px; }
 /* Overview cards run five across, so their tables are tighter. */
-.mt-card .mt-ct td, .mt-card .mt-ct th { padding: 0 5px; }
+.mt-card .mt-ct td, .mt-card .mt-ct th { padding: 0 4px; }
 .mt-card .mt-ct th { padding-top: 8px; padding-bottom: 8px; }
 .mt-card .mt-ct th:first-child, .mt-card .mt-ct td:first-child { padding-left: 12px; }
 .mt-card .mt-ct th:last-child, .mt-card .mt-ct td:last-child { padding-right: 10px; }
 /* The card's tighter cell padding above would drop the status row's own, leaving its text at the top edge. */
-.mt-card .mt-ct-status td { padding-top: 9px; padding-bottom: 9px; }
+.mt-card .mt-ct-status td { padding-top: 8px; padding-bottom: 8px; }
 .mt-card .mt-ct .mt-avatar { width: 20px; height: 20px; font-size: 8px; }
 .mt-card .mt-ct-who { gap: 6px; }
 .mt-el .mt-tile-foot:empty { display: none; }
@@ -853,14 +854,14 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-mk-head { margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .mt .mt-mk-sources { display: flex; }
 .mt .mt-mk-sources button { flex: 1; }
-.mt-mk-card { position: relative; display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+.mt-mk-card { position: relative; display: grid; gap: 6px; padding: 12px 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
 .mt-mk-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .mt-mk-q { margin: 0; color: var(--muted); font-size: 14px; }
 .mt-mk-lead { margin: 0; font-size: 20px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 .mt-mk-chart { position: relative; }
 .mt-mk-chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
 .mt-mk-grid { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.mt-mk-axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mt-mk-axis { fill: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .mt-mk-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .mt-mk-cross { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
 .mt-mk-tip { position: absolute; top: 0; transform: translateX(-50%); z-index: 3; min-width: 150px; padding: 6px 8px; border: 1px solid var(--el-line, var(--rule)); border-radius: 6px; background: var(--el-raised, var(--sheet)); font-size: 12px; pointer-events: none; white-space: nowrap; }
@@ -868,7 +869,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-mk-tip div span { margin-left: auto; padding-left: 10px; font-variant-numeric: tabular-nums; }
 .mt-mk-tip i, .mt-mk-legend svg { flex: none; }
 .mt-mk-tip i { width: 8px; height: 2px; }
-.mt-mk-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink); }
+.mt-mk-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--ink); }
 .mt-mk-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .mt-mk-legend span { color: var(--muted); font-variant-numeric: tabular-nums; }
 .mt-mk-src { justify-self: start; }
@@ -888,8 +889,8 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-nation-district.active { cursor: pointer; }
 .mt-borders.strong { stroke: #0c0c0c; stroke-width: 1.3; }
 .mt .mt-line.hover { stroke: #fff; stroke-width: 1.8; }
-.mt-state-label { fill: #fff; font-family: var(--font-sans), system-ui, sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.02em; stroke: #0c0c0c; stroke-width: 3px; stroke-linejoin: round; paint-order: stroke; pointer-events: none; }
-.mt-state-check { font-size: 11px; }
+.mt-state-label { fill: #fff; font-family: var(--font-sans), system-ui, sans-serif; font-size: 12px; font-weight: 800; letter-spacing: 0.02em; stroke: #0c0c0c; stroke-width: 3px; stroke-linejoin: round; paint-order: stroke; pointer-events: none; }
+.mt-state-check { font-size: 10.5px; }
 
 /* The map fills its column edge to edge, without a card around it, as DDHQ's forecast maps do. */
 .mt .mt-office > .mt-zoom { padding: 0; border: 0; background: none; }
@@ -899,15 +900,15 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 
 /* Forecast hover card: race, candidates with win chances and party bars, the rating as a pill. */
 .mt .mt-tip:has(.mt-ft) { padding: 0; gap: 0; min-width: 300px; max-width: 380px; overflow: hidden; }
-.mt-ft { display: grid; font-size: 13px; }
-.mt-ft-head { display: grid; grid-template-columns: 1fr auto 92px; align-items: baseline; gap: 12px; padding: 6px 10px 5px; border-bottom: 1px solid var(--rule); }
+.mt-ft { display: grid; font-size: 12px; }
+.mt-ft-head { display: grid; grid-template-columns: 1fr auto 92px; align-items: baseline; gap: 12px; padding: 6px 10px 4px; border-bottom: 1px solid var(--rule); }
 .mt-ft-head b { font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mt-ft-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
 /* With a flip tag the card widens to keep the whole race name rather than cutting it short. */
 .mt .mt-tip:has(.mt-ft-flip) { max-width: 460px; }
 .mt-ft-title:has(.mt-ft-flip) { min-width: max-content; }
 /* The flip tag: the holder's letter to the favorite's, each in its party color, on a fill fading from one to the other. */
-.mt-ft-head .mt-ft-flip { --from: var(--oth); --to: var(--oth); flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--muted); background: linear-gradient(90deg, color-mix(in srgb, var(--from) 28%, transparent), color-mix(in srgb, var(--to) 28%, transparent)); }
+.mt-ft-head .mt-ft-flip { --from: var(--oth); --to: var(--oth); flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--muted); background: linear-gradient(90deg, color-mix(in srgb, var(--from) 28%, transparent), color-mix(in srgb, var(--to) 28%, transparent)); }
 .mt-ft-flip i { font-style: normal; }
 .mt-ft-flip i:first-child { color: var(--from); }
 .mt-ft-flip i:last-child { color: var(--to); }
@@ -919,23 +920,23 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-ft-head span:last-child { text-align: center; }
 .mt-ft-body { display: grid; grid-template-columns: 1fr 92px; align-items: center; }
 .mt-ft-rows { list-style: none; margin: 0; padding: 0; }
-.mt-ft-rows li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 10px 5px 8px; border-left: 3px solid var(--oth); border-bottom: 1px solid var(--rule); }
+.mt-ft-rows li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 10px 4px 8px; border-left: 3px solid var(--oth); border-bottom: 1px solid var(--rule); }
 .mt-ft-rows li:last-child { border-bottom: 0; }
 .mt-ft-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
 .mt-ft-p { font-variant-numeric: tabular-nums; color: var(--ink); }
 .mt-ft-pill { justify-self: center; margin: 4px 8px; padding: 8px 10px; border-radius: 8px; color: #fff; font-size: 16px; font-weight: 800; text-align: center; white-space: nowrap; }
 .mt-ft-pill.tossup { color: #111; }
-.mt-ft-foot { padding: 4px 10px 6px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11.5px; }
+.mt-ft-foot { padding: 4px 10px 6px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 12px; }
 
 /* Forecast: the race's forecast card and polls table (components/midterms/RaceInsights.tsx), and the methodology page. */
 .mt-fc-split { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--rule); }
 .mt-fc-split span { display: block; height: 100%; }
-.mt-fc-parts { display: grid; margin: 4px 0 0; font-size: 13px; }
+.mt-fc-parts { display: grid; margin: 4px 0 0; font-size: 12px; }
 .mt-fc-parts div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 0; border-top: 1px solid var(--rule); }
 .mt-fc-parts dt { color: var(--muted); }
 .mt-fc-parts dd { margin: 0; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.mt-pl-scroll { overflow-x: auto; margin: 0 -14px; padding: 0 14px; }
-.mt-pl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mt-pl-scroll { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+.mt-pl-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .mt-pl-table th { padding: 6px 8px; border-bottom: 1px solid var(--rule); color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-align: left; text-transform: uppercase; white-space: nowrap; }
 .mt-pl-table td { padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; font-variant-numeric: tabular-nums; }
 .mt-pl-table th:first-child, .mt-pl-table td:first-child { padding-left: 0; }
@@ -944,8 +945,8 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-pl-table td a { color: var(--ink); text-decoration: none; }
 .mt-pl-table td a:hover { text-decoration: underline; }
 .mt-pl-table tr.out td, .mt-pl-table tr.out td a { color: var(--muted); }
-.mt-pl-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--rule); border-radius: 4px; color: var(--muted); font-size: 10.5px; white-space: nowrap; }
-.mt-pl-why { display: block; color: var(--muted); font-size: 11.5px; }
+.mt-pl-tag { display: inline-block; margin-left: 6px; padding: 0 4px; border: 1px solid var(--rule); border-radius: 4px; color: var(--muted); font-size: 10.5px; white-space: nowrap; }
+.mt-pl-why { display: block; color: var(--muted); font-size: 12px; }
 .mt-method { max-width: 760px; }
 .mt-method h2 { margin-top: 28px; }
 .mt-method table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -992,7 +993,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 }
 
 /* Other races: "find any race" on the overview and in a dialog from election mode's toolbar. */
-.mt-other { display: grid; gap: 8px; padding: 14px 16px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
+.mt-other { display: grid; gap: 8px; padding: 16px 16px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
 .mt-other h2 { font-size: 16px; }
 .mt-other p { margin: 0; }
 .mt-find { display: grid; gap: 8px; }
@@ -1002,7 +1003,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-find-list a { display: grid; gap: 2px; padding: 8px 12px; color: var(--ink); text-decoration: none; }
 .mt-find-list a:hover, .mt-find-list a:focus-visible { background: var(--el-hover); }
 .mt-find-title { font-weight: 600; }
-.mt-find-meta { color: var(--muted); font-size: 12.5px; }
+.mt-find-meta { color: var(--muted); font-size: 12px; }
 .mt-find-dialog { width: min(560px, calc(100vw - 32px)); padding: 16px; background: var(--sheet); color: var(--ink); border: 1px solid var(--el-line); border-radius: 10px; box-shadow: 0 16px 48px rgb(0 0 0 / 0.6); }
 .mt-find-dialog::backdrop { background: rgb(0 0 0 / 0.55); }
 .mt-find-dialog[open] { display: grid; gap: 10px; }
@@ -1014,27 +1015,27 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 
 /* Forecast tab: the House, Senate and governor forecasts in the same panels, bars and race tables as the office pages. */
 .mt .mt-fc-pages { margin-top: 10px; }
-.mt .mt-fc-pages a { border-radius: 6px; padding: 4px 10px; font-size: 13px; font-weight: 500; color: var(--muted); text-decoration: none; }
+.mt .mt-fc-pages a { border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; color: var(--muted); text-decoration: none; }
 .mt .mt-fc-pages a:hover { color: var(--ink); }
 .mt .mt-fc-pages a[aria-current="page"] { background: var(--el-raised); color: var(--ink); }
 .mt-fc .mt-updated a { color: var(--accent); }
 .mt-fc-label { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 
 .mt-fc-hero { margin-top: 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
-.mt-fc-hero-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+.mt-fc-hero-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 16px; border-bottom: 1px solid var(--rule); }
 .mt-fc-head { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; color: var(--ink); }
 .mt-fc-head .t-d { color: var(--dem-ink); }
 .mt-fc-head .t-r { color: var(--rep-ink); }
 /* One wide panel: the projection across the full width, and the history chart under it. */
 .mt-fc-hero-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
-.mt-fc-hero-top { padding: 18px 20px 16px; border-bottom: 1px solid var(--rule); }
-.mt-fc-hero-chart { min-width: 0; padding: 12px 20px 14px; }
+.mt-fc-hero-top { padding: 20px 20px 16px; border-bottom: 1px solid var(--rule); }
+.mt-fc-hero-chart { min-width: 0; padding: 12px 20px 16px; }
 .mt-fc-hero .mt-fc-odds { gap: 10px; }
-.mt-fc-hero .mt-seats-nums { font-size: 15px; }
+.mt-fc-hero .mt-seats-nums { font-size: 14px; }
 .mt .mt-fc-hero .mt-seats-nums b { font-size: clamp(40px, 4.4vw, 60px); }
-.mt-fc-hero .mt-seats-mid { font-size: 15px; color: var(--ink); }
+.mt-fc-hero .mt-seats-mid { font-size: 14px; color: var(--ink); }
 .mt .mt-fc-hero .mt-balance-bar.mt-seats-bar { height: 16px; }
-.mt-fc-hero .mt-fc-sub { font-size: 13px; }
+.mt-fc-hero .mt-fc-sub { font-size: 12px; }
 .mt-fc-full { font-size: 14px; font-weight: 600; color: var(--accent); text-decoration: none; }
 .mt-fc-full:hover { text-decoration: underline; }
 .mt-fc-odds { display: grid; gap: 8px; }
@@ -1053,7 +1054,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-fc-mapcol { display: grid; gap: 8px; align-content: start; min-width: 0; }
 .mt-fc-mapcol > p { margin: 0; }
 .mt-fc .mt-office, .mt-fc .mt-zoom { border: 0; background: none; padding: 0; }
-.mt-fc-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--muted); }
+.mt-fc-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--muted); }
 .mt-fc-switch:hover { color: var(--ink); }
 .mt-fc-switch input { position: absolute; opacity: 0; pointer-events: none; }
 .mt-fc-switch span { position: relative; width: 32px; height: 18px; border-radius: 999px; background: var(--el-raised); border: 1px solid var(--el-line); transition: background 0.2s; }
@@ -1094,9 +1095,9 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-fc-split { grid-column: 1 / -1; border-radius: 6px; background: var(--rate-safe-r); }
 
 @media (max-width: 720px) {
-  .mt-fc-head { font-size: 18px; }
-  .mt-fc-hero-top { padding: 14px; }
-  .mt-fc-hero-chart { padding: 12px 14px; }
+  .mt-fc-head { font-size: 20px; }
+  .mt-fc-hero-top { padding: 16px; }
+  .mt-fc-hero-chart { padding: 12px 16px; }
   .mt-fc-filters input { font-size: 16px; }
 }
 @media (max-width: 420px) {
@@ -1142,7 +1143,7 @@ body:has(.wrap.mt.mt-sbs-page) .site-footer .wrap { max-width: none; padding: 0 
 .mt-modes.in-header { display: none; }
 @media (min-width: 1001px) {
   .mt-modes.in-header { display: flex; margin: 0; padding: 0; overflow-x: auto; scrollbar-width: none; }
-  .mt-modes.in-header a { color: rgb(255 255 255 / 0.72); padding: 5px 11px; font-size: 14px; }
+  .mt-modes.in-header a { color: rgb(255 255 255 / 0.72); padding: 4px 12px; font-size: 14px; }
   .mt-modes.in-header a:hover { color: #fff; background: rgb(255 255 255 / 0.08); }
   .mt-modes.in-header a[aria-current="page"] { color: #fff; background: rgb(255 255 255 / 0.14); }
   .mt-modes.moved { display: none; }
@@ -1152,12 +1153,12 @@ body:has(.wrap.mt.mt-sbs-page) .site-footer .wrap { max-width: none; padding: 0 
 
 /* Race page cards, simplified: the forecast breakdown sits behind a toggle, and the poll table is pollster, dates, result. */
 .mt-fc-more { margin-top: 4px; }
-.mt-fc-more summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 6px 0; list-style: none; }
+.mt-fc-more summary { cursor: pointer; color: var(--muted); font-size: 12px; padding: 6px 0; list-style: none; }
 .mt-fc-more summary::-webkit-details-marker { display: none; }
 .mt-fc-more summary::before { content: "▸ "; }
 .mt-fc-more[open] summary::before { content: "▾ "; }
 .mt-fc-more summary:hover { color: var(--ink); }
-.mt-pl-tag { font-size: 10.5px; padding: 0 5px; margin-left: 6px; }
+.mt-pl-tag { font-size: 10.5px; padding: 0 4px; margin-left: 6px; }
 
 /* Office pages fit one screen on desktop: the map row takes whatever height the heading and seat bar leave,
    and the map scales to fit it rather than to the width. Only the source notes and footer sit below. */
@@ -1191,16 +1192,17 @@ body:has(.wrap.mt.mt-dv) main { padding-top: 0; }
 .mt-dv-crumb a { color: var(--accent); text-decoration: none; }
 .mt-dv-crumb > span[aria-hidden] { color: var(--muted); }
 .mt-dv-crumb b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mt-dv-crumb .input { font-size: 18px; font-weight: 700; min-height: 34px; padding: 2px 8px; }
+.mt-dv-crumb .input { font-size: 16px; font-weight: 700; min-height: 34px; padding: 2px 8px; }
 .mt-dv-icon { border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 2px 4px; }
 .mt-dv-icon:hover { color: var(--ink); }
+.mt-dv-icon svg, .mt-dv-tools button svg, .mt-find-head .btn svg { display: block; }
 .mt-dv-saved { font-size: 12px; font-weight: 500; color: var(--muted); }
 .mt-dv-saved.failed { color: var(--rep-ink); }
 .mt-dv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .mt-dv-actions .mt-select { min-height: 34px; font-size: 14px; }
 .mt .mt-dv-add { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 700; }
 .mt .mt-dv-present { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-.mt-dv-note { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.mt-dv-note { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
 
 .mt-dv-board { position: relative; display: grid; gap: 6px; background-image: radial-gradient(circle, var(--el-line) 1px, transparent 1.4px); background-size: calc((100% + 6px) / var(--cols)) calc(var(--row) + 6px); background-position: -3px -3px; min-height: 60vh; }
 .mt-dv-panel { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
@@ -1213,14 +1215,14 @@ body:has(.wrap.mt.mt-dv) main { padding-top: 0; }
 .mt-dv-head p { margin: 0; display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; }
 .mt-dv-head p a, .mt-dv-head p b { color: var(--ink); font-weight: 700; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
 .mt-dv-head p a:hover { text-decoration: underline; }
-.mt-dv-head p span { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.mt-dv-head p span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .mt-dv-panel.header .mt-dv-head { border-bottom: 0; height: 100%; padding: 4px 6px; }
 .mt-dv-panel.header h2 { margin: 0; font-size: clamp(18px, 2.2vw, 30px); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mt-dv-tools { position: relative; display: flex; gap: 2px; flex: none; }
 .mt-dv-tools > button { border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
 .mt-dv-tools > button:hover { color: var(--ink); background: var(--el-hover); }
 .mt-dv-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: grid; min-width: 160px; padding: 4px; background: var(--el-raised); border: 1px solid var(--el-line); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); }
-.mt-dv-menu button { border: 0; background: none; color: var(--ink); text-align: left; padding: 7px 10px; border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; }
+.mt-dv-menu button { border: 0; background: none; color: var(--ink); text-align: left; padding: 8px 10px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
 .mt-dv-menu button:hover { background: var(--el-hover); }
 .mt-dv-menu button.danger { color: var(--rep-ink); }
 .mt-dv-body { flex: 1; min-height: 0; overflow: auto; }
@@ -1232,41 +1234,41 @@ body:has(.wrap.mt.mt-dv) main { padding-top: 0; }
 .mt-dv-body svg { display: block; }
 .mt-dv-resize { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 50%, var(--el-line) 50%); border-bottom-right-radius: 8px; }
 .mt-dv-ghost { border: 2px dashed var(--accent); border-radius: 8px; pointer-events: none; z-index: 5; }
-.mt-dv-empty { margin: 0; padding: 16px; color: var(--muted); font-size: 13px; text-align: center; }
+.mt-dv-empty { margin: 0; padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
 /* A panel whose component has nothing to draw (no market for the race, say) says so instead of sitting blank. */
-.mt-dv-body:empty::before { content: "Nothing to show for this race yet."; display: block; padding: 16px; color: var(--muted); font-size: 13px; text-align: center; }
+.mt-dv-body:empty::before { content: "Nothing to show for this race yet."; display: block; padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
 .mt-dv-body .mt-mk-empty { padding: 16px; text-align: center; }
 .mt-dv-crumb a { white-space: nowrap; }
 .mt-dv-blank { grid-column: 1 / -1; grid-row: 2 / span 2; align-self: center; text-align: center; color: var(--muted); }
-.mt-dv-drops { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.mt-dv-drops { list-style: none; margin: 0; padding: 0; font-size: 12px; }
 .mt-dv-drops li { display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
 .mt-dv-drops li span:nth-child(3) { text-align: right; }
 
 .mt-dv-dialog { width: min(640px, calc(100vw - 32px)); max-height: min(80vh, 720px); padding: 0; background: var(--sheet); color: var(--ink); border: 1px solid var(--el-line); border-radius: 10px; }
 .mt-dv-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
 .mt-dv-dialog > header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
-.mt-dv-dialog h2 { margin: 0; font-size: 17px; }
-.mt-dv-types { display: grid; gap: 14px; padding: 14px 16px; }
+.mt-dv-dialog h2 { margin: 0; font-size: 16px; }
+.mt-dv-types { display: grid; gap: 16px; padding: 16px 16px; }
 .mt-dv-types fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.mt-dv-types legend { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-.mt-dv-types button { border: 1px solid var(--rule); background: var(--paper); color: var(--ink); border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 13.5px; cursor: pointer; }
+.mt-dv-types legend { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.mt-dv-types button { border: 1px solid var(--rule); background: var(--paper); color: var(--ink); border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
 .mt-dv-types button:hover { border-color: var(--accent); }
-.mt-dv-offices, .mt-dv-text { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 16px; }
+.mt-dv-offices, .mt-dv-text { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 16px; }
 .mt-dv-text .input { flex: 1; min-width: 200px; }
 .mt-dv-races { padding: 12px 16px; display: grid; gap: 8px; }
 .mt-dv-races ul { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; border: 1px solid var(--rule); border-radius: 8px; }
 .mt-dv-races li button { display: grid; width: 100%; gap: 2px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--rule); background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
 .mt-dv-races li button:hover { background: var(--el-hover); }
-.mt-dv-races li button span { font-size: 12.5px; color: var(--muted); }
+.mt-dv-races li button span { font-size: 12px; color: var(--muted); }
 .mt-dv-races li.muted { padding: 10px 12px; }
 
 .mt-dv-list { margin-top: 20px; }
 .mt-dv-list h2 { font-size: 16px; margin: 0 0 10px; }
 .mt-dv-list ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 .mt-dv-list li { display: flex; align-items: stretch; justify-content: space-between; gap: 8px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
-.mt-dv-list li a { display: grid; gap: 4px; flex: 1; padding: 12px 14px; color: var(--ink); text-decoration: none; }
+.mt-dv-list li a { display: grid; gap: 4px; flex: 1; padding: 12px 16px; color: var(--ink); text-decoration: none; }
 .mt-dv-list li a:hover b { text-decoration: underline; }
-.mt-dv-list li a span { font-size: 13px; color: var(--muted); }
+.mt-dv-list li a span { font-size: 12px; color: var(--muted); }
 .mt-dv-list li .btn { align-self: center; margin-right: 8px; }
 
 /* Phones: one column of panels in reading order, each keeping its height in rows. */
@@ -1275,7 +1277,7 @@ body:has(.wrap.mt.mt-dv) main { padding-top: 0; }
   .mt-dv-panel { grid-column: 1 / -1 !important; grid-row: auto !important; min-height: calc(var(--h) * 40px); }
   .mt-dv-panel.header { min-height: 0; }
   .mt-dv-resize, .mt-dv-ghost { display: none; }
-  .mt-dv-crumb { font-size: 17px; }
+  .mt-dv-crumb { font-size: 16px; }
 }
 
 /* Election night fixes */
@@ -1347,19 +1349,16 @@ body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
  * They fade in after a beat, so a quick answer goes straight to the page without a flash of grey. */
 .mt-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .mt-skel-frame { margin-top: 12px; animation: mt-in 0.3s ease 0.2s both; }
-.mt-skel { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--el-raised) 30%, color-mix(in srgb, var(--el-line) 55%, var(--el-raised)) 50%, var(--el-raised) 70%) 0 0 / 300% 100%; animation: mt-shimmer 1.6s ease-in-out infinite; }
-@keyframes mt-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.mt-skel { display: block; border-radius: 6px; background: var(--el-raised); }
 .mt .mt-skel-balance { min-height: 150px; padding: 12px 0; align-content: space-between; }
 /* The real US outline, greyed and breathing, stands in for a map whose colors are still loading. */
-.mt-skel-breathe { animation: mt-breathe 1.6s ease-in-out infinite alternate; pointer-events: none; }
-@keyframes mt-breathe { from { opacity: 0.45; } to { opacity: 0.8; } }
+.mt-skel-breathe { opacity: 0.6; pointer-events: none; }
 /* A placeholder taking over from another is already showing: no second fade, and the shimmer keeps its beat. */
 .mt-skel-frame.handoff { animation: none; }
-.mt-skel-frame.handoff .mt-skel, .mt-skel-frame.handoff .mt-skel-breathe { animation-delay: var(--skel-t); }
 .mt-skel-map { width: 100%; border-radius: 8px; }
 .mt-skel-map.zoom { aspect-ratio: 975 / 610; }
 .mt-skel-map.state { aspect-ratio: 640 / 440; }
-.mt-skel-rows { display: grid; gap: 14px; padding: 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+.mt-skel-rows { display: grid; gap: 16px; padding: 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
 .mt-skel-frame .mt-section-head { min-height: 36px; }
 
 /* Results fade up into place when they first arrive, and a switched tab or view eases in rather than snapping. */
@@ -1385,21 +1384,21 @@ body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
 .wrap.mt > .mt-tour-hole, .wrap.mt > .mt-tour-card { margin: 0; }
 /* The card takes focus only to bring keyboards and screen readers along; its buttons carry the focus rings. */
 .mt-tour-card:focus, .mt-tour-card:focus-visible { outline: none; }
-.mt-tour-card h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.mt-tour-card h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .mt-tour-card p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
 .mt-tour-card .mt-tour-count { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .mt-tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .mt-tour-actions > span { display: flex; gap: 8px; }
-.mt-tour-actions .btn.small { min-height: 34px; padding: 0 14px; font-size: 14px; }
+.mt-tour-actions .btn.small { min-height: 34px; padding: 0 16px; font-size: 14px; }
 .mt-tour-actions .btn.quiet.small { padding: 0; color: var(--muted); }
 .mt-tour-actions .btn.quiet.small:hover { color: var(--ink); }
 .mt-source .mt-tour-replay { margin-left: 16px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
 
 /* Search tab: one wide field, starting suggestions, then tracked races and civicAPI's other races in the race-list table. */
-.mt-search-box .input { width: 100%; max-width: 760px; min-height: 48px; padding: 10px 14px; font-size: 17px; }
+.mt-search-box .input { width: 100%; max-width: 760px; min-height: 48px; padding: 10px 16px; font-size: 16px; }
 .mt-search-start { display: grid; gap: 12px; max-width: 760px; }
 .mt-search-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.mt-search-chips .btn.small { min-height: 34px; padding: 0 14px; font-size: 14px; }
+.mt-search-chips .btn.small { min-height: 34px; padding: 0 16px; font-size: 14px; }
 .mt-seg-count { margin-left: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .mt-search-page .mt-rows-wrap { max-height: none; }
 .mt .mt-found td:first-child { white-space: normal; min-width: 16ch; }
@@ -1482,32 +1481,32 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
 .mt-balance-nums > span, .mt-seats-nums > .d, .mt-seats-nums > .r { white-space: nowrap; }
 
 /* Early vote tab. */
-.mt-ev-summary { margin-top: 10px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 32px; align-items: center; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 20px; }
+.mt-ev-summary { margin-top: 10px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 32px; align-items: center; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px 20px; }
 /* The party split fills the rest of the row, set off from the counts by a rule. */
 .mt-ev-summary > div { border-left: 1px solid var(--rule); padding-left: 32px; }
 .mt-ev-summary p { margin: 0 0 8px; }
 .mt-ev-stats { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0; }
-.mt-ev-stats dt { font-size: 13px; color: var(--muted); }
+.mt-ev-stats dt { font-size: 12px; color: var(--muted); }
 .mt-ev-stats dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
-.mt-ev-stats .lead dd { font-family: var(--serif); font-size: 26px; line-height: 1.1; }
+.mt-ev-stats .lead dd { font-family: var(--serif); font-size: 24px; line-height: 1.1; }
 .mt-ev-bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--rule); }
 .mt-ev-bar > span { display: block; height: 100%; }
 .mt-ev-party .mt-legend b { font-variant-numeric: tabular-nums; }
 .mt-ev-block h3, .mt-ev-state h3 { font-size: 16px; margin: 0 0 6px; }
 .mt-ev-block p { margin: 6px 0 0; }
 .mt-ev-demos { display: grid; gap: 10px; }
-.mt-ev-demo h4 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 2px; }
+.mt-ev-demo h4 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 0 0 2px; }
 .mt-ev-demo .mt-table td { padding: 4px 6px; }
 .mt-ev-tip { display: grid; gap: 2px; }
 /* A state's panel spaces its sections evenly, apart from the site-wide .stack margins. */
 .mt-ev-state { display: grid; gap: 20px; }
 .mt-ev-state > * { margin: 0; }
-.mt-ev-lead { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px 14px; display: grid; gap: 8px; }
-.mt-ev-lead h3 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0; }
+.mt-ev-lead { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px 16px; display: grid; gap: 8px; }
+.mt-ev-lead h3 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; }
 .mt-ev-lead p { margin: 0; }
 .mt-ev-lead-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
-.mt-ev-lead-who { font-family: var(--serif); font-size: 22px; line-height: 1.15; }
-.mt-ev-lead-margin { font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; }
+.mt-ev-lead-who { font-family: var(--serif); font-size: 24px; line-height: 1.15; }
+.mt-ev-lead-margin { font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; }
 .mt-ev-lead-who.d, .mt-ev-lead-margin.d { color: var(--dem-ink, var(--dem)); }
 .mt-ev-lead-who.r, .mt-ev-lead-margin.r { color: var(--rep-ink, var(--rep)); }
 .mt-ev-tag { font-size: 12px; font-weight: 600; color: var(--muted); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px; }
@@ -1531,7 +1530,7 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
 }
 
 /* Development only: the mock election night switch, pinned bottom center (clear of Next's dev badge and the chat button). */
-.mt-mock { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: calc(100vw - 32px); padding: 8px 12px; background: var(--sheet); color: var(--ink); border: 1px dashed var(--el-line); border-radius: 8px; font: inherit; font-size: 13px; }
+.mt-mock { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: calc(100vw - 32px); padding: 8px 12px; background: var(--sheet); color: var(--ink); border: 1px dashed var(--el-line); border-radius: 8px; font: inherit; font-size: 12px; }
 button.mt-mock { cursor: pointer; font-weight: 600; color: var(--muted); }
 button.mt-mock:hover { color: var(--ink); }
 .mt-mock.on { border: 1px solid var(--accent); }
@@ -1543,7 +1542,7 @@ button.mt-mock:hover { color: var(--ink); }
  * doesn't show. It sits over that tab's own page, which keeps running underneath.
  */
 .mt-companion { position: fixed; inset: 0; z-index: 45; overflow-y: auto; display: grid; gap: 16px; align-content: start; padding: 16px 20px 80px; background: var(--paper); color: var(--ink); }
-.mt-companion-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.mt-companion-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
 .mt-companion-bar b { color: var(--accent); }
 .mt-companion-bar .mt-bell { margin-left: auto; }
 .mt-companion-grid { display: grid; gap: 20px; align-items: start; }
@@ -1578,7 +1577,7 @@ body:has(> .mt-companion) { overflow: hidden; }
 }
 
 /* On the main screen, while the pop-up opens on the companion: a short note in the corner. */
-.mt-moment-note { position: fixed; right: 20px; top: 80px; z-index: 46; max-width: min(360px, calc(100vw - 40px)); margin: 0; padding: 10px 14px; background: var(--sheet); border: 1px solid var(--el-line); border-left: 3px solid var(--accent); border-radius: 8px; animation: mt-moment-in 0.18s ease-out; }
+.mt-moment-note { position: fixed; right: 20px; top: 80px; z-index: 46; max-width: min(360px, calc(100vw - 40px)); margin: 0; padding: 10px 16px; background: var(--sheet); border: 1px solid var(--el-line); border-left: 3px solid var(--accent); border-radius: 8px; animation: mt-moment-in 0.18s ease-out; }
 .mt-moment-note .p-D { color: var(--dem-ink); }
 .mt-moment-note .p-R { color: var(--rep-ink); }
 .mt-moment-note .p-I { color: var(--oth); }

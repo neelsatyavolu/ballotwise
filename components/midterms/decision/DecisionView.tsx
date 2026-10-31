@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PencilIcon } from "../icons";
 import { encodeShare, GRID_SIZES, openSpot, PANELS, panelId, place, type GridLayout, type GridSize, type Panel } from "@/lib/midterms/decisionView";
 import type { RaceSummary } from "@/lib/midterms/view";
 import { AddElement, type Choice } from "./AddElement";
@@ -136,7 +137,7 @@ export function DecisionView({ layout: initial, onSave, onCopy, popout = false, 
               <b>{layout.title}</b>
             )}
             {onSave && !renaming && (
-              <button type="button" className="mt-dv-icon" aria-label="Rename dashboard" onClick={() => setRenaming(true)}>✎</button>
+              <button type="button" className="mt-dv-icon" aria-label="Rename dashboard" onClick={() => setRenaming(true)}><PencilIcon /></button>
             )}
             {onSave && <span className={`mt-dv-saved ${saved}`} aria-live="polite">{saved === "saving" ? "Saving…" : saved === "failed" ? "Not saved" : "Saved"}</span>}
           </p>

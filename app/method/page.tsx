@@ -76,7 +76,6 @@ export default function Method() {
       <ul>
         <li>AI can misread a source. Follow the links on anything that matters to your vote.</li>
         <li>Small local races have less written about them, so there&apos;s less to go on.</li>
-        <li>Ballot measures aren&apos;t covered yet.</li>
         <li>Check your county election office for dates, deadlines, and where to vote.</li>
       </ul>
 

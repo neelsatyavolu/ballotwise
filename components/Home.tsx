@@ -44,7 +44,7 @@ export function Home({ initialQuery }: { initialQuery: string }) {
       <section className="hero">
         <div className="hero-grid">
         <div className="hero-copy">
-        <h1>See every candidate on the same page.</h1>
+        <h1>See every candidate on the same page</h1>
         <p className="lede">
           Type in any race on your ballot. Ballotwise looks up every candidate the same way, links each fact to where it came
           from, and shows who agrees with you most.

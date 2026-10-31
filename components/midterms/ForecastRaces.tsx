@@ -84,7 +84,7 @@ export function ForecastRaces({ office, races, limit }: { office: ForecastOffice
   return (
     <div className="mt-fc-races">
       <div className="mt-fc-filters">
-        <input className="input" type="search" placeholder={`Search ${unit}…`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={`Search ${unit}`} />
+        <input className="input" type="search" placeholder={`Search ${unit}s`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={`Search ${unit}`} />
         <select className="input" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} aria-label="Filter by rating">
           {FILTERS.map((f) => (
             <option key={f.id} value={f.id}>{f.label}</option>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent } from "react";
+import { MoreIcon, PencilIcon } from "../icons";
 import { fitted, GRID_SIZES, PANELS, place, type GridLayout, type Panel } from "@/lib/midterms/decisionView";
 import type { RaceSummary } from "@/lib/midterms/view";
 import { PanelBody, panelHref, panelTitle } from "./Panels";
@@ -127,11 +128,11 @@ export function Board({ layout, editable, find, onChange, onAction }: { layout: 
               )}
               <div className="mt-dv-tools" onPointerDown={(e) => e.stopPropagation()}>
                 {editable && header && (
-                  <button type="button" aria-label="Rename section" onClick={() => onAction({ type: "rename", panel: p })}>✎</button>
+                  <button type="button" aria-label="Rename section" onClick={() => onAction({ type: "rename", panel: p })}><PencilIcon /></button>
                 )}
                 {editable && (
                   <button type="button" aria-label="Panel options" aria-expanded={menu === p.id} onClick={() => setMenu(menu === p.id ? null : p.id)}>
-                    ⋯
+                    <MoreIcon />
                   </button>
                 )}
                 {menu === p.id && (

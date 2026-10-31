@@ -255,7 +255,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
         )}
         {election.on && (
           <button type="button" className="btn secondary small mt-ask" onClick={() => setChatOpen(true)}>
-            <span aria-hidden>✦</span> Ask Grok
+            Ask Grok
           </button>
         )}
         <ElectionToggle on={election.on} onChange={election.set} />

@@ -104,7 +104,7 @@ export function AiDashboards({ races, dashboards, openId, onOpen, onRename, onDe
                 <Link href={`/midterms/dashboards/${open.id}`} className="btn secondary">Open in Decision View</Link>
               ) : (
                 <>
-                  <button type="button" className="btn secondary" onClick={() => onAsk("", false)}>✦ Edit with Grok</button>
+                  <button type="button" className="btn secondary" onClick={() => onAsk("", false)}>Edit with Grok</button>
                   <Link href={`/midterms/dashboards/new?from=${open.id}`} className="btn quiet">Edit as grid</Link>
                 </>
               )}
