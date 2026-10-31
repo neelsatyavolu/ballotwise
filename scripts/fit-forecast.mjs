@@ -568,6 +568,12 @@ function personalOf(office, past, race, side, name) {
     .filter((c) => c.state === race.state && c.year < race.year && (office === "house" ? c.year === race.year - 2 : c.year >= race.year - TERM[office]) && won(c))
     .sort((a, b) => b.year - a.year || Number(b.district === race.district) - Number(a.district === race.district));
   const prev = prior[0];
+  // A personal vote is the candidate's own following, so a House member's isn't measured from a race where they beat
+  // the incumbent (their opponent had won the seat two years before): Bresnahan ran behind PA-8 in 2024 because of
+  // Cartwright's following, not his own. Open-seat and incumbent wins count.
+  const opponent = prev && lastName(side === "D" ? prev.rName : prev.dName);
+  const beatIncumbent = office === "house" && prev && past.some((c) => c.state === prev.state && c.district === prev.district && c.year === prev.year - 2 && (side === "D" ? c.margin < 0 && lastName(c.rName) === opponent : c.margin > 0 && lastName(c.dName) === opponent));
+  if (beatIncumbent) return 0;
   const expected = prev ? expectedMargin(office, prev) : null;
   return expected === null ? 0 : clampPersonal(prev.margin - expected);
 }
