@@ -807,6 +807,8 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-card .mt-ct th { padding-top: 8px; padding-bottom: 8px; }
 .mt-card .mt-ct th:first-child, .mt-card .mt-ct td:first-child { padding-left: 12px; }
 .mt-card .mt-ct th:last-child, .mt-card .mt-ct td:last-child { padding-right: 10px; }
+/* The card's tighter cell padding above would drop the status row's own, leaving its text at the top edge. */
+.mt-card .mt-ct-status td { padding-top: 9px; padding-bottom: 9px; }
 .mt-card .mt-ct .mt-avatar { width: 20px; height: 20px; font-size: 8px; }
 .mt-card .mt-ct-who { gap: 6px; }
 .mt-el .mt-tile-foot:empty { display: none; }

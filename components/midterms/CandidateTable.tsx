@@ -110,7 +110,7 @@ export function CandidateTable({ race, status, limit, short = false, share = fal
       <tfoot>
         <tr className="mt-ct-status">
           <td colSpan={cols - 2}>{status}</td>
-          <td className="num">{fmt(race.total)}</td>
+          <td className="num">{race.total > 0 && fmt(race.total)}</td>
           <td />
         </tr>
         <tr className="mt-ct-report">
