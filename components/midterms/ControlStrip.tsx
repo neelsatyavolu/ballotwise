@@ -45,24 +45,34 @@ function numbers(office: Chamber, tally: Tally, races: readonly RaceSummary[]) {
   return { won, notUp, gained, lost, unknownHolder, ahead, early, uncalled: tally.uncalled };
 }
 
+/** "ahead in 6 (+3 barely counted)": early leads (under 25% reporting) are shown apart. Empty when there are none. */
+function leadText(leads: number, early: number) {
+  if (!leads && !early) return "";
+  const barely = early ? `${early} barely counted` : "";
+  if (!leads) return `ahead in ${barely}`;
+  return `ahead in ${leads}${barely ? ` (+${barely})` : ""}`;
+}
+
 /**
- * "D needs 7 more · leads 6 +3 early", or "D has control" once they have it. Early leads (under 25% reporting) are
- * shown apart. `open` is every seat nobody holds yet, including any civicAPI hasn't listed, so a missing race can't
- * fake an elimination.
+ * "D needs 7 more · ahead in 6 (+3 barely counted)", or "D has control" once they have it. `open` is every seat
+ * nobody holds yet, including any civicAPI hasn't listed, so a missing race can't fake an elimination.
  */
 function needLine(p: "D" | "R", have: number, need: number, leads: number, open: number, early = 0) {
   if (have >= need) return `${p} has control`;
   if (have + open < need) return `${p} can't reach ${need}`;
-  const lead = [leads && `leads ${leads}`, early && `+${early} early`].filter(Boolean).join(" ");
+  const lead = leadText(leads, early);
   return `${p} needs ${need - have} more${lead ? ` · ${lead}` : ""}`;
 }
 
-/** "Net D +1 (D gained 2, lost 1)", or a plain statement when nothing has changed hands. */
+/** "D gains 4 seats": only the side(s) up on flips, since the other side's loss is the same seats. Gains and losses in full sit in the breakdown. */
 function netLine(n: ReturnType<typeof numbers>, called: number) {
   const parts = (["D", "R", "other"] as const).filter((p) => n.gained[p] || n.lost[p]);
   if (!called) return null;
   if (!parts.length) return n.unknownHolder ? `No known seat has changed party (${n.unknownHolder} with no record)` : "No seat has changed party";
-  return parts.map((p) => `${side(p)} ${n.gained[p] - n.lost[p] >= 0 ? "+" : ""}${n.gained[p] - n.lost[p]} net`).join(" · ");
+  const up = parts.map((p) => ({ p, net: n.gained[p] - n.lost[p] })).filter((x) => x.net > 0);
+  if (!up.length) return "Flips cancel out";
+  const seats = (k: number) => `${k} seat${k === 1 ? "" : "s"}`;
+  return up.map(({ p, net }) => `${side(p)} gains ${up.length === 1 ? seats(net) : net}`).join(" · ");
 }
 
 function ChamberCard({ office, tally, races, coverage, onNeed }: { office: Chamber; tally: Tally; races: readonly RaceSummary[]; coverage?: Coverage[Chamber]; onNeed?: (office: Chamber) => void }) {
@@ -101,7 +111,7 @@ function ChamberCard({ office, tally, races, coverage, onNeed }: { office: Chamb
       </div>
       <div className="mt-cs-need small">
         {(["D", "R"] as const).map((p) => {
-          const text = need ? needLine(p, tally[p], need[p], n.ahead[p], openSeats(tally), n.early[p]) : n.ahead[p] ? `${p} leads ${n.ahead[p]}${n.early[p] ? ` +${n.early[p]} early` : ""}` : "";
+          const text = need ? needLine(p, tally[p], need[p], n.ahead[p], openSeats(tally), n.early[p]) : n.ahead[p] ? `${p} ${leadText(n.ahead[p], n.early[p])}` : "";
           // The need line opens the race list on this chamber's uncalled races, closest calls first: the path to control.
           return onNeed && text && n.uncalled > 0 ? (
             <button key={p} type="button" className="mt-cs-path" onClick={() => onNeed(office)} title={`Show the ${n.uncalled} uncalled ${TITLE[office]} races`}>
