@@ -1,24 +1,25 @@
-// Tunes the forecast's hyperparameters (lib/midterms/tuning.json) so its ratings and chamber odds agree with Decision
-// Desk HQ's published forecast. The fitted model (fit.json) stays as fit; only settings that apply to every race of an
-// office move: its σ multiplier, its market weight, the expert raters' weight, a scale on its personal-vote coefficient
-// and the share of each race's variance its chamber simulation draws from shared errors (which leaves race chances
-// alone); and, for all offices, the market clip and a scale on the environment coefficient. No race is adjusted on
-// its own.
+// Tunes the forecast's hyperparameters (lib/midterms/tuning.json) so its race chances, seats and chamber odds agree
+// with Decision Desk HQ's published forecast. The fitted model (fit.json) stays as fit; only settings that apply to
+// every race of an office move: its σ multiplier, its market weight, the expert raters' weight, scales on its lean,
+// personal-vote and fundraising coefficients, an offset to its fundamentals, its polls' weight curve, and the share of
+// each race's variance its chamber simulation draws from shared errors (which leaves race chances alone); and, for all
+// offices, the market clip and a scale on the environment coefficient. No race is adjusted on its own.
 //
 // The benchmark is a JSON file read off DDHQ's public pages, kept outside the repo (their terms don't allow copying
 // their content); only the resulting parameters are written:
 //
-//   { "control": { "house": [lo, hi], "senate": [lo, hi] },
+//   { "captured": "when the pages were read",
+//     "control": { "house": [lo, hi], "senate": [lo, hi] },
+//     "seats": { "house": { "D": n, "R": n }, "senate": { "D": n, "R": n } },
 //     "tossups": { "house": [race keys], "senate": [...], "governor": [...] },
 //     "ratings": { "house": [Safe D, Likely D, Lean D, Toss-up, Lean R, Likely R, Safe R], ... },
 //     "races": { "<race key>": { "side": "D" | "R" | null, "p": favorite's chance }, ... } }
 //
-// The objective, in order of weight: the exact toss-up set per office, chamber control within the target range, each
-// listed race more than 10 points from the benchmark's chance, then the rating of each listed race and the mean gap in
-// their chances (a point of mean gap weighs as much as a race with the wrong rating), each race more than 5 points off,
-// then the rating counts; ties go to settings whose matched ratings sit furthest from a rating line
-// and whose k is nearest the backtest's. A grid over the shared settings, each office searched on its own within it,
-// then a coordinate search at finer steps until nothing improves.
+// The objective, in order of weight: each listed race more than 5 points from the benchmark's chance (and how far
+// past), each chamber's expected seats more than 0.4 from the benchmark's, control outside the target range; then the
+// toss-up set, ratings and the mean gap; ties go to settings whose matched ratings sit furthest from a rating line and
+// whose k is nearest the backtest's. A grid over the shared settings, each office searched on its own within it, then
+// a coordinate search at finer steps until nothing improves. The report ends with the match itself, pass or fail.
 //
 // Run with `node scripts/tune-to-ddhq.mjs <benchmark.json> [--refresh] [--dry-run] [--evaluate] [--office=senate]`;
 // --evaluate reports on the settings in tuning.json without searching, and --office searches only that office's own
@@ -91,6 +92,15 @@ const key = (r) => M.raceKey(r.office, r.state, r.district);
 // ---------- Scoring ----------
 
 const favoriteOf = (f) => (f ? M.favorite(f) : null);
+/**
+ * Our chance for the benchmark's favorite (an independent facing the Republican stands in for a Democrat), read off the
+ * odds so a dead heat counts as 50%; for a benchmark toss-up with no side, our favorite's chance. Null without a forecast.
+ */
+const chanceFor = (f, want) => {
+  if (!f) return null;
+  if (want.side === null) return favoriteOf(f)?.p ?? 0.5;
+  return f.odds[want.side] ?? (want.side === "D" ? f.odds.I : undefined) ?? 0;
+};
 const officeOf = (k) => k.split(":")[0];
 const isTossup = (f) => M.ratingOf(f) === "tossup";
 const RACES = Object.fromEntries(OFFICES.map((o) => [o, inputs.races.filter((r) => r.office === o)]));
@@ -100,6 +110,8 @@ const forecastsOf = (t, office) => new Map(PREPARED[office].map((p) => [p.key, M
 const chamberOf = (t, office, forecasts, runs) => M.chamberViews(M.chamberEntries(RACES[office], (r) => forecasts.get(key(r))), runs, t)[office];
 const ratingAt = (side, p) => M.ratingOf({ odds: { [side]: p, [side === "D" ? "R" : "D"]: 1 - p } });
 /** The backtest's own σ multiplier per office; the search prefers settings near it. */
+/** Each chamber's seats not up this year, from the simulation's own table. */
+const NOT_UP = Object.fromEntries(OFFICES.map((o) => [o, M.chamberViews([], 1)[o].notUp]));
 const BACKTEST_K = { house: M.FIT.house.calibration.k, senate: M.FIT.senate.calibration.k, governor: M.FIT.senateNoFundraising.calibration.k };
 /** Distance from the nearest rating line (60, 75, 95), for how well a matched rating would hold up as data moves. */
 const edgeDistance = (p) => Math.min(...[0.6, 0.75, 0.95].map((line) => Math.abs(p - line)));
@@ -134,23 +146,24 @@ function officeScore(office, forecasts, chamber, t) {
   let far = 0;
   let off = 0;
   // A race's gap counts toward the mean, and once past FAR or OFF also as a race that isn't close.
+  let excess = 0;
   const miss = (d) => {
     gap += d;
     far += d > FAR ? 1 : 0;
     off += d > OFF ? 1 : 0;
+    // Past 4.5 points, so races sitting just inside OFF are pulled further in.
+    excess += Math.max(0, d - (OFF - 0.005));
   };
   for (const [k, want] of Object.entries(bench.races ?? {})) {
     if (officeOf(k) !== office) continue;
-    const fav = favoriteOf(forecasts.get(k));
-    if (!fav) continue;
+    const ours = chanceFor(forecasts.get(k), want);
+    if (ours === null) continue;
     listed += 1;
-    if (want.side === null) {
-      miss(Math.abs(fav.p - want.p));
-      continue;
-    }
-    miss(Math.abs((fav.side === want.side ? fav.p : 1 - fav.p) - want.p));
-    if (fav.side !== want.side || M.ratingOf(forecasts.get(k)) !== ratingAt(want.side, want.p)) ratingMiss += 1;
-    else edge = Math.min(edge, edgeDistance(fav.p));
+    miss(Math.abs(ours - want.p));
+    if (want.side === null) continue;
+    const fav = favoriteOf(forecasts.get(k));
+    if (fav?.side !== want.side || M.ratingOf(forecasts.get(k)) !== ratingAt(want.side, want.p)) ratingMiss += 1;
+    else edge = Math.min(edge, edgeDistance(ours));
   }
   let countsMiss = 0;
   const counts = bench.ratings?.[office];
@@ -164,11 +177,17 @@ function officeScore(office, forecasts, chamber, t) {
     }
     BUCKETS.forEach((b, i) => (countsMiss += Math.abs(ours[b] - counts[i])));
   }
+  // Seats are the expected count, the sum of each side's chances plus the seats not up: a miss once it's more than
+  // 0.4 from the benchmark's whole number, so it rounds the same way with room for the simulation's noise.
+  const want = bench.seats?.[office];
+  const expectedD = NOT_UP[office].D + [...forecasts.values()].reduce((s, f) => s + (f?.odds?.D ?? 0) + (f?.odds?.I ?? 0), 0);
+  const seatMiss = want ? Math.max(0, Math.abs(expectedD - want.D) - 0.4) : 0;
   // Matched toss-ups closer than 2 points to the 60 line would flip as data refreshes: 10 a point short of that.
-  const edgeMiss = 1000 * Math.max(0, 0.02 - tossEdge);
+  const edgeMiss = 100 * Math.max(0, 0.02 - tossEdge);
   const tieBreak = 20 * (0.1 - Math.max(0, Math.min(edge, tossEdge))) + 3 * Math.abs(t.k[office] - BACKTEST_K[office]);
-  const total = 100 * tossMiss + 100 * tossSoft + 20 * controlMiss + edgeMiss + 50 * far + 5 * ratingMiss + 2 * off + countsMiss + (5 * 100 * gap) / Math.max(1, listed) + tieBreak;
-  return { total, tossMiss, controlMiss, ratingMiss, countsMiss, far, off, gap: (100 * gap) / Math.max(1, listed), listed, edge: tossEdge };
+  // The match itself comes first: each race past OFF (and how far past), seats, control; ratings only break ties.
+  const total = 30 * off + 300 * excess + 200 * seatMiss + 50 * controlMiss + 5 * tossMiss + 5 * tossSoft + edgeMiss + ratingMiss + 0.2 * countsMiss + (5 * 100 * gap) / Math.max(1, listed) + tieBreak;
+  return { total, tossMiss, controlMiss, seatMiss, ratingMiss, countsMiss, far, off, gap: (100 * gap) / Math.max(1, listed), listed, edge: tossEdge };
 }
 
 function score(t, runs = 2000) {
@@ -178,13 +197,13 @@ function score(t, runs = 2000) {
   });
   const sum = (k) => parts.reduce((s, p) => s + p[k], 0);
   const listed = sum("listed");
-  return { total: sum("total"), tossMiss: sum("tossMiss"), controlMiss: sum("controlMiss"), ratingMiss: sum("ratingMiss"), countsMiss: sum("countsMiss"), far: sum("far"), off: sum("off"), gap: parts.reduce((s, p) => s + p.gap * p.listed, 0) / Math.max(1, listed) };
+  return { total: sum("total"), tossMiss: sum("tossMiss"), controlMiss: sum("controlMiss"), seatMiss: sum("seatMiss"), ratingMiss: sum("ratingMiss"), countsMiss: sum("countsMiss"), far: sum("far"), off: sum("off"), gap: parts.reduce((s, p) => s + p.gap * p.listed, 0) / Math.max(1, listed) };
 }
 
 // ---------- Search ----------
 
 const range = (lo, hi, step) => Array.from({ length: Math.round((hi - lo) / step) + 1 }, (_, i) => Math.round((lo + i * step) * 1000) / 1000);
-const withOffice = (t, office, { k, max, personal, shared, experts, incumbency, personalCap, fundraisingCap, pollFull, nationalShare }) => ({
+const withOffice = (t, office, { k, max, personal, shared, experts, incumbency, personalCap, fundraisingCap, pollFull, nationalShare, pollMax, lean, fundraising, offset }) => ({
   ...t,
   k: { ...t.k, [office]: k ?? t.k[office] },
   markets: { ...t.markets, max: { ...t.markets.max, [office]: max ?? t.markets.max[office] } },
@@ -195,6 +214,10 @@ const withOffice = (t, office, { k, max, personal, shared, experts, incumbency, 
   personalCap: { ...t.personalCap, [office]: personalCap ?? t.personalCap[office] },
   fundraisingCap: { ...t.fundraisingCap, [office]: fundraisingCap ?? t.fundraisingCap[office] },
   pollFull: { ...t.pollFull, [office]: pollFull ?? t.pollFull[office] },
+  pollMax: { ...t.pollMax, [office]: pollMax ?? t.pollMax[office] },
+  lean: { ...t.lean, [office]: lean ?? t.lean[office] },
+  fundraising: { ...t.fundraising, [office]: fundraising ?? t.fundraising[office] },
+  offset: { ...t.offset, [office]: offset ?? t.offset[office] },
   nationalShare: { ...t.nationalShare, [office]: nationalShare === undefined ? t.nationalShare[office] : nationalShare },
 });
 const K = range(0.6, 2, 0.1);
@@ -277,6 +300,10 @@ const FINE = [
     [(t, v) => withOffice(t, o, { fundraisingCap: v }), range(0.5, 3, 0.25)],
     [(t, v) => withOffice(t, o, { pollFull: v }), [2, 3, 4, 5, 6, 8, 10, 15]],
     [(t, v) => withOffice(t, o, { nationalShare: v }), grid(o, "nationalShare", [null, 0, 0.25, 0.5, 0.75, 1])],
+    [(t, v) => withOffice(t, o, { offset: v }), range(-8, 8, 0.25)],
+    [(t, v) => withOffice(t, o, { lean: v }), range(0.5, 1.5, 0.02)],
+    [(t, v) => withOffice(t, o, { fundraising: v }), range(-1, 3, 0.1)],
+    [(t, v) => withOffice(t, o, { pollMax: v }), range(0, 0.8, 0.05)],
   ]),
   ...(ONLY
     ? []
@@ -347,10 +374,43 @@ for (const [k, want] of Object.entries(bench.races ?? {})) {
 }
 console.log(`  same rating ${same} of ${Object.keys(bench.races ?? {}).length}, mean gap ${check.gap.toFixed(1)}`);
 
+// The match against the benchmark, pass or fail: each chamber's seats exactly, control within the range, and every
+// listed race's chance for the benchmark's favorite within OFF of theirs.
+console.log(`\nmatch against the benchmark${bench.captured ? ` captured ${bench.captured}` : ""}`);
+const fails = [];
+for (const office of ["house", "senate"]) {
+  const v = final.chambers[office];
+  const want = bench.seats?.[office];
+  if (want) {
+    const ok = v.dSeats === want.D && v.rSeats === want.R;
+    if (!ok) fails.push(`${office} seats`);
+    const expected = v.notUp.D + [...final.forecasts].filter(([k]) => officeOf(k) === office).reduce((s, [, f]) => s + (f?.odds?.D ?? 0) + (f?.odds?.I ?? 0), 0);
+    console.log(`  ${office} seats    ours ${v.dSeats}–${v.rSeats} (D's chances sum to ${expected.toFixed(2)}) theirs ${want.D}–${want.R} ${ok ? "ok" : "FAIL"}`);
+  }
+  const [lo, hi] = bench.control?.[office] ?? [0, 1];
+  const ok = v.dControl >= lo - 1e-9 && v.dControl <= hi + 1e-9;
+  if (!ok) fails.push(`${office} control`);
+  console.log(`  ${office} control  ours D ${pct(v.dControl)} R ${pct(1 - v.dControl)} theirs D ${pct((lo + hi) / 2)} R ${pct(1 - (lo + hi) / 2)} ${ok ? "ok" : "FAIL"}`);
+}
+for (const office of OFFICES) {
+  const gaps = Object.entries(bench.races ?? {})
+    .filter(([k]) => officeOf(k) === office)
+    .map(([k, want]) => {
+      const ours = chanceFor(final.forecasts.get(k), want);
+      return { k, want, ours, gap: ours === null ? Infinity : Math.abs(ours - want.p) };
+    })
+    .sort((a, b) => b.gap - a.gap);
+  const over = gaps.filter((g) => g.gap > OFF + 1e-9);
+  if (over.length) fails.push(`${over.length} ${office} races`);
+  console.log(`  ${office} races    ${gaps.length - over.length} of ${gaps.length} within ${100 * OFF} points ${over.length ? "FAIL" : "ok"}; largest gaps:`);
+  for (const g of gaps.slice(0, 10)) console.log(`    ${g.k.padEnd(14)} ours ${g.ours === null ? "—" : pct(g.ours)} theirs ${pct(g.want.p)} for ${g.want.side ?? "?"}, gap ${(100 * g.gap).toFixed(1)}`);
+}
+console.log(fails.length ? `  FAIL: ${fails.join(", ")}` : "  PASS");
+
 if (!flags.includes("--dry-run") && !EVALUATE) {
   const round = (v) => Math.round(v * 1000) / 1000;
   const per = (rec) => Object.fromEntries(OFFICES.map((o) => [o, round(rec[o])]));
-  const out = { k: per(best.k), markets: { max: per(best.markets.max), clip: round(best.markets.clip) }, environment: round(best.environment), personal: per(best.personal), shared: per(best.shared), experts: per(best.experts), incumbency: per(best.incumbency), personalCap: per(best.personalCap), fundraisingCap: per(best.fundraisingCap), nationalShare: Object.fromEntries(OFFICES.map((o) => [o, best.nationalShare[o] === null ? null : round(best.nationalShare[o])])), pollFull: per(best.pollFull) };
+  const out = { k: per(best.k), markets: { max: per(best.markets.max), clip: round(best.markets.clip) }, environment: round(best.environment), personal: per(best.personal), shared: per(best.shared), experts: per(best.experts), incumbency: per(best.incumbency), personalCap: per(best.personalCap), fundraisingCap: per(best.fundraisingCap), nationalShare: Object.fromEntries(OFFICES.map((o) => [o, best.nationalShare[o] === null ? null : round(best.nationalShare[o])])), pollFull: per(best.pollFull), pollMax: per(best.pollMax), lean: per(best.lean), fundraising: per(best.fundraising), offset: per(best.offset) };
   writeFileSync(join(ROOT, "lib/midterms/tuning.json"), `${JSON.stringify(out)}\n`);
   console.log("\nwrote lib/midterms/tuning.json");
 }

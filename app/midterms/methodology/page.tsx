@@ -30,7 +30,7 @@ const SEAT_CHECK = (["house", "senate"] as const)
 const signed = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}`;
 
 export default function Methodology() {
-  const { polls, markets } = PARAMS;
+  const { markets } = PARAMS;
   const cycles = Object.keys(FIT.house.backtest);
   return (
     <article className="wrap mt mt-method prose">
@@ -214,8 +214,8 @@ export default function Methodology() {
       <h2>2. Polls</h2>
       <p>
         Where a race has a polling average (below), the fundamentals margin and the polling margin are blended. Polls count for more as
-        they accumulate, up to {pct(polls.max)} of the margin once a race has {polls.full} polls; a race with fewer than two gets none.
-        DDHQ describes a heavily polled race as nearly half polls, which is where ours tops out.
+        they accumulate, up to a tuned share of the margin (below) once a race has enough of them; a race with fewer than two gets
+        none.
       </p>
 
       <h2>3. Chance of winning</h2>
@@ -254,13 +254,13 @@ export default function Methodology() {
       <h2>Tuned to agree with DDHQ</h2>
       <p>
         <strong>
-          The forecast&apos;s hyperparameters are tuned so that its ratings and chamber odds agree with Decision Desk HQ&apos;s published
-          forecast.
+          The forecast&apos;s hyperparameters are tuned so that its race chances, seat counts and chamber odds agree with Decision Desk
+          HQ&apos;s published forecast.
         </strong>{" "}
-        The fitted model stays as fit; only settings that apply to every race move. We searched them against DDHQ&apos;s public
-        toss-ups, chamber odds and race chances, first for the same toss-ups in each office, then House and Senate control within two
-        points, then the rating of each race they highlight. No race is adjusted on its own, and none of DDHQ&apos;s numbers are stored
-        here. The settings in use:
+        The fitted model stays as fit; only settings that apply to every race of an office move. We searched them against DDHQ&apos;s
+        public race chances, seats and chamber odds: first for each race within five points of DDHQ&apos;s chance, then each
+        chamber&apos;s expected seats and control, then the ratings. No race is adjusted on its own, and none of DDHQ&apos;s numbers are
+        stored here. The settings in use:
       </p>
       <ul>
         <li>
@@ -285,10 +285,19 @@ export default function Methodology() {
           the Senate and {TUNING.incumbency.governor.toFixed(1)} for governors.
         </li>
         <li>
-          Fundraising: a ratio past {Math.round(Math.exp(TUNING.fundraisingCap.house))} to 1 adds nothing more in House races (
-          {Math.round(Math.exp(TUNING.fundraisingCap.senate))} to 1 in the Senate). Polls reach full weight at{" "}
-          {TUNING.pollFull.house} polls in House races, {TUNING.pollFull.senate} in Senate races and {TUNING.pollFull.governor} for
-          governors.
+          The fitted lean coefficient times {TUNING.lean.house.toFixed(2)} for the House, {TUNING.lean.senate.toFixed(2)} for the Senate
+          and {TUNING.lean.governor.toFixed(2)} for governors, and every race&apos;s fundamentals moved {signed(TUNING.offset.house)},{" "}
+          {signed(TUNING.offset.senate)} and {signed(TUNING.offset.governor)} points toward the Democrat.
+        </li>
+        <li>
+          Fundraising: the fitted coefficient times {TUNING.fundraising.house.toFixed(2)} for the House and{" "}
+          {TUNING.fundraising.senate.toFixed(2)} for the Senate; a ratio past {Math.round(Math.exp(TUNING.fundraisingCap.house))} to 1
+          adds nothing more in House races ({Math.round(Math.exp(TUNING.fundraisingCap.senate))} to 1 in the Senate).
+        </li>
+        <li>
+          Polls: up to {pct(TUNING.pollMax.house)} of the margin in House races, {pct(TUNING.pollMax.senate)} in Senate races and{" "}
+          {pct(TUNING.pollMax.governor)} for governors, reaching it at {TUNING.pollFull.house}, {TUNING.pollFull.senate} and{" "}
+          {TUNING.pollFull.governor} polls.
         </li>
         <li>
           In the chamber simulations, the share of each race&apos;s uncertainty that moves with other races (the national, regional
