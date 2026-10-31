@@ -39,12 +39,27 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Ballotwise.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ballotwise"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  BallotwiseUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: BallotwiseUITests
+    dependencies:
+      - target: Ballotwise
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.xanom.ballotwise.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Ballotwise
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 schemes:
   Ballotwise:
     build:
       targets:
         Ballotwise: all
         BallotwiseTests: [test]
+        BallotwiseUITests: [test]
     test:
       targets:
         - BallotwiseTests
+        - BallotwiseUITests

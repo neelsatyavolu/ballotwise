@@ -80,6 +80,20 @@ enum Theme {
         }
         return .unrated
     }
+
+    /// A county shaded by who leads it (deeper for wider leads), or by the 2024 presidential margin before votes.
+    static func countyFill(_ county: County?) -> Color {
+        guard let county else { return .unrated.opacity(0.4) }
+        if county.total > 0, let lead = Format.lead(county.candidates) {
+            let strength = county.reporting < 15 && !(county.reportingUnknown ?? false) ? 0.3 : lead.margin >= 20 ? 0.92 : lead.margin >= 10 ? 0.7 : lead.margin >= 5 ? 0.5 : 0.32
+            return color(lead.leader).opacity(strength)
+        }
+        if let m = county.baseline2024 {
+            let strength = abs(m) >= 20 ? 0.45 : abs(m) >= 10 ? 0.32 : 0.2
+            return (m > 0 ? Color.dem : Color.rep).opacity(strength)
+        }
+        return .unrated.opacity(0.4)
+    }
 }
 
 extension Font {

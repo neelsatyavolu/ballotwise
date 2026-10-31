@@ -8,6 +8,15 @@ nonisolated struct MapShapeData: @unchecked Sendable, Identifiable {
     let id: String
     let name: String
     let path: CGPath
+    /// Worked out once, so a map can skip shapes outside the view without walking every path each frame.
+    let bounds: CGRect
+
+    init(id: String, name: String, path: CGPath) {
+        self.id = id
+        self.name = name
+        self.path = path
+        bounds = path.boundingBoxOfPath
+    }
 }
 
 nonisolated struct LoadedMap: @unchecked Sendable {
@@ -97,6 +106,17 @@ actor MapLoader {
         try await load("districts/\(state)") { data in
             let j = try JSONDecoder().decode(DistrictsJSON.self, from: data)
             return LoadedMap(viewBox: Self.nationBox, shapes: j.districts.map { MapShapeData(id: "\(state)-\($0.district)", name: "\(state)-\($0.district == 0 ? "AL" : String($0.district))", path: SVGPath.parse($0.d)) }, lines: nil)
+        }
+    }
+
+    /// Every state's districts together, for the national House map. A state that fails to load is left blank.
+    func allDistricts() async -> [MapShapeData] {
+        let states = Format.stateNames.keys.filter { $0 != "DC" }
+        return await withTaskGroup(of: [MapShapeData].self) { group in
+            for s in states { group.addTask { (try? await self.districts(s).shapes) ?? [] } }
+            var all: [MapShapeData] = []
+            for await shapes in group { all += shapes }
+            return all
         }
     }
 

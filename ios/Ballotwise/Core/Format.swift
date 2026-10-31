@@ -127,6 +127,30 @@ nonisolated enum Format {
         return "\(who) \(chance(top.p))"
     }
 
+    /// "Forecast: Talarico 60% · Markets: Dem 71% · Polls: D+3.1 (73)", as the website's cards read; nil with no signals.
+    static func signalLine(_ r: Race) -> String? {
+        var parts: [String] = []
+        if let leader = forecastLeader(r) { parts.append("Forecast: \(leader)") }
+        if let top = r.signal?.market?.odds.ranked.first, let side = ["D": "Dem", "R": "Rep", "I": "Ind"][top.side] {
+            parts.append("Markets: \(side) \(Int((top.p * 100).rounded()))%")
+        }
+        if let polls = r.signal?.polls { parts.append("Polls: \(marginLabel(polls.margin)) (\(polls.count))") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Party as a results desk abbreviates it: DEM, GOP, LIB, GRE, IND, or the party's own short tag.
+    static func partyCode(_ p: String) -> String {
+        switch party(p) {
+        case .d: return "DEM"
+        case .r: return "GOP"
+        case .other:
+            for (word, code) in [("libertarian", "LIB"), ("green", "GRE"), ("independent", "IND")] where p.range(of: word, options: .caseInsensitive) != nil {
+                return code
+            }
+            return partyTag(p).uppercased()
+        }
+    }
+
     static func favoriteChance(_ r: Race) -> Double { r.signal?.forecast?.odds.ranked.first?.p ?? 1 }
 
     /// Rated races by competitiveness, then by how close the forecast is, then state and district.

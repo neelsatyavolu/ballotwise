@@ -8,9 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		01A0B349FE6D3A08011625C5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B034225F4218845EAF0B40DC /* Assets.xcassets */; };
+		02B939392128728E3DFD4472 /* WallRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89EFCBDEF796B09F8C97005 /* WallRail.swift */; };
 		0AA7CC0A1F8B8E7590F1B59F /* LiveStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136095C947A991C9E4C049EB /* LiveStore.swift */; };
 		0C7AE213862C74F2CEC39B16 /* ForecastStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18583531CB108EB188705427 /* ForecastStore.swift */; };
 		0D7AC6F522E8A22951D8F72D /* BallotwiseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2308A4A583886F61B34FE29A /* BallotwiseTests.swift */; };
+		0FF34FBDFE46DEAEB51C3827 /* WallUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC43C67EF1A5DB98B735928C /* WallUITests.swift */; };
 		290EB7DB2DAE4459282D7717 /* Polls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7022C0A8D91C4DB254C60DF5 /* Polls.swift */; };
 		2C7C8F73208A26DDBDEEE2D6 /* RaceComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4160D267BE701047C07DEFD /* RaceComponents.swift */; };
 		3AB59B4ED950A0B1E8453D5D /* BallotwiseApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AFDCDE799DE7D12A8E93F9 /* BallotwiseApp.swift */; };
@@ -21,17 +23,24 @@
 		5D3201375DE11F42865B45BF /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0437B97061BF860166905A /* Theme.swift */; };
 		5EB2B4DA7FA246537754DB73 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2714B5CB26B820FB288CACA4 /* Account.swift */; };
 		63014EADA454268D01FFABF4 /* DashboardsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D40716D096320413FA5CE790 /* DashboardsView.swift */; };
-		6C38A5D90E3EDEE8928DCA1F /* NationMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49863B12326A7DA2C9865DD8 /* NationMapView.swift */; };
+		747B9B587A8696756186C3C0 /* Telestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5C7588EFCB8B61896FCD81 /* Telestrator.swift */; };
 		7806412FD5A4B04D41A95BB8 /* RacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7055FBA66B45FC7C1C43AC /* RacesView.swift */; };
 		860565827E998B263A724184 /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA800B0116F39479C690117 /* LiveView.swift */; };
+		941BCCDB3C09600F89B80A59 /* MapRaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B8BA45C324237F0137D6EC3 /* MapRaces.swift */; };
+		979C560E7913791E7FF5909E /* WallMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087844FCBB901E1B0C2375F5 /* WallMap.swift */; };
 		9FE817A54E9159F480C399E5 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B05E8481FA68931AB2B20A /* Format.swift */; };
 		A1DC2B3B36ACEC57C3D16CFD /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12761D3993DBEDF846D83FCB /* Models.swift */; };
 		A603BE34FC63F0321D239A83 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC806712CBAB23CE3A4BD235 /* SearchView.swift */; };
+		A82AB028CED8D84CF516E96A /* holders.json in Resources */ = {isa = PBXBuildFile; fileRef = AEC3EFB44061B4ABBF04FA85 /* holders.json */; };
 		B691D47D769ECA83183EA2E1 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C831CB42A56CFE76EC7696F /* RootView.swift */; };
 		B97154411A23C8CB492EC76D /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4190A93AD7DA5F851513FAC4 /* API.swift */; };
+		BB01D1F1FF3661E71521E152 /* Holders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F59E4213F3659D6A5285A33 /* Holders.swift */; };
 		BFF5E70EB4EE7EF73EF70619 /* CountyMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B1C3E8401526FF17F7432 /* CountyMap.swift */; };
 		D6A775279F84A6AEF1D94AAB /* ForecastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ECE50CBA2AFE6A78C6501E2 /* ForecastView.swift */; };
 		D7D9F5D780A5A6CA459942EB /* RaceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 751F8E2003C202EBF5CD3460 /* RaceDetailView.swift */; };
+		E3F686F98A732E58D62E0732 /* WallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A72C83B67C8E06B7C90BAC2 /* WallView.swift */; };
+		F1E4BF7F6E0C45ABB6C85748 /* ResultsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45681D5CD77CC054233D3EC2 /* ResultsTable.swift */; };
+		F9F4AD84C098065EE1423CC4 /* WallLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523FC1D914EC3778299EFB82 /* WallLogic.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -42,34 +51,51 @@
 			remoteGlobalIDString = 3888752A029C98E0C505D7EF;
 			remoteInfo = Ballotwise;
 		};
+		BC7FBB2547BE325147770EE4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6816AB0B1A8DCF09371F99D6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3888752A029C98E0C505D7EF;
+			remoteInfo = Ballotwise;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		0302240BABD56A35D7A4D071 /* Ballotwise.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Ballotwise.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		087844FCBB901E1B0C2375F5 /* WallMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallMap.swift; sourceTree = "<group>"; };
 		0F7055FBA66B45FC7C1C43AC /* RacesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RacesView.swift; sourceTree = "<group>"; };
 		11AFDCDE799DE7D12A8E93F9 /* BallotwiseApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BallotwiseApp.swift; sourceTree = "<group>"; };
 		12761D3993DBEDF846D83FCB /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		136095C947A991C9E4C049EB /* LiveStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStore.swift; sourceTree = "<group>"; };
 		18583531CB108EB188705427 /* ForecastStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastStore.swift; sourceTree = "<group>"; };
+		1F59E4213F3659D6A5285A33 /* Holders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Holders.swift; sourceTree = "<group>"; };
 		2308A4A583886F61B34FE29A /* BallotwiseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BallotwiseTests.swift; sourceTree = "<group>"; };
 		2714B5CB26B820FB288CACA4 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		2C9B1C3E8401526FF17F7432 /* CountyMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountyMap.swift; sourceTree = "<group>"; };
 		30B05E8481FA68931AB2B20A /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
 		3FEFC7B3C8C980511C3DF0ED /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4190A93AD7DA5F851513FAC4 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
-		49863B12326A7DA2C9865DD8 /* NationMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NationMapView.swift; sourceTree = "<group>"; };
+		45681D5CD77CC054233D3EC2 /* ResultsTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsTable.swift; sourceTree = "<group>"; };
 		49DA84805D2884B78D7A2DF2 /* Ballotwise.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Ballotwise.entitlements; sourceTree = "<group>"; };
+		4A72C83B67C8E06B7C90BAC2 /* WallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallView.swift; sourceTree = "<group>"; };
+		4D5C7588EFCB8B61896FCD81 /* Telestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Telestrator.swift; sourceTree = "<group>"; };
+		523FC1D914EC3778299EFB82 /* WallLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallLogic.swift; sourceTree = "<group>"; };
 		69144ECF5853F6BBEACBD363 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		7022C0A8D91C4DB254C60DF5 /* Polls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Polls.swift; sourceTree = "<group>"; };
 		751F8E2003C202EBF5CD3460 /* RaceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceDetailView.swift; sourceTree = "<group>"; };
+		7B8BA45C324237F0137D6EC3 /* MapRaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapRaces.swift; sourceTree = "<group>"; };
 		83451627E8AF972B336F6E54 /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		83C4D57080093E680BF17A5F /* BallotwiseTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BallotwiseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		89F779293DC57C1D88417FCD /* BallotwiseUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BallotwiseUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8C831CB42A56CFE76EC7696F /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		8ECE50CBA2AFE6A78C6501E2 /* ForecastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastView.swift; sourceTree = "<group>"; };
+		AEC3EFB44061B4ABBF04FA85 /* holders.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = holders.json; sourceTree = "<group>"; };
 		B034225F4218845EAF0B40DC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1139578970FF6C05DDF9769 /* RaceCharts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceCharts.swift; sourceTree = "<group>"; };
 		B8B90B49FF7B294C7DA8F5ED /* Maps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Maps.swift; sourceTree = "<group>"; };
+		BC43C67EF1A5DB98B735928C /* WallUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallUITests.swift; sourceTree = "<group>"; };
 		BDA800B0116F39479C690117 /* LiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveView.swift; sourceTree = "<group>"; };
+		C89EFCBDEF796B09F8C97005 /* WallRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallRail.swift; sourceTree = "<group>"; };
 		D40716D096320413FA5CE790 /* DashboardsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardsView.swift; sourceTree = "<group>"; };
 		D4160D267BE701047C07DEFD /* RaceComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceComponents.swift; sourceTree = "<group>"; };
 		DD0437B97061BF860166905A /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -82,6 +108,7 @@
 			children = (
 				0302240BABD56A35D7A4D071 /* Ballotwise.app */,
 				83C4D57080093E680BF17A5F /* BallotwiseTests.xctest */,
+				89F779293DC57C1D88417FCD /* BallotwiseUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,20 +122,25 @@
 			path = App;
 			sourceTree = "<group>";
 		};
-		23200B6567FB75016C3BFA66 /* Map */ = {
-			isa = PBXGroup;
-			children = (
-				49863B12326A7DA2C9865DD8 /* NationMapView.swift */,
-			);
-			path = Map;
-			sourceTree = "<group>";
-		};
 		2A65E7F9247D2ECB1E6A0EFD /* BallotwiseTests */ = {
 			isa = PBXGroup;
 			children = (
 				2308A4A583886F61B34FE29A /* BallotwiseTests.swift */,
 			);
 			path = BallotwiseTests;
+			sourceTree = "<group>";
+		};
+		32F7FBF429252BD8384FB3D2 /* Wall */ = {
+			isa = PBXGroup;
+			children = (
+				45681D5CD77CC054233D3EC2 /* ResultsTable.swift */,
+				4D5C7588EFCB8B61896FCD81 /* Telestrator.swift */,
+				523FC1D914EC3778299EFB82 /* WallLogic.swift */,
+				087844FCBB901E1B0C2375F5 /* WallMap.swift */,
+				C89EFCBDEF796B09F8C97005 /* WallRail.swift */,
+				4A72C83B67C8E06B7C90BAC2 /* WallView.swift */,
+			);
+			path = Wall;
 			sourceTree = "<group>";
 		};
 		397C56742744EE025206C3F5 /* Search */ = {
@@ -142,11 +174,11 @@
 				7F7FEBFE11850E5553063415 /* Dashboards */,
 				DB6C023ECA0CA876AA75F1E1 /* Forecast */,
 				40152A355B4BB8F923B5061D /* Live */,
-				23200B6567FB75016C3BFA66 /* Map */,
 				96777926F6C8C217C5039C78 /* Race */,
 				5BA9C650CAC0375719FEFDAE /* Races */,
 				397C56742744EE025206C3F5 /* Search */,
 				C42DED633AEA6C81C09F16BC /* Settings */,
+				32F7FBF429252BD8384FB3D2 /* Wall */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -164,9 +196,18 @@
 			children = (
 				B034225F4218845EAF0B40DC /* Assets.xcassets */,
 				49DA84805D2884B78D7A2DF2 /* Ballotwise.entitlements */,
+				AEC3EFB44061B4ABBF04FA85 /* holders.json */,
 				3FEFC7B3C8C980511C3DF0ED /* Info.plist */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		863A0674D4C3AD8E631B06F7 /* BallotwiseUITests */ = {
+			isa = PBXGroup;
+			children = (
+				BC43C67EF1A5DB98B735928C /* WallUITests.swift */,
+			);
+			path = BallotwiseUITests;
 			sourceTree = "<group>";
 		};
 		90D3F3E4938D1864638F2F1C /* Ballotwise */ = {
@@ -197,7 +238,9 @@
 				4190A93AD7DA5F851513FAC4 /* API.swift */,
 				18583531CB108EB188705427 /* ForecastStore.swift */,
 				30B05E8481FA68931AB2B20A /* Format.swift */,
+				1F59E4213F3659D6A5285A33 /* Holders.swift */,
 				136095C947A991C9E4C049EB /* LiveStore.swift */,
+				7B8BA45C324237F0137D6EC3 /* MapRaces.swift */,
 				B8B90B49FF7B294C7DA8F5ED /* Maps.swift */,
 				12761D3993DBEDF846D83FCB /* Models.swift */,
 				7022C0A8D91C4DB254C60DF5 /* Polls.swift */,
@@ -228,6 +271,7 @@
 			children = (
 				90D3F3E4938D1864638F2F1C /* Ballotwise */,
 				2A65E7F9247D2ECB1E6A0EFD /* BallotwiseTests */,
+				863A0674D4C3AD8E631B06F7 /* BallotwiseUITests */,
 				0E75E0D4B0B7E0DE42F96760 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -235,6 +279,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		008933933CC34E16888551D4 /* BallotwiseUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C03CFAC4D7CA24F321F00441 /* Build configuration list for PBXNativeTarget "BallotwiseUITests" */;
+			buildPhases = (
+				F155218537BD6819BC3271E6 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5613F132EA269B1C85C3B967 /* PBXTargetDependency */,
+			);
+			name = BallotwiseUITests;
+			packageProductDependencies = (
+			);
+			productName = BallotwiseUITests;
+			productReference = 89F779293DC57C1D88417FCD /* BallotwiseUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		3888752A029C98E0C505D7EF /* Ballotwise */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 05B660ABC269F86E846B31D0 /* Build configuration list for PBXNativeTarget "Ballotwise" */;
@@ -280,6 +342,11 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					008933933CC34E16888551D4 = {
+						DevelopmentTeam = VTQW687WBQ;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 3888752A029C98E0C505D7EF;
+					};
 					3888752A029C98E0C505D7EF = {
 						DevelopmentTeam = VTQW687WBQ;
 						ProvisioningStyle = Automatic;
@@ -306,6 +373,7 @@
 			targets = (
 				3888752A029C98E0C505D7EF /* Ballotwise */,
 				E3468FB8774BC83083542086 /* BallotwiseTests */,
+				008933933CC34E16888551D4 /* BallotwiseUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -316,6 +384,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				01A0B349FE6D3A08011625C5 /* Assets.xcassets in Resources */,
+				A82AB028CED8D84CF516E96A /* holders.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -334,21 +403,36 @@
 				0C7AE213862C74F2CEC39B16 /* ForecastStore.swift in Sources */,
 				D6A775279F84A6AEF1D94AAB /* ForecastView.swift in Sources */,
 				9FE817A54E9159F480C399E5 /* Format.swift in Sources */,
+				BB01D1F1FF3661E71521E152 /* Holders.swift in Sources */,
 				0AA7CC0A1F8B8E7590F1B59F /* LiveStore.swift in Sources */,
 				860565827E998B263A724184 /* LiveView.swift in Sources */,
+				941BCCDB3C09600F89B80A59 /* MapRaces.swift in Sources */,
 				3C4784C7FF12261356B9D04A /* Maps.swift in Sources */,
 				A1DC2B3B36ACEC57C3D16CFD /* Models.swift in Sources */,
 				405742D23DEF955B0996F192 /* MoreView.swift in Sources */,
-				6C38A5D90E3EDEE8928DCA1F /* NationMapView.swift in Sources */,
 				290EB7DB2DAE4459282D7717 /* Polls.swift in Sources */,
 				59344125BF6A28BA2B527338 /* PushManager.swift in Sources */,
 				47664D6FF34F245937553006 /* RaceCharts.swift in Sources */,
 				2C7C8F73208A26DDBDEEE2D6 /* RaceComponents.swift in Sources */,
 				D7D9F5D780A5A6CA459942EB /* RaceDetailView.swift in Sources */,
 				7806412FD5A4B04D41A95BB8 /* RacesView.swift in Sources */,
+				F1E4BF7F6E0C45ABB6C85748 /* ResultsTable.swift in Sources */,
 				B691D47D769ECA83183EA2E1 /* RootView.swift in Sources */,
 				A603BE34FC63F0321D239A83 /* SearchView.swift in Sources */,
+				747B9B587A8696756186C3C0 /* Telestrator.swift in Sources */,
 				5D3201375DE11F42865B45BF /* Theme.swift in Sources */,
+				F9F4AD84C098065EE1423CC4 /* WallLogic.swift in Sources */,
+				979C560E7913791E7FF5909E /* WallMap.swift in Sources */,
+				02B939392128728E3DFD4472 /* WallRail.swift in Sources */,
+				E3F686F98A732E58D62E0732 /* WallView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F155218537BD6819BC3271E6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0FF34FBDFE46DEAEB51C3827 /* WallUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -363,6 +447,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		5613F132EA269B1C85C3B967 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3888752A029C98E0C505D7EF /* Ballotwise */;
+			targetProxy = BC7FBB2547BE325147770EE4 /* PBXContainerItemProxy */;
+		};
 		BDF71296EF0EE956C285679B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 3888752A029C98E0C505D7EF /* Ballotwise */;
@@ -536,6 +625,24 @@
 			};
 			name = Debug;
 		};
+		9020EB49462B8410CCD04607 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = co.xanom.ballotwise.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Ballotwise;
+			};
+			name = Debug;
+		};
 		9A32FA4B2461D4D20395C513 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -570,6 +677,24 @@
 			};
 			name = Release;
 		};
+		E8DB844FCDC6E448A2C29583 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = co.xanom.ballotwise.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Ballotwise;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -587,6 +712,15 @@
 			buildConfigurations = (
 				7DC058E4ADEA6B3AC920923B /* Debug */,
 				5A8E5945F21007ECFCC8658A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C03CFAC4D7CA24F321F00441 /* Build configuration list for PBXNativeTarget "BallotwiseUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9020EB49462B8410CCD04607 /* Debug */,
+				E8DB844FCDC6E448A2C29583 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -112,3 +112,124 @@ struct DecodingTests {
         #expect(m.polymarket == nil)
     }
 }
+
+@MainActor
+struct WallTests {
+    func race(id: Int, office: Office = .senate, state: String = "GA", district: Int? = nil, title: String = "US Senate", rating: String? = nil, candidates: [Candidate] = [], total: Int = 0, reporting: Double = 0) -> Race {
+        var r = Race(id: id, office: office, state: state, district: district, title: title, reporting: reporting, total: total, candidates: candidates)
+        r.rating = rating
+        return r
+    }
+
+    func near(_ a: CGPoint, _ b: CGPoint) -> Bool { abs(a.x - b.x) < 0.001 && abs(a.y - b.y) < 0.001 }
+
+    @Test func cameraCentersAndFitsTheFocus() {
+        let focus = CGRect(x: 100, y: 50, width: 200, height: 100)
+        let size = CGSize(width: 1000, height: 600)
+        let t = WallLogic.camera(focus, in: size, inset: 0)
+        #expect(near(CGPoint(x: 200, y: 100).applying(t), CGPoint(x: 500, y: 300)))
+        // Width is the tighter fit: 200 map units span the full 1000 points.
+        #expect(near(CGPoint(x: 100, y: 100).applying(t), CGPoint(x: 0, y: 300)))
+        // A tap maps back to the same map point, zoomed and panned too.
+        let zoomed = WallLogic.camera(focus, in: size, zoom: 3, pan: CGSize(width: 40, height: -20))
+        let p = CGPoint(x: 150, y: 80)
+        #expect(near(p.applying(zoomed).applying(zoomed.inverted()), p))
+        #expect(near(CGPoint(x: 200, y: 100).applying(zoomed), CGPoint(x: 540, y: 280)))
+    }
+
+    @Test func swingComparesWithTwentyTwentyFour() {
+        let cs = [Candidate(name: "A", party: "Democratic", votes: 550, pct: 55), Candidate(name: "B", party: "Republican", votes: 450, pct: 45)]
+        #expect(WallLogic.swing(County(name: "X", reporting: 50, total: 1000, candidates: cs, baseline2024: -4)) == 14)
+        #expect(WallLogic.swing(County(name: "X", reporting: 0, total: 0, candidates: cs, baseline2024: -4)) == nil)
+        #expect(WallLogic.swing(County(name: "X", reporting: 50, total: 1000, candidates: cs)) == nil)
+    }
+
+    @Test func shapesFindTheirRaces() {
+        let all = [
+            race(id: 1, state: "OH", title: "Ohio US Senate Special"),
+            race(id: 2, state: "OH"),
+            race(id: 3, office: .house, state: "PA", district: 7),
+            race(id: 4, office: .house, state: "WY", district: 0),
+        ]
+        #expect(MapRaces.race(all, office: .senate, shape: "OH")?.id == 2)
+        #expect(MapRaces.races(all, office: .senate, state: "OH").map(\.id) == [2, 1])
+        #expect(MapRaces.race(all, office: .house, shape: "PA-7")?.id == 3)
+        #expect(MapRaces.race(all, office: .house, shape: "WY-0")?.id == 4)
+        #expect(MapRaces.race(all, office: .house, shape: "PA") == nil)
+        #expect(MapRaces.race(all, office: .governor, shape: "OH") == nil)
+    }
+
+    @Test func watchListPrefersCloseCounts() {
+        func counted(_ id: Int, _ d: Int) -> Race {
+            race(id: id, candidates: [Candidate(name: "A", party: "Democratic", votes: d, pct: Double(d) / 10), Candidate(name: "B", party: "Republican", votes: 1000 - d, pct: Double(1000 - d) / 10)], total: 1000, reporting: 80)
+        }
+        let rated = [race(id: 10, rating: "likely-d"), race(id: 11, rating: "tossup"), race(id: 12)]
+        #expect(WallLogic.watchList(rated, office: .senate).map(\.id) == [11, 10])
+        let counting = [counted(1, 700), counted(2, 510), counted(3, 600)] + rated
+        #expect(WallLogic.watchList(counting, office: .senate).map(\.id) == [2, 3, 1])
+        #expect(WallLogic.watchList(counting, office: .house).isEmpty)
+    }
+
+    @Test func tableStatusReadsLikeTheWebsite() {
+        let d = Candidate(name: "A", party: "Democratic", votes: 520, pct: 52)
+        let r = Candidate(name: "B", party: "Republican", votes: 480, pct: 48)
+        #expect(WallLogic.status([d, r], state: "TX") == "Lead 4.0 pts")
+        let before = Candidate(name: "A", party: "Democratic", votes: 0, pct: 0)
+        let closes = Polls.final("TX")!
+        #expect(WallLogic.status([before], state: "TX", now: closes.addingTimeInterval(-60)).hasPrefix("Polls close "))
+        #expect(WallLogic.status([before], state: "TX", now: closes.addingTimeInterval(60)) == "No results yet")
+    }
+
+    @Test func signalLineAndPartyCodes() {
+        var r = race(id: 1)
+        #expect(Format.signalLine(r) == nil)
+        r.signal = Signal(market: MarketSignal(odds: Odds(d: 0.71, r: 0.29)), polls: PollSignal(margin: 3.1, count: 73))
+        #expect(Format.signalLine(r) == "Markets: Dem 71% · Polls: D+3.1 (73)")
+        #expect(Format.partyCode("Democratic") == "DEM")
+        #expect(Format.partyCode("Republican") == "GOP")
+        #expect(Format.partyCode("Libertarian Party") == "LIB")
+        #expect(Format.partyCode("Green") == "GRE")
+    }
+
+    @Test func boardTitlesReadLikeANetwork() {
+        #expect(WallLogic.title(race(id: 1, office: .house, state: "CA", district: 18, title: "US House CA-18")) == "California 18th District")
+        #expect(WallLogic.title(race(id: 2, office: .house, state: "AK", district: 0, title: "US House AK")) == "Alaska At-Large District")
+        #expect(WallLogic.title(race(id: 3, state: "OH", title: "US Senate special")) == "Ohio Senate (special)")
+        #expect(WallLogic.subtitle(race(id: 1, office: .house, state: "CA", district: 18)) == "2026 House")
+        #expect(WallLogic.subtitle(race(id: 4, office: .governor, state: "GA", title: "Governor")) == "2026 Governor")
+    }
+
+    @Test func indexMatchesTheLookup() {
+        let all = [
+            race(id: 1, state: "OH", title: "Ohio US Senate Special"),
+            race(id: 2, state: "OH"),
+            race(id: 3, office: .house, state: "PA", district: 7),
+        ]
+        #expect(MapRaces.index(all, office: .senate).mapValues(\.id) == ["OH": 2])
+        #expect(MapRaces.index(all, office: .house).mapValues(\.id) == ["PA-7": 3])
+    }
+
+    @Test func flipsFollowTheWebsite() {
+        let dem = Candidate(name: "D", party: "Democratic", votes: 0, pct: 0)
+        let rep = Candidate(name: "R", party: "Republican", votes: 0, pct: 0)
+        // Texas's Senate seat is Republican: a Democratic favorite, leader or winner flips it; a toss-up doesn't.
+        var tx = race(id: 1, state: "TX", rating: "lean-d", candidates: [dem, rep])
+        #expect(Holders.holder(tx) == "R")
+        #expect(Holders.flipTo(tx) == "D")
+        tx.rating = "tossup"
+        #expect(Holders.flipTo(tx) == nil)
+        let counted = race(id: 2, state: "TX", candidates: [Candidate(name: "R", party: "Republican", votes: 600, pct: 60), Candidate(name: "D", party: "Democratic", votes: 400, pct: 40)], total: 1000, reporting: 80)
+        #expect(Holders.flipTo(counted) == nil)
+        let won = race(id: 3, state: "TX", candidates: [Candidate(name: "D", party: "Democratic", votes: 510, pct: 51, winner: true), rep], total: 1000, reporting: 99)
+        #expect(Holders.flipTo(won) == "D")
+        // The special elections and governors have their own holders.
+        #expect(Holders.holder(race(id: 4, state: "OH", title: "US Senate special")) == "R")
+        #expect(Holders.holder(race(id: 5, office: .governor, state: "KS", title: "Governor")) == "D")
+        #expect(Holders.holder(race(id: 6, office: .house, state: "NE", district: 2)) == "R")
+    }
+
+    @Test func lensesFollowTheLevel() {
+        #expect(WallLens.available(counties: false) == [.results, .forecast])
+        #expect(WallLens.available(counties: true) == [.results, .past, .shift])
+    }
+}

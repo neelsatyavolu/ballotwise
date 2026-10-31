@@ -42,18 +42,7 @@ struct CountyMap: View {
         }
     }
 
-    private func fill(_ shape: MapShapeData) -> Color {
-        guard let county = results[shape.id] else { return .unrated.opacity(0.4) }
-        if county.total > 0, let lead = Format.lead(county.candidates) {
-            let strength = county.reporting < 15 && !(county.reportingUnknown ?? false) ? 0.3 : lead.margin >= 20 ? 0.92 : lead.margin >= 10 ? 0.7 : lead.margin >= 5 ? 0.5 : 0.32
-            return Theme.color(lead.leader).opacity(strength)
-        }
-        if let m = county.baseline2024 {
-            let strength = abs(m) >= 20 ? 0.45 : abs(m) >= 10 ? 0.32 : 0.2
-            return (m > 0 ? Color.dem : Color.rep).opacity(strength)
-        }
-        return .unrated.opacity(0.4)
-    }
+    private func fill(_ shape: MapShapeData) -> Color { Theme.countyFill(results[shape.id]) }
 }
 
 struct CountyDetail: View {
