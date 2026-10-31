@@ -163,6 +163,9 @@ function contests(rows, office, years = CYCLES) {
   const hasTotal = new Set(rows.filter((r) => /^total$/i.test(r.mode ?? "")).map((r) => `${r.year}|${r.state_po}|${r.district}|${r.special}`));
   for (const r of rows) {
     if (!general(r) || yes(r.writein) || !r.candidate) continue;
+    // A House special election shares its seat's key with that year's regular race; merged, NY-3's 2024 special and
+    // general read as one race with two Republicans and were dropped. The regular race is the one kept.
+    if (office === "house" && yes(r.special)) continue;
     if (hasTotal.has(`${r.year}|${r.state_po}|${r.district}|${r.special}`) && !/^total$/i.test(r.mode ?? "")) continue;
     const year = Number(r.year);
     if (!years.includes(year)) continue;
@@ -490,8 +493,27 @@ function sharedError(residuals, groupOf) {
 
 // ---------- Build ----------
 
+/**
+ * Major-party candidates MEDSL's 2024 House file leaves out of contested races (its version 20250910), from Wikipedia's
+ * 2024 results tables: [state, district, candidate, party, votes]. Without them the race reads as one-sided and drops
+ * out, and so does its winner's personal vote (Suozzi's in NY-3, Kean's in NJ-7, Bresnahan's in PA-8). Added only while
+ * the candidate is still missing, so a corrected file isn't double counted.
+ */
+const MEDSL_2024_MISSING = [
+  ["NY", 3, "MIKE LIPETRI", "REPUBLICAN", 174694],
+  ["NJ", 7, "THOMAS KEAN JR.", "REPUBLICAN", 223331],
+  ["PA", 8, "ROB BRESNAHAN JR.", "REPUBLICAN", 195663],
+  ["GA", 2, "SANFORD BISHOP", "DEMOCRAT", 176028],
+  ["VA", 8, "DON BEYER", "DEMOCRAT", 274593],
+  ["MD", 2, "JOHNNY OLSZEWSKI", "DEMOCRAT", 223797],
+];
+const withMissing2024 = (rows) => {
+  const added = MEDSL_2024_MISSING.filter(([st, d, , party]) => !rows.some((r) => r.year === "2024" && r.state_po === st && Number(r.district) === d && r.party === party && r.stage === "GEN"))
+    .map(([st, d, candidate, party, votes]) => ({ ...rows.find((r) => r.year === "2024" && r.state_po === st && Number(r.district) === d && r.stage === "GEN"), candidate, party, candidatevotes: String(votes), writein: "FALSE", mode: "TOTAL" }));
+  return [...rows, ...added];
+};
 const [houseRows, senateRows, presRows] = await Promise.all([
-  dataverse(MEDSL.house).then((r) => r.text()).then(table),
+  dataverse(MEDSL.house).then((r) => r.text()).then(table).then(withMissing2024),
   dataverse(MEDSL.senate).then((r) => r.text()).then(table),
   dataverse(MEDSL.president).then((r) => r.text()).then(table),
 ]);
