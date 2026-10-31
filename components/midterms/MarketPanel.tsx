@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { Line, MarketBook, RaceMarkets } from "@/lib/midterms/marketHistory";
 import { useLive } from "./hooks";
 import { LineChart } from "./LineChart";
+import { MarketsSkeleton } from "./PanelSkeleton";
 
 type Source = "polymarket" | "kalshi";
 type Range = "all" | "live";
@@ -76,13 +77,17 @@ function Book({ book, range, setRange }: { book: MarketBook; range: Range; setRa
   );
 }
 
-/** Prediction-market prices for one race over time, from Polymarket or Kalshi; nothing at all when neither lists it. */
-export function MarketPanel({ raceId }: { raceId: number }) {
-  const { data } = useLive<RaceMarkets>(`/api/midterms/race/${raceId}/markets`);
+/**
+ * Prediction-market prices for one race over time, from Polymarket or Kalshi; nothing at all when neither lists it.
+ * `expected` (the race's forecast already has a market price) shows a placeholder while the history loads.
+ */
+export function MarketPanel({ raceId, expected = false }: { raceId: number; expected?: boolean }) {
+  const { data, error } = useLive<RaceMarkets>(`/api/midterms/race/${raceId}/markets`);
   const sources = useMemo(() => (["polymarket", "kalshi"] as const).filter((s) => data?.[s]?.lines.length), [data]);
   const [picked, setPicked] = useState<Source | null>(null);
   const [range, setRange] = useState<Range>("all");
-  if (!data || !sources.length) return null;
+  if (!data) return expected && !error ? <MarketsSkeleton /> : null;
+  if (!sources.length) return null;
   const source = picked && sources.includes(picked) ? picked : sources[0];
   return (
     <section className="mt-mk" aria-label="Prediction markets">

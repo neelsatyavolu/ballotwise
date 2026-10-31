@@ -13,7 +13,7 @@ import { OFFICE_LABEL, raceLabel, signalLine, STATE_NAMES } from "@/lib/midterms
 import { CandidateTable } from "./CandidateTable";
 import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
-import { pollInterval, useLive, useStars } from "./hooks";
+import { pollInterval, useLive, useStars, warmLive } from "./hooks";
 import { useDeskData } from "./desk";
 import { CountyMap, type CountyFill } from "./maps";
 import { MarketPanel } from "./MarketPanel";
@@ -36,6 +36,9 @@ export function RaceView({ id }: { id: number }) {
   const { refresh } = useAccount();
   const privateDesk = useDeskData();
   const favorites = useStars();
+  // The forecast, polls and market panels ask for their own data, but only once the race has drawn them. Starting
+  // those requests now runs them alongside the race's instead of after it.
+  useEffect(() => warmLive([`${path}/forecast`, `${path}/markets`]), [path]);
   const [reply, setReply] = useState<{ seat: string; race: DdhqRace | null; error: string | null; at: number } | null>(null);
   const [mode, setMode] = useState<Mode>("results");
   const [selected, setSelected] = useState<string | null>(null);
@@ -187,7 +190,7 @@ export function RaceView({ id }: { id: number }) {
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
           {race.office !== "measure" && <RaceInsights race={race} ddhq={active} />}
           {data.history && <VoteUpdates history={data.history} />}
-          {race.office !== "measure" && <MarketPanel raceId={race.id} />}
+          {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!race.signal?.market} />}
         </section>
 
         <section aria-labelledby="map">

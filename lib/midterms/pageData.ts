@@ -7,10 +7,12 @@ import { headers } from "next/headers";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { getCached } from "@/lib/cache";
 import { db } from "@/lib/env";
-import { otherRace, overview, race } from "@/lib/midterms/catalog";
+import { bareRaces, otherRace, overview, race } from "@/lib/midterms/catalog";
 import { isDocumentRequest } from "@/lib/midterms/documentRequest";
 import { liveEtag } from "@/lib/midterms/etag";
+import { raceMarkets } from "@/lib/midterms/marketHistory";
 import { CHAMBER_HISTORY_KEY, readOdds, type ChamberHistory } from "@/lib/midterms/odds";
+import { raceInsights } from "@/lib/midterms/raceInsights";
 import { EMPTY_SEEDS, type LiveSeed, type TrackerSeeds } from "@/components/midterms/seeds";
 
 export type SeedKind = "tracker" | "race" | "early";
@@ -55,14 +57,39 @@ async function raceSeed(id: number, now: number): Promise<LiveSeed | null> {
   }
 }
 
+/**
+ * The race page's forecast/polls and market answers, keyed by their API paths. Each is left out when it fails, so the
+ * panel just loads it after hydration as before.
+ */
+async function panelSeeds(id: number, now: number): Promise<Record<string, LiveSeed>> {
+  const found = (await bareRaces(now, db())).find((r) => r.id === id);
+  if (!found || found.office === "measure") return {};
+  const [insights, markets] = await Promise.allSettled([raceInsights(db(), found, now), raceMarkets(db(), found, now)]);
+  const seeds: Record<string, LiveSeed> = {};
+  if (insights.status === "fulfilled") seeds[`/api/midterms/race/${id}/forecast`] = { data: insights.value, etag: null };
+  else console.error("forecast panel seed failed:", insights.reason);
+  if (markets.status === "fulfilled") seeds[`/api/midterms/race/${id}/markets`] = { data: markets.value, etag: null };
+  else console.error("market panel seed failed:", markets.reason);
+  return seeds;
+}
+
 /** `arg` is a race id, or an early-vote state postal code (empty loads the national totals only). */
 export const loadSeeds = cache(async (kind: SeedKind, arg = ""): Promise<TrackerSeeds> => {
   if (!isDocumentRequest(await headers())) return EMPTY_SEEDS;
   const now = Date.now();
   if (kind === "race") {
     const id = Number(arg);
-    const seeded = Number.isInteger(id) && id > 0 ? await raceSeed(id, now) : null;
-    return { overview: null, forecast: null, extra: seeded ? { [`/api/midterms/race/${id}`]: seeded } : {} };
+    if (!Number.isInteger(id) || id <= 0) return EMPTY_SEEDS;
+    // The panels load alongside the race but never hold up the HTML: whichever isn't ready when the race is loads
+    // after hydration instead (a market refresh can wait on Polymarket and Kalshi).
+    const panels = panelSeeds(id, now).catch((err) => {
+      console.error("panel seeds failed:", err);
+      return {};
+    });
+    const seeded = await raceSeed(id, now);
+    if (!seeded) return EMPTY_SEEDS;
+    const ready = await Promise.race([panels, Promise.resolve(null)]);
+    return { overview: null, forecast: null, extra: { ...ready, [`/api/midterms/race/${id}`]: seeded } };
   }
   if (kind === "early") {
     const { earlyNation, earlyState, EarlyVoteMissing } = await import("@/lib/midterms/earlyVoteSource");

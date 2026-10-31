@@ -240,7 +240,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                     <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} selectedId={shownId} />
                   )}
                   {/* The market viewer comes last, below everything else for the state. */}
-                  {shown && shown.office !== "measure" && <MarketPanel key={shown.id} raceId={shown.id} />}
+                  {shown && shown.office !== "measure" && <MarketPanel key={shown.id} raceId={shown.id} expected={!!shown.signal?.market} />}
                 </>
               )}
             </aside>

@@ -11,6 +11,7 @@ import type { RaceSummary } from "@/lib/midterms/races";
 import { marginLabel, nomineeOf } from "@/lib/midterms/view";
 import { useLive } from "./hooks";
 import { LineChart } from "./LineChart";
+import { ChartBone, PollsSkeleton } from "./PanelSkeleton";
 import { RatingTag } from "./RaceCard";
 
 /** Brighter party hues for 2px lines on the dark card, as on the market chart. */
@@ -36,8 +37,8 @@ function favorite(f: Forecast, race: Pick<RaceSummary, "candidates">): { name: s
 
 const share = (p: number) => (p >= 0.995 ? ">99%" : p <= 0.005 ? "<1%" : `${(p * 100).toFixed(1)}%`);
 
-/** The forecast for one race: who's favored and by how much, its daily history, and what went into it. */
-function ForecastCard({ race, forecast, history }: { race: RaceSummary; forecast: Forecast; history: Insights["history"] }) {
+/** The forecast for one race: who's favored and by how much, its daily history (a placeholder while `loading`), and what went into it. */
+function ForecastCard({ race, forecast, history, loading }: { race: RaceSummary; forecast: Forecast; history: Insights["history"]; loading: boolean }) {
   const fav = favorite(forecast, race);
   const names = forecast.names;
   const points = history ? history.days.flatMap((d, i) => (history.p[i] === null ? [] : [[Date.parse(`${d}T12:00:00Z`) / 1000, history.p[i]!] as const])) : [];
@@ -58,6 +59,8 @@ function ForecastCard({ race, forecast, history }: { race: RaceSummary; forecast
       {fav ? <p className="mt-mk-lead">{fav.name} {Math.round(fav.p * 100)}%</p> : <p className="mt-mk-lead">Even</p>}
       {lines.length > 0 && points.length >= 2 ? (
         <LineChart lines={lines} ticks={[0, 0.5, 1]} value={(p) => `${Math.round(p * 100)}%`} date={day} label={`Forecast history for ${leftName}`} empty="" />
+      ) : loading ? (
+        <ChartBone />
       ) : (
         names && (
           <div className="mt-fc-split" role="img" aria-label={`${names.left} ${share(forecast.odds[forecast.left] ?? 0)}, ${names.right} ${share(forecast.odds.R ?? 0)}`}>
@@ -242,7 +245,8 @@ function DdhqCard({ race }: { race: DdhqRace }) {
 
 /** A race's forecast and polls, like DDHQ's race page; each panel is left out when there's nothing to show. */
 export function RaceInsights({ race, ddhq }: { race: RaceSummary; ddhq?: DdhqRace | null }) {
-  const { data } = useLive<Insights>(`/api/midterms/race/${race.id}/forecast`);
+  const { data, error } = useLive<Insights>(`/api/midterms/race/${race.id}/forecast`);
+  const loading = !data && !error;
   const forecast = race.signal?.forecast ?? null;
   const privateRace = deskFor(race) ?? ddhq;
   return (
@@ -256,10 +260,11 @@ export function RaceInsights({ race, ddhq }: { race: RaceSummary; ddhq?: DdhqRac
         forecast && (
           <section className="mt-mk" aria-label="Forecast">
             <h3 className="mt-mk-head">Forecast</h3>
-            <ForecastCard race={race} forecast={forecast} history={data?.history ?? null} />
+            <ForecastCard race={race} forecast={forecast} history={data?.history ?? null} loading={loading} />
           </section>
         )
       )}
+      {loading && race.signal?.polls && <PollsSkeleton />}
       {data?.polls && data.polls.rows.length > 0 && (
         <section className="mt-mk" aria-label="Polls">
           <h3 className="mt-mk-head" id="polls">

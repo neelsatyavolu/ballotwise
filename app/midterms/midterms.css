@@ -1360,6 +1360,12 @@ body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
 .mt-skel-map.state { aspect-ratio: 640 / 440; }
 .mt-skel-rows { display: grid; gap: 16px; padding: 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
 .mt-skel-frame .mt-section-head { min-height: 36px; }
+/* The race page's Polls and Markets panels while their data loads (components/midterms/PanelSkeleton.tsx). They fade in
+   after a beat, so an answer that's already on its way never flashes a placeholder. */
+.mt-skel-panel { animation: mt-in 0.3s ease 0.2s both; }
+.mt-skel-chart { width: 100%; aspect-ratio: 560 / 190; }
+.mt-skel-table { display: grid; gap: 14px; padding-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .mt-skel-panel { animation: none; } }
 
 /* Results fade up into place when they first arrive, and a switched tab or view eases in rather than snapping. */
 .mt-in { animation: mt-in 0.25s ease both; }
