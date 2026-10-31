@@ -285,6 +285,10 @@
 /* The tracker is wider than the rest of the site; widen the header and footer on its pages so everything lines up. */
 body:has(.wrap.mt) .site-header .wrap,
 body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
+/* Where the "Side by side" tab shows too, the header tabs need more room than 1440px gives them. */
+@media (min-width: 1800px) {
+  body:has(.wrap.mt) .site-header .wrap { max-width: 1720px; }
+}
 
 /* Election mode: the election-night workspace. */
 .mt {
