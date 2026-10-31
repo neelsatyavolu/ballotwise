@@ -11,6 +11,8 @@ const race = (names: string[], extra: Partial<RaceSummary> = {}) =>
 const pick = (candidates: string[], picks: string[], extra: Partial<GuidePick> = {}): GuidePick => ({
   guideId: "g1",
   kind: "office",
+  title: "Race",
+  jurisdiction: "State of Texas",
   candidates,
   match: { picks: picks.map((name, i) => ({ candidateId: `c${i}`, name, score: 80 })), runnerUpScore: 60, runnerUpName: null, closeCall: false, coverage: 1 },
   ...extra,
@@ -42,8 +44,25 @@ describe("pickIn", () => {
   it("matches an unopposed guide on its one candidate", () => {
     expect(pickIn(race(["Jane Smith"]), [pick(["Jane Smith"], ["Jane Smith"])])?.names).toEqual(["Jane Smith"]);
   });
-  it("skips ballot measures, whose sides are only Yes and No", () => {
-    expect(pickIn(race(["Yes", "No"], { office: "measure" }), [pick(["Yes", "No"], ["Yes"], { kind: "measure" })])).toBeNull();
+  describe("measures", () => {
+    const measure = (title: string, state = "CA", extra: Partial<RaceSummary> = {}) => race(["Yes", "No"], { office: "measure", title, state, ...extra });
+    const prop37 = (side: string, extra: Partial<GuidePick> = {}) =>
+      pick(["Yes on 37", "No on 37"], [`${side} on 37`], { kind: "measure", title: "Proposition 37: Creates Loan Program for Middle-Class Homebuyers", jurisdiction: "State of California", ...extra });
+    it("matches a measure by its number and state, and picks the side", () => {
+      expect(pickIn(measure("California Proposition 37"), [prop37("No")])?.names).toEqual(["No"]);
+      expect(pickIn(measure("California Proposition 37"), [prop37("Yes")])?.names).toEqual(["Yes"]);
+    });
+    it("doesn't match another number, another state, or a candidate race", () => {
+      expect(pickIn(measure("California Proposition 3"), [prop37("Yes")])).toBeNull();
+      expect(pickIn(measure("Arizona Proposition 37", "AZ"), [prop37("Yes")])).toBeNull();
+      expect(pickIn(race(["Yes", "No"]), [prop37("Yes")])).toBeNull();
+    });
+    it("matches a city's measure only in a race naming that city", () => {
+      const j = pick(["Yes on J", "No on J"], ["Yes on J"], { kind: "measure", title: "Measure J: Community Safety/Services Sales Tax", jurisdiction: "City of Palo Alto, California" });
+      const local = { kind: "question", type: "", date: "" } as RaceSummary["local"];
+      expect(pickIn(measure("City of Palo Alto Measure J", "CA", { local }), [j])?.names).toEqual(["Yes"]);
+      expect(pickIn(measure("City of Mountain View Measure J", "CA", { local }), [j])).toBeNull();
+    });
   });
   it("keeps every pick in a multi-seat race", () => {
     const got = pickIn(race(["A Adams", "B Brown", "C Clark"]), [pick(["A Adams", "B Brown", "C Clark"], ["C Clark", "A Adams"])]);
@@ -90,7 +109,7 @@ describe("trackedPicks", () => {
     await saveGuide(db, a.id, "guide-0002", data("2024-11-05"), 10);
     const got = await trackedPicks(db, a.id, "2026-11-03");
     expect(got).toHaveLength(1);
-    expect(got[0]).toMatchObject({ guideId: "guide-0001", kind: "office", candidates: ["Ann Lee", "Bob Jones"] });
+    expect(got[0]).toMatchObject({ guideId: "guide-0001", kind: "office", title: "U.S. Senate", jurisdiction: "Texas", candidates: ["Ann Lee", "Bob Jones"] });
     expect(got[0].match.picks.map((p) => p.name)).toEqual(["Ann Lee"]);
     expect(await trackedPicks(db, b.id, "2026-11-03")).toHaveLength(0);
   });

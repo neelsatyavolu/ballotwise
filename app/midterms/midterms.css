@@ -783,6 +783,13 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 /* Row and "+N more" links are styled grey or bold ink; the tag keeps its own look there. */
 .mt-ct-more a.mt-pick, .mt-rows td a.mt-pick { color: var(--red); font-weight: 600; text-decoration: none; }
 .mt-row-pick { display: block; margin-top: 3px; }
+/* Several picks (a multi-seat race) run long: the line wraps rather than widening the table past its card. */
+.mt-ct-more td { white-space: normal; }
+.mt-ct-more .mt-pick, .mt-row-pick .mt-pick { display: inline-block; max-width: 100%; white-space: normal; vertical-align: middle; }
+/* On a narrow card the picked row gets a filled red oval, like a marked ballot; the line under the rows names it. */
+.mt-pick-mark { flex: none; width: 12px; height: 8px; border-radius: 50%; background: var(--red); }
+.mt-pick-on { position: relative; display: inline-grid; flex: none; }
+.mt-pick-on .mt-pick-mark { position: absolute; right: -4px; bottom: -2px; width: 10px; height: 7px; box-shadow: 0 0 0 2px var(--sheet); }
 .mt-ct .mt-avatar { width: 24px; height: 24px; margin: 0; font-size: 9px; }
 .mt-ct-party { color: var(--ink); font-weight: 500; }
 .mt-ct tbody tr.won td { background: color-mix(in srgb, var(--p) 22%, transparent); font-weight: 600; }

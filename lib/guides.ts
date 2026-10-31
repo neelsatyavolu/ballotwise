@@ -129,7 +129,7 @@ export async function trackedPicks(db: Db, userId: string, date: string): Promis
   return results.flatMap((r) => {
     const { match, kind } = toSummary(r, profiles[r.id] ?? {});
     const data = JSON.parse(r.data) as GuideData | null;
-    return match && data ? [{ guideId: r.id, kind, candidates: data.race.candidates.map((c) => c.name), match }] : [];
+    return match && data ? [{ guideId: r.id, kind, title: data.race.title, jurisdiction: data.race.jurisdiction, candidates: data.race.candidates.map((c) => c.name), match }] : [];
   });
 }
 

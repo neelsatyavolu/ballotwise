@@ -63,9 +63,11 @@ export function CandidateTable({ race, status, limit, short = false, share = fal
   const hidden = race.candidates.length - shown.length;
   const early = isEarly(race);
   const cols = measure ? 3 : 4;
-  // The voter's best match from their guide for this race, if they have one; tagged even when the row is cut off below.
+  // The voter's best match from their guide for this race. A wide table tags the row; a narrow card has no room beside
+  // the name, so it marks the row and names the match in a line under the candidates, as it does for a cut-off row.
   const found = pickIn(race, usePicks());
-  const pickedHidden = found?.names.filter((n) => !shown.some((c) => c.name === n)) ?? [];
+  const nameOf = (n: string) => (short && !measure ? lastName(n) : n);
+  const pickLine = found ? (short ? found.names : found.names.filter((n) => !shown.some((c) => c.name === n))) : [];
   return (
     <table className={`mt-ct${fill ? " fill" : ""}`}>
       <thead>
@@ -77,34 +79,40 @@ export function CandidateTable({ race, status, limit, short = false, share = fal
         </tr>
       </thead>
       <tbody>
-        {shown.map((c) => (
-          <tr key={c.name} className={c.winner ? "won" : undefined} style={{ "--p": partyColor(c), opacity: early && !c.winner ? 0.85 : undefined } as CSSProperties}>
-            <td className="mt-ct-cand" title={c.name}>
-              <span className="mt-ct-who">
-                {!measure && <Avatar race={race} candidate={c}>{initials(c.name)}</Avatar>}
-                <span className="mt-ct-name">{short && !measure ? lastName(c.name) : c.name}</span>
-                {c.incumbent && <span className="mt-ct-inc" title="Incumbent">*</span>}
-                {c.winner && <span className="mt-check" aria-label="winner"> ✓</span>}
-                {found?.names.includes(c.name) && <PickTag found={found} name={c.name} />}
-              </span>
-            </td>
-            {!measure && <td className="mt-ct-party">{partyCode(c.party)}</td>}
-            <td className="num">{fmt(c.votes)}</td>
-            <td className="num">
-              {share && (
-                <span className="mt-share" aria-hidden>
-                  <span style={{ width: `${c.pct}%`, background: partyColor(c) }} />
+        {shown.map((c) => {
+          const picked = Boolean(found?.names.includes(c.name));
+          // On a card the mark sits on the photo's corner, so it takes no room from the name; a measure has no photo.
+          const mark = <span className="mt-pick-mark" title="Your match" aria-label="Your match" />;
+          const avatar = <Avatar race={race} candidate={c}>{initials(c.name)}</Avatar>;
+          return (
+            <tr key={c.name} className={c.winner ? "won" : undefined} style={{ "--p": partyColor(c), opacity: early && !c.winner ? 0.85 : undefined } as CSSProperties}>
+              <td className="mt-ct-cand" title={c.name}>
+                <span className="mt-ct-who">
+                  {!measure && (picked && short ? <span className="mt-pick-on">{avatar}{mark}</span> : avatar)}
+                  <span className="mt-ct-name">{short && !measure ? lastName(c.name) : c.name}</span>
+                  {c.incumbent && <span className="mt-ct-inc" title="Incumbent">*</span>}
+                  {c.winner && <span className="mt-check" aria-label="winner"> ✓</span>}
+                  {found && picked && (short ? measure && mark : <PickTag found={found} name={c.name} />)}
                 </span>
-              )}
-              {c.pct.toFixed(2)}%
-            </td>
-          </tr>
-        ))}
-        {hidden > 0 && (
+              </td>
+              {!measure && <td className="mt-ct-party">{partyCode(c.party)}</td>}
+              <td className="num">{fmt(c.votes)}</td>
+              <td className="num">
+                {share && (
+                  <span className="mt-share" aria-hidden>
+                    <span style={{ width: `${c.pct}%`, background: partyColor(c) }} />
+                  </span>
+                )}
+                {c.pct.toFixed(2)}%
+              </td>
+            </tr>
+          );
+        })}
+        {(hidden > 0 || pickLine.length > 0) && (
           <tr className="mt-ct-more">
             <td colSpan={cols}>
-              <Link href={`/midterms/${race.id}`}>+{hidden} more</Link>
-              {found && pickedHidden.length > 0 && <> <PickTag found={found} name={pickedHidden[0]} label={`Your match: ${pickedHidden.map((n) => (short ? lastName(n) : n)).join(", ")}`} /></>}
+              {hidden > 0 && <Link href={`/midterms/${race.id}`}>+{hidden} more</Link>}
+              {found && pickLine.length > 0 && <>{hidden > 0 && " "}<PickTag found={found} name={pickLine[0]} label={`Your match: ${pickLine.map(nameOf).join(", ")}`} /></>}
             </td>
           </tr>
         )}
