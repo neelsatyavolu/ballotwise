@@ -1,0 +1,85 @@
+// Where a state's postal label goes on the nation map.
+
+type Point = [number, number];
+
+/** States whose outline is smaller than this (in map units) are left unlabeled, as DDHQ does in the Northeast; Hawaii is labeled anyway. */
+const MIN_LABEL_AREA = 2000;
+const ALWAYS_LABELED = new Set(["HI"]);
+const GRID = 16;
+const ROUNDS = 4;
+
+function rings(d: string): Point[][] {
+  return d
+    .split("M")
+    .slice(1)
+    .map((ring) => ring.replace(/Z/gi, "").split("L").map((p) => p.split(",").map(Number) as Point));
+}
+
+function area(pts: readonly Point[]): number {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[(i + 1) % pts.length];
+    a += x0 * y1 - x1 * y0;
+  }
+  return Math.abs(a / 2);
+}
+
+function inside([x, y]: Point, pts: readonly Point[]): boolean {
+  let hit = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+
+function edgeDistance([x, y]: Point, pts: readonly Point[]): number {
+  let best = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[(i + 1) % pts.length];
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len = dx * dx + dy * dy;
+    const t = len ? Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / len)) : 0;
+    best = Math.min(best, Math.hypot(x - (x0 + t * dx), y - (y0 + t * dy)));
+  }
+  return best;
+}
+
+/**
+ * The point deepest inside an outline, found on a grid that narrows around the best spot each round. Unlike the
+ * centroid, it can't land on a coast or outside a curved state (Florida's panhandle pulls its centroid onto the Gulf).
+ */
+function deepest(pts: readonly Point[]): Point {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  let [x0, y0, x1, y1] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  let best: { at: Point; d: number } = { at: [(x0 + x1) / 2, (y0 + y1) / 2], d: -Infinity };
+  for (let round = 0; round < ROUNDS; round++) {
+    const sx = (x1 - x0) / GRID;
+    const sy = (y1 - y0) / GRID;
+    for (let i = 0; i <= GRID; i++) {
+      for (let j = 0; j <= GRID; j++) {
+        const at: Point = [x0 + i * sx, y0 + j * sy];
+        if (!inside(at, pts)) continue;
+        const d = edgeDistance(at, pts);
+        if (d > best.d) best = { at, d };
+      }
+    }
+    [x0, y0, x1, y1] = [best.at[0] - 2 * sx, best.at[1] - 2 * sy, best.at[0] + 2 * sx, best.at[1] + 2 * sy];
+  }
+  return best.at;
+}
+
+/** Where a state's postal label goes: the point deepest inside its largest outline, or null when it's too small for one. */
+export function labelSpot(state: string, d: string): Point | null {
+  const largest = rings(d).reduce<{ pts: Point[]; area: number } | null>((best, pts) => {
+    const a = area(pts);
+    return !best || a > best.area ? { pts, area: a } : best;
+  }, null);
+  if (!largest || !largest.area || (largest.area < MIN_LABEL_AREA && !ALWAYS_LABELED.has(state))) return null;
+  return deepest(largest.pts);
+}

@@ -1,5 +1,6 @@
 // Rendered inside OfficeView.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { labelSpot } from "@/lib/midterms/labelSpot";
 import { CityLabels, FlipStripes, loadMap, useDistrictShapes, usePatternId, type City } from "./maps";
 import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zoom";
 
@@ -11,33 +12,6 @@ type Districts = { districts: { district: number; d: string }[] };
 export type Fill = { fill: string; tip: ReactNode; flip?: boolean; called?: boolean; watch?: boolean; lean?: boolean };
 
 const FULL: Box = [0, 0, 975, 610];
-
-/** States whose outline is smaller than this (in map units) are left unlabeled, as DDHQ does in the Northeast; Hawaii is labeled anyway. */
-const MIN_LABEL_AREA = 2000;
-const ALWAYS_LABELED = new Set(["HI"]);
-
-/** Where a state's postal label goes: the centroid of its largest outline, or null when it's too small for one. */
-function labelSpot(state: string, d: string): [number, number] | null {
-  let best: { area: number; x: number; y: number } | null = null;
-  for (const ring of d.split("M").slice(1)) {
-    const pts = ring.replace(/Z/gi, "").split("L").map((p) => p.split(",").map(Number));
-    let a = 0;
-    let cx = 0;
-    let cy = 0;
-    for (let i = 0; i < pts.length; i++) {
-      const [x0, y0] = pts[i];
-      const [x1, y1] = pts[(i + 1) % pts.length];
-      const f = x0 * y1 - x1 * y0;
-      a += f;
-      cx += (x0 + x1) * f;
-      cy += (y0 + y1) * f;
-    }
-    if (!a) continue;
-    a /= 2;
-    if (!best || Math.abs(a) > best.area) best = { area: Math.abs(a), x: cx / (6 * a), y: cy / (6 * a) };
-  }
-  return best && (best.area >= MIN_LABEL_AREA || ALWAYS_LABELED.has(state)) ? [best.x, best.y] : null;
-}
 
 /**
  * Where to zoom for a race inside a state. A district that covers only part of a big state gets its own closer
