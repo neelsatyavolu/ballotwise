@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/client";
 import { useAccount } from "./AccountProvider";
+import { VotesConnect } from "./VotesConnect";
 
 export function DeleteAccount() {
   const { user, loading, refresh } = useAccount();
@@ -42,10 +43,11 @@ export function DeleteAccount() {
     <div className="auth wrap">
       <h1>Your account</h1>
       <p className="muted">Signed in as {user.email}.</p>
+      <VotesConnect />
       <h2 style={{ marginTop: 32 }}>Delete your account</h2>
       <p>
-        This permanently deletes your account, your address, your interview answers, your ballot and every guide, and disconnects
-        Grok. It can&apos;t be undone.
+        This permanently deletes your account, your address, your interview answers, your ballot and every guide, and turns off
+        Grok and Decision Desk HQ. It can&apos;t be undone.
       </p>
       <form onSubmit={submit} noValidate>
         <div className="field">

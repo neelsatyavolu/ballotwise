@@ -6,6 +6,9 @@ import { api, ApiError } from "@/lib/client";
 import { clockNow, simAt } from "@/lib/midterms/clock";
 import { fetchedAtOf, fetchLive, isLagging, isNewer, LIVE_TIMEOUT_MS, LiveError, pollInterval, retryDelay, type LiveAnswer } from "@/lib/midterms/live";
 import type { GridLayout } from "@/lib/midterms/decisionView";
+import { overlayLive } from "@/lib/ddhq/apply";
+import type { Overview } from "@/lib/midterms/view";
+import { noteSeats, useDeskOverlay } from "./desk";
 import { useRenderedAt, useTrackerSeeds } from "./SeedProvider";
 import type { LiveSeed } from "./seeds";
 
@@ -185,7 +188,10 @@ export function useLive<T>(path: string | null) {
 
   const mine = state && state.path === path ? state : path ? ((lastAnswers.get(path) as Held<T> | undefined) ?? null) : null;
   const fetchedAt = mine?.fetchedAt ?? null;
-  return { data: mine ? mine.data : null, error, now, interval, fetchedAt, lagging: isLagging(fetchedAt, now) };
+  const raw = mine?.data ?? null;
+  if (path === "/api/midterms" && raw && typeof raw === "object" && "races" in raw) noteSeats((raw as unknown as Overview).races);
+  const desk = useDeskOverlay();
+  return { data: raw ? overlayLive(path, raw, desk) : null, error, now, interval, fetchedAt, lagging: isLagging(fetchedAt, now) };
 }
 
 /** The signed-in voter's starred races. `ids` is null when signed out. */

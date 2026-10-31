@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { RaceInsights as Insights } from "@/app/api/midterms/race/[id]/forecast/route";
 import type { Forecast } from "@/lib/midterms/forecast";
 import type { PollRow, RacePolls } from "@/lib/midterms/pollAverage";
+import type { DdhqRace } from "@/lib/ddhq/votes";
 import type { RaceSummary } from "@/lib/midterms/races";
 import { marginLabel, nomineeOf } from "@/lib/midterms/view";
 import { useLive } from "./hooks";
@@ -214,17 +215,48 @@ function PollsCard({ polls }: { polls: RacePolls }) {
   );
 }
 
+const LINE_PARTY = { D: "var(--dem-ink)", R: "var(--rep-ink)", I: "var(--oth)" } as const;
+
+/** Decision Desk HQ's forecast for this user. Shown instead of Ballotwise's when their Votes Pro account is connected. */
+function DdhqCard({ race }: { race: DdhqRace }) {
+  const [top, next] = race.forecast;
+  return (
+    <div className="mt-mk-card">
+      <div className="mt-mk-top">
+        <p className="mt-mk-q">Decision Desk HQ forecast</p>
+      </div>
+      {top ? <p className="mt-mk-lead">{top.name} {Math.round(top.probability * 100)}%</p> : <p className="mt-mk-lead">No forecast yet</p>}
+      {top && next && (
+        <div className="mt-fc-split" role="img" aria-label={race.forecast.map((row) => `${row.name} ${Math.round(row.probability * 100)}%`).join(", ")}>
+          {race.forecast.map((row) => (
+            <span key={row.name} style={{ width: `${row.probability * 100}%`, background: LINE_PARTY[row.party] }} />
+          ))}
+        </div>
+      )}
+      {race.call && <p className="muted small">Called for {race.call.name}.</p>}
+      <p className="muted small">From your Votes Pro account. Other visitors still see Ballotwise&apos;s forecast.</p>
+    </div>
+  );
+}
+
 /** A race's forecast and polls, like DDHQ's race page; each panel is left out when there's nothing to show. */
-export function RaceInsights({ race }: { race: RaceSummary }) {
+export function RaceInsights({ race, ddhq }: { race: RaceSummary; ddhq?: DdhqRace | null }) {
   const { data } = useLive<Insights>(`/api/midterms/race/${race.id}/forecast`);
   const forecast = race.signal?.forecast ?? null;
   return (
     <>
-      {forecast && (
+      {ddhq && ddhq.forecast.length > 0 ? (
         <section className="mt-mk" aria-label="Forecast">
           <h3 className="mt-mk-head">Forecast</h3>
-          <ForecastCard race={race} forecast={forecast} history={data?.history ?? null} />
+          <DdhqCard race={ddhq} />
         </section>
+      ) : (
+        forecast && (
+          <section className="mt-mk" aria-label="Forecast">
+            <h3 className="mt-mk-head">Forecast</h3>
+            <ForecastCard race={race} forecast={forecast} history={data?.history ?? null} />
+          </section>
+        )
       )}
       {data?.polls && data.polls.rows.length > 0 && (
         <section className="mt-mk" aria-label="Polls">

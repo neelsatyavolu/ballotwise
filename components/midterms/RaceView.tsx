@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api, ApiError } from "@/lib/client";
+import { applyDesk, isDesk } from "@/lib/ddhq/apply";
+import type { DdhqRace } from "@/lib/ddhq/votes";
+import { useAccount } from "@/components/AccountProvider";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
@@ -27,10 +31,49 @@ const SCREEN = { senate: "/midterms/senate", house: "/midterms/house", governor:
 
 export function RaceView({ id }: { id: number }) {
   const { data, error, now } = useLive<Fetched>(`/api/midterms/race/${id}`);
+  const { ddhq, user, refresh } = useAccount();
   const favorites = useStars();
+  const [desk, setDesk] = useState<DdhqRace | null>(null);
+  const [deskSeat, setDeskSeat] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("results");
   const [selected, setSelected] = useState<string | null>(null);
-  const race = data?.race;
+  const loaded = data?.race;
+  const state = loaded?.state;
+  const office = loaded?.office;
+  const district = loaded?.district;
+  const special = Boolean(loaded && /special/i.test(loaded.title));
+  const seat = state && office ? `${office}:${state}:${district ?? ""}:${special ? "s" : "g"}:${user?.id ?? ""}` : "";
+  const active = ddhq === "connected" && desk && deskSeat === seat ? desk : null;
+  const race = loaded && active?.candidates ? applyDesk(loaded, active) : loaded;
+
+  useEffect(() => {
+    if (ddhq !== "connected" || !state || !office || office === "measure") return;
+    const params = new URLSearchParams({ state, office });
+    if (district != null) params.set("district", String(district));
+    if (special) params.set("special", "1");
+    const mine = seat;
+    let live = true;
+    const load = () => {
+      api<DdhqRace>(`/api/ddhq/race?${params}`)
+        .then((next) => {
+          if (!live) return;
+          setDesk(next);
+          setDeskSeat(mine);
+        })
+        .catch((err) => {
+          if (!live) return;
+          setDesk(null);
+          setDeskSeat(null);
+          if (err instanceof ApiError && err.status === 401) void refresh();
+        });
+    };
+    load();
+    const timer = window.setInterval(load, 20_000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [ddhq, state, office, district, special, seat, refresh]);
 
   const fills = useMemo(() => {
     const out = new Map<string, CountyFill>();
@@ -38,7 +81,7 @@ export function RaceView({ id }: { id: number }) {
     return out;
   }, [race, mode]);
 
-  if (!race) {
+  if (!data || !race) {
     return (
       <div className="wrap mt">
         {/* The tabs stay in the header while the race loads, so it doesn't jump; none is marked until the office is known. */}
@@ -122,10 +165,15 @@ export function RaceView({ id }: { id: number }) {
                 Results from <a href={race.source.url}>{race.source.name}</a>. The county doesn&apos;t mark winners in its results, so this page shows who leads and calls no one.{" "}
               </>
             )}
-            {called && !race.source ? `${called.name} was declared the winner by civicAPI's decision desk, not AP or Decision Desk HQ. ` : ""}* Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
+            {isDesk(race) && called
+              ? `Decision Desk HQ called this race for ${called.name}. `
+              : called && !race.source
+                ? `${called.name} was declared the winner by civicAPI's decision desk, not AP or Decision Desk HQ. `
+                : ""}
+            * Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
-          {race.office !== "measure" && <RaceInsights race={race} />}
+          {race.office !== "measure" && <RaceInsights race={race} ddhq={active} />}
           {data.history && <VoteUpdates history={data.history} />}
           {race.office !== "measure" && <MarketPanel raceId={race.id} />}
         </section>

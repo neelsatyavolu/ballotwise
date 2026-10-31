@@ -7,10 +7,11 @@ type Grok = "connected" | "disconnected" | "refresh-failed";
 type Values = "none" | "in-progress" | "done";
 type Terms = "accepted" | "needed";
 type Provider = "grok" | "codex";
-type Me = { user: { id: string; email: string } | null; grok: Grok; provider: Provider | null; values: Values; terms: Terms };
+type Ddhq = "connected" | "disconnected";
+type Me = { user: { id: string; email: string } | null; grok: Grok; provider: Provider | null; values: Values; terms: Terms; ddhq: Ddhq };
 type Account = Me & { loading: boolean; refresh: () => Promise<void> };
 
-const SIGNED_OUT: Me = { user: null, grok: "disconnected", provider: null, values: "none", terms: "accepted" };
+const SIGNED_OUT: Me = { user: null, grok: "disconnected", provider: null, values: "none", terms: "accepted", ddhq: "disconnected" };
 const AccountContext = createContext<Account>({ ...SIGNED_OUT, loading: true, refresh: async () => {} });
 
 // Starts as the layout script evaluates, before effects, so the header doesn't wait an extra turn to know who's signed in.
