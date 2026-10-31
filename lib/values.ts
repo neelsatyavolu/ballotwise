@@ -39,11 +39,12 @@ Rules:
 - One question at a time, in plain language, at most two short sentences. Be warm and brief. Never praise, agree with, disagree with, or comment on their views.
 - Never mention parties, candidates, politicians, ideology labels (left, right, liberal, conservative, progressive, MAGA and so on) or media figures. If they use a label, ask what they specifically want.
 - Ask about concrete tradeoffs, not slogans. Cover the range: cost of living and taxes, housing and development, public safety and policing, health care, schools, environment and energy, immigration, government spending and services, rights and civil liberties, transportation, and what they want in a leader (experience, style, independence). Go deeper where they care; after one quick check, skip what they don't.
-- If you are given the issues on this voter's ballot, spend most questions on the tradeoffs behind them, so their answers speak directly to what they will vote on. Ask about the underlying choice in your own neutral words; don't read the ballot questions out, and cover the topics that come up in the most races first.
+- Their answers are later used to place them on many specific ballot questions you won't have time to ask about, so learn the principles that decide many questions at once, not only topic-by-topic views. Make sure you learn: whether the state should borrow (bonds) for things it wants now or pay as it goes; saving reserves for downturns versus spending or returning surplus money; how strictly government spending should be audited and published; state rules versus local control; regulation versus leaving things to markets; and which needs public money should go to first. Fold these into the topic questions where you can.
+- If you are given the issues on this voter's ballot, spend most questions on the tradeoffs behind them, so their answers speak directly to what they will vote on. Ask about the underlying choice in your own neutral words; don't read the ballot questions out. Group ballot issues that turn on the same choice (several bonds, several tax or spending rules, several oversight offices) and ask about that shared choice once, starting with the choices behind the most races.
 - Follow up on vague answers ("it depends" on what?) and learn how much each topic matters to them.
 - Offer 2 to 4 short suggested replies that span the reasonable range in balanced wording. Vary which view comes first. They can always answer in their own words.
 - "progress" is your estimate from 0 to 1 of how complete the picture is.
-- Finish when the picture is clear, after ${MAX_QUESTIONS} questions, or when told to. The summary uses their own words where possible, never infers views they did not state, and weights each priority 1 to 3 by how strongly they expressed it. Give each distinct topic they spoke to its own priority, so specific views aren't lost in a broad one.
+- Finish when the picture is clear, after ${MAX_QUESTIONS} questions, or when told to. The summary uses their own words where possible, never infers views they did not state, and weights each priority 1 to 3 by how strongly they expressed it. Give each distinct topic they spoke to its own priority, so specific views aren't lost in a broad one, and give each principle they stated (on borrowing, saving, oversight, local control, regulation) its own priority too.
 
 Reply with one JSON object and nothing else, either
 {"done": false, "message": "your next question", "suggestions": ["..."], "progress": 0.3}
@@ -143,7 +144,8 @@ export const ALIGN_INSTRUCTIONS = `You place a voter on specific issue questions
 For each issue choose a stance from -2 (strongly side A) to +2 (strongly side B):
 - If the summary speaks to the issue, use it: "inferred": false, weight 1 to 3 following how much the voter said that topic matters, and "why" is one sentence quoting or closely paraphrasing what they said.
 - If the interview didn't name the issue but the voter spoke to the same subject (for example their view on rent costs for a housing question, or on school funding for an education budget question), infer from that: "inferred": true, weight 1, and "why" is one sentence starting "Inferred from" that names what they said. Use a mild stance (-1, 0 or +1) unless what they said is strong.
-- Never infer across subjects. A view on one topic (taxes, crime, immigration, spending) does not tell you their view on a different one (insurance rules, school sports, election administration), and general outlook is not evidence. In that case use null, "inferred": false, and say what the interview didn't cover. A blank is better than a guess.
+- Also infer from a principle the voter stated when the issue turns on that same principle, even if the topic differs. Taxes, spending, borrowing, debt, reserves and bonds are one fiscal subject: "cut spending before raising taxes" bears on whether to borrow for a new program or save more in reserves. A stated view on state rules versus local control bears on how much a state body should direct local officials. A stated wish for transparency or careful spending bears on how strictly spending is audited and published. Same rules: "inferred": true, weight 1, a mild stance, and "why" names the principle.
+- Never infer otherwise. A view on one topic (crime, immigration, school sports) does not tell you their view on a different one that turns on a different choice (insurance rules, election administration), and general outlook is not evidence. In that case use null, "inferred": false, and say what the interview didn't cover. A blank is better than a guess.
 Reply with one JSON object: {"answers": [{"issueId": "...", "stance": 1, "weight": 2, "why": "...", "inferred": false}]}`;
 
 export async function alignToIssues(tokens: GrokTokens, summary: ValuesSummary, office: string, issues: Issue[]): Promise<Suggested> {
@@ -165,9 +167,13 @@ export async function saveSuggested(db: Db, guideId: string, suggested: Suggeste
 }
 
 /**
- * Ready guides whose interview mapping left issues blank, from before inferred answers existed.
+ * Ready guides whose interview mapping left issues blank, from before inferred answers existed,
+ * or left every issue blank, from before answers could be inferred from a stated principle.
  * Each is claimed once (for the cache lifetime), so reloading the page doesn't queue it again.
  */
+/** Bumped when the mapping rules change, so guides claimed under the old rules can be claimed again. */
+const REALIGN_KEY = "realign-v2";
+
 export async function claimRealignment(db: Db, userId: string, now: number): Promise<string[]> {
   const { results } = await db
     .prepare("SELECT id, suggested FROM guides WHERE user_id = ? AND status = 'ready' AND suggested LIKE '%\"stance\":null%'")
@@ -176,9 +182,12 @@ export async function claimRealignment(db: Db, userId: string, now: number): Pro
   const claimed: string[] = [];
   for (const { id, suggested } of results) {
     const answers = Object.values(JSON.parse(suggested) as Suggested);
-    if (!answers.some((a) => a.stance === null && a.inferred === undefined)) continue;
-    if (await getCached(db, `realign:${id}`, now)) continue;
-    await putCached(db, `realign:${id}`, true, now);
+    const preInference = answers.some((a) => a.stance === null && a.inferred === undefined);
+    const allBlank = answers.length > 0 && answers.every((a) => a.stance === null);
+    if (!preInference && !allBlank) continue;
+    const key = `${REALIGN_KEY}:${id}`;
+    if (await getCached(db, key, now)) continue;
+    await putCached(db, key, true, now);
     claimed.push(id);
   }
   return claimed;

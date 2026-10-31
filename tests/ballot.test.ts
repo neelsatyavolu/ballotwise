@@ -420,6 +420,20 @@ describe("values interview", () => {
     expect(summaryRow.match).toMatchObject({ picks: [{ name: "Ann", score: 75 }] });
   });
 
+  it("maps a race again, once, when the interview left every issue blank", async () => {
+    const { claimRealignment, saveSuggested } = await import("../lib/values");
+    const { db, user } = await setup();
+    await addContestGuides(db, user.id, contests as never, 2);
+    const [blank, partial] = await listGuides(db, user.id, "ballot");
+    for (const g of [blank, partial]) await db.prepare("UPDATE guides SET status = 'ready' WHERE id = ?").bind(g.id).run();
+    const none = { stance: null, weight: 1 as const, why: "Not covered.", inferred: false };
+    await saveSuggested(db, blank.id, { housing: none, transit: none });
+    await saveSuggested(db, partial.id, { housing: none, transit: { stance: 1, weight: 1, why: "Inferred from rent.", inferred: true } });
+
+    expect(await claimRealignment(db, user.id, 1)).toEqual([blank.id]);
+    expect(await claimRealignment(db, user.id, 2)).toEqual([]);
+  });
+
   it("does not claim alignment when research finishes before the interview", async () => {
     stubGrok();
     const { db, user, deps, queued } = await setup();
