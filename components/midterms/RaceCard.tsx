@@ -38,7 +38,7 @@ export function RaceCard({ race, starred, onStar, limit = 3 }: { race: RaceSumma
   const label = raceLabel(race);
   const sub = race.total ? null : signalLine(race.signal, race);
   return (
-    <li className="mt-card">
+    <li className="mt-card" data-race={race.id}>
       <div className="mt-card-top">
         <Link href={`/midterms/${race.id}`} className="mt-card-title">
           {label}

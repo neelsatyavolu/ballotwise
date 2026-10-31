@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EXPIRE_MS, hiddenOn, roleOf, type Screen } from "../lib/midterms/screens";
 
 const NOW = 1_000_000;
-const screen = (id: string, over: Partial<Screen> = {}): Screen => ({ id, startedAt: 0, at: NOW, visible: true, area: 1000, panels: [], solo: false, mock: null, ...over });
+const screen = (id: string, over: Partial<Screen> = {}): Screen => ({ id, startedAt: 0, at: NOW, visible: true, area: 1000, panels: [], seen: [], solo: false, mock: null, ...over });
 
 describe("second screens", () => {
   const ultrawide = screen("wide", { area: 5000, panels: ["control", "calls", "schedule"] });

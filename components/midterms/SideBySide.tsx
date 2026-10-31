@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { parseWeights, resize } from "@/lib/midterms/columns";
 import { closestFirst } from "@/lib/midterms/explore";
 import { electionModeDefault } from "@/lib/midterms/polls";
@@ -271,6 +271,21 @@ function ColumnHandle({ i, label, grid, widths }: { i: number; label: string; gr
   );
 }
 
+/**
+ * Keeps `--sbs-top` on the grid at how far down the page it starts, so on wide screens the columns fill the rest of
+ * the window (midterms.css) and their lists scroll inside them instead of the page scrolling.
+ */
+function useFitWindow(grid: RefObject<HTMLDivElement | null>, ready: boolean) {
+  useEffect(() => {
+    const el = grid.current;
+    if (!ready || !el) return;
+    const fit = () => el.style.setProperty("--sbs-top", `${el.getBoundingClientRect().top + window.scrollY}px`);
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [grid, ready]);
+}
+
 /** Senate, House and Governor dashboards in columns for wide and ultrawide screens, sharing one live feed. */
 export function SideBySide() {
   const { data, error } = useLive<Overview>("/api/midterms");
@@ -280,6 +295,7 @@ export function SideBySide() {
   const star: Star = { ids: favorites.ids, toggle: favorites.toggle };
   const widths = useWidths();
   const grid = useRef<HTMLDivElement>(null);
+  useFitWindow(grid, Boolean(data));
   // No title row, so the columns get the height; the live status sits in the first column's heading.
   const status = data && (
     <span className="mt-sbs-status">

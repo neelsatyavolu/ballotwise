@@ -16,13 +16,15 @@ import { setSolo, useScreens } from "./useScreens";
 
 const noSubscribe = () => () => {};
 
-function Tossups({ data, stars }: { data: Overview; stars: ReturnType<typeof useStars> }) {
-  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && (r.office === "senate" || r.office === "house")).sort(closestFirst), [data]);
+/** The Senate and House toss-ups whose cards aren't on the main screen, closest counts first. */
+function Tossups({ data, stars, seen }: { data: Overview; stars: ReturnType<typeof useStars>; seen: readonly number[] }) {
+  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && (r.office === "senate" || r.office === "house") && !seen.includes(r.id)).sort(closestFirst), [data, seen]);
+  if (!races.length) return null;
   return (
     <section className="mt-companion-tossups" aria-label="Toss-up races">
       <div className="mt-section-head tight">
-        <h2>Toss-ups</h2>
-        <span className="muted small">{races.length}</span>
+        <h2>{seen.length ? "More toss-ups" : "Toss-ups"}</h2>
+        <span className="muted small">{seen.length ? `${races.length} not on your main screen` : races.length}</span>
       </div>
       <ul className="mt-grid mt-sbs-cards">
         {races.map((r) => (
@@ -34,7 +36,7 @@ function Tossups({ data, stars }: { data: Overview; stars: ReturnType<typeof use
 }
 
 /** Mounted only on a companion, so other tabs don't fetch or load stars for it. */
-function Body({ hidden }: { hidden: readonly Panel[] }) {
+function Body({ hidden, seen }: { hidden: readonly Panel[]; seen: readonly number[] }) {
   const data = useLive<Overview>("/api/midterms").data;
   const stars = useStars();
   const shows = (p: Panel) => hidden.includes(p);
@@ -46,17 +48,17 @@ function Body({ hidden }: { hidden: readonly Panel[] }) {
         {data && <MomentPopup data={data} starred={stars.ids} inCompanion />}
         <button type="button" className="mt-el-quiet small" onClick={() => setSolo(true)}>Use this tab normally</button>
       </header>
-      {data ? <Panels data={data} hidden={hidden} stars={stars} shows={shows} /> : <p className="muted">Loading…</p>}
+      {data ? <Panels data={data} hidden={hidden} seen={seen} stars={stars} shows={shows} /> : <p className="muted">Loading…</p>}
     </>
   );
 }
 
-function Panels({ data, hidden, stars, shows }: { data: Overview; hidden: readonly Panel[]; stars: ReturnType<typeof useStars>; shows: (p: Panel) => boolean }) {
+function Panels({ data, hidden, seen, stars, shows }: { data: Overview; hidden: readonly Panel[]; seen: readonly number[]; stars: ReturnType<typeof useStars>; shows: (p: Panel) => boolean }) {
   return (
     <>
       {shows("control") && <ControlStrip data={data} />}
       <div className="mt-companion-grid">
-        {shows("tossups") && <Tossups data={data} stars={stars} />}
+        {shows("tossups") && <Tossups data={data} stars={stars} seen={seen} />}
         {(shows("calls") || shows("schedule")) && (
           <div className="mt-companion-side">
             {shows("calls") && <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" />}
@@ -75,7 +77,7 @@ function Panels({ data, hidden, stars, shows }: { data: Overview; hidden: readon
  * the main screen's mock night, if any, so the two show the same night. "Use this tab normally" leaves the setup.
  */
 export function Companion() {
-  const { role, hidden, mainMock } = useScreens();
+  const { role, hidden, seen, mainMock } = useScreens();
   const companion = role === "companion";
   useEffect(() => {
     if (companion) adoptMock(mainMock);
@@ -84,7 +86,7 @@ export function Companion() {
   if (!companion || !body) return null;
   return createPortal(
     <div className="mt mt-companion" role="region" aria-label="Companion screen">
-      <Body hidden={hidden} />
+      <Body hidden={hidden} seen={seen} />
     </div>,
     body,
   );

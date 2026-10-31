@@ -16,7 +16,10 @@ export type Screen = {
   visible: boolean;
   /** Window area in CSS pixels: the bigger window is the main screen. */
   area: number;
+  /** The panels wholly on screen: not cut off by the window's edge or scrolled out of sight. */
   panels: readonly Panel[];
+  /** The toss-up races whose cards are on screen, so a companion shows only the rest. */
+  seen: readonly number[];
   /** The viewer asked this tab never to become a companion. */
   solo: boolean;
   /** The mock election night running in this tab, if any, so a companion can run the same one. */

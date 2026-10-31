@@ -1455,6 +1455,20 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
 .mt-sbs-col .mt-rows:not(.counting) th:nth-child(3), .mt-sbs-col .mt-rows:not(.counting) td:nth-child(3),
 .mt-sbs-col .mt-rows:not(.counting) th:nth-child(4), .mt-sbs-col .mt-rows:not(.counting) td:nth-child(4) { display: none; }
 .mt-sbs-col .mt-rows.counting .mt-leader .muted { display: none; }
+/*
+ * On wide screens the page fits the window: the grid fills it from where it starts (--sbs-top, set in SideBySide.tsx)
+ * and each column's race list, toss-up cards or open race scroll inside it, so nothing sits below the fold.
+ */
+@media (min-width: 1800px) {
+  .mt-sbs { height: calc(100dvh - var(--sbs-top, 0px) - 12px); grid-template-rows: minmax(0, 1fr); }
+  .mt-sbs-col { min-height: 0; }
+  .mt-sbs-col .mt-zoom svg { max-height: 46vh; }
+  .mt-sbs .mt-sbs-col > .mt-rows-wrap { min-height: 140px; }
+  .mt-sbs-col > .mt-sbs-cards, .mt-sbs-col > .mt-sbs-focus { flex: 1 1 0; min-height: 0; overflow-y: auto; align-content: start; }
+  /* Cards keep their own height and the list scrolls, rather than every card being squeezed to fit. */
+  .mt-sbs-col > .mt-sbs-cards, .mt-sbs-col > .mt-sbs-focus { grid-auto-rows: max-content; }
+  .mt-sbs-side { min-height: 0; overflow-y: auto; }
+}
 
 /* Election night: uncalled leans are highlighted a step below toss-ups, in the same yellow: a half-strength bar in
    race lists, a thin dashed outline on maps and seats, and a fainter ring on tiles. */
@@ -1538,6 +1552,16 @@ button.mt-mock:hover { color: var(--ink); }
   .mt-companion-grid:has(> .mt-companion-tossups):has(> .mt-companion-side) { grid-template-columns: minmax(0, 1fr) minmax(300px, 0.45fr); }
 }
 .mt-companion .mt-el-calllist { max-height: none; }
+/* The companion fits its window: the toss-up cards and the calls scroll inside their own columns, not the page. */
+.mt-companion { display: flex; flex-direction: column; overflow: hidden; }
+body:has(> .mt-companion) { overflow: hidden; }
+.mt-companion-grid { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.mt-companion-grid:empty { display: none; }
+.mt-companion-tossups .mt-sbs-cards { align-content: start; grid-auto-rows: max-content; }
+@media (min-width: 1100px) {
+  .mt-companion-grid { grid-template-rows: minmax(0, 1fr); align-items: stretch; overflow: visible; }
+  .mt-companion-tossups, .mt-companion-side { min-height: 0; overflow-y: auto; }
+}
 
 /* On the main screen, while the pop-up opens on the companion: a short note in the corner. */
 .mt-moment-note { position: fixed; right: 20px; top: 80px; z-index: 46; max-width: min(360px, calc(100vw - 40px)); margin: 0; padding: 10px 14px; background: var(--sheet); border: 1px solid var(--el-line); border-left: 3px solid var(--accent); border-radius: 8px; animation: mt-moment-in 0.18s ease-out; }
