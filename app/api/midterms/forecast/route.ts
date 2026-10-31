@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { getCached } from "@/lib/cache";
 import { db } from "@/lib/env";
-import type { Chambers } from "@/lib/midterms/forecast";
+import type { Chambers, RatingCounts } from "@/lib/midterms/forecast";
 import { CHAMBER_HISTORY_KEY, readOdds, type ChamberHistory } from "@/lib/midterms/odds";
 
 export type ForecastOverview = {
+  /** Only added by the private client overlay; the public response stays Ballotwise. */
+  source?: "ddhq";
+  /** Published race-category counts, when the private provider supplies them. */
+  ratings?: Partial<Record<keyof Chambers, RatingCounts>>;
   /** When the forecast was last computed (ms since epoch); null before the first run. */
   updatedAt: number | null;
-  chambers: Chambers | null;
+  chambers: Partial<Chambers> | null;
   history: ChamberHistory | null;
 };
 

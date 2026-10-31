@@ -6,6 +6,7 @@ import type { RaceInsights as Insights } from "@/app/api/midterms/race/[id]/fore
 import type { Forecast } from "@/lib/midterms/forecast";
 import type { PollRow, RacePolls } from "@/lib/midterms/pollAverage";
 import type { DdhqRace } from "@/lib/ddhq/votes";
+import { deskFor } from "@/lib/ddhq/apply";
 import type { RaceSummary } from "@/lib/midterms/races";
 import { marginLabel, nomineeOf } from "@/lib/midterms/view";
 import { useLive } from "./hooks";
@@ -243,12 +244,13 @@ function DdhqCard({ race }: { race: DdhqRace }) {
 export function RaceInsights({ race, ddhq }: { race: RaceSummary; ddhq?: DdhqRace | null }) {
   const { data } = useLive<Insights>(`/api/midterms/race/${race.id}/forecast`);
   const forecast = race.signal?.forecast ?? null;
+  const privateRace = deskFor(race) ?? ddhq;
   return (
     <>
-      {ddhq && ddhq.forecast.length > 0 ? (
+      {privateRace && privateRace.forecast.length > 0 ? (
         <section className="mt-mk" aria-label="Forecast">
           <h3 className="mt-mk-head">Forecast</h3>
-          <DdhqCard race={ddhq} />
+          <DdhqCard race={privateRace} />
         </section>
       ) : (
         forecast && (

@@ -32,6 +32,7 @@ const STAMP = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric",
 
 /** The pre-vote map tooltip, after DDHQ's forecast card: candidates with win chances, and the rating as a pill. */
 export function ForecastTip({ race, updatedAt }: { race: RaceSummary; updatedAt: number | null }) {
+  if (race.signal?.forecast?.source === "ddhq") updatedAt = race.signal.forecast.updatedAt ?? null;
   const rows = candidateOdds(race);
   const priced = rows.filter((c) => c.p !== null);
   const shown = (priced.length ? priced : rows).slice(0, 3);

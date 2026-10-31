@@ -96,7 +96,7 @@ export async function votesSessionCookie(session: DdhqSession): Promise<string> 
   const minted = await clerk(`/v1/client/sessions/${session.sessionId}/tokens`, new URLSearchParams(), session.clientToken);
   const jwt = sessionJwt(minted.json);
   if (jwt && minted.res.ok) return `__session=${jwt}`;
-  if (minted.res.status === 401 || minted.res.status === 403 || minted.res.status === 404) {
+  if (minted.res.status === 401) {
     throw new AccountError("The Votes sign-in expired. Connect it again.", 401);
   }
   throw new AccountError("Decision Desk HQ didn't answer. Try again in a minute.", 502);

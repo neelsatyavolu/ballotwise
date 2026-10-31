@@ -7,6 +7,8 @@ import states from "./states.json";
 
 export type { CallEvent, Candidate, Office, Party, RaceSummary, Rating, Signal, Tally };
 export type Overview = {
+  /** Set only after this user's published DDHQ forecast bundle has loaded. */
+  forecastSource?: "ddhq";
   races: RaceSummary[];
   balance: { senate: Tally; house: Tally; governor: Tally };
   fetchedAt: number;

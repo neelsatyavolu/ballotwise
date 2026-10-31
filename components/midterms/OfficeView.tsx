@@ -130,7 +130,7 @@ export function SeatHeader({ office, data, forecast = null }: { office: Office; 
     );
   }
   const tally = office === "senate" ? data.balance.senate : office === "house" ? data.balance.house : data.balance.governor;
-  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} projected={projection(data.races, office, tally, forecast?.chambers?.[office])} />;
+  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} projected={projection(data.races, office, tally, forecast?.chambers?.[office], forecast?.source)} />;
 }
 
 export function OfficeView({ office, initialState }: { office: Office; initialState: string | null }) {

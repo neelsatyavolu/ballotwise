@@ -1,0 +1,12 @@
+{
+  "name": "ballotwise-ddhq-egress",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "python3 -B -m unittest discover -s . -p 'test_*.py'",
+    "deploy": "../../node_modules/.bin/wrangler deploy --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "0.3.7"
+  }
+}

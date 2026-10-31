@@ -1,94 +1,52 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { useAccount } from "@/components/AccountProvider";
-import { api, ApiError } from "@/lib/client";
-import type { DdhqRace, DdhqSeat } from "@/lib/ddhq/votes";
+import { ApiError } from "@/lib/client";
+import { createDeskStore, EMPTY_DESK, type DeskData } from "@/lib/ddhq/store";
+import type { DdhqSeat } from "@/lib/ddhq/votes";
 
-type Seat = DdhqSeat;
-type Listener = () => void;
+const store = createDeskStore(async <T,>(path: string, body: unknown | undefined, signal: AbortSignal): Promise<T> => {
+  const response = await fetch(path, {
+    method: body === undefined ? "GET" : "POST",
+    headers: body === undefined ? undefined : { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+    signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
+  });
+  if (!response.ok) throw new ApiError("Decision Desk HQ did not answer.", response.status);
+  return response.json() as Promise<T>;
+});
 
-const listeners = new Set<Listener>();
-let map: ReadonlyMap<string, DdhqRace> = new Map();
-let seats: Seat[] = [];
-let runningFor: string | null = null;
-let stop = false;
+type SeatSource = { office: string; state: string; district: number | null; title: string };
 
-function publish(next: ReadonlyMap<string, DdhqRace>) {
-  map = next;
-  for (const listener of listeners) listener();
-}
-
-function subscribe(listener: Listener) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export function noteSeats(races: { office: string; state: string; district: number | null; title: string }[]) {
-  seats = races
+/** Each mounted consumer contributes seats; a detail panel cannot replace the whole catalog. */
+export function useDeskSeats(races: readonly SeatSource[]) {
+  const source = useRef(Symbol("desk-seats"));
+  const seats = useMemo(() => races
     .filter((race) => race.office === "senate" || race.office === "house" || race.office === "governor")
-    .map((race) => ({
-      state: race.state,
-      office: race.office as Seat["office"],
-      district: race.district,
-      special: /special/i.test(race.title),
-    }));
-}
-
-function shutdown() {
-  stop = true;
-  runningFor = null;
-  if (map.size) publish(new Map());
-}
-
-async function pass(refresh: () => Promise<void>) {
-  const todo = seats;
-  if (!todo.length) return;
-  const next = new Map(map);
-  for (let i = 0; i < todo.length; i += 24) {
-    if (stop) return;
-    try {
-      const body = await api<{ races: { key: string; race: DdhqRace | null }[] }>("/api/ddhq/races", { body: { seats: todo.slice(i, i + 24) } });
-      for (const row of body.races) if (row.race) next.set(row.key, row.race);
-      publish(new Map(next));
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        shutdown();
-        await refresh();
-        return;
-      }
-      return;
-    }
-  }
-}
-
-function ensure(userId: string, refresh: () => Promise<void>) {
-  if (runningFor === userId) return;
-  shutdown();
-  stop = false;
-  runningFor = userId;
-  void (async () => {
-    while (!stop && runningFor === userId) {
-      const waiting = seats.length === 0;
-      await pass(refresh);
-      await new Promise((resolve) => setTimeout(resolve, waiting ? 2000 : 60_000));
-    }
-  })();
-}
-
-const empty: ReadonlyMap<string, DdhqRace> = new Map();
-
-/** Decision Desk HQ counts for the signed-in user, empty when the switch is off. */
-export function useDeskOverlay(): ReadonlyMap<string, DdhqRace> {
-  const { ddhq, user, refresh } = useAccount();
-  const id = user?.id ?? null;
-  const current = useSyncExternalStore(subscribe, () => map, () => empty);
+    .map((race): DdhqSeat => ({ state: race.state, office: race.office as DdhqSeat["office"], district: race.district, special: /special/i.test(race.title) })), [races]);
   useEffect(() => {
-    if (ddhq !== "connected" || !id) {
-      shutdown();
-      return;
-    }
-    ensure(id, refresh);
-  }, [ddhq, id, refresh]);
-  return ddhq === "connected" ? current : empty;
+    store.setSeats(source.current, seats);
+  }, [seats]);
+  useEffect(() => {
+    const key = source.current;
+    return () => store.removeSeats(key);
+  }, []);
+}
+
+/** Only the active account can read its private snapshot, including before effects run. */
+export function useDeskData(): DeskData {
+  const { ddhq, user, refresh } = useAccount();
+  const owner = ddhq === "connected" ? user?.id ?? null : null;
+  const snapshot = useSyncExternalStore(store.subscribe, () => store.getForOwner(owner), () => EMPTY_DESK);
+  useEffect(() => {
+    if (owner) store.connect(owner, refresh);
+    else store.disconnect();
+  }, [owner, refresh]);
+  return snapshot;
+}
+
+export function useDeskOverlay() {
+  return useDeskData().races;
 }

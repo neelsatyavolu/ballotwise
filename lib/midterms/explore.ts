@@ -67,6 +67,7 @@ export function statusOf(r: RaceSummary): Status {
 }
 
 export function tierOf(r: RaceSummary): Tier {
+  if (r.signal?.forecast?.source === "ddhq" && r.signal.forecast.ratingKnown === false) return "unrated";
   if (r.rating) return r.rating === "tossup" ? "tossup" : r.rating.startsWith("lean") ? "lean" : "likely";
   return r.signal?.forecast ? "safe" : "unrated";
 }

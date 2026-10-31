@@ -44,7 +44,7 @@ export function RaceView({ id }: { id: number }) {
   const special = Boolean(loaded && /special/i.test(loaded.title));
   const seat = state && office ? `${office}:${state}:${district ?? ""}:${special ? "s" : "g"}:${user?.id ?? ""}` : "";
   const active = ddhq === "connected" && desk && deskSeat === seat ? desk : null;
-  const race = loaded && active?.candidates ? applyDesk(loaded, active) : loaded;
+  const race = loaded && active ? applyDesk(loaded, active) : loaded;
 
   useEffect(() => {
     if (ddhq !== "connected" || !state || !office || office === "measure") return;

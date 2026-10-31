@@ -7,6 +7,8 @@ import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
 import type { Overview } from "@/lib/midterms/view";
 import { LIVE_TIMEOUT_MS } from "@/lib/midterms/live";
+import { overlayLive } from "@/lib/ddhq/apply";
+import { useDeskData, useDeskSeats } from "../desk";
 import { pollInterval, useLive } from "../hooks";
 
 export type RaceData = { race: RaceDetail; fetchedAt: number; stale: boolean; history?: Observation[] };
@@ -33,6 +35,12 @@ export function DashboardData({ raceIds, children }: { raceIds: readonly number[
   const forecast = useLive<ForecastOverview>("/api/midterms/forecast");
   const [races, setRaces] = useState<ReadonlyMap<number, RaceData | "missing">>(new Map());
   const key = useMemo(() => [...new Set(raceIds)].sort((a, b) => a - b).join(","), [raceIds]);
+  const desk = useDeskData();
+  const deskSeats = useMemo(() => {
+    const needed = new Set(key.split(",").map(Number));
+    return [...races].flatMap(([id, data]) => !needed.has(id) || data === "missing" ? [] : [data.race]);
+  }, [races, key]);
+  useDeskSeats(deskSeats);
 
   useEffect(() => {
     if (!key) return;
@@ -68,6 +76,7 @@ export function DashboardData({ raceIds, children }: { raceIds: readonly number[
     };
   }, [key]);
 
-  const value = useMemo(() => ({ overview: live.data, forecast: forecast.data, error: live.error, races }), [live.data, forecast.data, live.error, races]);
+  const privateRaces = useMemo(() => new Map([...races].map(([id, data]) => [id, data === "missing" ? data : overlayLive(`/api/midterms/race/${id}`, data, desk.races, desk.forecast)])), [races, desk.races, desk.forecast]);
+  const value = useMemo(() => ({ overview: live.data, forecast: forecast.data, error: live.error, races: privateRaces }), [live.data, forecast.data, live.error, privateRaces]);
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }

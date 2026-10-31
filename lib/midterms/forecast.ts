@@ -199,6 +199,11 @@ export type Inputs = {
 };
 
 export type Forecast = {
+  /** Set only on a connected user's private DDHQ overlay, never on the shared model output. */
+  source?: "ddhq";
+  updatedAt?: number | null;
+  /** False when DDHQ supplied odds but no published category; null rating must not imply Safe then. */
+  ratingKnown?: boolean;
   /** Each side's chance of winning. */
   odds: Odds;
   /** The side opposing the Republican in a contest (D, or an independent), else the favorite. */

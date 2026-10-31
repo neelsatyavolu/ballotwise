@@ -125,19 +125,22 @@ function useChamber(office?: ChamberOffice) {
   const rows = office ? (forecast?.history?.[office] ?? []) : [];
   return {
     view: office ? forecast?.chambers?.[office] : undefined,
+    unavailable: forecast?.source === "ddhq" && !!office && !forecast.chambers?.[office],
     control: rows.map(([d, p]) => [day(d), p] as const) as ChartPoint[],
     seats: { D: rows.map(([d, , dem]) => [day(d), dem] as const) as ChartPoint[], R: rows.map(([d, , , rep]) => [day(d), rep] as const) as ChartPoint[] },
   };
 }
 
 function ChamberControl({ office }: { office?: ChamberOffice }) {
-  const { view, control } = useChamber(office);
+  const { view, control, unavailable } = useChamber(office);
+  if (unavailable) return <Empty>Decision Desk HQ publishes governor race forecasts, not an aggregate projection.</Empty>;
   if (!view) return <Empty>The forecast is loading.</Empty>;
   return <PartyOdds dControl={view.dControl} control={control} />;
 }
 
 function WinChart({ office }: { office?: ChamberOffice }) {
-  const { control } = useChamber(office);
+  const { control, unavailable } = useChamber(office);
+  if (unavailable) return <Empty>Decision Desk HQ does not publish this chamber history.</Empty>;
   return (
     <LineChart
       lines={[
@@ -155,7 +158,8 @@ function WinChart({ office }: { office?: ChamberOffice }) {
 }
 
 function SeatsChart({ office }: { office?: ChamberOffice }) {
-  const { seats } = useChamber(office);
+  const { seats, unavailable } = useChamber(office);
+  if (unavailable) return <Empty>Decision Desk HQ does not publish this projected-seat history.</Empty>;
   return (
     <LineChart
       lines={[
@@ -176,7 +180,7 @@ function BalanceTopline({ office }: { office?: ChamberOffice }) {
   const { overview, forecast } = useDashboardData();
   if (!overview || !office) return <Empty>Loading…</Empty>;
   const tally = overview.balance[office];
-  return <SeatBar office={office} tally={tally} ahead={leading(overview.races, office)} projected={projection(overview.races, office, tally, forecast?.chambers?.[office])} />;
+  return <SeatBar office={office} tally={tally} ahead={leading(overview.races, office)} projected={projection(overview.races, office, tally, forecast?.chambers?.[office], forecast?.source)} />;
 }
 
 function BalanceMap({ office }: { office?: ChamberOffice }) {

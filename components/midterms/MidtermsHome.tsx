@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
+import { useAccount } from "@/components/AccountProvider";
 import { projection } from "@/lib/midterms/forecastTab";
 import { holderOf } from "@/lib/midterms/holders";
 import { colorOf, compareRaces, OFFICE_LABEL, pct, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
@@ -107,7 +108,7 @@ const MAP_TITLE = { senate: "Senate map", governor: "Governor map", house: "Hous
 const mapKey = (r: RaceSummary) => (r.office === "house" ? `${r.state}-${r.district ?? 0}` : r.state);
 
 /** Senate, governor or House races on a US map, each state or district shaded by who leads, striped where it would change party. */
-function RaceMap({ races, updatedAt }: { races: RaceSummary[]; updatedAt: number | null }) {
+function RaceMap({ races, updatedAt, source }: { races: RaceSummary[]; updatedAt: number | null; source?: "ddhq" }) {
   const router = useRouter();
   const [office, setOffice] = useState<(typeof MAP_OFFICES)[number]>("senate");
   // From election day on, the map drops the forecast and fills in only as results arrive.
@@ -151,9 +152,9 @@ function RaceMap({ races, updatedAt }: { races: RaceSummary[]; updatedAt: number
           <span><i style={{ background: "var(--dem)" }} /> Dem</span>
           <span><i style={{ background: "var(--rep)" }} /> Rep</span>
           <span><i style={{ background: "var(--tossup)" }} /> Toss-up</span>
-          <span><i style={{ background: "var(--rule-strong)" }} /> No market or polls</span>
+          <span><i style={{ background: "var(--rule-strong)" }} /> {source === "ddhq" ? "No DDHQ forecast" : "No market or polls"}</span>
           <span><i className="flip" /> Pre-election favorite would change party</span>
-          <span>Market or poll rating: paler = less certain, full color = safe.</span>
+          <span>{source === "ddhq" ? "Decision Desk HQ rating" : "Market or poll rating"}: paler = less certain, full color = safe.</span>
         </p>
       )}
     </section>
@@ -210,6 +211,7 @@ function AllRaces({ races, star, initialState }: { races: RaceSummary[]; star: S
 }
 
 export function MidtermsHome({ initialState }: { initialState: string | null }) {
+  const { ddhq } = useAccount();
   const live = useLive<Overview>("/api/midterms");
   const forecast = useLive<ForecastOverview>("/api/midterms/forecast").data;
   const { error, now } = live;
@@ -243,6 +245,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       <ModeNav current="/midterms" />
       <header className="mt-hero">
         <h1>Midterms 2026</h1>
+        {ddhq === "connected" && <span className="mt-kicker">{data?.forecastSource === "ddhq" ? "Decision Desk HQ · Your Votes Pro forecast" : "Ballotwise forecast fallback · DDHQ is refreshing"}</span>}
         <span className="mt-kicker">{counting ? `Live results, checked every ${Math.round(live.interval / 1000)} seconds` : `Tuesday, Nov 3 · first polls close at ${formatTime(FIRST_CLOSE)}`}</span>
         {data && (
           <span className="mt-updated small">
@@ -267,7 +270,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
         <>
           <div className="mt-balances mt-in" data-tour="balance">
             {(["senate", "house", "governor"] as const).map((o) => (
-              <BalanceBar key={o} title={o === "governor" ? "Governors" : OFFICE_LABEL[o]} office={o} tally={data.balance[o]} projected={projection(data.races, o, data.balance[o], forecast?.chambers?.[o])} />
+              <BalanceBar key={o} title={o === "governor" ? "Governors" : OFFICE_LABEL[o]} office={o} tally={data.balance[o]} projected={projection(data.races, o, data.balance[o], forecast?.chambers?.[o], forecast?.source)} />
             ))}
           </div>
 
@@ -287,7 +290,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
           {tab === "key" && (
             <div className="stack mt-in">
               <div className="mt-overview">
-                <RaceMap races={races} updatedAt={data.ratings.updatedAt} />
+                <RaceMap races={races} updatedAt={data.ratings.updatedAt} source={data.forecastSource} />
                 <section className="mt-closest" data-tour="races">
                   <div className="mt-section-head tight">
                     <h2>Key races</h2>
@@ -299,7 +302,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
                   </div>
                   {key.length ? <RaceRows races={key} star={star} /> : <p className="mt-empty small">No race has a market or polling rating yet. Key races fill in as the ratings arrive.</p>}
                   <p className="muted small">
-                    Ratings come live from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades
+                    {data.forecastSource === "ddhq" ? <>Ratings and probabilities come from your <a href="https://votes.decisiondeskhq.com/forecast/2026">Decision Desk HQ</a> forecast</> : <>Ratings come live from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a> prices, or the <a href="https://votehub.com/polls">VoteHub</a> polling average where no market trades</>}
                     {data.ratings.updatedAt ? `, updated ${timeAgo(data.ratings.updatedAt, now)}` : ""}.
                   </p>
                 </section>

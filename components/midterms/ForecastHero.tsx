@@ -203,7 +203,7 @@ const RATING_TEXT: Record<RatingKey, string> = { safeD: "Safe D", likelyD: "Like
 const RATING_VAR: Record<RatingKey, string> = { safeD: "var(--rate-safe-d)", likelyD: "var(--rate-likely-d)", leanD: "var(--rate-lean-d)", tossup: "var(--rate-tossup)", leanR: "var(--rate-lean-r)", likelyR: "var(--rate-likely-r)", safeR: "var(--rate-safe-r)" };
 
 /** Every seat by rating in one bar, Democrats from the left, with the majority marked. */
-export function SeatsByRating({ view, office }: { view: ChamberView; office: ForecastOffice }) {
+export function SeatsByRating({ view, office, showProjection = true }: { view: ChamberView; office: ForecastOffice; showProjection?: boolean }) {
   const counted = RATING_KEYS.reduce((s, k) => s + view.ratings[k], 0) + view.ratings.other;
   const total = Math.max(1, counted);
   // A count shows only in a segment wide enough to hold it; the bar's label and each segment's title carry them all.
@@ -212,7 +212,7 @@ export function SeatsByRating({ view, office }: { view: ChamberView; office: For
     <section className="mt-seats mt-fc-seats">
       <div className="mt-seats-nums">
         <span className="d">
-          <b>{view.dSeats}</b> Dem
+          {showProjection && <b>{view.dSeats}</b>} Dem
         </span>
         <span className="mt-legend mt-fc-legend">
           {(["safe", "likely", "lean"] as const).map((t) => (
@@ -225,7 +225,7 @@ export function SeatsByRating({ view, office }: { view: ChamberView; office: For
           </span>
         </span>
         <span className="r">
-          Rep <b>{view.rSeats}</b>
+          Rep {showProjection && <b>{view.rSeats}</b>}
         </span>
       </div>
       <div className="mt-fc-seatbar" role="img" aria-label={RATING_KEYS.map((k) => `${RATING_TEXT[k]} ${view.ratings[k]}`).join(", ")}>
@@ -235,7 +235,9 @@ export function SeatsByRating({ view, office }: { view: ChamberView; office: For
         {view.majority && <i className="mt-fc-majority" style={{ left: `${(view.majority / total) * 100}%` }} />}
       </div>
       <p className="muted small">
-        {view.majority
+        {!showProjection && office === "governor"
+          ? "Governorships up this year, by Decision Desk HQ rating."
+          : view.majority
           ? `Seats by forecast rating, Democrats from the left. The line marks ${view.majority} for control.`
           : office === "governor"
             ? `Governorships by forecast rating, Democrats from the left. Includes the ${view.notUp.D + view.notUp.R + view.notUp.other} governors not up this year.`

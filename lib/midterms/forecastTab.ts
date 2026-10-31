@@ -84,7 +84,8 @@ export function withServer(view: ChamberView, server: ServerView | null | undefi
  * already decided (seats not up this year, and called races), and Democrats' chance of control once the server's
  * simulation has run. Null once counting starts, when the bar shows seats won and led instead.
  */
-export function projection(races: readonly RaceSummary[], office: ForecastOffice, tally: Tally, server: ServerView | null | undefined): { ahead: { D: number; R: number; other: number }; dControl: number | null } | null {
+export function projection(races: readonly RaceSummary[], office: ForecastOffice, tally: Tally, server: ServerView | null | undefined, source?: "ddhq"): { ahead: { D: number; R: number; other: number }; dControl: number | null } | null {
+  if (source === "ddhq" && !server) return null;
   if (races.some((r) => r.office === office && r.total > 0)) return null;
   const view = withServer(chamberFromRaces(races, office, tally), server, office);
   return { ahead: { D: Math.max(0, view.dSeats - tally.D), R: Math.max(0, view.rSeats - tally.R), other: 0 }, dControl: view.dControl };

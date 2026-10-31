@@ -8,7 +8,7 @@ import { fetchedAtOf, fetchLive, isLagging, isNewer, LIVE_TIMEOUT_MS, LiveError,
 import type { GridLayout } from "@/lib/midterms/decisionView";
 import { overlayLive } from "@/lib/ddhq/apply";
 import type { Overview } from "@/lib/midterms/view";
-import { noteSeats, useDeskOverlay } from "./desk";
+import { useDeskData, useDeskSeats } from "./desk";
 import { useRenderedAt, useTrackerSeeds } from "./SeedProvider";
 import type { LiveSeed } from "./seeds";
 
@@ -189,9 +189,15 @@ export function useLive<T>(path: string | null) {
   const mine = state && state.path === path ? state : path ? ((lastAnswers.get(path) as Held<T> | undefined) ?? null) : null;
   const fetchedAt = mine?.fetchedAt ?? null;
   const raw = mine?.data ?? null;
-  if (path === "/api/midterms" && raw && typeof raw === "object" && "races" in raw) noteSeats((raw as unknown as Overview).races);
-  const desk = useDeskOverlay();
-  return { data: raw ? overlayLive(path, raw, desk) : null, error, now, interval, fetchedAt, lagging: isLagging(fetchedAt, now) };
+  const deskSeats = useMemo(() => {
+    if (!raw || typeof raw !== "object") return [];
+    if (path === "/api/midterms" && "races" in raw) return (raw as unknown as Overview).races;
+    if (path && /^\/api\/midterms\/race\/\d+$/.test(path) && "race" in raw) return [(raw as unknown as { race: Overview["races"][number] }).race];
+    return [];
+  }, [path, raw]);
+  useDeskSeats(deskSeats);
+  const desk = useDeskData();
+  return { data: overlayLive(path, raw, desk.races, desk.forecast), error, now, interval, fetchedAt, lagging: isLagging(fetchedAt, now) };
 }
 
 /** The signed-in voter's starred races. `ids` is null when signed out. */

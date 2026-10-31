@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
+import { useAccount } from "@/components/AccountProvider";
 import { flipTo } from "@/lib/midterms/explore";
 import { chamberFromRaces, withServer, type ChamberView, type ForecastOffice } from "@/lib/midterms/forecastTab";
 import { ratingFill, type Overview, type RaceSummary } from "@/lib/midterms/view";
@@ -97,10 +98,11 @@ function OfficeForecast({ office, data, view, forecast }: { office: ForecastOffi
   const [flips, setFlips] = useState(false);
   const { control, seats } = series(office, forecast);
   const unit = office === "house" ? "district" : "state";
+  const hasProjection = forecast?.source !== "ddhq" || !!forecast.chambers?.[office];
   return (
     <>
-      <ForecastHero office={office} view={view} control={control} seats={seats} marker={marketsJoined(forecast, office)} />
-      <SeatsByRating view={view} office={office} />
+      {hasProjection && <ForecastHero office={office} view={view} control={control} seats={seats} marker={marketsJoined(forecast, office)} />}
+      <SeatsByRating view={view} office={office} showProjection={hasProjection} />
       <div className="mt-office">
         <div className="mt-fc-mapcol">
           <div className="mt-section-head tight">
@@ -168,7 +170,7 @@ function OverviewPage({ data, views, forecast }: { data: Overview; views: Record
               <span className="muted small">{CONTROL_LINE[o]}</span>
             </div>
             <div className="mt-fc-card-body">
-              <ForecastOdds office={o} view={views[o]} control={series(o, forecast).control} />
+              {(forecast?.source !== "ddhq" || forecast.chambers?.[o]) && <ForecastOdds office={o} view={views[o]} control={series(o, forecast).control} />}
               <p className="mt-fc-label">Closest races</p>
               <ForecastRaces office={o} races={data.races} limit={10} />
             </div>
@@ -181,17 +183,24 @@ function OverviewPage({ data, views, forecast }: { data: Overview; views: Record
 
 /** The Forecast tab: an overview and one page each for the House, Senate and governors. */
 export function ForecastTab({ view }: { view: ForecastView }) {
+  const { ddhq } = useAccount();
   const { data, error } = useLive<Overview>("/api/midterms");
   const live = useLive<ForecastOverview>("/api/midterms/forecast");
   const forecast = live.data ?? null;
   // The server's simulation once it has run; until then, seats by rating and expected seats from each race's forecast.
   const views = useMemo(() => {
     if (!data) return null;
-    return Object.fromEntries(OFFICES.map((o) => [o, withServer(chamberFromRaces(data.races, o, data.balance[o]), forecast?.chambers?.[o], o)])) as Record<ForecastOffice, ChamberView>;
+    return Object.fromEntries(OFFICES.map((o) => {
+      const current = withServer(chamberFromRaces(data.races, o, data.balance[o]), forecast?.chambers?.[o], o);
+      if (forecast?.source === "ddhq" && !forecast.chambers?.[o] && forecast.ratings?.[o]) {
+        return [o, { ...current, ratings: forecast.ratings[o], notUp: { D: 0, R: 0, other: 0 }, total: data.races.filter((r) => r.office === o).length }];
+      }
+      return [o, current];
+    })) as Record<ForecastOffice, ChamberView>;
   }, [data, forecast]);
   const updatedAt = forecast?.updatedAt ?? data?.ratings.updatedAt ?? null;
   const count = view === "overview" ? 0 : (data?.races.filter((r) => r.office === view).length ?? 0);
-  const kicker = view === "overview" ? "Ballotwise model for the House, Senate and governors" : count ? `${count} races` : "";
+  const kicker = forecast?.source === "ddhq" ? `Decision Desk HQ${count ? ` · ${count} races` : " · Your Votes Pro forecast"}` : ddhq === "connected" ? "Ballotwise fallback · DDHQ is refreshing" : view === "overview" ? "Ballotwise model for the House, Senate and governors" : count ? `${count} races` : "";
 
   return (
     <div className="wrap mt mt-fc">
@@ -201,7 +210,7 @@ export function ForecastTab({ view }: { view: ForecastView }) {
         <span className="mt-kicker">{kicker}</span>
         <span className="mt-updated small">
           {updatedAt && `Updated ${STAMP.format(updatedAt)} · `}
-          <Link href="/midterms/methodology">How it works</Link>
+          <Link href={forecast?.source === "ddhq" ? "https://votes-docs.decisiondeskhq.com/forecast-methodology" : "/midterms/methodology"}>How it works</Link>
         </span>
       </header>
       <nav className="mt-seg mt-fc-pages" aria-label="Forecast pages">

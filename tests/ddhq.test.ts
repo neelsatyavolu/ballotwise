@@ -5,10 +5,14 @@ import { applyDesk, isDesk, overlayLive } from "../lib/ddhq/apply";
 import { finishVotesCode, startVotesCode, votesSessionCookie } from "../lib/ddhq/clerk";
 import { deleteDdhqPending, loadDdhqPending, storeDdhqPending } from "../lib/ddhq/pending";
 import { deleteDdhqSession, hasDdhqSession, loadDdhqSession, storeDdhqSession, unseal } from "../lib/ddhq/vault";
+import { chromeVotes } from "../lib/ddhq/chrome";
+import { appEnv } from "../lib/env";
 import { clearSeatCache, ddhqRace, pickRace, readCall, readForecast, readResults, votesIsPro } from "../lib/ddhq/votes";
 import type { RaceDetail, RaceSummary } from "../lib/midterms/races";
 import type { Overview } from "../lib/midterms/view";
 import { testDb } from "./sqlite-db";
+
+vi.mock("../lib/env", () => ({ appEnv: vi.fn(() => ({})) }));
 
 const KEY = randomBytes(32).toString("base64");
 const CODE = "482913";
@@ -16,6 +20,7 @@ const CODE = "482913";
 afterEach(() => {
   clearSeatCache();
   vi.unstubAllGlobals();
+  vi.mocked(appEnv).mockReturnValue({} as ReturnType<typeof appEnv>);
 });
 
 function json(status: number, body: unknown, cookies: string[] = []): Response {
@@ -151,6 +156,129 @@ describe("Votes email code", () => {
     await expect(votesSessionCookie({ clientToken: "client-jwt", sessionId: "sess_1" })).rejects.toMatchObject({ status: 401 });
     vi.stubGlobal("fetch", async () => json(503, {}));
     await expect(votesSessionCookie({ clientToken: "client-jwt", sessionId: "sess_1" })).rejects.toMatchObject({ status: 502 });
+    for (const status of [403, 404, 429, 502]) {
+      vi.stubGlobal("fetch", async () => json(status, {}));
+      await expect(votesSessionCookie({ clientToken: "client-jwt", sessionId: "sess_1" })).rejects.toMatchObject({ status: 502 });
+    }
+  });
+});
+
+function bindEgress(fetcher: (request: Request) => Promise<Response>) {
+  const fetch = vi.fn(fetcher);
+  vi.mocked(appEnv).mockReturnValue({ DDHQ_EGRESS: { fetch } } as unknown as ReturnType<typeof appEnv>);
+  return fetch;
+}
+
+describe("Votes Chrome egress", () => {
+  it.each([200, 403])("prefers the private egress and preserves %s", async (status) => {
+    const native = vi.fn(async () => new Response("checkpoint", { status: 429 }));
+    vi.stubGlobal("fetch", native);
+    const relay = bindEgress(async () => json(status, status === 403 ? { upgradeRequired: true } : {}));
+    expect(await votesIsPro("__session=user-a")).toBe(status === 200);
+    const request = relay.mock.calls[0][0];
+    expect(request.url).toBe("https://votes.decisiondeskhq.com/api/vote-history?race_id=294677");
+    expect(request.headers.get("cookie")).toBe("__session=user-a");
+    expect(request.headers.get("authorization")).toBeNull();
+    expect(request.cache).toBe("no-store");
+    expect(request.redirect).toBe("manual");
+    expect(native).not.toHaveBeenCalled();
+  });
+
+  it("treats an egress challenge header as temporary, even without a 429", async () => {
+    bindEgress(async () => new Response("checkpoint", { status: 403, headers: { "x-vercel-mitigated": "challenge" } }));
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 502 });
+  });
+
+  it.each([200, 307, 403])("does not need a direct non-API response (%s) when egress is available", async (status) => {
+    vi.stubGlobal("fetch", async () => new Response("not Votes JSON", { status, headers: { "content-type": "text/html" } }));
+    bindEgress(async () => json(200, {}));
+    expect(await votesIsPro("__session=user-a")).toBe(true);
+  });
+
+  it("does not accept malformed JSON as a verified Pro response", async () => {
+    vi.stubGlobal("fetch", async () => new Response("not JSON", { status: 200, headers: { "content-type": "application/json" } }));
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 502 });
+  });
+
+  it("uses direct fetch with Bearer authentication when there is no egress binding", async () => {
+    const direct = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () => json(200, {}));
+    vi.stubGlobal("fetch", direct);
+    expect(await votesIsPro("__session=user-a")).toBe(true);
+    expect(direct.mock.calls[0][1]).toMatchObject({ cache: "no-store", redirect: "manual" });
+    expect(new Headers(direct.mock.calls[0][1]?.headers).get("authorization")).toBe("Bearer user-a");
+  });
+
+  it.each(["signed-out", "handshake"])("does not misclassify Clerk %s as a free subscription", async (auth) => {
+    vi.stubGlobal("fetch", async () => json(429, {}));
+    bindEgress(async () => new Response("{}", { status: 403, headers: { "content-type": "application/json", "x-clerk-auth-status": auth } }));
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 502, message: "Decision Desk HQ couldn't verify this Votes session. Request a new code." });
+  });
+
+  it("still rejects a signed-in free account", async () => {
+    vi.stubGlobal("fetch", async () => json(429, {}));
+    bindEgress(async () => new Response("{}", { status: 403, headers: { "content-type": "application/json", "x-clerk-auth-status": "signed-in" } }));
+    expect(await votesIsPro("__session=user-a")).toBe(false);
+  });
+
+  it.each([false, true])("preserves a real Votes 401 (via egress: %s)", async (viaEgress) => {
+    vi.stubGlobal("fetch", async () => json(viaEgress ? 429 : 401, {}));
+    if (viaEgress) bindEgress(async () => json(401, {}));
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 401 });
+  });
+
+  it.each([429, 502, 503])("keeps egress %s failures temporary", async (status) => {
+    vi.stubGlobal("fetch", async () => json(429, {}));
+    bindEgress(async () => json(status, {}));
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 502 });
+  });
+
+  it("keeps missing bindings, transport failures and non-JSON successes temporary", async () => {
+    vi.stubGlobal("fetch", async () => json(429, {}));
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 502 });
+    bindEgress(async () => { throw new Error("egress unavailable"); });
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 502 });
+    bindEgress(async () => new Response("checkpoint", { status: 200, headers: { "content-type": "text/html" } }));
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 502 });
+    bindEgress(async () => new Response(null, { status: 307, headers: { location: "https://clerk.decisiondeskhq.com/" } }));
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 502 });
+  });
+
+  it("keeps simultaneous users' cookies on their own requests", async () => {
+    const relay = bindEgress(async (request) => {
+      await Promise.resolve();
+      return json(request.headers.get("cookie") === "__session=user-a" ? 200 : 403, {});
+    });
+    const responses = await Promise.all([
+      chromeVotes("/api/forecast/294677", "__session=user-a"),
+      chromeVotes("/api/races/294677", "__session=user-b"),
+    ]);
+    expect(responses.map((response) => response?.status)).toEqual([200, 403]);
+    expect(relay.mock.calls.map(([request]) => [new URL(request.url).pathname, request.headers.get("cookie")])).toEqual([
+      ["/api/forecast/294677", "__session=user-a"],
+      ["/api/races/294677", "__session=user-b"],
+    ]);
+  });
+
+  it("rejects unrelated paths and extra cookies before reaching the binding", async () => {
+    const relay = bindEgress(async () => json(200, {}));
+    for (const path of ["https://example.com/api/races/1", "//example.com/api/races/1", "/api/other", "/api/races/../1", "/api/races/1#fragment"]) {
+      expect(await chromeVotes(path, "__session=user-a")).toBeNull();
+    }
+    expect(await chromeVotes("/api/races/1", "__session=user-a; other=user-b")).toBeNull();
+    expect(relay).not.toHaveBeenCalled();
+  });
+
+  it("uses the same egress for search, forecast and race calls", async () => {
+    vi.stubGlobal("fetch", async (url: string) => String(url).includes("/tokens") ? json(200, { jwt: "session-jwt" }) : json(429, {}));
+    const relay = bindEgress(async (request) => {
+      const path = new URL(request.url).pathname;
+      if (path === "/api/searchv2") return json(200, { results: [hit({ race_id: 294677 })] });
+      if (path === "/api/forecast/294677") return json(200, { parties: [{ shortAbbrev: "D", winProbability: 0.6, candidates: [{ name: "Jon Ossoff" }] }] });
+      return json(200, { raceData: { toplineResults: [] } });
+    });
+    expect((await ddhqRace({ clientToken: "client-only-for-clerk", sessionId: "s" }, "senate", "GA", null))?.forecast).toHaveLength(1);
+    expect(relay.mock.calls.map(([request]) => new URL(request.url).pathname).sort()).toEqual(["/api/forecast/294677", "/api/races/294677", "/api/searchv2"]);
+    for (const [request] of relay.mock.calls) expect(request.headers.get("cookie")).toBe("__session=session-jwt");
   });
 });
 

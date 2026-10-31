@@ -1,8 +1,10 @@
 import { AccountError } from "../auth/accounts";
 import { STATE_NAMES } from "../midterms/view";
-import type { Office } from "../midterms/races";
+import type { Office, Rating } from "../midterms/races";
+import { chromeVotes } from "./chrome";
 import { votesSessionCookie } from "./clerk";
 import type { DdhqSession } from "./vault";
+import { publishedRating } from "./rating";
 
 const VOTES = "https://votes.decisiondeskhq.com";
 const ELECTION = "2026-11-03";
@@ -19,7 +21,7 @@ export type DdhqCall = { name: string; at: string };
 export type DdhqCandidate = { name: string; party: string; votes: number; pct: number; winner: boolean; incumbent: boolean };
 export type DdhqCounty = { fips: string; candidates: { name: string; party: string; votes: number; pct: number }[] };
 /** `candidates` is null when Votes didn't send a count, so the civicAPI numbers stay. */
-export type DdhqRace = { forecast: DdhqForecast[]; call: DdhqCall | null; candidates: DdhqCandidate[] | null; counties: DdhqCounty[]; total: number };
+export type DdhqRace = { forecast: DdhqForecast[]; rating?: Rating | null; updatedAt?: number | null; call: DdhqCall | null; candidates: DdhqCandidate[] | null; counties: DdhqCounty[]; total: number };
 
 export type DdhqSeat = { state: string; office: Exclude<Office, "measure">; district: number | null; special: boolean };
 
@@ -28,6 +30,10 @@ const ID_TTL = 6 * 60 * 60 * 1000;
 
 export function clearSeatCache(): void {
   ids.clear();
+}
+
+export function rememberRaceIds(rows: readonly { key: string; id: string }[]): void {
+  for (const row of rows) ids.set(row.key, { id: row.id, at: Date.now() });
 }
 
 export function seatKey(seat: { office: string; state: string; district: number | null; special?: boolean }): string {
@@ -164,27 +170,41 @@ export function readCall(body: unknown): DdhqCall | null {
   return null;
 }
 
-async function votes(path: string, cookie: string): Promise<Response> {
-  // A browser user agent is what this host accepts. Bare clients get a Vercel challenge instead of JSON.
-  const res = await fetch(`${VOTES}${path}`, {
-    headers: {
-      cookie,
-      accept: "application/json",
-      referer: `${VOTES}/`,
-      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    },
+function challenged(res: Response): boolean {
+  return res.status === 429 || res.headers.get("x-vercel-mitigated") === "challenge";
+}
+
+export async function votes(path: string, cookie: string): Promise<Response> {
+  const page = /^\/forecast\/2026\/(?:house|senate|governor)$/.test(path);
+  const accept = page ? "text/x-component" : "application/json";
+  // Prefer the proven warm egress instead of paying for a rejected Worker fetch per URL.
+  const res = await chromeVotes(path, cookie) ?? await fetch(`${VOTES}${path}`, {
+    headers: { cookie, authorization: `Bearer ${cookie.slice("__session=".length)}`, accept, referer: `${VOTES}/`, ...(page ? { RSC: "1" } : {}) },
+    cache: "no-store",
+    redirect: "manual",
   });
-  if (res.status === 429 || res.headers.get("x-vercel-mitigated") === "challenge") {
-    throw new AccountError("Decision Desk HQ blocked this request. Try again in a minute.", 502);
-  }
+  const redirected = res.status >= 300 && res.status < 400;
+  const contentType = res.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+  const unexpected = res.ok ? contentType !== accept : res.status === 403 && contentType !== "application/json";
+  if (challenged(res) || redirected || unexpected) throw new AccountError("Decision Desk HQ blocked this request. Try again in a minute.", 502);
   return res;
 }
 
 /** True when this session can open a Pro-only Votes feed. A free account gets 403. */
 export async function votesIsPro(cookie: string): Promise<boolean> {
   const res = await votes("/api/vote-history?race_id=294677", cookie);
+  const auth = res.headers.get("x-clerk-auth-status");
+  if (res.status === 403 && (auth === "signed-out" || auth === "handshake")) {
+    throw new AccountError("Decision Desk HQ couldn't verify this Votes session. Request a new code.", 502);
+  }
   if (res.status === 403) return false;
-  if (!res.ok) throw new AccountError("Decision Desk HQ didn't confirm this account. Try connecting again.", 502);
+  refused(res);
+  if (res.status !== 200) throw new AccountError("Decision Desk HQ didn't confirm this account. Try connecting again.", 502);
+  try {
+    await res.json();
+  } catch {
+    throw new AccountError("Decision Desk HQ didn't confirm this account. Try connecting again.", 502);
+  }
   return true;
 }
 
@@ -224,12 +244,15 @@ async function loadRace(cookie: string, office: Exclude<Office, "measure">, stat
   if (!forecastRes.ok && forecastRes.status !== 404) throw new AccountError("Decision Desk HQ didn't answer.", 502);
   if (!raceRes.ok && raceRes.status !== 404) throw new AccountError("Decision Desk HQ didn't answer.", 502);
   if (forecastRes.status === 404 && raceRes.status === 404) return null;
-  const forecast = forecastRes.ok ? readForecast(await forecastRes.json()) : [];
+  const forecastBody = forecastRes.ok ? await forecastRes.json() as { rating?: unknown; updatedAt?: unknown } : null;
+  const forecast = forecastBody ? readForecast(forecastBody) : [];
+  const rating = publishedRating(forecastBody?.rating, forecast);
+  const at = typeof forecastBody?.updatedAt === "string" ? Date.parse(forecastBody.updatedAt) : NaN;
   const raceBody = raceRes.ok ? await raceRes.json() : null;
   const call = raceBody ? readCall(raceBody) : null;
   const results = raceBody ? readResults(raceBody) : { candidates: null, counties: [], total: 0 };
   if (forecast.length === 0 && !call && !results.candidates) return null;
-  return { forecast, call, candidates: results.candidates, counties: counties ? results.counties : [], total: results.total };
+  return { forecast, ...(rating !== undefined ? { rating } : {}), ...(Number.isFinite(at) ? { updatedAt: at } : {}), call, candidates: results.candidates, counties: counties ? results.counties : [], total: results.total };
 }
 
 /** Forecast, count and call for one seat, fetched with this user's Votes session. */
