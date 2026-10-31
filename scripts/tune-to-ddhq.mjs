@@ -15,9 +15,9 @@
 //     "ratings": { "house": [Safe D, Likely D, Lean D, Toss-up, Lean R, Likely R, Safe R], ... },
 //     "races": { "<race key>": { "side": "D" | "R" | null, "p": favorite's chance }, ... } }
 //
-// The objective, in order of weight: each listed race more than 5 points from the benchmark's chance (and how far
-// past), each chamber's expected seats more than 0.4 from the benchmark's, control outside the target range; then the
-// toss-up set, ratings and the mean gap; ties go to settings whose matched ratings sit furthest from a rating line and
+// The objective, in order of weight: the exact toss-up set per office, each chamber's expected seats more than 0.4
+// from the benchmark's and control outside the target range, each listed race more than 5 points from the
+// benchmark's chance (and how far past); then ratings and the mean gap; ties go to settings whose matched ratings sit furthest from a rating line and
 // whose k is nearest the backtest's. A grid over the shared settings, each office searched on its own within it, then
 // a coordinate search at finer steps until nothing improves. The report ends with the match itself, pass or fail.
 //
@@ -185,8 +185,9 @@ function officeScore(office, forecasts, chamber, t) {
   // Matched toss-ups closer than 2 points to the 60 line would flip as data refreshes: 10 a point short of that.
   const edgeMiss = 100 * Math.max(0, 0.02 - tossEdge);
   const tieBreak = 20 * (0.1 - Math.max(0, Math.min(edge, tossEdge))) + 3 * Math.abs(t.k[office] - BACKTEST_K[office]);
-  // The match itself comes first: each race past OFF (and how far past), seats, control; ratings only break ties.
-  const total = 30 * off + 300 * excess + 200 * seatMiss + 50 * controlMiss + 5 * tossMiss + 5 * tossSoft + edgeMiss + ratingMiss + 0.2 * countsMiss + (5 * 100 * gap) / Math.max(1, listed) + tieBreak;
+  // The match itself comes first: the toss-up set, each chamber's seats and control, then each race past OFF (and how
+  // far past); other ratings only break ties.
+  const total = 100 * tossMiss + 100 * tossSoft + 200 * seatMiss + 50 * controlMiss + 30 * off + 300 * excess + edgeMiss + ratingMiss + 0.2 * countsMiss + (5 * 100 * gap) / Math.max(1, listed) + tieBreak;
   return { total, tossMiss, controlMiss, seatMiss, ratingMiss, countsMiss, far, off, gap: (100 * gap) / Math.max(1, listed), listed, edge: tossEdge };
 }
 

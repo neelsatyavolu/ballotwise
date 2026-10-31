@@ -258,8 +258,8 @@ export default function Methodology() {
           HQ&apos;s published forecast.
         </strong>{" "}
         The fitted model stays as fit; only settings that apply to every race of an office move. We searched them against DDHQ&apos;s
-        public race chances, seats and chamber odds: first for each race within five points of DDHQ&apos;s chance, then each
-        chamber&apos;s expected seats and control, then the ratings. No race is adjusted on its own, and none of DDHQ&apos;s numbers are
+        public toss-ups, race chances, seats and chamber odds: first for the same toss-ups in each office, then each
+        chamber&apos;s expected seats and control, then each race within five points of DDHQ&apos;s chance. No race is adjusted on its own, and none of DDHQ&apos;s numbers are
         stored here. The settings in use:
       </p>
       <ul>
