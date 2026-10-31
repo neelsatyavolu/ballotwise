@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { memo, useContext, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { EARLY_REPORTING, favoredSide, groupOf, isCompetitive, isEarly, isWatch, leaderOf, statusOf, tierOf, type Group, type Sort } from "@/lib/midterms/explore";
+import { EARLY_REPORTING, favoredSide, groupOf, isCompetitive, isEarly, isTossup, leaderOf, statusOf, tierOf, type Group, type Sort } from "@/lib/midterms/explore";
 import { leadingFlip, outcomeOf } from "@/lib/midterms/holders";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import { fmt, lead, signalLine, type RaceSummary } from "@/lib/midterms/view";
@@ -127,7 +127,7 @@ const RaceTile = memo(
   const leader = leaderOf(race);
   const sub = race.about?.text ?? (race.total ? null : signalLine(race.signal, race));
   return (
-    <article className={`mt-tile s-${statusOf(race)}${leader ? ` p-${leader}` : ""}${isWatch(race) ? " watch" : isCompetitive(race) ? " lean" : ""}`} aria-label={shortLabel(race)}>
+    <article className={`mt-tile s-${statusOf(race)}${leader ? ` p-${leader}` : ""}${isTossup(race) ? " watch" : isCompetitive(race) ? " lean" : ""}`} aria-label={shortLabel(race)}>
       {race.total > 0 && (
         <span className="mt-tile-share" aria-hidden>
           {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c), opacity: isEarly(race) ? 0.55 : 1 }} />)}

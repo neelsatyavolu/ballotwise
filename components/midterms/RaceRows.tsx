@@ -3,7 +3,7 @@ import Link from "next/link";
 import { lead, partyTag, raceLabel, type RaceSummary } from "@/lib/midterms/view";
 import { partyColor } from "./party";
 import { RatingTag } from "./RaceCard";
-import { isCompetitive, isWatch } from "@/lib/midterms/explore";
+import { isCompetitive, isTossup } from "@/lib/midterms/explore";
 import { reportingText } from "./reporting";
 import { calledWinner } from "./SeatBoard";
 
@@ -36,7 +36,7 @@ export function RaceRows({ races, star, onPick, selectedId, note }: { races: Rac
             const runnerUp = shown ? r.candidates.find((c) => c !== shown) : undefined;
             const margin = shown && r.total ? shown.pct - (runnerUp?.pct ?? 0) : null;
             return (
-              <tr key={r.id} className={[r.id === selectedId && "selected", isWatch(r) && "watch", isCompetitive(r) && "lean"].filter(Boolean).join(" ") || undefined} aria-current={r.id === selectedId ? "true" : undefined}>
+              <tr key={r.id} className={[r.id === selectedId && "selected", isTossup(r) && "watch", isCompetitive(r) && "lean"].filter(Boolean).join(" ") || undefined} aria-current={r.id === selectedId ? "true" : undefined}>
                 <td>
                   {onPick ? (
                     <button type="button" className="mt-linkish" onClick={() => onPick(r)}>{raceLabel(r)}</button>

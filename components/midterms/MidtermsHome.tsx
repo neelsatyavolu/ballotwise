@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isWatch, raceFill } from "@/lib/midterms/explore";
+import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isTossup, raceFill } from "@/lib/midterms/explore";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { projection } from "@/lib/midterms/forecastTab";
 import { holderOf } from "@/lib/midterms/holders";
@@ -115,7 +115,7 @@ function RaceMap({ races, updatedAt }: { races: RaceSummary[]; updatedAt: number
     // Ohio and Florida hold Senate specials; a state's regular race, if any, sets its color.
     for (const r of races.filter((x) => x.office === office).sort((a, b) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title)))) {
       if (out.has(mapKey(r))) continue;
-      out.set(mapKey(r), { fill: raceFill(r, results), tip: r.total ? mapTip(r) : <ForecastTip race={r} updatedAt={updatedAt} />, flip: !!flipTo(r) && (!results || r.total > 0), watch: results && isWatch(r), lean: results && isCompetitive(r) });
+      out.set(mapKey(r), { fill: raceFill(r, results), tip: r.total ? mapTip(r) : <ForecastTip race={r} updatedAt={updatedAt} />, flip: !!flipTo(r) && (!results || r.total > 0), watch: results && isTossup(r), lean: results && isCompetitive(r) });
     }
     return out;
   }, [races, office, results, updatedAt]);
@@ -140,7 +140,7 @@ function RaceMap({ races, updatedAt }: { races: RaceSummary[]; updatedAt: number
           <span><i style={{ background: "var(--rate-safe-r)" }} /> Rep won</span>
           <span><i style={{ background: "var(--rule-strong)" }} /> No votes yet</span>
           <span><i className="flip" /> Called gain or leading in a potential flip</span>
-          <span><i className="watch" /> Toss-up, uncalled</span>
+          <span><i className="watch" /> Toss-up</span>
           <span><i className="watch lean" /> Lean, uncalled</span>
           <span>Called races in full color; uncalled ones by who leads, darker = wider lead, early counts palest.</span>
         </p>

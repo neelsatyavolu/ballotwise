@@ -1100,7 +1100,7 @@ body:has(.wrap.mt.mt-sbs-page) .site-footer .wrap { max-width: none; padding: 0 
 .mt .mt-card-about { flex: none; }
 .mt-ct-fill td { border-bottom: 0; }
 
-/* Election night: uncalled pre-election toss-ups, the races to watch, are flagged in yellow wherever they appear. */
+/* Election night: pre-election toss-ups are flagged in yellow wherever they appear, called or not. */
 .mt-watch { fill: none; stroke: var(--rate-tossup); stroke-width: 2.2; stroke-linejoin: round; pointer-events: none; }
 .mt-watch-note { margin-top: 4px; color: var(--rate-tossup); font-size: 12px; font-weight: 700; }
 .mt-ft .mt-watch-note, .mt-el-tip .mt-watch-note { padding: 0 10px 6px; }
@@ -1257,7 +1257,7 @@ body:has(.wrap.mt.mt-dv) main { padding-top: 0; }
 }
 
 /* Election night fixes */
-/* The map legend's swatch for an uncalled pre-election toss-up: the yellow watch outline. */
+/* The map legend's swatch for a pre-election toss-up: the yellow watch outline. */
 .mt-legend i.watch { background: var(--sheet); box-shadow: inset 0 0 0 2px var(--rate-tossup); }
 /* "D needs 7 more" opens the races that decide control. */
 .mt-cs-path { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: inherit; cursor: pointer; white-space: nowrap; }

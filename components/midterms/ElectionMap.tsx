@@ -1,6 +1,6 @@
 // Rendered inside the tracker's client components.
 import { useMemo, type ReactNode } from "react";
-import { isCalled, isCompetitive, isWatch, statusOf } from "@/lib/midterms/explore";
+import { isCalled, isCompetitive, isTossup, statusOf } from "@/lib/midterms/explore";
 import { fmt, lead, measureCount, OFFICE_LABEL, raceLabel, STATE_NAMES, type Office, type RaceSummary } from "@/lib/midterms/view";
 import { NationMap } from "./maps";
 import { partyColor } from "./party";
@@ -55,7 +55,7 @@ function statewideFills(races: RaceSummary[], mode: FillMode, counting: boolean)
   for (const [state, list] of byState) {
     const sorted = [...list].sort(regularFirst);
     const lines = sorted.map(seatSummary);
-    out.set(state, { fill: seatFill(sorted[0], mode, counting, true), watch: sorted.some(isWatch), lean: !sorted.some(isWatch) && sorted.some(isCompetitive), label: lines.join("; "), tip: <>{sorted.map((r) => <TipRace key={r.id} race={r} />)}</> });
+    out.set(state, { fill: seatFill(sorted[0], mode, counting, true), watch: sorted.some(isTossup), lean: !sorted.some(isTossup) && sorted.some(isCompetitive), label: lines.join("; "), tip: <>{sorted.map((r) => <TipRace key={r.id} race={r} />)}</> });
   }
   return out;
 }

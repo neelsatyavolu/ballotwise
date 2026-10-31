@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeCount, DEFAULT_FILTERS, explore, flipTo, fromQuery, isCompetitive, isWatch, leaderOf, raceFill, safeSide, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
+import { activeCount, DEFAULT_FILTERS, explore, flipTo, fromQuery, isCompetitive, isTossup, isWatch, leaderOf, raceFill, safeSide, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
 import { compareRaces, type RaceSummary } from "../lib/midterms/view";
 
 let nextId = 1;
@@ -24,6 +24,9 @@ const f = (over: Partial<Filters> = {}): Filters => ({ ...DEFAULT_FILTERS, ...ov
 describe("races to watch", () => {
   it("flags uncalled toss-ups to watch, and uncalled leans as competitive", () => {
     expect(isWatch(race({ rating: "tossup" }))).toBe(true);
+    expect(isWatch(race({ rating: "tossup", votes: [10, 9], winner: 0 }))).toBe(false);
+    expect(isTossup(race({ rating: "tossup", votes: [10, 9], winner: 0 }))).toBe(true);
+    expect(isTossup(race({ rating: "lean-d" }))).toBe(false);
     expect(isCompetitive(race({ rating: "lean-d" }))).toBe(true);
     expect(isCompetitive(race({ rating: "lean-r", votes: [10, 9] }))).toBe(true);
     expect(isCompetitive(race({ rating: "tossup" }))).toBe(false);

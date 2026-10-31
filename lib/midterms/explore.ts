@@ -37,6 +37,8 @@ export const CLOSE_MARGIN = 5;
 
 export const isCalled = (r: RaceSummary) => r.candidates.some((c) => c.winner);
 
+/** A race the forecast rated a toss-up: marked in yellow on election night, called or not. */
+export const isTossup = (r: RaceSummary) => r.rating === "tossup";
 /** A race the forecast rated a toss-up that hasn't been called yet: the ones to watch on election night. */
 export const isWatch = (r: RaceSummary) => r.rating === "tossup" && !isCalled(r);
 /** An uncalled race the forecast rated a lean: competitive, and highlighted on election night a step below toss-ups. */

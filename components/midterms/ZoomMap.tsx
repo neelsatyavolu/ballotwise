@@ -8,7 +8,7 @@ type Nation = { viewBox: string; borders: string; states: { state: string; name:
 type Layer = { counties: { fips: string; name: string; d: string }[]; cities?: City[] };
 type Districts = { districts: { district: number; d: string }[] };
 /** `flip` stripes a state or district projected to change party; `called` marks a state's label with a check. */
-/** `watch` outlines an uncalled toss-up in yellow on election night, `lean` an uncalled lean in a thinner dashed yellow. */
+/** `watch` outlines a toss-up in yellow on election night, `lean` an uncalled lean in a thinner dashed yellow. */
 export type Fill = { fill: string; tip: ReactNode; flip?: boolean; called?: boolean; watch?: boolean; lean?: boolean };
 
 const FULL: Box = [0, 0, 975, 610];
@@ -242,7 +242,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
         {county && <path d={county.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
         {pickedDistrict && <path d={pickedDistrict.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
         {focusedPath && <path d={focusedPath} className="mt-line focus" vectorEffect="non-scaling-stroke" />}
-        {/* Election night: uncalled pre-election toss-ups get a yellow outline, the races to watch, and uncalled leans a
+        {/* Election night: pre-election toss-ups get a yellow outline, called or not, and uncalled leans a
             thinner dashed one. Leans go first so a toss-up's outline sits on top where they meet. */}
         {!focus && !nationDistricts && nation.states.map((s) => fills.get(s.state)?.lean && <path key={`lean-${s.state}`} d={s.d} className="mt-watch lean" vectorEffect="non-scaling-stroke" />)}
         {!focus && nationDistricts && allDistricts?.map((d) => nationDistricts.get(d.key)?.lean && <path key={`lean-${d.key}`} d={d.d} className="mt-watch lean" vectorEffect="non-scaling-stroke" />)}

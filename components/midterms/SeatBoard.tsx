@@ -1,7 +1,7 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
 import { useMemo } from "react";
-import { EARLY_REPORTING, favoredSide, isCompetitive, isEarly, isWatch, statusOf, tierOf } from "@/lib/midterms/explore";
+import { EARLY_REPORTING, favoredSide, isCompetitive, isEarly, isTossup, statusOf, tierOf } from "@/lib/midterms/explore";
 import { holderOf, outcomeOf } from "@/lib/midterms/holders";
 import { clockNow } from "@/lib/midterms/clock";
 import { electionModeDefault } from "@/lib/midterms/polls";
@@ -91,7 +91,7 @@ export function FillLegend({ counted, mode, gains = false, flat = false }: { cou
       <span><i style={{ background: mix("var(--rep)", 50) }} />R leads</span>
       <span><i style={{ background: "var(--sheet)", boxShadow: "inset 0 0 0 1px var(--rule-strong)" }} />Tied</span>
       <span><i style={{ background: flat ? NO_VOTES_FILL : "color-mix(in srgb, var(--rule-strong) 70%, var(--sheet))" }} />No votes yet</span>
-      <span><i className="watch" />Pre-election toss-up still uncalled</span>
+      <span><i className="watch" />Pre-election toss-up</span>
       <span><i className="watch lean" />Lean, still uncalled</span>
       {flat && <span><i style={{ background: "color-mix(in srgb, var(--rule) 45%, var(--sheet))" }} />No race</span>}
       {gains && <span><i className="ring" />Changed party</span>}
@@ -122,7 +122,7 @@ export function SeatBoard({ races, selected, onState, matching, mode }: { races:
             </button>
             <div className="mt-board-seats">
               {list.map((r) => (
-                <Link key={r.id} href={`/midterms/${r.id}`} tabIndex={-1} className={`mt-seat${outcomeOf(r)?.gain ? " gain" : ""}${isWatch(r) ? " watch" : isCompetitive(r) ? " lean" : ""}${matching.has(r.id) ? "" : " dim"}`} style={{ background: seatFill(r, mode, counting) }} aria-label={seatSummary(r)} title={seatSummary(r)}>
+                <Link key={r.id} href={`/midterms/${r.id}`} tabIndex={-1} className={`mt-seat${outcomeOf(r)?.gain ? " gain" : ""}${isTossup(r) ? " watch" : isCompetitive(r) ? " lean" : ""}${matching.has(r.id) ? "" : " dim"}`} style={{ background: seatFill(r, mode, counting) }} aria-label={seatSummary(r)} title={seatSummary(r)}>
                   {r.district || "AL"}
                 </Link>
               ))}
