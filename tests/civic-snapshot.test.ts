@@ -79,6 +79,21 @@ afterEach(() => {
   (RETIRED_RACE_IDS as Set<number>).clear();
 });
 
+describe("fetchCatalog's civicAPI searches", () => {
+  it("ask only for Nov 3 races, and only statewide ones for governors and measures", async () => {
+    const asked: URLSearchParams[] = [];
+    vi.stubGlobal("fetch", async (url: string) => (asked.push(new URL(url).searchParams), new Response(JSON.stringify({ races: [] }))));
+    await fetchCatalog(NOW);
+    expect(asked.map((p) => p.get("type")).sort()).toEqual(["Ballot Measure", "Governor", "House of Representatives", "Proposition", "Referendum", "US Senate"]);
+    for (const params of asked) {
+      expect(params.get("startDate")).toBe("2026-11-03");
+      expect(params.get("endDate")).toBe("2026-11-03");
+      const statewideOnly = !["US Senate", "House of Representatives"].includes(params.get("type")!);
+      expect(params.get("election_type")).toBe(statewideOnly ? "Statewide" : null);
+    }
+  });
+});
+
 describe("fetchCatalog during an outage", () => {
   it("serves D1's race snapshots, marked stale, when a fresh isolate starts during an outage", async () => {
     const db = testDb();

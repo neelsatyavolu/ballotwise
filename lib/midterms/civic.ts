@@ -9,11 +9,14 @@ const BASE = "https://civicapi.org/api/v2/";
 const PAGE = 500;
 // The race types that hold Senate, House, Governor and statewide-measure races. Others are filtered out in summarize().
 const TYPES = ["US Senate", "House of Representatives", "Governor", "Referendum", "Proposition", "Ballot Measure"];
-// About 36 races each this year, ahead of years of older ones: a 100-race page holds them all and comes back in
-// half the time of a 500-race one.
-const SMALL_PAGE: Record<string, number> = { "US Senate": 100, Governor: 100 };
-/** How long a fetched catalog or race is reused before asking civicAPI again. civicAPI itself caches for 15s. */
-export const FRESH_MS = 30_000;
+// summarize() keeps only statewide governors and measures, so these are searched for statewide races alone: Referendum
+// otherwise lists over a thousand local Nov 3 measures.
+const STATEWIDE_ONLY = new Set(["Governor", "Referendum", "Proposition", "Ballot Measure"]);
+/**
+ * How long a fetched catalog or race is reused before asking civicAPI again: civicAPI's own cache time, so each
+ * refresh can bring new numbers. Date-filtered searches keep a refresh to about six small requests.
+ */
+export const FRESH_MS = 15_000;
 /**
  * A page view that can refresh in the background is served a catalog up to this old at once, rather than waiting
  * the several seconds civicAPI takes; the next poll gets the refreshed one. The minutely cron keeps D1's copy within
@@ -98,17 +101,17 @@ export async function pooled<T, R>(items: readonly T[], limit: number, work: (it
   return out;
 }
 
-// civicAPI ignores the date filter but lists newest elections first. Its order isn't strict (a later runoff or an
-// earlier special can sit among the Nov 3 races), so paging goes on past mixed pages and stops at the first page
-// with no Nov 3 race at all; summarize() keeps only Nov 3 races.
+// civicAPI ignores `election_date` but filters on `startDate`/`endDate` (as its own decision page asks), so every page
+// holds only Nov 3 races. Should it stop filtering, it lists newest elections first, so paging still stops at the
+// first page with no Nov 3 race at all; summarize() keeps only Nov 3 races either way.
 async function racesOfType(type: string, deadline: number): Promise<unknown[]> {
   const out: unknown[] = [];
-  const size = SMALL_PAGE[type] ?? PAGE;
-  for (let offset = 0; offset < 10 * PAGE; offset += size) {
-    const page = (await civic(`race/search?country=US&election_date=${ELECTION_DATE}&type=${encodeURIComponent(type)}&limit=${size}&offset=${offset}`, deadline)) as { races?: { election_date?: string }[] };
+  const filter = `startDate=${ELECTION_DATE}&endDate=${ELECTION_DATE}${STATEWIDE_ONLY.has(type) ? "&election_type=Statewide" : ""}`;
+  for (let offset = 0; offset < 10 * PAGE; offset += PAGE) {
+    const page = (await civic(`race/search?country=US&${filter}&type=${encodeURIComponent(type)}&limit=${PAGE}&offset=${offset}`, deadline)) as { races?: { election_date?: string }[] };
     const races = page.races ?? [];
     out.push(...races);
-    if (races.length < size || !races.some((r) => r.election_date?.startsWith(ELECTION_DATE))) break;
+    if (races.length < PAGE || !races.some((r) => r.election_date?.startsWith(ELECTION_DATE))) break;
   }
   return out;
 }

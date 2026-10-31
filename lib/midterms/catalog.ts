@@ -48,7 +48,7 @@ export async function overview(db: Db, now: number, background: (work: Promise<u
 
 /**
  * Past this age, results shown while a refresh runs behind them count as stale. Above FRESH_MS plus the time a refresh
- * takes, so the usual serve-then-refresh cycle (a copy up to about 35 seconds old) doesn't flicker stale on each poll.
+ * takes, so the usual serve-then-refresh cycle (a copy up to about 20 seconds old) doesn't flicker stale on each poll.
  */
 export const STALE_AFTER_MS = FRESH_MS + 15_000;
 
