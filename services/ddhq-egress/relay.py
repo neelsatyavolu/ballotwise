@@ -43,6 +43,8 @@ def valid_path(path):
         return not query
     if re.fullmatch(r"/api/(forecast|races)/[0-9]+", parsed.path):
         return not query
+    if parsed.path == "/api/races/batch/topline":
+        return set(query) == {"ids"} and bool(re.fullmatch(r"[0-9]+(?:,[0-9]+){0,23}", query["ids"]))
     if parsed.path == "/api/vote-history":
         return set(query) == {"race_id"} and bool(re.fullmatch(r"[0-9]+", query["race_id"]))
     return parsed.path == "/api/searchv2" and set(query) == SEARCH_KEYS and all(query.values())

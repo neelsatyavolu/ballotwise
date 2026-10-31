@@ -6,8 +6,7 @@ import { api, ApiError } from "@/lib/client";
 import { clockNow, simAt } from "@/lib/midterms/clock";
 import { fetchedAtOf, fetchLive, isLagging, isNewer, LIVE_TIMEOUT_MS, LiveError, pollInterval, retryDelay, type LiveAnswer } from "@/lib/midterms/live";
 import type { GridLayout } from "@/lib/midterms/decisionView";
-import { overlayLive } from "@/lib/ddhq/apply";
-import type { Overview } from "@/lib/midterms/view";
+import { deskRaces, selectDeskDisplay, type DeskDisplayOptions } from "@/lib/ddhq/display";
 import { useDeskData, useDeskSeats } from "./desk";
 import { useRenderedAt, useTrackerSeeds } from "./SeedProvider";
 import type { LiveSeed } from "./seeds";
@@ -93,7 +92,7 @@ function seedFor<T>(path: string | null, seeds: ReturnType<typeof useTrackerSeed
   return seed ? heldFrom<T>(path, seed) : null;
 }
 
-export function useLive<T>(path: string | null) {
+export function useLive<T>(path: string | null, options: DeskDisplayOptions = {}) {
   // A full page load embeds the answer (see pageData.ts). State starts there so the server HTML already shows it.
   const seeds = useTrackerSeeds();
   const renderedAt = useRenderedAt();
@@ -189,15 +188,12 @@ export function useLive<T>(path: string | null) {
   const mine = state && state.path === path ? state : path ? ((lastAnswers.get(path) as Held<T> | undefined) ?? null) : null;
   const fetchedAt = mine?.fetchedAt ?? null;
   const raw = mine?.data ?? null;
-  const deskSeats = useMemo(() => {
-    if (!raw || typeof raw !== "object") return [];
-    if (path === "/api/midterms" && "races" in raw) return (raw as unknown as Overview).races;
-    if (path && /^\/api\/midterms\/race\/\d+$/.test(path) && "race" in raw) return [(raw as unknown as { race: Overview["races"][number] }).race];
-    return [];
-  }, [path, raw]);
+  const deskSeats = useMemo(() => options.forecastOnly ? [] : deskRaces(path, raw, options.office), [path, raw, options.forecastOnly, options.office]);
   useDeskSeats(deskSeats);
   const desk = useDeskData();
-  return { data: overlayLive(path, raw, desk.races, desk.forecast), error, now, interval, fetchedAt, lagging: isLagging(fetchedAt, now) };
+  const view = selectDeskDisplay(path, raw, desk, options);
+  const checkedAt = fetchedAtOf(view.data) ?? fetchedAt;
+  return { data: view.data, catalogData: raw, loading: view.loading, error: view.error ?? (view.privateSource && raw ? null : error), now, interval, fetchedAt: checkedAt, lagging: isLagging(checkedAt, now) };
 }
 
 /** The signed-in voter's starred races. `ids` is null when signed out. */

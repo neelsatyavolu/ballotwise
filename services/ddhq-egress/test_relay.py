@@ -53,6 +53,17 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await relay.relay(client, "GET", path, COOKIE)).status, 200)
                 self.assertEqual(client.calls[0][0], relay.ORIGIN + path)
 
+    async def test_topline_batch_is_limited_to_24_numeric_ids(self):
+        for ids in ["1", "1,2", ",".join(str(i) for i in range(1, 25))]:
+            path = "/api/races/batch/topline?ids=" + ids
+            client = Client(body=b"[]")
+            self.assertEqual((await relay.relay(client, "GET", path, COOKIE)).status, 200)
+            self.assertEqual(client.calls[0][0], relay.ORIGIN + path)
+        for query in ["ids=", "ids=1,", "ids=1,,2", "ids=-1", "ids=1.2", "ids=one", "ids=1&ids=2", "ids=1&url=https://evil.test", "ids=" + ",".join(str(i) for i in range(1, 26))]:
+            client = Client()
+            self.assertEqual((await relay.relay(client, "GET", "/api/races/batch/topline?" + query, COOKIE)).status, 400)
+            self.assertEqual(client.calls, [])
+
     async def test_rejects_other_targets_and_query_shapes_before_fetch(self):
         for path in ["https://evil.test/api/races/1", "//evil.test/api/races/1", "/api/races/../1", "/api/races/%31", "/api/races/1?x=1", "/api/searchv2?q=x", PATH + "&url=https://evil.test", PATH + "&race_id=2", PATH + "#fragment", "/api/other", "/api/races/1\r\n", "/api/races/1\\"]:
             with self.subTest(path=path):

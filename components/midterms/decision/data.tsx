@@ -7,7 +7,7 @@ import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
 import type { Overview } from "@/lib/midterms/view";
 import { LIVE_TIMEOUT_MS } from "@/lib/midterms/live";
-import { overlayLive } from "@/lib/ddhq/apply";
+import { selectDeskDisplay } from "@/lib/ddhq/display";
 import { useDeskData, useDeskSeats } from "../desk";
 import { pollInterval, useLive } from "../hooks";
 
@@ -76,7 +76,17 @@ export function DashboardData({ raceIds, children }: { raceIds: readonly number[
     };
   }, [key]);
 
-  const privateRaces = useMemo(() => new Map([...races].map(([id, data]) => [id, data === "missing" ? data : overlayLive(`/api/midterms/race/${id}`, data, desk.races, desk.forecast)])), [races, desk.races, desk.forecast]);
+  const privateRaces = useMemo(() => {
+    const shown = new Map<number, RaceData | "missing">();
+    for (const [id, data] of races) {
+      if (data === "missing") shown.set(id, data);
+      else {
+        const selected = selectDeskDisplay(`/api/midterms/race/${id}`, data, desk).data;
+        if (selected) shown.set(id, selected);
+      }
+    }
+    return shown;
+  }, [races, desk]);
   const value = useMemo(() => ({ overview: live.data, forecast: forecast.data, error: live.error, races: privateRaces }), [live.data, forecast.data, live.error, privateRaces]);
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }

@@ -8,6 +8,7 @@ function validPath(url) {
   if (url.hash || url.pathname.includes("%") || url.href.length > 2048 || new Set(keys).size !== keys.length) return false;
   if (/^\/forecast\/2026\/(house|senate|governor)$/.test(url.pathname)) return keys.length === 0;
   if (/^\/api\/(forecast|races)\/[0-9]+$/.test(url.pathname)) return keys.length === 0;
+  if (url.pathname === "/api/races/batch/topline") return keys.length === 1 && keys[0] === "ids" && /^[0-9]+(?:,[0-9]+){0,23}$/.test(url.searchParams.get("ids"));
   if (url.pathname === "/api/vote-history") return keys.length === 1 && keys[0] === "race_id" && /^[0-9]+$/.test(url.searchParams.get("race_id"));
   return url.pathname === "/api/searchv2" && keys.length === 4 && keys.every((key) => SEARCH_KEYS.has(key) && url.searchParams.get(key));
 }

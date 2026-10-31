@@ -180,7 +180,7 @@ function BalanceTopline({ office }: { office?: ChamberOffice }) {
   const { overview, forecast } = useDashboardData();
   if (!overview || !office) return <Empty>Loading…</Empty>;
   const tally = overview.balance[office];
-  return <SeatBar office={office} tally={tally} ahead={leading(overview.races, office)} projected={projection(overview.races, office, tally, forecast?.chambers?.[office], forecast?.source)} />;
+  return <SeatBar office={office} tally={tally} ahead={leading(overview.races, office)} projected={projection(overview.races, office, tally, forecast?.chambers?.[office], forecast?.source ?? overview.forecastSource)} />;
 }
 
 function BalanceMap({ office }: { office?: ChamberOffice }) {

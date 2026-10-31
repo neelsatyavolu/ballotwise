@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/client";
 import { holderOf, outcomeOf } from "@/lib/midterms/holders";
+import { callKey } from "@/lib/midterms/moments";
+import { isDesk } from "@/lib/ddhq/apply";
 import { stampTime } from "@/lib/midterms/polls";
 import { colorOf, OFFICE_LABEL, partyOf, partyTag, type CallEvent, type Office, type RaceSummary } from "@/lib/midterms/view";
 import { CallAlerts } from "./CallAlerts";
 import { shortLabel } from "./PollClose";
 import { useStored } from "./seen";
+import { useDeskData } from "./desk";
 
 const SHOWN = 12;
 /** Seats changing party listed before "+N more", so a big night doesn't bury the feed under its chips. */
@@ -21,7 +24,7 @@ function fromRaces(races: readonly RaceSummary[]): CallEvent[] {
     .map((r): CallEvent => {
       const won = r.call!.withdrawn ? null : r.candidates.find((c) => c.winner);
       const kind = r.call!.withdrawn ? "withdrawal" : r.call!.replaced ? "change" : "call";
-      return { id: r.call!.id, raceId: r.id, office: r.office, kind, winner: won?.name ?? null, party: won?.party ?? null, previous: r.call!.replaced, at: r.call!.at };
+      return { id: r.call!.id, raceId: r.id, office: r.office, kind, winner: won?.name ?? null, party: won?.party ?? null, previous: r.call!.replaced, at: r.call!.at, ...(isDesk(r) ? { source: "ddhq" as const } : {}) };
     })
     .sort((a, b) => b.at - a.at);
 }
@@ -45,7 +48,16 @@ function winnerMargin(r: RaceSummary, name: string): number | null {
 }
 
 /** Every call, changed call and withdrawal, newest first, with seats changing party pinned on top. `children` sit beside the alerts switch: election mode puts its pop-up switch there. */
-export function CallsFeed({ races, events: given, counts, office, children }: { races: readonly RaceSummary[]; events?: CallEvent[]; counts?: Record<Office, number>; office: Office | "all"; children?: React.ReactNode }) {
+type CallsFeedProps = { races: readonly RaceSummary[]; events?: CallEvent[]; counts?: Record<Office, number>; office: Office | "all"; children?: React.ReactNode };
+
+export function CallsFeed(props: CallsFeedProps) {
+  const { owner } = useDeskData();
+  const privateSource = props.races.some(isDesk);
+  const sourceKey = privateSource ? `ddhq:${owner}` : "public";
+  return <CallList key={sourceKey} {...props} privateSource={privateSource} sourceKey={sourceKey} />;
+}
+
+function CallList({ races, events: given, counts, office, children, privateSource, sourceKey }: CallsFeedProps & { privateSource: boolean; sourceKey: string }) {
   const [all, setAll] = useState(false);
   const [allGains, setAllGains] = useState(false);
   const [everyOffice, setEveryOffice] = useState(false);
@@ -56,13 +68,15 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
   // Every event received from live polls this session, so older pages and the moving latest window never leave a gap.
   const live = useMemo(() => given ?? fromRaces(races), [given, races]);
   const [received, setReceived] = useState<{ from: CallEvent[]; all: CallEvent[] }>({ from: live, all: live });
-  if (received.from !== live) setReceived({ from: live, all: [...live, ...received.all.filter((e) => !live.some((x) => x.id === e.id))] });
+  if (!privateSource && received.from !== live) setReceived({ from: live, all: [...live, ...received.all.filter((e) => !live.some((x) => x.id === e.id))] });
   const [loadError, setLoadError] = useState<string | null>(null);
   const events = useMemo(() => {
-    const extra = older.scope === scope ? older.events : [];
-    const seenIds = new Set<number>();
-    return [...received.all, ...extra].filter((e) => byId.has(e.raceId) && !seenIds.has(e.id) && (seenIds.add(e.id), true)).sort((a, b) => b.id - a.id);
-  }, [received, byId, older, scope]);
+    const extra = !privateSource && older.scope === scope ? older.events : [];
+    const seenIds = new Set<string>();
+    return [...(privateSource ? live : received.all), ...extra]
+      .filter((e) => byId.has(e.raceId) && !seenIds.has(callKey(e)) && (seenIds.add(callKey(e)), true))
+      .sort((a, b) => privateSource ? b.at - a.at || b.raceId - a.raceId : b.id - a.id);
+  }, [privateSource, live, received, byId, older, scope]);
   // An event is superseded only by a newer event in the same race, not by a call that's briefly pending.
   const newestByRace = useMemo(() => {
     const out = new Map<number, number>();
@@ -71,8 +85,9 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
   }, [events]);
   const shown = events.filter((e) => scope === "all" || e.office === scope);
   // The server's count, but never fewer than what's on screen (the two can be a poll apart).
-  const total = Math.max(shown.length, counts ? (scope === "all" ? Object.values(counts).reduce((a, b) => a + b, 0) : counts[scope]) : 0);
+  const total = Math.max(shown.length, !privateSource && counts ? (scope === "all" ? Object.values(counts).reduce((a, b) => a + b, 0) : counts[scope]) : 0);
   const loadOlder = async () => {
+    if (privateSource) return;
     const oldest = shown.at(-1)?.id;
     setLoadError(null);
     try {
@@ -85,13 +100,14 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
   };
   // New means after the last "Mark seen" in this browser (event ids only grow), or after this page first opened.
   // Older events loaded on request are history, never new.
-  const [opened] = useState(() => Math.max(0, ...events.map((e) => e.id)));
-  const [stored, setStored] = useStored("mt-calls-seen");
+  const order = (e: CallEvent) => privateSource ? e.at : e.id;
+  const [opened] = useState(() => Math.max(0, ...events.map(order)));
+  const [stored, setStored] = useStored(privateSource ? `mt-calls-seen:${sourceKey}` : "mt-calls-seen");
   const seenThrough = Number(stored) || opened;
   useEffect(() => {
     if (!stored && opened) setStored(String(opened));
   }, [stored, opened, setStored]);
-  const isNew = (e: CallEvent) => e.id > seenThrough;
+  const isNew = (e: CallEvent) => order(e) > seenThrough;
   const fresh = shown.filter(isNew);
   const gains = races.filter((r) => (scope === "all" || r.office === scope) && outcomeOf(r)?.gain);
   const list = all ? shown : shown.slice(0, SHOWN);
@@ -108,7 +124,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
       <div className="mt-section-head tight">
         <h2>Latest calls</h2>
         <span className="muted small">{total || "None yet"}</span>
-        <CallAlerts events={live} races={races} />
+        <CallAlerts events={live} races={races} currentOnly={privateSource} />
         {children}
       </div>
       {(fresh.length > 0 || office !== "all") && (
@@ -116,7 +132,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
           {fresh.length > 0 && (
             <>
               {fresh.length} new since you looked ·{" "}
-              <button type="button" className="mt-el-quiet" onClick={() => setStored(String(Math.max(seenThrough, ...events.map((e) => e.id))))}>Mark seen</button>
+              <button type="button" className="mt-el-quiet" onClick={() => setStored(String(Math.max(seenThrough, ...events.map(order))))}>Mark seen</button>
             </>
           )}
           {fresh.length > 0 && office !== "all" && <span aria-hidden> · </span>}
@@ -147,7 +163,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
         </div>
       )}
       {shown.length === 0 ? (
-        <p className="muted small">Calls land here, newest first, as civicAPI&apos;s decision desk makes them after polls close.</p>
+        <p className="muted small">{privateSource ? "Current calls land here, newest first, as Decision Desk HQ publishes them." : "Calls land here, newest first, as civicAPI's decision desk makes them after polls close."}</p>
       ) : (
         <ol className="mt-el-calllist">
           {list.map((e) => {
@@ -159,7 +175,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
             // The margin comes from the race's current count, so only when that count still shows this winner.
             const margin = current && won?.winner ? winnerMargin(r, e.winner!) : null;
             return (
-              <li key={e.id} className={`${isNew(e) ? "new" : ""}${current ? "" : " old"}`}>
+              <li key={callKey(e)} className={`${isNew(e) ? "new" : ""}${current ? "" : " old"}`}>
                 <time className="muted" dateTime={new Date(e.at).toISOString()}>{stampTime(e.at)}</time>
                 <span className="mt-el-call-main">
                   <Link href={`/midterms/${r.id}`}>{shortLabel(r)}</Link>
@@ -187,7 +203,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
           {all ? "Show the latest only" : `Show all ${shown.length} loaded`}
         </button>
       )}
-      {shown.length < total && (all || shown.length <= SHOWN) && (
+      {!privateSource && shown.length < total && (all || shown.length <= SHOWN) && (
         <button type="button" className="btn quiet small" onClick={() => void loadOlder()}>
           Load older calls ({total - shown.length} more)
         </button>
@@ -195,7 +211,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
       {loadError && <p className="error small">{loadError}</p>}
       <details className="mt-el-about small muted">
         <summary>About these calls</summary>
-        Calls come from civicAPI&apos;s decision desk, not AP or Decision Desk HQ. Times are when Ballotwise first saw each call. Hold and gain compare with the party holding the seat now; House seats are matched by district number, so redrawn districts compare with their current member.
+        {privateSource ? "Senate, House and governor calls use your Decision Desk HQ session and its published call times. Withdrawn calls leave this current-call list. Ballot measures and failed DDHQ requests use civicAPI. " : "Calls come from civicAPI's decision desk, not AP or Decision Desk HQ. Times are when Ballotwise first saw each call. "}Hold and gain compare with the party holding the seat now; House seats are matched by district number, so redrawn districts compare with their current member.
       </details>
     </section>
   );

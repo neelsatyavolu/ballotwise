@@ -5,6 +5,7 @@ import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { fmt, lead, marginLabel, partyOf, partyTag } from "@/lib/midterms/view";
+import { isDesk } from "@/lib/ddhq/apply";
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
@@ -69,7 +70,7 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
   const regions = race.counties;
   const withVotes = regions.filter((c) => c.total > 0);
   const updated = race.updated ? Date.parse(race.updated) : NaN;
-  const source = race.source?.name ?? "civicAPI";
+  const source = isDesk(race) ? "Decision Desk HQ" : race.source?.name ?? "civicAPI";
 
   return (
     <section className="mt-context" aria-labelledby="context">
@@ -79,15 +80,15 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
           {Number.isFinite(updated) ? `${source} last updated ${race.source ? "its results" : "this race"} at ${stampTime(updated)} ${zoneAbbr(updated)}` : `${source} gives no update time for this race`}; Ballotwise checked at {stampTime(fetchedAt)} {zoneAbbr(fetchedAt)}.
         </li>
         <li>
-          {race.total === 0 ? "No votes counted yet." : race.reportingUnknown || !race.reporting ? `${source} has votes but gives no reporting figure for this race.` : `${Math.round(race.reporting)}% reporting, ${race.source ? `${source}'s count of precincts` : "civicAPI's estimate of precincts or ballot batches"} in. It isn't the share of the expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? "; mail, provisional and late ballots can still come in" : ""}.`}
+          {race.total === 0 ? "No votes counted yet." : race.reportingUnknown || !race.reporting ? `${source} has votes but gives no reporting figure for this race.` : `${Math.round(race.reporting)}% reporting, ${isDesk(race) || race.source ? `${source}'s count of precincts` : "civicAPI's estimate of precincts or ballot batches"} in. It isn't the share of the expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? "; mail, provisional and late ballots can still come in" : ""}.`}
         </li>
         {regions.length > 1 && (
           <li>
             {withVotes.length} of {regions.length} {regions.some((c) => c.fips) ? "counties" : "towns"} have reported votes
-            {withVotes.length ? `; civicAPI reports 100% for ${regions.filter((c) => c.reporting >= 100).length} of them` : ""}.
+            {withVotes.length ? `; ${source} reports 100% for ${regions.filter((c) => c.reporting >= 100).length} of them` : ""}.
           </li>
         )}
-        <li className="muted">{source} doesn&apos;t estimate how many votes remain; the votes-left figure above is Ballotwise&apos;s own rough one.</li>
+        <li className="muted">The votes-left figure above is Ballotwise&apos;s own rough estimate.</li>
       </ul>
     </section>
   );

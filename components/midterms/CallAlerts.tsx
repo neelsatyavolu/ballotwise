@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CallEvent, RaceSummary } from "@/lib/midterms/view";
+import { callKey } from "@/lib/midterms/moments";
 import { shortLabel } from "./PollClose";
 import { useStored } from "./seen";
 
@@ -39,12 +40,12 @@ function describe(e: CallEvent, r: RaceSummary | undefined): { title: string; bo
  * Opt-in alerts for calls, changed calls and withdrawals: a browser notification and a short chime, once per event.
  * Vote updates never alert. Events already on screen when alerts are turned on (or the page opens) don't alert.
  */
-export function CallAlerts({ events, races }: { events: readonly CallEvent[]; races: readonly RaceSummary[] }) {
+export function CallAlerts({ events, races, currentOnly = false }: { events: readonly CallEvent[]; races: readonly RaceSummary[]; currentOnly?: boolean }) {
   const [stored, setStored] = useStored(KEY);
   const supported = typeof window !== "undefined" && "Notification" in window;
   const on = stored === "on" && supported && Notification.permission === "granted";
   const [denied, setDenied] = useState(false);
-  const seen = useRef<Set<number> | null>(null);
+  const seen = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     if (!on) {
@@ -53,17 +54,17 @@ export function CallAlerts({ events, races }: { events: readonly CallEvent[]; ra
     }
     // The first pass after turning on only learns what's already there.
     if (!seen.current) {
-      seen.current = new Set(events.map((e) => e.id));
+      seen.current = new Set(events.map(callKey));
       return;
     }
-    const fresh = events.filter((e) => !seen.current!.has(e.id));
+    const fresh = events.filter((e) => !seen.current!.has(callKey(e)));
     if (!fresh.length) return;
-    for (const e of fresh) seen.current.add(e.id);
+    for (const e of fresh) seen.current.add(callKey(e));
     const byId = new Map(races.map((r) => [r.id, r]));
     for (const e of fresh.slice(0, 5)) {
       const { title, body } = describe(e, byId.get(e.raceId));
       try {
-        new Notification(title, { body, tag: `mt-call-${e.id}` });
+        new Notification(title, { body, tag: `mt-${callKey(e)}` });
       } catch {
         // Some browsers only allow notifications from a service worker; the chime still sounds.
       }
@@ -84,7 +85,7 @@ export function CallAlerts({ events, races }: { events: readonly CallEvent[]; ra
       className={`mt-bell${on ? " on" : ""}`}
       aria-pressed={on}
       onClick={() => void toggle()}
-      title={denied ? "Notifications are blocked for this site in your browser settings" : on ? "Alerts on for new, changed and withdrawn calls. Tap to turn off." : "Alert me when a race is called, a call changes or is withdrawn"}
+      title={denied ? "Notifications are blocked for this site in your browser settings" : currentOnly ? on ? "Alerts on for new and changed DDHQ calls. Tap to turn off." : "Alert me to new and changed DDHQ calls" : on ? "Alerts on for new, changed and withdrawn calls. Tap to turn off." : "Alert me when a race is called, a call changes or is withdrawn"}
     >
       {denied ? "Alerts blocked" : on ? "Alerts on" : "Alerts off"}
     </button>

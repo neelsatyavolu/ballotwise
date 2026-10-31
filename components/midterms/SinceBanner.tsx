@@ -4,6 +4,7 @@ import { createContext, useEffect } from "react";
 import { stampTime } from "@/lib/midterms/polls";
 import type { RaceSummary } from "@/lib/midterms/view";
 import { useSince } from "./seen";
+import { useDeskData } from "./desk";
 
 /** Races where someone else leads than when the viewer last looked, for a small marker on their cards. */
 const NONE: ReadonlySet<number> = new Set();
@@ -16,6 +17,13 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * viewer leaves the tab record a fresh look, so coming back shows only what happened while away.
  */
 export function SinceBanner({ races, children }: { races: readonly RaceSummary[]; children?: React.ReactNode }) {
+  const desk = useDeskData();
+  // Private leaders must never enter the public cross-visit localStorage snapshot.
+  if (desk.enabled) return <LeadChanged.Provider value={NONE}>{children}</LeadChanged.Provider>;
+  return <PublicSinceBanner races={races}>{children}</PublicSinceBanner>;
+}
+
+function PublicSinceBanner({ races, children }: { races: readonly RaceSummary[]; children?: React.ReactNode }) {
   const { since, hasSnapshot, mark } = useSince(races);
   const counted = races.some((r) => r.total > 0);
   useEffect(() => {

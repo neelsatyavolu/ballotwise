@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiError } from "@/lib/client";
-import { applyDesk, isDesk } from "@/lib/ddhq/apply";
+import { ApiError } from "@/lib/client";
+import { applyDesk, isDesk, overlayLive } from "@/lib/ddhq/apply";
 import type { DdhqRace } from "@/lib/ddhq/votes";
 import { useAccount } from "@/components/AccountProvider";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
@@ -13,7 +13,8 @@ import { OFFICE_LABEL, raceLabel, signalLine, STATE_NAMES } from "@/lib/midterms
 import { CandidateTable } from "./CandidateTable";
 import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
-import { useLive, useStars } from "./hooks";
+import { pollInterval, useLive, useStars } from "./hooks";
+import { useDeskData } from "./desk";
 import { CountyMap, type CountyFill } from "./maps";
 import { MarketPanel } from "./MarketPanel";
 import { RaceInsights } from "./RaceInsights";
@@ -30,50 +31,60 @@ type Fetched = { race: RaceDetail; fetchedAt: number; stale: boolean; history?: 
 const SCREEN = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
 
 export function RaceView({ id }: { id: number }) {
-  const { data, error, now } = useLive<Fetched>(`/api/midterms/race/${id}`);
-  const { ddhq, user, refresh } = useAccount();
+  const path = `/api/midterms/race/${id}`;
+  const { data: rendered, catalogData, error, now } = useLive<Fetched>(path, { forecastOnly: true });
+  const { refresh } = useAccount();
+  const privateDesk = useDeskData();
   const favorites = useStars();
-  const [desk, setDesk] = useState<DdhqRace | null>(null);
-  const [deskSeat, setDeskSeat] = useState<string | null>(null);
+  const [reply, setReply] = useState<{ seat: string; race: DdhqRace | null; error: string | null; at: number } | null>(null);
   const [mode, setMode] = useState<Mode>("results");
   const [selected, setSelected] = useState<string | null>(null);
-  const loaded = data?.race;
+  const loaded = catalogData?.race;
   const state = loaded?.state;
   const office = loaded?.office;
   const district = loaded?.district;
   const special = Boolean(loaded && /special/i.test(loaded.title));
-  const seat = state && office ? `${office}:${state}:${district ?? ""}:${special ? "s" : "g"}:${user?.id ?? ""}` : "";
-  const active = ddhq === "connected" && desk && deskSeat === seat ? desk : null;
-  const race = loaded && active ? applyDesk(loaded, active) : loaded;
+  const seat = state && office ? `${office}:${state}:${district ?? ""}:${special ? "s" : "g"}:${privateDesk.owner ?? ""}` : "";
+  const privateRace = privateDesk.enabled && !!office && office !== "measure" && !loaded?.local;
+  const mine = privateRace && reply?.seat === seat ? reply : null;
+  const active = mine?.race ?? null;
+  const fallback = mine?.error ? overlayLive(path, catalogData, privateDesk.races, privateDesk.forecast) : null;
+  const base = fallback ?? rendered ?? (active ? catalogData : null);
+  const data = base && active ? { ...base, race: applyDesk(base.race, active), fetchedAt: mine!.at, stale: false, history: undefined, callPending: false } : base;
+  const race = data?.race;
 
   useEffect(() => {
-    if (ddhq !== "connected" || !state || !office || office === "measure") return;
+    if (!privateRace || !state || !office) return;
     const params = new URLSearchParams({ state, office });
     if (district != null) params.set("district", String(district));
     if (special) params.set("special", "1");
     const mine = seat;
     let live = true;
-    const load = () => {
-      api<DdhqRace>(`/api/ddhq/race?${params}`)
-        .then((next) => {
-          if (!live) return;
-          setDesk(next);
-          setDeskSeat(mine);
-        })
-        .catch((err) => {
-          if (!live) return;
-          setDesk(null);
-          setDeskSeat(null);
-          if (err instanceof ApiError && err.status === 401) void refresh();
-        });
-    };
-    load();
-    const timer = window.setInterval(load, 20_000);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let controller: AbortController | null = null;
+    async function load() {
+      controller = new AbortController();
+      try {
+        const response = await fetch(`/api/ddhq/race?${params}`, { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]) });
+        const next = await response.json() as DdhqRace & { error?: string };
+        if (!response.ok) throw new ApiError(next.error ?? "Decision Desk HQ didn't answer.", response.status);
+        if (!Array.isArray(next.candidates)) throw new ApiError("Decision Desk HQ has no count available for this race.", 502);
+        if (live) setReply({ seat: mine, race: next as DdhqRace, error: null, at: Date.now() });
+      } catch (err) {
+        if (!live) return;
+        setReply({ seat: mine, race: null, error: err instanceof ApiError ? err.message : "Decision Desk HQ didn't answer.", at: Date.now() });
+        if (err instanceof ApiError && err.status === 401) void refresh();
+      } finally {
+        if (live) timer = setTimeout(() => void load(), Math.min(20_000, pollInterval(Date.now())));
+      }
+    }
+    void load();
     return () => {
       live = false;
-      window.clearInterval(timer);
+      clearTimeout(timer);
+      controller?.abort();
     };
-  }, [ddhq, state, office, district, special, seat, refresh]);
+  }, [privateRace, state, office, district, special, seat, refresh]);
 
   const fills = useMemo(() => {
     const out = new Map<string, CountyFill>();
@@ -81,7 +92,7 @@ export function RaceView({ id }: { id: number }) {
     return out;
   }, [race, mode]);
 
-  if (!data || !race) {
+  if (!data || !race || privateRace && !active && !mine?.error) {
     return (
       <div className="wrap mt">
         {/* The tabs stay in the header while the race loads, so it doesn't jump; none is marked until the office is known. */}
@@ -142,6 +153,7 @@ export function RaceView({ id }: { id: number }) {
           </span>
         </p>
         {error && <p className="error small">{error} Showing the last results we got.</p>}
+        {mine?.error && <p className="error small">{mine.error} Showing the public fallback while DDHQ retries.</p>}
         {favorites.error && <p className="error small">{favorites.error}</p>}
       </header>
 

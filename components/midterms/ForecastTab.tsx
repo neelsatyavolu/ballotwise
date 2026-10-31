@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
-import { useAccount } from "@/components/AccountProvider";
 import { flipTo } from "@/lib/midterms/explore";
 import { chamberFromRaces, withServer, type ChamberView, type ForecastOffice } from "@/lib/midterms/forecastTab";
 import { ratingFill, type Overview, type RaceSummary } from "@/lib/midterms/view";
@@ -184,9 +183,8 @@ function OverviewPage({ data, views, forecast }: { data: Overview; views: Record
 
 /** The Forecast tab: an overview and one page each for the House, Senate and governors. */
 export function ForecastTab({ view }: { view: ForecastView }) {
-  const { ddhq } = useAccount();
   const desk = useDeskData();
-  const { data, error } = useLive<Overview>("/api/midterms");
+  const { data, error } = useLive<Overview>("/api/midterms", { forecastOnly: true });
   const live = useLive<ForecastOverview>("/api/midterms/forecast");
   const forecast = live.data ?? null;
   // The server's simulation once it has run; until then, seats by rating and expected seats from each race's forecast.
@@ -202,8 +200,8 @@ export function ForecastTab({ view }: { view: ForecastView }) {
   }, [data, forecast]);
   const updatedAt = forecast?.updatedAt ?? data?.ratings.updatedAt ?? null;
   const count = view === "overview" ? 0 : (data?.races.filter((r) => r.office === view).length ?? 0);
-  const fallback = desk.forecastStatus === "error" ? "DDHQ unavailable · Ballotwise fallback" : "Loading DDHQ forecast · Ballotwise fallback";
-  const kicker = forecast?.source === "ddhq" ? `Decision Desk HQ${count ? ` · ${count} races` : " · Your Votes Pro forecast"}` : ddhq === "connected" ? fallback : view === "overview" ? "Ballotwise model for the House, Senate and governors" : count ? `${count} races` : "";
+  const fallback = desk.forecastStatus === "error" ? "DDHQ unavailable · Ballotwise fallback" : "Loading Decision Desk HQ…";
+  const kicker = forecast?.source === "ddhq" ? `Decision Desk HQ${count ? ` · ${count} races` : " · Your Votes Pro forecast"}` : desk.enabled ? fallback : view === "overview" ? "Ballotwise model for the House, Senate and governors" : count ? `${count} races` : "";
 
   return (
     <div className="wrap mt mt-fc">
@@ -213,10 +211,10 @@ export function ForecastTab({ view }: { view: ForecastView }) {
         <span className="mt-kicker">{kicker}</span>
         <span className="mt-updated small">
           {updatedAt && `Updated ${STAMP.format(updatedAt)} · `}
-          <Link href={forecast?.source === "ddhq" ? "https://votes-docs.decisiondeskhq.com/forecast-methodology" : "/midterms/methodology"}>How it works</Link>
+          <Link href={desk.enabled && desk.forecastStatus !== "error" ? "https://votes-docs.decisiondeskhq.com/forecast-methodology" : "/midterms/methodology"}>How it works</Link>
         </span>
       </header>
-      {ddhq === "connected" && desk.forecastStatus === "error" && <p className="error" role="status">{desk.forecastError} Retrying automatically.</p>}
+      {desk.enabled && desk.forecastStatus === "error" && <p className="error" role="status">{desk.forecastError} Retrying automatically.</p>}
       <nav className="mt-seg mt-fc-pages" aria-label="Forecast pages">
         {(Object.keys(TITLE) as ForecastView[]).map((v) => (
           <Link key={v} href={HREF[v]} aria-current={v === view ? "page" : undefined}>

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createDeskStore, EMPTY_DESK } from "../lib/ddhq/store";
+import { createDeskStore, deskOwner, deskSeatKey, EMPTY_DESK } from "../lib/ddhq/store";
 import type { DdhqForecastBundle } from "../lib/ddhq/forecast-types";
 import type { DdhqRace, DdhqSeat } from "../lib/ddhq/votes";
 
@@ -24,11 +24,150 @@ function setup() {
   return { store, calls };
 }
 
-async function settled() { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }
-beforeEach(() => vi.useFakeTimers());
+async function settled() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(Date.parse("2026-10-31T12:00:00Z")); });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });
 
 describe("private DDHQ store", () => {
+  it("uses the server owner only until a known client account state wins", () => {
+    expect(deskOwner("A", { loading: true, user: null, ddhq: "disconnected" })).toBe("A");
+    expect(deskOwner(null, { loading: true, user: null, ddhq: "disconnected" })).toBeNull();
+    expect(deskOwner("A", { loading: false, user: null, ddhq: "disconnected" })).toBeNull();
+    expect(deskOwner("A", { loading: false, user: { id: "A" }, ddhq: "disconnected" })).toBeNull();
+    expect(deskOwner("A", { loading: true, user: { id: "B" }, ddhq: "connected" })).toBe("B");
+    expect(deskOwner("A", { loading: true, user: { id: "A" }, ddhq: "disconnected" })).toBeNull();
+    expect(deskSeatKey(GA)).toBe(keyOf(GA));
+  });
+
+  it("loads results while the forecast is blocked, including genuine zero counts", async () => {
+    const { store, calls } = setup();
+    store.setSeats(Symbol(), [GA]); store.connect("A", async () => {});
+    const pending = store.getSnapshot();
+    expect(calls.map((call) => call.path)).toEqual(["/api/ddhq/forecast", "/api/ddhq/races"]);
+    expect(pending.countsReady.size).toBe(0);
+    expect(pending.countsFailed.size).toBe(0);
+    calls[1].resolve({ races: [{ key: keyOf(GA), race: race({ candidates: [], total: 0 }) }] }); await settled();
+    expect(store.getSnapshot().forecastStatus).toBe("loading");
+    expect(store.getSnapshot().countsReady.has(keyOf(GA))).toBe(true);
+    expect(store.getSnapshot().countsFailed.size).toBe(0);
+    expect(store.getSnapshot().countsFetchedAt).toBe(Date.now());
+    expect(store.getSnapshot().races.get(keyOf(GA))?.candidates).toEqual([]);
+    expect(pending.countsReady.size).toBe(0);
+  });
+
+  it("marks unavailable rows and request failures as real fallback, then recovers", async () => {
+    const { store, calls } = setup();
+    store.setSeats(Symbol(), [GA]); store.connect("A", async () => {});
+    calls[1].resolve({ races: [{ key: keyOf(GA), race: null }] }); await settled();
+    expect(store.getSnapshot().countsFailed.has(keyOf(GA))).toBe(true);
+    expect(store.getSnapshot().countsReady.size).toBe(0);
+    expect(store.getSnapshot().countsError).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(30_000);
+    calls[2].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    const ready = store.getSnapshot();
+    expect(ready.countsReady.has(keyOf(GA))).toBe(true);
+    expect(ready.countsFailed.size).toBe(0);
+    expect(ready.countsError).toBeNull();
+    await vi.advanceTimersByTimeAsync(30_000);
+    calls[3].reject(Object.assign(new Error("Votes temporarily unavailable"), { status: 502 })); await settled();
+    expect(store.getSnapshot().countsReady.size).toBe(0);
+    expect(store.getSnapshot().countsFailed.has(keyOf(GA))).toBe(true);
+    expect(store.getSnapshot().countsError).toBe("Votes temporarily unavailable");
+    expect(store.getSnapshot().races.has(keyOf(GA))).toBe(false);
+    expect(ready.countsReady.has(keyOf(GA))).toBe(true);
+  });
+
+  it("retains owner-scoped counts across tracker navigation while a keeper remains", async () => {
+    const { store, calls } = setup();
+    const keeper = store.subscribe(() => {}); const page = store.subscribe(() => {});
+    const first = Symbol();
+    store.setSeats(first, [GA]); store.connect("A", async () => {});
+    calls[0].resolve(bundle()); calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    store.removeSeats(first); page();
+    expect(store.getSnapshot().races.get(keyOf(GA))?.total).toBe(100);
+    const nextPage = store.subscribe(() => {});
+    store.setSeats(Symbol(), [GA]); store.connect("A", async () => {});
+    expect(store.getSnapshot().countsReady.has(keyOf(GA))).toBe(true);
+    expect(store.getSnapshot().races.get(keyOf(GA))?.total).toBe(100);
+    expect(calls.filter((call) => call.path === "/api/ddhq/forecast")).toHaveLength(1);
+    expect(calls.filter((call) => call.path === "/api/ddhq/races")).toHaveLength(2);
+    expect(calls[2].signal.aborted).toBe(false);
+    nextPage(); keeper();
+    expect(store.getSnapshot()).toBe(EMPTY_DESK);
+    expect(calls[2].signal.aborted).toBe(true);
+  });
+
+  it.each([
+    ["2026-10-31T12:00:00Z", 30_000],
+    ["2026-11-03T12:00:00Z", 15_000],
+  ] as const)("keeps warm navigation instant but waits for fresh counts after the %s polling interval", async (now, ttl) => {
+    vi.setSystemTime(Date.parse(now));
+    const { store, calls } = setup();
+    const keeper = store.subscribe(() => {}); const first = Symbol();
+    store.setSeats(first, [GA]); store.connect("A", async () => {});
+    calls[0].resolve(bundle()); calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    store.removeSeats(first);
+    await vi.advanceTimersByTimeAsync(ttl - 1);
+    const warm = Symbol(); store.setSeats(warm, [GA]);
+    expect(store.getSnapshot().countsReady.has(keyOf(GA))).toBe(true);
+    expect(store.getSnapshot().races.get(keyOf(GA))?.total).toBe(100);
+    calls.findLast((call) => call.path === "/api/ddhq/races")!.resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    store.removeSeats(warm);
+    await vi.advanceTimersByTimeAsync(ttl + 1);
+    store.setSeats(Symbol(), [GA]);
+    expect(store.getSnapshot().countsReady.has(keyOf(GA))).toBe(false);
+    expect(store.getSnapshot().countsFailed.has(keyOf(GA))).toBe(false);
+    expect(store.getSnapshot().countsFetchedAt).toBeNull();
+    expect(store.getSnapshot().races.get(keyOf(GA))).toMatchObject({ candidates: null, forecast: [{ probability: 0.7 }] });
+    const call = { name: "Candidate", at: "2026-11-04T01:02:03Z" };
+    const fresh = { ...count, total: 200, call, candidates: count.candidates!.map((candidate) => ({ ...candidate, votes: 200, winner: true })) };
+    calls.findLast((request) => request.path === "/api/ddhq/races")!.resolve({ races: [{ key: keyOf(GA), race: fresh }] }); await settled();
+    expect(store.getSnapshot().countsReady.has(keyOf(GA))).toBe(true);
+    expect(store.getSnapshot().races.get(keyOf(GA))).toMatchObject({ total: 200, call });
+    expect(store.getSnapshot().countsFetchedAt).toBe(Date.now());
+    keeper();
+  });
+
+  it("reports the oldest successful check among active ready seats instead of the latest unrelated batch", async () => {
+    const { store, calls } = setup(); const first = Symbol(); const second = Symbol();
+    store.setSeats(first, [GA]); store.connect("A", async () => {});
+    const initial = Date.now();
+    calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    await vi.advanceTimersByTimeAsync(5_000);
+    store.setSeats(second, [MI]);
+    calls[2].resolve({ races: [{ key: keyOf(MI), race: count }] }); await settled();
+    expect(store.getSnapshot().countsFetchedAt).toBe(initial);
+    store.removeSeats(first);
+    expect(store.getSnapshot().countsFetchedAt).toBe(initial + 5_000);
+    await vi.advanceTimersByTimeAsync(1_000);
+    store.setSeats(first, [GA]);
+    expect(store.getSnapshot().countsFetchedAt).toBe(initial);
+    calls[3].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    expect(store.getSnapshot().countsFetchedAt).toBe(initial + 5_000);
+  });
+
+  it("adapts count polling from 30 seconds to 15 seconds on election day and publishes new calls", async () => {
+    vi.setSystemTime(Date.parse("2026-11-03T04:59:45Z"));
+    const { store, calls } = setup();
+    store.setSeats(Symbol(), [GA]); store.connect("A", async () => {});
+    calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    const before = store.getSnapshot().countsFetchedAt!;
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(calls).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls[2].path).toBe("/api/ddhq/races");
+    const call = { name: "Candidate", at: "2026-11-03T05:00:15Z" };
+    calls[2].resolve({ races: [{ key: keyOf(GA), race: { ...count, call, candidates: count.candidates!.map((candidate) => ({ ...candidate, winner: true })) } }] }); await settled();
+    expect(store.getSnapshot().races.get(keyOf(GA))?.call).toEqual(call);
+    expect(store.getSnapshot().countsFetchedAt).toBeGreaterThan(before);
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(calls).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls[3].path).toBe("/api/ddhq/races");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(calls).toHaveLength(4);
+  });
+
   it("reports initial failure between retries, then loading and successful recovery", async () => {
     const { store, calls } = setup();
     expect(store.getSnapshot()).toMatchObject({ forecastStatus: "idle", forecastError: null });
@@ -70,11 +209,11 @@ describe("private DDHQ store", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("publishes the complete forecast before waiting for counts and merges independent fields", async () => {
+  it("publishes the complete forecast without waiting for counts and merges independent fields", async () => {
     const { store, calls } = setup();
     store.setSeats(Symbol(), [GA]);
     store.connect("A", async () => {});
-    expect(calls.map((call) => call.path)).toEqual(["/api/ddhq/forecast"]);
+    expect(calls.map((call) => call.path)).toEqual(["/api/ddhq/forecast", "/api/ddhq/races"]);
     calls[0].resolve(bundle());
     await settled();
     expect(store.getSnapshot().forecast?.source).toBe("ddhq");
@@ -119,23 +258,89 @@ describe("private DDHQ store", () => {
 
   it("continues later count batches after an early batch fails", async () => {
     const { store, calls } = setup();
-    const seats = Array.from({ length: 25 }, (_, i): DdhqSeat => ({ state: "CA", office: "house", district: i + 1, special: false }));
+    const seats = Array.from({ length: 513 }, (_, i): DdhqSeat => ({ state: "CA", office: "house", district: i + 1, special: false }));
     store.setSeats(Symbol(), seats); store.connect("A", async () => {});
     calls[0].resolve(bundle()); await settled();
     calls[1].reject({ status: 502 }); await settled();
-    expect((calls[2].body as { seats: DdhqSeat[] }).seats).toEqual([seats[24]]);
-    calls[2].resolve({ races: [{ key: keyOf(seats[24]), race: count }] }); await settled();
-    expect(store.getSnapshot().races.get(keyOf(seats[24]))?.total).toBe(100);
+    expect((calls[2].body as { seats: DdhqSeat[] }).seats).toEqual([seats[512]]);
+    calls[2].resolve({ races: [{ key: keyOf(seats[512]), race: count }] }); await settled();
+    expect(store.getSnapshot().races.get(keyOf(seats[512]))?.total).toBe(100);
     expect(store.getSnapshot().forecast).not.toBeNull();
   });
 
-  it("ignores a removed consumer's late counts without removing the independent forecast", async () => {
+  it("fetches all 435 House seats in one authenticated request and handles partial failures per seat", async () => {
+    const { store, calls } = setup();
+    const seats = Array.from({ length: 435 }, (_, i): DdhqSeat => ({ state: "CA", office: "house", district: i + 1, special: false }));
+    store.setSeats(Symbol(), seats); store.connect("A", async () => {});
+    expect(calls).toHaveLength(2);
+    expect((calls[1].body as { seats: DdhqSeat[] }).seats).toHaveLength(435);
+    calls[1].resolve({ races: seats.map((seat, i) => ({ key: keyOf(seat), race: i < 24 ? null : count })) }); await settled();
+    expect(store.getSnapshot().countsReady.size).toBe(411);
+    expect(store.getSnapshot().countsFailed.size).toBe(24);
+    expect(calls.filter((call) => call.path === "/api/ddhq/races")).toHaveLength(1);
+  });
+
+  it("splits more than 512 seats sequentially and includes newly queued seats in the next request", async () => {
+    const { store, calls } = setup();
+    const seats = Array.from({ length: 600 }, (_, i): DdhqSeat => ({ state: "CA", office: "house", district: i + 1, special: false }));
+    store.setSeats(Symbol(), seats); store.connect("A", async () => {});
+    expect(calls).toHaveLength(2);
+    expect((calls[1].body as { seats: DdhqSeat[] }).seats).toHaveLength(512);
+    store.setSeats(Symbol(), [MI]);
+    expect(calls).toHaveLength(2);
+    calls[1].resolve({ races: seats.slice(0, 512).map((seat) => ({ key: keyOf(seat), race: count })) }); await settled();
+    expect(calls).toHaveLength(3);
+    expect((calls[2].body as { seats: DdhqSeat[] }).seats).toEqual([...seats.slice(512), MI]);
+    expect(store.getSnapshot().countsReady.size).toBe(512);
+    calls[2].resolve({ races: [...seats.slice(512), MI].map((seat) => ({ key: keyOf(seat), race: count })) }); await settled();
+    expect(store.getSnapshot().countsReady.size).toBe(601);
+  });
+
+  it("cancels an old board request and never launches its remainder after an account switch or disconnect", async () => {
+    const { store, calls } = setup();
+    const seats = Array.from({ length: 600 }, (_, i): DdhqSeat => ({ state: "CA", office: "house", district: i + 1, special: false }));
+    store.setSeats(Symbol(), seats); store.connect("A", async () => {});
+    store.connect("B", async () => {});
+    expect(calls).toHaveLength(4);
+    expect(calls[1].signal.aborted).toBe(true);
+    calls[1].resolve({ races: seats.slice(0, 512).map((seat) => ({ key: keyOf(seat), race: count })) });
+    await settled();
+    expect(calls).toHaveLength(4);
+    expect(store.getSnapshot().owner).toBe("B");
+    expect(store.getSnapshot().countsReady.size).toBe(0);
+    expect(store.getSnapshot().countsFailed.size).toBe(0);
+    store.disconnect();
+    expect(calls[3].signal.aborted).toBe(true);
+    calls[3].resolve({ races: seats.slice(0, 512).map((seat) => ({ key: keyOf(seat), race: count })) }); await settled();
+    expect(calls).toHaveLength(4);
+    expect(store.getSnapshot()).toBe(EMPTY_DESK);
+  });
+
+  it("keeps reporting and count timestamps through count-only and forecast-merged snapshots", async () => {
+    const { store, calls } = setup();
+    const metadata = {
+      reporting: 63, resultsUpdatedAt: "2026-11-04T01:02:03Z",
+      counties: [{ fips: "13001", name: "Appling", total: 100, reporting: 84, candidates: [{ name: "Candidate", party: "D", votes: 100, pct: 100 }] }],
+    };
+    const upstream = { ...count, ...metadata };
+    store.setSeats(Symbol(), [GA]); store.connect("A", async () => {});
+    calls[1].resolve({ races: [{ key: keyOf(GA), race: upstream }] }); await settled();
+    expect(store.getSnapshot().races.get(keyOf(GA))).toMatchObject({ ...metadata, forecast: [] });
+    expect(store.getSnapshot().races.get(keyOf(GA))).not.toHaveProperty("rating");
+    expect(store.getSnapshot().races.get(keyOf(GA))).not.toHaveProperty("updatedAt");
+    expect(upstream.rating).toBe("lean-d");
+    calls[0].resolve(bundle([{ key: keyOf(GA), race: race({ rating: "tossup", updatedAt: 777 }) }])); await settled();
+    expect(store.getSnapshot().races.get(keyOf(GA))).toMatchObject({ ...metadata, forecast: [{ probability: 0.7 }], rating: "tossup", updatedAt: 777 });
+  });
+
+  it("retains a removed consumer's late counts in the same owner's tracker cache", async () => {
     const { store, calls } = setup(); const source = Symbol();
     store.setSeats(source, [GA]); store.connect("A", async () => {});
     calls[0].resolve(bundle()); await settled();
     store.removeSeats(source);
     calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
-    expect(store.getSnapshot().races.get(keyOf(GA))).toMatchObject({ candidates: null, total: 0, forecast: [{ probability: 0.7 }] });
+    expect(store.getSnapshot().races.get(keyOf(GA))).toMatchObject({ total: 100, forecast: [{ probability: 0.7 }] });
+    expect(store.getSnapshot().countsReady.has(keyOf(GA))).toBe(true);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(calls.filter((call) => call.path === "/api/ddhq/races")).toHaveLength(1);
   });
@@ -177,6 +382,9 @@ describe("private DDHQ store", () => {
     expect(calls[1].signal.aborted).toBe(true);
     calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
     expect(store.getSnapshot().races.size).toBe(0);
+    expect(store.getSnapshot().countsReady.size).toBe(0);
+    expect(store.getSnapshot().countsFailed.size).toBe(0);
+    expect(store.getSnapshot().countsFetchedAt).toBeNull();
     store.disconnect();
     calls[2].resolve(bundle()); await settled();
     expect(store.getSnapshot()).toBe(EMPTY_DESK);
@@ -200,7 +408,7 @@ describe("private DDHQ store", () => {
     const { store, calls } = setup();
     store.setSeats(Symbol(), [GA]); store.connect("A", async () => {});
     await vi.advanceTimersByTimeAsync(120_000);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     calls[0].resolve(bundle()); await settled();
     await vi.advanceTimersByTimeAsync(120_000);
     expect(calls.filter((call) => call.path === "/api/ddhq/races")).toHaveLength(1);

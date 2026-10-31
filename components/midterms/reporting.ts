@@ -8,7 +8,7 @@ import type { RaceSummary } from "@/lib/midterms/view";
  */
 export function reportingText(r: Pick<RaceSummary, "total" | "reporting" | "reportingUnknown" | "candidates">): { short: string; long: string; title?: string } {
   if (r.total === 0) return { short: "0%", long: "No results yet" };
-  if (r.reportingUnknown || !r.reporting) return { short: "n/a", long: "Reporting not given", title: "civicAPI has votes for this race but no reporting figure" };
+  if (r.reportingUnknown || !r.reporting) return { short: "n/a", long: "Reporting not given", title: "Votes are available, but the source did not provide a reporting figure" };
   const n = Math.round(r.reporting);
   if (r.reporting >= 99 && !r.candidates.some((c) => c.winner)) {
     return { short: "99%+", long: "Precincts in, ballots may remain", title: `${n}% of precincts or batches in, but mail, provisional and late ballots can still be counted` };

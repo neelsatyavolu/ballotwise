@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
-import { useAccount } from "@/components/AccountProvider";
 import { useDeskData } from "./desk";
 import { projection } from "@/lib/midterms/forecastTab";
 import { holderOf } from "@/lib/midterms/holders";
@@ -212,7 +211,6 @@ function AllRaces({ races, star, initialState }: { races: RaceSummary[]; star: S
 }
 
 export function MidtermsHome({ initialState }: { initialState: string | null }) {
-  const { ddhq } = useAccount();
   const desk = useDeskData();
   const live = useLive<Overview>("/api/midterms");
   const forecast = useLive<ForecastOverview>("/api/midterms/forecast").data;
@@ -247,7 +245,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       <ModeNav current="/midterms" />
       <header className="mt-hero">
         <h1>Midterms 2026</h1>
-        {ddhq === "connected" && <span className="mt-kicker">{data?.forecastSource === "ddhq" ? "Decision Desk HQ · Your Votes Pro forecast" : desk.forecastStatus === "error" ? "DDHQ unavailable · Ballotwise forecast fallback" : "Loading DDHQ forecast · Ballotwise fallback"}</span>}
+        {desk.enabled && <span className="mt-kicker">{desk.forecast ? "Decision Desk HQ · Your Votes Pro forecast" : desk.forecastStatus === "error" ? "DDHQ unavailable · Ballotwise forecast fallback" : "Loading Decision Desk HQ forecast…"}</span>}
         <span className="mt-kicker">{counting ? `Live results, checked every ${Math.round(live.interval / 1000)} seconds` : `Tuesday, Nov 3 · first polls close at ${formatTime(FIRST_CLOSE)}`}</span>
         {data && (
           <span className="mt-updated small">
@@ -262,7 +260,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
         )}
         <ElectionToggle on={election.on} onChange={election.set} />
       </header>
-      {ddhq === "connected" && desk.forecastStatus === "error" && <p className="error" role="status">{desk.forecastError} Retrying automatically.</p>}
+      {desk.enabled && desk.forecastStatus === "error" && <p className="error" role="status">{desk.forecastError} Retrying automatically.</p>}
       {error && <p className="error">{data ? `${error} Showing the last results we got.` : error}</p>}
       {!data && !error && <OverviewSkeleton />}
 
@@ -273,7 +271,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
         <>
           <div className="mt-balances mt-in" data-tour="balance">
             {(["senate", "house", "governor"] as const).map((o) => (
-              <BalanceBar key={o} title={o === "governor" ? "Governors" : OFFICE_LABEL[o]} office={o} tally={data.balance[o]} projected={projection(data.races, o, data.balance[o], forecast?.chambers?.[o], forecast?.source)} />
+              <BalanceBar key={o} title={o === "governor" ? "Governors" : OFFICE_LABEL[o]} office={o} tally={data.balance[o]} projected={projection(data.races, o, data.balance[o], forecast?.chambers?.[o], forecast?.source ?? data.forecastSource)} />
             ))}
           </div>
 

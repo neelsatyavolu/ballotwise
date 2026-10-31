@@ -85,15 +85,15 @@ describe("Decision Desk HQ race mapping", () => {
     ]);
     const body = { raceData: { toplineResults: [
       { winner: false, called_at: null, firstName: "Mike", lastName: "Collins", votes: 40, percent: 40, party: { abbrev: "GOP" } },
-      { winner: true, called_at: "2026-11-04T03:00:00Z", firstName: "Jon", lastName: "Ossoff", votes: 60, percent: 0.6, party: { name: "Democratic" } },
+      { winner: true, called_at: "2026-11-04T03:00:00Z", firstName: "Jon", lastName: "Ossoff", votes: 60, percent: 60, party: { name: "Democratic" } },
     ], countyResults: [{ fips: "13049", candidates: [{ first_name: "Jon", last_name: "Ossoff", votes: 10, percent: 70, party: { name: "Democratic" } }] }] } };
-    expect(readCall(body)).toEqual({ name: "Jon Ossoff", at: "2026-11-04T03:00:00Z" });
+    expect(readCall(body)).toEqual({ name: "Jon Ossoff", at: "2026-11-04T03:00:00.000Z" });
     expect(readCall({ raceData: { toplineResults: [{ winner: true, called_at: null, firstName: "Jon", lastName: "Ossoff" }] } })).toBeNull();
     expect(readResults(body)).toMatchObject({
       total: 100,
       candidates: [
-        { name: "Mike Collins", party: "Republican", votes: 40, pct: 40, winner: false },
         { name: "Jon Ossoff", party: "Democratic", votes: 60, pct: 60, winner: true },
+        { name: "Mike Collins", party: "Republican", votes: 40, pct: 40, winner: false },
       ],
       counties: [{ fips: "13049", candidates: [{ name: "Jon Ossoff", votes: 10, pct: 70 }] }],
     });
@@ -305,7 +305,7 @@ describe("Votes Pro gate", () => {
     });
     expect(await ddhqRace({ clientToken: "c", sessionId: "s" }, "senate", "GA", null)).toEqual({
       forecast: [{ name: "Jon Ossoff", party: "D", probability: 0.6 }],
-      call: { name: "Jon Ossoff", at: "2026-11-04T03:00:00Z" },
+      call: { name: "Jon Ossoff", at: "2026-11-04T03:00:00.000Z" },
       candidates: [{ name: "Jon Ossoff", party: "Democratic", votes: 10, pct: 100, winner: true, incumbent: false }],
       counties: [],
       total: 10,
@@ -351,7 +351,7 @@ describe("civicAPI replacement", () => {
     expect(next.candidates.find((row) => row.winner)?.name).toBe("Mike Collins");
     expect(next.total).toBe(80);
     expect(next.call).toMatchObject({ winner: "Mike Collins", withdrawn: false });
-    expect(next.counties[0]).toMatchObject({ reporting: 80, baseline2024: 12, total: 5 });
+    expect(next.counties[0]).toMatchObject({ reporting: 0, reportingUnknown: true, baseline2024: 12, total: 5 });
     expect(next.counties[0].candidates.map((row) => row.name)).toEqual(["Jon Ossoff", "Someone New"]);
     expect(isDesk(next)).toBe(true);
 

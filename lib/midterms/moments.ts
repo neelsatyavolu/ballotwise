@@ -28,7 +28,9 @@ export type Moment = {
 };
 
 /** A call event's moment key, the same whatever kind of moment it turns out to be. */
-export const callKey = (e: Pick<CallEvent, "id">) => `call:${e.id}`;
+export const callKey = (e: Pick<CallEvent, "id"> & Partial<CallEvent>) => e.source === "ddhq"
+  ? `call:ddhq:${e.raceId}:${e.at}:${e.kind}:${e.winner ?? ""}`
+  : `call:${e.id}`;
 
 const label = (r: RaceSummary) => (r.office === "measure" ? `${r.state} ${raceLabel(r)}` : raceLabel(r));
 

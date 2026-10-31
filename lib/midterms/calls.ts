@@ -9,6 +9,8 @@ export type Call = NonNullable<RaceSummary["call"]>;
  * winner just before it: null for a first call (or a call after a withdrawal), the withdrawn winner for a withdrawal.
  */
 export type CallEvent = {
+  /** Private current-state DDHQ event; absent on the shared civicAPI call history. */
+  source?: "ddhq";
   id: number;
   raceId: number;
   office: Office;

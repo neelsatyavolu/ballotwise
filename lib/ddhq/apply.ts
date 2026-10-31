@@ -55,15 +55,27 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace): T {
   const next = { ...race };
   if (desk.candidates) {
     const winner = desk.call?.name ?? desk.candidates.find((row) => row.winner)?.name ?? null;
-    const calledAt = desk.call ? Date.parse(desk.call.at) : Date.now();
-    next.candidates = desk.candidates.map((row) => candidate({ ...row, winner: row.name === winner }));
+    const calledAt = desk.call ? Date.parse(desk.call.at) : NaN;
+    next.candidates = desk.candidates.map((row) => candidate({ ...row, winner: row.name === winner })).sort((a, b) => b.votes - a.votes);
     next.total = desk.total;
+    next.reporting = desk.reporting ?? 0;
+    next.reportingUnknown = desk.total > 0 && desk.reporting === undefined ? true : undefined;
     next.calledFor = winner;
     next.callPending = undefined;
-    next.call = winner ? { id: race.id, at: Number.isNaN(calledAt) ? Date.now() : calledAt, winner, replaced: null, withdrawn: false } : null;
-    if ("counties" in race && desk.counties.length > 0) {
+    next.callUnknown = undefined;
+    next.missing = undefined;
+    next.lastSeen = undefined;
+    next.trend = undefined;
+    next.round = undefined;
+    next.call = winner && Number.isFinite(calledAt) ? { id: race.id, at: calledAt, winner, replaced: null, withdrawn: false } : null;
+    if ("counties" in race) {
       const detail = next as unknown as RaceDetail;
       detail.counties = (race as unknown as RaceDetail).counties.map((county) => mergeCounty(county, desk));
+      for (const county of desk.counties) {
+        if (detail.counties.some((row) => row.fips === county.fips)) continue;
+        detail.counties.push(mergeCounty({ fips: county.fips, name: county.name ?? county.fips, total: 0, reporting: 0, candidates: [], baseline2024: null, pres2024: null }, desk));
+      }
+      detail.updated = desk.resultsUpdatedAt ?? null;
     }
     marked.add(next);
   }
@@ -84,16 +96,10 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace): T {
 
 function mergeCounty(county: CountyResult, desk: DdhqRace): CountyResult {
   const hit = desk.counties.find((row) => row.fips === county.fips);
-  if (!hit) return county;
-  const byName = new Map(hit.candidates.map((row) => [row.name, row]));
-  const candidates = county.candidates.map((row) => {
-    const next = byName.get(row.name);
-    return next ? { ...row, votes: next.votes, pct: next.pct, party: next.party || row.party } : { ...row, votes: 0, pct: 0 };
-  });
-  for (const row of hit.candidates) {
-    if (!candidates.some((candidate) => candidate.name === row.name)) candidates.push({ name: row.name, party: row.party, votes: row.votes, pct: row.pct });
-  }
-  return { ...county, total: candidates.reduce((sum, row) => sum + row.votes, 0), candidates };
+  if (!hit) return { ...county, total: 0, reporting: 0, reportingUnknown: true, candidates: [] };
+  const candidates = hit.candidates.map((row) => ({ ...row }));
+  const total = hit.total ?? candidates.reduce((sum, row) => sum + row.votes, 0);
+  return { ...county, name: hit.name ?? county.name, total, candidates, reporting: hit.reporting ?? 0, reportingUnknown: total > 0 && hit.reporting === undefined ? true : undefined };
 }
 
 export function deskKeyFor(race: Pick<RaceSummary, "office" | "state" | "district" | "title">): string {
@@ -105,7 +111,8 @@ function eventsFor(races: readonly RaceSummary[]): CallEvent[] {
     .filter((race) => race.call && !race.call.withdrawn && race.call.winner)
     .map((race) => {
       const winner = race.candidates.find((candidate) => candidate.name === race.call!.winner);
-      return { id: race.id, raceId: race.id, office: race.office, kind: "call" as const, winner: race.call!.winner, party: winner?.party ?? null, previous: null, at: race.call!.at };
+      const privateCall = isDesk(race);
+      return { id: privateCall ? race.id : race.call!.id, raceId: race.id, office: race.office, kind: "call" as const, winner: race.call!.winner, party: winner?.party ?? null, previous: null, at: race.call!.at, ...(privateCall ? { source: "ddhq" as const } : {}) };
     })
     .sort((a, b) => b.at - a.at);
 }
