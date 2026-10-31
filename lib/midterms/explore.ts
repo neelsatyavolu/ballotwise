@@ -42,6 +42,20 @@ export const isWatch = (r: RaceSummary) => r.rating === "tossup" && !isCalled(r)
 /** An uncalled race the forecast rated a lean: competitive, and highlighted on election night a step below toss-ups. */
 export const isCompetitive = (r: RaceSummary) => !!r.rating?.startsWith("lean") && !isCalled(r);
 
+/**
+ * The closest-races order: uncalled toss-ups first, then everything else. Within each, the closest counted race first;
+ * before any votes, the most competitive by rating. A called toss-up drops back among the rest.
+ */
+export function closestFirst(a: RaceSummary, b: RaceSummary): number {
+  const watch = Number(isWatch(b)) - Number(isWatch(a));
+  if (watch) return watch;
+  const la = lead(a.candidates);
+  const lb = lead(b.candidates);
+  if (la && lb) return la.margin - lb.margin;
+  if (la || lb) return la ? -1 : 1;
+  return compareRaces(a, b);
+}
+
 export function statusOf(r: RaceSummary): Status {
   if (isCalled(r)) return "called";
   return r.total > 0 ? "counting" : "awaiting";

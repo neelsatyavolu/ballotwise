@@ -108,6 +108,8 @@
 .mt-outline { fill: none; stroke: var(--rule-strong); stroke-width: 1; }
 .mt-county { fill: color-mix(in srgb, var(--rule) 45%, var(--sheet)); stroke: var(--sheet); stroke-width: 0.6; transition: fill 0.4s; }
 .mt-county.active { cursor: pointer; }
+/* A focused state is traced along its own border (the map's hover outline), not boxed by the page-wide focus ring. */
+.mt-county:focus { outline: none; }
 .mt-borders { fill: none; stroke: var(--sheet); stroke-width: 1; pointer-events: none; }
 /* Stripes over a state or district projected to change party. */
 .mt-flip { stroke: none; pointer-events: none; }
@@ -333,7 +335,12 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-cs-sub { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .mt-cs-mini { display: none; }
 .mt-el-latest { display: none; }
-.mt-el-fresh { margin: 0; padding: 4px 10px; border-radius: var(--radius); background: color-mix(in srgb, var(--red) 12%, var(--sheet)); }
+.mt-el-calls-meta { margin: 0; }
+.mt-el-quiet { border: 0; background: none; padding: 0; font: inherit; color: var(--ink); cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 2px; }
+.mt-el-quiet:hover { text-decoration-color: currentColor; }
+.mt-el-hold { white-space: nowrap; padding-top: 1px; }
+.mt-el-about summary { cursor: pointer; width: max-content; }
+.mt-el-about[open] summary { margin-bottom: 4px; }
 .mt-el-gains { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .mt-cs-sub span:last-child { text-align: right; }
 .mt-cs-foot { margin: 0; color: var(--muted); }
@@ -359,8 +366,8 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-fx { display: grid; gap: 8px; }
 .mt-fx-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .mt-fx-bar .mt-search { flex: 1; min-width: 200px; }
-.mt-fx-bar .btn.small, .mt-fx-panel .btn.small { min-height: 36px; padding: 0 12px; font-size: 14px; }
-.mt-fx-bar .btn.has { border-color: var(--accent); color: var(--accent); }
+.mt-fx-bar .btn.small, .mt-fx-row .btn.small, .mt-fx-panel .btn.small { min-height: 36px; padding: 0 12px; font-size: 14px; }
+.mt-fx-bar .btn.has, .mt-fx-row .btn.has { border-color: var(--accent); color: var(--accent); }
 .mt-fx-views, .mt-fx-active { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .mt-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 999px; background: var(--sheet); color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .mt-chip:hover { border-color: var(--ink); }
@@ -420,7 +427,8 @@ a.mt-flag { text-decoration: none; }
 .mt-el-call-main { min-width: 0; }
 .mt-el-call-main a { color: var(--ink); font-weight: 700; text-decoration: none; }
 .mt-el-call-main a:hover { text-decoration: underline; }
-.mt-el-call-who { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The winner line wraps rather than cutting off names and margins in narrow columns. */
+.mt-el-call-who { display: block; overflow-wrap: anywhere; }
 .mt-el-calls { display: grid; gap: 6px; }
 .mt-el-calls > p { margin: 0; }
 
@@ -430,8 +438,8 @@ a.mt-flag { text-decoration: none; }
 .mt-el-sched li + li { border-top: 1px solid var(--rule); }
 .mt-el-sched li.closed summary b { color: var(--muted); }
 .mt-el-sched li.next { box-shadow: inset 3px 0 0 var(--red); }
-.mt-el-sched summary { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; cursor: pointer; font-size: 14px; list-style: none; }
-.mt-el-sched summary::-webkit-details-marker { display: none; }
+.mt-el-sched li summary { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; cursor: pointer; font-size: 14px; list-style: none; }
+.mt-el-sched li summary::-webkit-details-marker { display: none; }
 .mt-el-sched-states { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mt-el-sched-status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .mt-el-sched li.next .mt-el-sched-status { color: var(--red); font-weight: 700; }
@@ -521,9 +529,9 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt .btn.secondary:hover { border-color: var(--el-line); background: var(--el-hover); filter: none; }
 .mt .input { background: var(--sheet); border-color: var(--rule); color: var(--ink); }
 .mt .input:hover { border-color: var(--el-line); }
-.mt-el .mt-fx-bar .btn.small, .mt-el .mt-fx-panel .btn.small { min-height: 34px; font-size: 13px; font-weight: 500; }
+.mt-el .mt-fx-row .btn.small, .mt-el .mt-fx-panel .btn.small { min-height: 34px; font-size: 13px; font-weight: 500; }
 .mt-el .mt-fx-bar .mt-search, .mt-el .mt-fx .mt-select { min-height: 34px; padding: 6px 10px; font-size: 14px; }
-.mt-el .mt-fx-bar .btn.has { border-color: var(--accent); color: var(--accent); }
+.mt-el .mt-fx-row .btn.has { border-color: var(--accent); color: var(--accent); }
 
 /* Segmented groups: a bordered dark container; the selected item lighter with white text, the rest grey. */
 .mt .mt-seg, .mt-el .mt-el-offices { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
@@ -600,7 +608,9 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-tile-foot { margin-top: auto; display: grid; gap: 5px; padding: 8px 12px 10px; border-top: 1px solid var(--rule); }
 .mt-el .mt-tile-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; color: var(--muted); }
 .mt-el .mt-tile-status .mt-res-status { font-size: 12px; }
-.mt-el .mt-tile-lead { display: inline-flex; align-items: center; gap: 6px; }
+.mt-el .mt-tile-lead { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+/* The vote gap stays one piece: on a narrow card it drops under the badge rather than splitting "97,852 / votes". */
+.mt-el .mt-tile-lead > span { white-space: nowrap; }
 .mt-el .mt-margin { display: inline-block; padding: 1px 6px; border-radius: 4px; color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .mt-el .mt-res-trend { margin-top: 0; font-size: 12px; }
 
@@ -608,12 +618,13 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-el-calllist, .mt-el .mt-el-sched ol { background: var(--sheet); border-color: var(--rule); border-radius: 8px; }
 .mt-el .mt-el-calllist li { padding: 8px 12px; gap: 10px; font-size: 13px; }
 .mt-el .mt-el-calllist li:hover, .mt-el .mt-el-sched li:hover { background: var(--el-hover); }
-.mt-el .mt-el-calllist li.new { background: color-mix(in srgb, var(--accent) 7%, var(--sheet)); box-shadow: inset 4px 0 0 var(--accent); }
+/* New calls get a thin accent edge only, so a burst of calls doesn't turn the whole list yellow. */
+.mt-el .mt-el-calllist li.new { box-shadow: inset 3px 0 0 var(--accent); }
 .mt-el .mt-el-calllist time, .mt-el .mt-el-call-who { font-size: 12px; color: var(--muted); }
 .mt-el .mt-el-calls > p, .mt-el .mt-el-sched > p { font-size: 12px; line-height: 1.45; color: var(--muted); }
 .mt-el .mt-el-sched li { padding: 8px 12px; }
 .mt-el .mt-el-sched li.next { box-shadow: inset 4px 0 0 var(--red); }
-.mt-el .mt-el-sched summary { font-size: 13px; }
+.mt-el .mt-el-sched li summary { font-size: 13px; }
 .mt-el .mt-el-sched summary b { font-weight: 700; color: var(--ink); }
 .mt-el .mt-el-sched li.closed summary b { color: var(--muted); }
 .mt-el .mt-el-sched-states, .mt-el .mt-el-sched-status { font-size: 12px; }
@@ -714,7 +725,13 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 }
 
 /* Race explorer toolbar: one search row, then the quick views as a single segmented control with the count beside it. */
-.mt-fx-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* Quick views on the left; the count (when filtered), filters, sort, freeze and other races on the right. */
+.mt-fx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mt-fx-row .mt-fx-views { margin-right: auto; }
+/* Beside the office tabs, the search can be narrow; on phones it still takes its own line. */
+.mt-el .mt-fx-bar .mt-search { min-width: 140px; }
+.mt-el .mt-fx-row .mt-select { width: 128px; }
+.mt-el .mt-fx-row .mt-fx-views .mt-chip { padding: 0 8px; }
 .mt .mt-fx-views { display: inline-flex; flex-wrap: nowrap; gap: 2px; margin: 0; padding: 3px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); overflow-x: auto; max-width: 100%; scrollbar-width: none; }
 .mt .mt-fx-views .mt-chip { min-height: 28px; border-color: transparent; background: none; }
 .mt .mt-fx-views .mt-chip.on { background: var(--el-raised); border-color: var(--el-line); color: var(--ink); }
@@ -765,13 +782,20 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-ct-more a { color: var(--muted); text-decoration: none; }
 .mt-ct-more a:hover { color: var(--ink); }
 .mt-ct tfoot td { height: 36px; color: var(--muted); background: color-mix(in srgb, var(--ink) 3%, transparent); }
-/* A long status ("Polls close Nov 4, 1:00 AM ET") wraps within the row's height, so footers stay level across cards. */
-.mt-ct-status td:first-child { white-space: normal; line-height: 1.15; padding-top: 0; padding-bottom: 0; }
+/*
+ * The status's first line and the total share one 18px line at the top of the row, so the total reads beside "Counting"
+ * (not floating between it and the lead under it). A long status ("Polls close Nov 4, 1:00 AM ET") wraps below.
+ */
+.mt-ct-status td { vertical-align: top; padding-top: 9px; padding-bottom: 9px; }
+.mt-ct-status td { line-height: 18px; }
+.mt-ct-status td:first-child { white-space: normal; }
+.mt-ct-status .mt-res-status { min-height: 18px; }
 .mt-ct-status .called { color: var(--el-reported); font-weight: 600; }
 .mt-ct-report td { border-bottom: 0; }
-.mt-ct-in { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
-.mt-ct-in .num { min-width: 28px; text-align: right; }
-.mt-ct-track { flex: 0 1 45%; max-width: 260px; height: 8px; background: var(--el-track); overflow: hidden; }
+/* The bar runs from the candidate column's edge; the share sits at the right, under the Pct column. */
+.mt-ct-in { display: flex; align-items: center; gap: 10px; }
+.mt-ct-in .num { min-width: 3.5em; text-align: right; }
+.mt-ct-track { flex: 1 1 auto; height: 8px; background: var(--el-track); overflow: hidden; }
 .mt-ct-track span { display: block; height: 100%; background: var(--el-reported); transition: width 0.5s ease; }
 
 /* Cards end on the table's last row, which sits at the card's bottom. */
@@ -931,11 +955,18 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 @media (min-width: 1800px) {
   .mt-sbs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mt-sbs-note { display: none; }
+  /*
+   * Side by side, the columns stretch to the tallest one and each closest-races list grows into the space under it
+   * instead of stopping short, up to its own rows. Its height of 0 keeps a 435-row list from making its own column the
+   * tallest.
+   */
+  .mt-sbs { align-items: stretch; }
+  .mt-sbs-col { display: flex; flex-direction: column; }
+  .mt-sbs .mt-sbs-col > .mt-rows-wrap { flex: 1 1 auto; height: 0; min-height: 360px; max-height: max-content; }
 }
 @media (min-width: 2560px) {
   .mt-sbs { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(340px, 0.6fr); }
   .mt-sbs-side { display: grid; gap: 20px; align-content: start; }
-  .mt-sbs-col .mt-rows-wrap { max-height: 520px; }
 }
 
 /* Other races: "find any race" on the overview and in a dialog from election mode's toolbar. */

@@ -91,20 +91,26 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
         <a href="#latest-calls">Calls</a>
       </nav>
 
-      <div className="mt-el-offices" role="tablist" aria-label="Office">
-        {OFFICES.map((o) => (
-          <button key={o} type="button" role="tab" className="tab" aria-selected={f.office === o} onClick={() => set({ office: o, states: [] })}>
-            {o === "all" ? "All races" : OFFICE_LABEL[o]}
-            <span className="tab-count">{counts[o]}</span>
-          </button>
-        ))}
-      </div>
-
       <RailContext.Provider value={rail}>
       <div className="mt-el-grid">
         <div className="mt-el-list" id="el-races">
           <LatestLink races={data.races} />
-          <Explorer races={data.races} f={f} set={set} stars={stars} />
+          <Explorer
+            races={data.races}
+            f={f}
+            set={set}
+            stars={stars}
+            lead={
+              <div className="mt-el-offices" role="tablist" aria-label="Office">
+                {OFFICES.map((o) => (
+                  <button key={o} type="button" role="tab" className="tab" aria-selected={f.office === o} onClick={() => set({ office: o, states: [] })}>
+                    {o === "all" ? "All races" : o === "measure" ? "Measures" : OFFICE_LABEL[o]}
+                    <span className="tab-count">{counts[o]}</span>
+                  </button>
+                ))}
+              </div>
+            }
+          />
         </div>
         <div className="mt-el-mapbox" id="el-map" ref={setMapbox}>
           <div className="mt-section-head tight">

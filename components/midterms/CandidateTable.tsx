@@ -38,10 +38,10 @@ function Reporting({ race }: { race: RaceSummary }) {
   const pct = known ? Math.min(100, race.reporting) : 0;
   return (
     <div className="mt-ct-in" title={text.title ?? "civicAPI's estimate of precincts or ballot batches reported. Not the share of the expected vote."}>
-      <span className="num">{known && text.short !== "99%+" ? `${Math.round(pct)}%` : text.long}</span>
       <span className="mt-ct-track" aria-hidden>
         <span style={{ width: `${pct}%` }} />
       </span>
+      <span className="num">{known && text.short !== "99%+" ? `${Math.round(pct)}%` : text.long}</span>
     </div>
   );
 }

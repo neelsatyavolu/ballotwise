@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { parseWeights, resize } from "@/lib/midterms/columns";
+import { closestFirst } from "@/lib/midterms/explore";
 import { electionModeDefault } from "@/lib/midterms/polls";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
@@ -12,7 +13,7 @@ import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { CountyTip, fillFor } from "./county";
 import { useClock, useLive, useStars } from "./hooks";
 import { ModeNav } from "./ModeNav";
-import { byCloseness, districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills } from "./OfficeView";
+import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills } from "./OfficeView";
 import { PollSchedule } from "./PollClose";
 import { RaceCard } from "./RaceCard";
 import { RaceRows, type Star } from "./RaceRows";
@@ -39,7 +40,7 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
   const updatedAt = data.ratings.updatedAt;
   const fills = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
   const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
-  const inState = useMemo(() => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || byCloseness(a, b) || (a.district ?? 0) - (b.district ?? 0)), [races, focus]);
+  const inState = useMemo(() => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || closestFirst(a, b) || (a.district ?? 0) - (b.district ?? 0)), [races, focus]);
   // A statewide office opens the state's regular race when none is picked; the House waits for a district.
   const shownId = focus ? (picked && inState.some((r) => r.id === picked) ? picked : office === "house" ? null : (inState[0]?.id ?? null)) : null;
   const shown = inState.find((r) => r.id === shownId) ?? null;
@@ -56,7 +57,7 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
     for (const r of inState) if (r.district !== null && !out.has(r.district)) out.set(r.district, districtFill(r, updatedAt, results));
     return out;
   }, [office, inState, updatedAt, results]);
-  const closest = useMemo(() => [...races].sort(byCloseness), [races]);
+  const closest = useMemo(() => [...races].sort(closestFirst), [races]);
   const zoomTo = (state: string | null, raceId: number | null = null) => {
     setFocus(state);
     setPicked(raceId);
@@ -119,7 +120,7 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
 }
 
 const WIDTHS_KEY = "mt-sbs-widths";
-/** What the third column shows: the governors' dashboard, or cards for every toss-up race. */
+/** What the third column shows: the governors' dashboard, or cards for every Senate and House toss-up. */
 const THIRD_KEY = "mt-sbs-third";
 type Third = "governor" | "tossups";
 /** Fired when this page saves a setting, so every reader of it updates. */
@@ -190,9 +191,9 @@ function ThirdSwitch({ third }: { third: Third }) {
   );
 }
 
-/** Every toss-up race, any office, as cards with the top two candidates: closest counts first once votes are in. */
+/** Every Senate and House toss-up (governors have their own column), as cards with the top two candidates: closest counts first. */
 function TossupColumn({ data, star, handle, toggle }: { data: Overview; star: Star; handle: ReactNode; toggle: ReactNode }) {
-  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup").sort(byCloseness), [data]);
+  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && (r.office === "senate" || r.office === "house")).sort(closestFirst), [data]);
   return (
     <section className="mt-sbs-col" aria-label="Toss-up races">
       <div className="mt-section-head tight">

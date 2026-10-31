@@ -86,7 +86,7 @@ export function CallAlerts({ events, races }: { events: readonly CallEvent[]; ra
       onClick={() => void toggle()}
       title={denied ? "Notifications are blocked for this site in your browser settings" : on ? "Alerts on for new, changed and withdrawn calls. Tap to turn off." : "Alert me when a race is called, a call changes or is withdrawn"}
     >
-      <span aria-hidden>{on ? "🔔" : "🔕"}</span> {denied ? "Alerts blocked" : on ? "Alerts on" : "Alerts"}
+      {denied ? "Alerts blocked" : on ? "Alerts on" : "Alerts off"}
     </button>
   );
 }

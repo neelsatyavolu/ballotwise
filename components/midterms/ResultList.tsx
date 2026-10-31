@@ -80,7 +80,7 @@ function StatusText({ race, now }: { race: RaceSummary; now: number }) {
       <span className="mt-res-status">
         Counting
         {isEarly(race) && <span className="mt-flag" title={`Under ${EARLY_REPORTING}% reporting: early leads often change`}>Early</span>}
-        {flip && <span className={`mt-flag lead p-${flip}`} title="Leading for a different party than holds the seat; not a call">{flip} leading in a potential flip</span>}
+        {flip && <span className={`mt-flag lead p-${flip}`} title="Leading for a different party than holds the seat; not a call">Possible {flip} flip</span>}
       </span>
     );
   }

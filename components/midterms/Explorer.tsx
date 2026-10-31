@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { activeCount, DEFAULT_FILTERS, explore, viewCounts, type Filters, type Leader, type Sort, type Status, type Tier, type View } from "@/lib/midterms/explore";
 import { closeWaves, formatET } from "@/lib/midterms/polls";
 import { STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
@@ -15,7 +15,7 @@ const VIEWS: { id: View; label: string; title: string }[] = [
   { id: "key", label: "Key races", title: "Rated toss-up, lean or likely by markets or polls" },
   { id: "uncalled", label: "Uncalled", title: "Not called yet" },
   { id: "close", label: "Close", title: "Votes counted, lead under 5 points, not called" },
-  { id: "gains", label: "Called gains & leading flips", title: "Called for a different party than holds the seat now, or led by one (early leads, under 25% reporting, are marked Early)" },
+  { id: "gains", label: "Flips", title: "Called for a different party than holds the seat now, or led by one (early leads, under 25% reporting, are marked Early)" },
 ];
 const STATUSES: { id: Status; label: string }[] = [
   { id: "awaiting", label: "No votes yet" },
@@ -115,8 +115,11 @@ function Panel({ f, set, states, onClose }: { f: Filters; set: (next: Partial<Fi
   );
 }
 
-/** Search, quick views, more filters (count status among them) and sort over one office's races, all kept in the URL. */
-export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary[]; f: Filters; set: (next: Partial<Filters>) => void; stars: Stars }) {
+/**
+ * Search, quick views, more filters (count status among them) and sort over one office's races, all kept in the URL.
+ * `lead` (election mode's office tabs) shares the search's row, so the controls take two rows.
+ */
+export function Explorer({ races, f, set, stars, lead }: { races: readonly RaceSummary[]; f: Filters; set: (next: Partial<Filters>) => void; stars: Stars; lead?: ReactNode }) {
   const [open, setOpen] = useState(false);
   // A frozen order is kept in this browser for the night, so a reload doesn't reshuffle the rows.
   const [heldRaw, setHeldRaw] = useStored("mt-freeze");
@@ -138,20 +141,13 @@ export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary
     set({ sort });
   };
   const extra = activeCount(f) - (f.q.trim() ? 1 : 0);
+  const narrowed = f.view !== DEFAULT_FILTERS.view || activeCount(f) > 0;
 
   return (
     <section className="mt-fx" aria-label="Races">
       <div className="mt-fx-bar">
+        {lead}
         <input className="input mt-search" type="search" placeholder="Search a race, state or candidate" value={f.q} onChange={(e) => set({ q: e.target.value })} aria-label="Search races" />
-        <button type="button" className={`btn secondary small${extra ? " has" : ""}`} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          Filters{extra ? ` (${extra})` : ""}
-        </button>
-        <select className="input mt-select" value={f.sort} onChange={(e) => sortBy(e.target.value as Sort)} aria-label="Sort by">
-          {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-        </select>
-        <button type="button" className="btn secondary small mt-fx-freeze" aria-pressed={!!held} onClick={() => setHeld(held ? null : list.map((r) => r.id))} title="Stop rows moving as new votes come in">
-          {held ? "Unfreeze" : "Freeze"}
-        </button>
         <RaceSearchButton />
       </div>
 
@@ -163,10 +159,20 @@ export function Explorer({ races, f, set, stars }: { races: readonly RaceSummary
             </button>
           ))}
         </div>
-        <p className="muted small mt-fx-count" aria-live="polite">
+        {/* Each view's chip already counts the races matching the filters, so the total is for screen readers. */}
+        <p className="mt-fx-count sr-only" aria-live="polite">
           {ordered.length} {ordered.length === 1 ? "race" : "races"}
-          {f.view !== DEFAULT_FILTERS.view || activeCount(f) ? " match" : ""}
+          {narrowed ? " match" : ""}
         </p>
+        <button type="button" className={`btn secondary small${extra ? " has" : ""}`} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          Filters{extra ? ` (${extra})` : ""}
+        </button>
+        <select className="input mt-select" value={f.sort} onChange={(e) => sortBy(e.target.value as Sort)} aria-label="Sort by">
+          {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+        <button type="button" className="btn secondary small mt-fx-freeze" aria-pressed={!!held} onClick={() => setHeld(held ? null : list.map((r) => r.id))} title="Stop rows moving as new votes come in">
+          {held ? "Unfreeze" : "Freeze"}
+        </button>
       </div>
 
       {open && <Panel f={f} set={set} states={states} onClose={() => setOpen(false)} />}

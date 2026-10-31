@@ -112,7 +112,10 @@ export function PollSchedule({ races, picked, onPick }: { races: readonly RaceSu
           );
         })}
       </ol>
-      <p className="muted small">Races are grouped by the state&apos;s first poll closing, when its results start. * marks states where the rest of the polls close later, so their races can&apos;t be called until then. Times from <a href="https://www.270towin.com/content/local-poll-closing-times-november-2026-general-election/">270toWin</a>.</p>
+      <details className="mt-el-about small muted">
+        <summary>About these times</summary>
+        Races are grouped by the state&apos;s first poll closing, when its results start. * marks states where the rest of the polls close later, so their races can&apos;t be called until then. Times from <a href="https://www.270towin.com/content/local-poll-closing-times-november-2026-general-election/">270toWin</a>.
+      </details>
     </section>
   );
 }

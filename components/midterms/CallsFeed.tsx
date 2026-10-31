@@ -11,6 +11,8 @@ import { shortLabel } from "./PollClose";
 import { useStored } from "./seen";
 
 const SHOWN = 12;
+/** Seats changing party listed before "+N more", so a big night doesn't bury the feed under its chips. */
+const GAINS_SHOWN = 4;
 
 /** Call events from each race's current state, for when the overview carries no event log. */
 function fromRaces(races: readonly RaceSummary[]): CallEvent[] {
@@ -45,6 +47,7 @@ function winnerMargin(r: RaceSummary, name: string): number | null {
 /** Every call, changed call and withdrawal, newest first, with seats changing party pinned on top. `children` sit beside the alerts switch: election mode puts its pop-up switch there. */
 export function CallsFeed({ races, events: given, counts, office, children }: { races: readonly RaceSummary[]; events?: CallEvent[]; counts?: Record<Office, number>; office: Office | "all"; children?: React.ReactNode }) {
   const [all, setAll] = useState(false);
+  const [allGains, setAllGains] = useState(false);
   const [everyOffice, setEveryOffice] = useState(false);
   const scope = everyOffice ? "all" : office;
   const byId = useMemo(() => new Map(races.map((r) => [r.id, r])), [races]);
@@ -104,31 +107,31 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
     <section className="mt-el-calls" id="latest-calls" aria-label="Latest calls">
       <div className="mt-section-head tight">
         <h2>Latest calls</h2>
+        <span className="muted small">{total || "None yet"}</span>
         <CallAlerts events={live} races={races} />
         {children}
-        <span className="muted small">
-          {total ? `${total} so far${shown.length < total ? `, latest ${Math.min(shown.length, all ? shown.length : SHOWN)} shown` : ""}` : "None yet"}
-          {office !== "all" && (
+      </div>
+      {(fresh.length > 0 || office !== "all") && (
+        <p className="mt-el-calls-meta small muted">
+          {fresh.length > 0 && (
             <>
-              {" · "}
-              <button type="button" className="mt-linkish" aria-pressed={everyOffice} onClick={() => setEveryOffice((v) => !v)}>
-                {everyOffice ? `Only ${office === "measure" ? "measures" : OFFICE_LABEL[office]}` : "Include every office"}
-              </button>
+              {fresh.length} new since you looked ·{" "}
+              <button type="button" className="mt-el-quiet" onClick={() => setStored(String(Math.max(seenThrough, ...events.map((e) => e.id))))}>Mark seen</button>
             </>
           )}
-        </span>
-      </div>
-      <p className="sr-only" aria-live="polite">{fresh.length ? `New: ${fresh.slice(0, 3).map(spoken).join("; ")}` : ""}</p>
-      {fresh.length > 0 && (
-        <p className="mt-el-fresh small">
-          {fresh.length} new since you looked{" "}
-          <button type="button" className="mt-linkish" onClick={() => setStored(String(Math.max(seenThrough, ...events.map((e) => e.id))))}>Mark seen</button>
+          {fresh.length > 0 && office !== "all" && <span aria-hidden> · </span>}
+          {office !== "all" && (
+            <button type="button" className="mt-el-quiet" aria-pressed={everyOffice} onClick={() => setEveryOffice((v) => !v)}>
+              {everyOffice ? `Only ${office === "measure" ? "measures" : OFFICE_LABEL[office]}` : "Show every office"}
+            </button>
+          )}
         </p>
       )}
+      <p className="sr-only" aria-live="polite">{fresh.length ? `New: ${fresh.slice(0, 3).map(spoken).join("; ")}` : ""}</p>
       {gains.length > 0 && (
         <div className="mt-el-gains" aria-label="Seats changing party">
-          <span className="small"><b>Changed party</b></span>
-          {gains.map((r) => {
+          <span className="small"><b>Changed party</b> <span className="muted">{gains.length}</span></span>
+          {(allGains ? gains : gains.slice(0, GAINS_SHOWN)).map((r) => {
             const o = outcomeOf(r)!;
             return (
               <Link key={r.id} href={`/midterms/${r.id}`} className={`mt-flag gain p-${o.side}`}>
@@ -136,6 +139,11 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
               </Link>
             );
           })}
+          {gains.length > GAINS_SHOWN && (
+            <button type="button" className="mt-el-quiet small" onClick={() => setAllGains((v) => !v)}>
+              {allGains ? "Fewer" : `+${gains.length - GAINS_SHOWN} more`}
+            </button>
+          )}
         </div>
       )}
       {shown.length === 0 ? (
@@ -155,7 +163,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
                 <time className="muted" dateTime={new Date(e.at).toISOString()}>{stampET(e.at)}</time>
                 <span className="mt-el-call-main">
                   <Link href={`/midterms/${r.id}`}>{shortLabel(r)}</Link>
-                  <span className="muted small"> {r.office === "measure" ? "measure" : OFFICE_LABEL[r.office].toLowerCase()}</span>
+                  {scope === "all" && <span className="muted small"> {r.office === "measure" ? "measure" : OFFICE_LABEL[r.office].toLowerCase()}</span>}
                   {e.winner ? (
                     <span className="mt-el-call-who">
                       <span className="swatch" style={{ background: won ? colorOf(won) : "var(--rule-strong)" }} aria-hidden /> {e.winner}
@@ -168,7 +176,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
                   {e.winner && prior && prior !== e.winner && <span className="mt-flag warn">Changed from {prior}</span>}
                   {!current && <span className="muted small"> · since superseded</span>}
                 </span>
-                {outcome && <span className={`mt-flag${outcome.gain ? ` gain p-${outcome.side}` : ""}`}>{outcome.side} {outcome.gain ? "gain" : "hold"}</span>}
+                {outcome && (outcome.gain ? <span className={`mt-flag gain p-${outcome.side}`}>{outcome.side} gain</span> : <span className="mt-el-hold small muted">{outcome.side} hold</span>)}
               </li>
             );
           })}
@@ -185,7 +193,10 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
         </button>
       )}
       {loadError && <p className="error small">{loadError}</p>}
-      <p className="muted small">Calls come from civicAPI&apos;s decision desk, not AP or Decision Desk HQ. Times are when Ballotwise first saw each call. Hold and gain compare with the party holding the seat now; House seats are matched by district number, so redrawn districts compare with their current member.</p>
+      <details className="mt-el-about small muted">
+        <summary>About these calls</summary>
+        Calls come from civicAPI&apos;s decision desk, not AP or Decision Desk HQ. Times are when Ballotwise first saw each call. Hold and gain compare with the party holding the seat now; House seats are matched by district number, so redrawn districts compare with their current member.
+      </details>
     </section>
   );
 }

@@ -5,9 +5,9 @@ import { useMemo, useState } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { projection } from "@/lib/midterms/forecastTab";
-import { flipTo, isCompetitive, isWatch, raceFill } from "@/lib/midterms/explore";
+import { closestFirst, flipTo, isCompetitive, isWatch, raceFill } from "@/lib/midterms/explore";
 import { electionModeDefault } from "@/lib/midterms/polls";
-import { colorOf, compareRaces, lead, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { colorOf, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
 import { useClock, useLive, useStars } from "./hooks";
@@ -26,15 +26,6 @@ const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "
 
 /** Specials sort after a state's regular race, so the regular one colors the state. */
 export const regularFirst = (a: RaceSummary, b: RaceSummary) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title));
-
-/** Closest counted races first; before any votes, the most competitive by rating. */
-export function byCloseness(a: RaceSummary, b: RaceSummary) {
-  const la = lead(a.candidates);
-  const lb = lead(b.candidates);
-  if (la && lb) return la.margin - lb.margin;
-  if (la || lb) return la ? -1 : 1;
-  return compareRaces(a, b);
-}
 
 function raceTip(r: RaceSummary) {
   return (
@@ -156,7 +147,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
   // House districts go closest to a toss-up first; other offices keep the regular race first, then ballot order.
   const inState = useMemo(
-    () => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || (office === "house" ? byCloseness(a, b) : 0) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title, undefined, { numeric: true })),
+    () => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || (office === "house" ? closestFirst(a, b) : 0) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title, undefined, { numeric: true })),
     [races, focus, office],
   );
   const statewide = office === "senate" || office === "governor";
@@ -178,7 +169,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   }, [detail.data]);
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return races.filter((r) => !q || `${raceLabel(r)} ${r.title} ${STATE_NAMES[r.state] ?? ""} ${r.candidates.map((c) => c.name).join(" ")}`.toLowerCase().includes(q)).sort(byCloseness);
+    return races.filter((r) => !q || `${raceLabel(r)} ${r.title} ${STATE_NAMES[r.state] ?? ""} ${r.candidates.map((c) => c.name).join(" ")}`.toLowerCase().includes(q)).sort(closestFirst);
   }, [races, query]);
   const star = { ids: favorites.ids, toggle: favorites.toggle };
 
