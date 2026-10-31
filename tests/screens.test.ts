@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EXPIRE_MS, hiddenOn, roleOf, type Screen } from "../lib/midterms/screens";
+import { EXPIRE_MS, hiddenOn, roleOf, tileGrid, type Screen } from "../lib/midterms/screens";
 
 const NOW = 1_000_000;
 const screen = (id: string, over: Partial<Screen> = {}): Screen => ({ id, startedAt: 0, at: NOW, visible: true, area: 1000, panels: [], seen: [], solo: false, mock: null, ...over });
@@ -37,4 +37,25 @@ describe("second screens", () => {
     expect(hiddenOn(ultrawide)).toEqual(["tossups"]);
     expect(hiddenOn(screen("x", { panels: ["tossups", "control"] }))).toEqual(["calls", "schedule"]);
   });
+
+  describe("toss-up tiles", () => {
+    const opts = { gap: 10, card: 300, aspect: 1.3 };
+
+    it("puts a couple of tiles side by side, each with a big map", () => {
+      const g = tileGrid(2, 2000, 1000, opts);
+      expect([g.cols, g.rows]).toEqual([2, 1]);
+      expect(g.map).toBeCloseTo(910);
+    });
+
+    it("stacks no rows it doesn't need and fits every tile", () => {
+      const g = tileGrid(5, 1440, 800, opts);
+      expect(g.cols * g.rows).toBeGreaterThanOrEqual(5);
+      expect(g.rows).toBe(1);
+    });
+
+    it("leaves no room for maps when too many tiles share a short screen", () => {
+      expect(tileGrid(18, 1440, 800, opts).map).toBeLessThan(150);
+    });
+  });
 });
+

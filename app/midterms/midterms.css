@@ -1557,13 +1557,23 @@ button.mt-mock:hover { color: var(--ink); }
 body:has(> .mt-companion) { overflow: hidden; }
 .mt-companion-grid { flex: 1 1 0; min-height: 0; overflow-y: auto; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
 .mt-companion-grid:empty { display: none; }
-/* The race cards fill the rest of the window; Companion.tsx hides the ones that would run past its bottom. */
+/*
+ * The board fills the rest of the window (CompanionBoard.tsx): toss-up tiles, each a card over its county map in a
+ * grid sized to draw the maps biggest, or a wall of cards trimmed to the ones that fit.
+ */
 .mt-companion-tossups { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-.mt-companion-tossups .mt-sbs-cards { flex: 1 1 0; min-height: 260px; overflow: hidden; align-content: start; grid-auto-rows: max-content; }
+.mt-companion-board { flex: 1 1 0; min-height: 260px; display: flex; flex-direction: column; }
+.mt-companion-board > .mt-sbs-cards { flex: 1 1 0; min-height: 0; overflow: hidden; align-content: start; grid-auto-rows: max-content; }
 .mt-companion .mt-card[hidden] { display: none; }
+.mt-companion-tiles { flex: 1 1 0; min-height: 0; display: grid; gap: 12px; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-template-rows: repeat(var(--rows), minmax(0, 1fr)); }
+.mt-companion-tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.mt-companion-tile > .mt-grid { flex: none; margin: 0; }
+.mt-companion-map { flex: 1 1 0; min-height: 0; }
+.mt-companion-map .mt-map { height: 100%; }
+.mt-companion-map .mt-map svg { width: 100%; height: 100%; }
 @media (min-width: 1100px) {
   .mt-companion-grid { overflow: visible; }
-  .mt-companion-tossups .mt-sbs-cards { min-height: 0; }
+  .mt-companion-board { min-height: 0; }
   .mt-companion-side { min-height: 0; overflow-y: auto; }
 }
 

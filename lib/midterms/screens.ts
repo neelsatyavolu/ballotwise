@@ -51,3 +51,22 @@ export function roleOf(self: Screen, others: readonly Screen[], now: number): { 
 export function hiddenOn(main: Screen): Panel[] {
   return PANELS.filter((p) => !main.panels.includes(p));
 }
+
+/** A companion's toss-up tiles: how many columns and rows, and how wide each tile's map can be drawn, in pixels. */
+export type TileGrid = { cols: number; rows: number; map: number };
+
+/**
+ * The grid for `n` tiles, each a results card over a county map, that draws the maps biggest in a `width` × `height`
+ * box: each map gets its tile's width, or the height left under the card times `aspect`, whichever is smaller.
+ */
+export function tileGrid(n: number, width: number, height: number, { gap, card, aspect }: { gap: number; card: number; aspect: number }): TileGrid {
+  let best: TileGrid = { cols: 1, rows: n, map: 0 };
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const w = (width - gap * (cols - 1)) / cols;
+    const h = (height - gap * (rows - 1)) / rows;
+    const map = Math.max(0, Math.min(w, (h - card) * aspect));
+    if (map > best.map) best = { cols, rows, map };
+  }
+  return best;
+}
