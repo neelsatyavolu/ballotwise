@@ -24,9 +24,9 @@ describe("closest races", () => {
     expect(list.map((r) => r.id)).toEqual([4, 2, 1, 3]);
   });
 
-  it("lets a called toss-up fall back into the regular order", () => {
+  it("keeps a called toss-up pinned above the rest, below the uncalled toss-ups", () => {
     const open = race(2, 9, { rating: "tossup" });
     const called = { ...open, candidates: open.candidates.map((c, i) => ({ ...c, winner: i === 0 })) };
-    expect([called, race(1, 1)].sort(closestFirst).map((r) => r.id)).toEqual([1, 2]);
+    expect([race(1, 1), called, race(3, 12, { rating: "tossup" })].sort(closestFirst).map((r) => r.id)).toEqual([3, 2, 1]);
   });
 });
