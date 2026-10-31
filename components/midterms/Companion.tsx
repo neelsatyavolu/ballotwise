@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { adoptMock } from "@/lib/midterms/clock";
 import { closestFirst } from "@/lib/midterms/explore";
@@ -16,17 +16,53 @@ import { setSolo, useScreens } from "./useScreens";
 
 const noSubscribe = () => () => {};
 
-/** The Senate and House toss-ups whose cards aren't on the main screen, closest counts first. */
-function Tossups({ data, stars, seen }: { data: Overview; stars: ReturnType<typeof useStars>; seen: readonly number[] }) {
-  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && (r.office === "senate" || r.office === "house") && !seen.includes(r.id)).sort(closestFirst), [data, seen]);
+/** The most race cards the companion lays out; a big screen fits a few dozen, never the House's 435. */
+const MAX_CARDS = 60;
+const OFFICES = new Set(["senate", "house", "governor"]);
+
+/**
+ * Hides every card from the first one that runs past the bottom of the list, so the companion fills its window
+ * without scrolling. Hiding from there on, not each card that's cut off, keeps the cards before it in place.
+ */
+function fitCards(ul: HTMLUListElement | null) {
+  if (!ul) return;
+  const cards = [...ul.children] as HTMLElement[];
+  cards.forEach((c) => (c.hidden = false));
+  const bottom = ul.getBoundingClientRect().bottom;
+  const first = cards.findIndex((c) => c.getBoundingClientRect().bottom > bottom + 1);
+  // The first card always shows, even on a window too short for it.
+  if (first >= 0) cards.slice(Math.max(first, 1)).forEach((c) => (c.hidden = true));
+}
+
+/** Fits the list's cards after every render (results change their heights) and whenever the list changes size. */
+function useFitCards(list: RefObject<HTMLUListElement | null>, shown: boolean) {
+  useLayoutEffect(() => fitCards(list.current));
+  useEffect(() => {
+    const ul = list.current;
+    if (!shown || !ul) return;
+    const watch = new ResizeObserver(() => fitCards(ul));
+    watch.observe(ul);
+    return () => watch.disconnect();
+  }, [list, shown]);
+}
+
+/**
+ * The races the main screen has no card for, closest first, as many as fit: the toss-ups it can't fit come first, then
+ * the next closest Senate, House and governor races, so the companion fills its screen even when little is hidden.
+ */
+function Closest({ data, stars, seen }: { data: Overview; stars: ReturnType<typeof useStars>; seen: readonly number[] }) {
+  const races = useMemo(() => data.races.filter((r) => OFFICES.has(r.office) && !seen.includes(r.id)).sort(closestFirst).slice(0, MAX_CARDS), [data, seen]);
+  const tossups = races.some((r) => r.rating === "tossup");
+  const list = useRef<HTMLUListElement>(null);
+  useFitCards(list, races.length > 0);
   if (!races.length) return null;
   return (
-    <section className="mt-companion-tossups" aria-label="Toss-up races">
+    <section className="mt-companion-tossups" aria-label="Closest races not on your main screen">
       <div className="mt-section-head tight">
-        <h2>{seen.length ? "More toss-ups" : "Toss-ups"}</h2>
-        <span className="muted small">{seen.length ? `${races.length} not on your main screen` : races.length}</span>
+        <h2>Not on your main screen</h2>
+        <span className="muted small">{tossups ? "Toss-ups first, then the next closest" : "The next closest races"}</span>
       </div>
-      <ul className="mt-grid mt-sbs-cards">
+      <ul ref={list} className="mt-grid mt-sbs-cards">
         {races.map((r) => (
           <RaceCard key={r.id} race={r} starred={stars.ids ? stars.ids.includes(r.id) : null} onStar={stars.toggle} limit={2} />
         ))}
@@ -48,17 +84,17 @@ function Body({ hidden, seen }: { hidden: readonly Panel[]; seen: readonly numbe
         {data && <MomentPopup data={data} starred={stars.ids} inCompanion />}
         <button type="button" className="mt-el-quiet small" onClick={() => setSolo(true)}>Use this tab normally</button>
       </header>
-      {data ? <Panels data={data} hidden={hidden} seen={seen} stars={stars} shows={shows} /> : <p className="muted">Loading…</p>}
+      {data ? <Panels data={data} seen={seen} stars={stars} shows={shows} /> : <p className="muted">Loading…</p>}
     </>
   );
 }
 
-function Panels({ data, hidden, seen, stars, shows }: { data: Overview; hidden: readonly Panel[]; seen: readonly number[]; stars: ReturnType<typeof useStars>; shows: (p: Panel) => boolean }) {
+function Panels({ data, seen, stars, shows }: { data: Overview; seen: readonly number[]; stars: ReturnType<typeof useStars>; shows: (p: Panel) => boolean }) {
   return (
     <>
       {shows("control") && <ControlStrip data={data} />}
       <div className="mt-companion-grid">
-        {shows("tossups") && <Tossups data={data} stars={stars} seen={seen} />}
+        <Closest data={data} stars={stars} seen={seen} />
         {(shows("calls") || shows("schedule")) && (
           <div className="mt-companion-side">
             {shows("calls") && <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" />}
@@ -66,14 +102,13 @@ function Panels({ data, hidden, seen, stars, shows }: { data: Overview; hidden: 
           </div>
         )}
       </div>
-      {!hidden.length && <p className="muted">Your main screen already shows everything. Big moments will pop up here.</p>}
     </>
   );
 }
 
 /**
- * On a companion screen, the panels the main screen can't show, over this tab's own page: toss-ups, latest calls,
- * poll closings or who controls each chamber. Big moments pop up here instead of on the main screen. A companion runs
+ * On a companion screen, what the main screen can't show, over this tab's own page: the closest races it has no card
+ * for, latest calls, poll closings or who controls each chamber. Big moments pop up here instead of on the main screen. A companion runs
  * the main screen's mock night, if any, so the two show the same night. "Use this tab normally" leaves the setup.
  */
 export function Companion() {

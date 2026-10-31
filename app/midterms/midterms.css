@@ -1555,12 +1555,16 @@ button.mt-mock:hover { color: var(--ink); }
 /* The companion fits its window: the toss-up cards and the calls scroll inside their own columns, not the page. */
 .mt-companion { display: flex; flex-direction: column; overflow: hidden; }
 body:has(> .mt-companion) { overflow: hidden; }
-.mt-companion-grid { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.mt-companion-grid { flex: 1 1 0; min-height: 0; overflow-y: auto; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
 .mt-companion-grid:empty { display: none; }
-.mt-companion-tossups .mt-sbs-cards { align-content: start; grid-auto-rows: max-content; }
+/* The race cards fill the rest of the window; Companion.tsx hides the ones that would run past its bottom. */
+.mt-companion-tossups { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.mt-companion-tossups .mt-sbs-cards { flex: 1 1 0; min-height: 260px; overflow: hidden; align-content: start; grid-auto-rows: max-content; }
+.mt-companion .mt-card[hidden] { display: none; }
 @media (min-width: 1100px) {
-  .mt-companion-grid { grid-template-rows: minmax(0, 1fr); align-items: stretch; overflow: visible; }
-  .mt-companion-tossups, .mt-companion-side { min-height: 0; overflow-y: auto; }
+  .mt-companion-grid { overflow: visible; }
+  .mt-companion-tossups .mt-sbs-cards { min-height: 0; }
+  .mt-companion-side { min-height: 0; overflow-y: auto; }
 }
 
 /* On the main screen, while the pop-up opens on the companion: a short note in the corner. */
