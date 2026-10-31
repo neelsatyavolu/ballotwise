@@ -323,14 +323,18 @@ export function favorite(f: Pick<Forecast, "odds">): { side: Side; p: number } |
   return { side: top[0], p: top[1] };
 }
 
-/** DDHQ's rating scale: Safe at 95% or more (no rating), Likely at 75%, Lean above 60%, otherwise a toss-up. */
+/**
+ * DDHQ's rating scale: Safe at 95% or more (no rating), Likely at 75%, Lean above 60%, otherwise a toss-up. Rated on
+ * the whole percent the page shows, so a 60.3% favorite shown as "60%" isn't called a lean.
+ */
 export function ratingOf(f: Pick<Forecast, "odds"> | null): Rating | null {
   if (!f) return null;
   const fav = favorite(f);
   if (!fav) return "tossup";
-  if (fav.p >= 0.95) return null;
-  if (fav.p >= 0.75) return `likely-${fav.side.toLowerCase()}` as Rating;
-  if (fav.p > 0.6) return `lean-${fav.side.toLowerCase()}` as Rating;
+  const pct = Math.round(fav.p * 100);
+  if (pct >= 95) return null;
+  if (pct >= 75) return `likely-${fav.side.toLowerCase()}` as Rating;
+  if (pct > 60) return `lean-${fav.side.toLowerCase()}` as Rating;
   return "tossup";
 }
 

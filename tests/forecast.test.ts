@@ -155,6 +155,13 @@ describe("ratingOf", () => {
     expect(ratingOf({ odds: { D: 0.5, R: 0.5 } })).toBe("tossup");
     expect(ratingOf(null)).toBeNull();
   });
+
+  it("rates the whole percent the page shows, so a 60.3% favorite shown as 60% is still a toss-up", () => {
+    expect(ratingOf({ odds: { D: 0.603, R: 0.397 } })).toBe("tossup");
+    expect(ratingOf({ odds: { D: 0.606, R: 0.394 } })).toBe("lean-d");
+    expect(ratingOf({ odds: { D: 0.748, R: 0.252 } })).toBe("likely-d");
+    expect(ratingOf({ odds: { D: 0.946, R: 0.054 } })).toBeNull();
+  });
 });
 
 describe("chamberViews", () => {
