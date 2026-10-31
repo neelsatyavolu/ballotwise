@@ -65,10 +65,10 @@ function heldFrom<T>(path: string, seed: LiveSeed): Held<T> {
   return { path, data: seed.data as T, etag: seed.etag, fetchedAt: fetchedAtOf(seed.data) };
 }
 
-/** Development previews (`?sim=`) run every live answer through the made-up election night, on every page. */
+/** Previews (`?sim=` in development, or a mock night) run every live answer through the made-up election night, on every page. */
 async function previewed<T>(path: string, data: T): Promise<T> {
   const at = simAt();
-  if (process.env.NODE_ENV !== "development" || at === null) return data;
+  if (at === null) return data;
   const sim = await import("@/lib/midterms/sim");
   return sim.simulatePayload(path, data, at);
 }

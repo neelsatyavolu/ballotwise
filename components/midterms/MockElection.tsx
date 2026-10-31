@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { readMock, setMock, type Mock } from "@/lib/midterms/clock";
+import { MOCK_ELECTION_EMAILS, readMock, setMock, type Mock } from "@/lib/midterms/clock";
 import { ELECTION_DAY_START, stampET } from "@/lib/midterms/polls";
+import { useAccount } from "@/components/AccountProvider";
 import { useClock } from "./hooks";
 
 const HOUR = 3_600_000;
@@ -15,13 +16,16 @@ const noSubscribe = () => () => {};
 const mockKey = () => JSON.stringify(readMock());
 
 /**
- * Development only: a switch for a mock election night that runs, so the tracker's live updates, calls, flips and
- * pop-ups can be watched before Nov 3. Starting, changing speed or stopping reloads the page on the new clock.
+ * A switch for a mock election night that runs, so the tracker's live updates, calls, flips and pop-ups can be watched
+ * before Nov 3. Offered in development and to the accounts in MOCK_ELECTION_EMAILS; a running night always shows its
+ * bar, so it can be stopped even after signing out. Starting, changing speed or stopping reloads on the new clock.
  */
 export function MockElection() {
   // Read through the snapshot's JSON so the stored object compares equal between renders.
   const raw = useSyncExternalStore(noSubscribe, mockKey, () => "null");
   const mock = useMemo(() => JSON.parse(raw) as Mock | null, [raw]);
+  const { user } = useAccount();
+  const allowed = process.env.NODE_ENV === "development" || (!!user && MOCK_ELECTION_EMAILS.includes(user.email.toLowerCase()));
   const now = useClock(1000);
   const [open, setOpen] = useState(false);
   const [start, setStart] = useState(17.5);
@@ -42,9 +46,10 @@ export function MockElection() {
       </div>
     );
   }
+  if (!allowed) return null;
   if (!open) {
     return (
-      <button type="button" className="mt-mock" onClick={() => setOpen(true)} title="Development only: run a made-up election night">
+      <button type="button" className="mt-mock" onClick={() => setOpen(true)} title="Run a made-up election night, in this browser only">
         Mock election
       </button>
     );

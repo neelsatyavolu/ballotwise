@@ -1,4 +1,4 @@
-// The tracker's sense of "now". Development previews of election night shift it; in production it is the real time.
+// The tracker's sense of "now". Previews of election night shift it, in this browser only; otherwise it is the real time.
 import { ELECTION_DAY_START } from "./polls";
 
 const HOUR = 3_600_000;
@@ -11,15 +11,19 @@ function fixedPreview(): number | null {
   return Number.isFinite(hours) && hours > 0 ? ELECTION_DAY_START + hours * HOUR : null;
 }
 
+/** Accounts that can start a mock night on the live site. */
+export const MOCK_ELECTION_EMAILS: readonly string[] = ["neel@xanom.co"];
+
 /**
- * Development only: a mock election night that runs. `start` is the night's time when it began, `at` the real time it
- * began and `speed` how many night seconds pass each real second. Kept for the tab, so it carries across pages.
+ * A mock election night that runs, in development or for the accounts in MOCK_ELECTION_EMAILS in production (see
+ * MockElection). `start` is the night's time when it began, `at` the real time it began and `speed` how many night
+ * seconds pass each real second. Kept for the tab, so it carries across pages. It changes only what this browser shows.
  */
 export type Mock = { start: number; at: number; speed: number };
 const MOCK_KEY = "mt-mock";
 
 export function readMock(): Mock | null {
-  if (!dev()) return null;
+  if (typeof window === "undefined") return null;
   try {
     const m: unknown = JSON.parse(sessionStorage.getItem(MOCK_KEY) ?? "null");
     const ok = !!m && typeof m === "object" && ["start", "at", "speed"].every((k) => Number.isFinite((m as Record<string, unknown>)[k]));
@@ -29,7 +33,7 @@ export function readMock(): Mock | null {
   }
 }
 
-/** Development only: run a mock night from `hours` after midnight Eastern on Nov 3 (null stops it), then reload. */
+/** Run a mock night from `hours` after midnight Eastern on Nov 3 (null stops it), then reload. */
 export function setMock(hours: number | null, speed = 1) {
   try {
     if (hours === null) sessionStorage.removeItem(MOCK_KEY);
@@ -51,8 +55,8 @@ let offset = previewed === null ? 0 : previewed - Date.now();
 export const clockNow = () => (mock ? mock.start + (Date.now() - mock.at) * mock.speed : Date.now()) + offset;
 
 /**
- * Development only: the time a preview shows, or null outside one (always in production, and on the server). A `?sim=`
- * preview stays at its moment; a mock night moves with the clock.
+ * The time a preview shows, or null outside one (always on the server). A `?sim=` preview (development only) stays at
+ * its moment; a mock night moves with the clock.
  */
 export function simAt(): number | null {
   return fixedPreview() ?? (mock ? clockNow() : null);

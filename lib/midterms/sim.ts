@@ -1,5 +1,5 @@
-// Development only: a made-up election night for previewing the tracker before real votes exist.
-// Loaded with a dynamic import behind a NODE_ENV check, so it never ships to production.
+// A made-up election night for previewing the tracker before real votes exist: `?sim=` in development, or a mock night
+// (see clock.ts). Loaded with a dynamic import only while a preview runs, so visitors never download it.
 import type { CallEvent } from "./calls";
 import { holderOf } from "./holders";
 import { ELECTION_DAY_START, stateCloses, stateFinal } from "./polls";
