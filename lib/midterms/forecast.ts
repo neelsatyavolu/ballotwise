@@ -64,6 +64,14 @@ export type Tuning = {
   fundraisingCap: Record<Body, number>;
   /** How many polls a race needs for its polling average to reach full weight. */
   pollFull: Record<Body, number>;
+  /** The most of the margin a polling average can take, at full weight. */
+  pollMax: Record<Body, number>;
+  /** A scale on the fitted partisan-lean coefficient. */
+  lean: Record<Body, number>;
+  /** A scale on the fitted fundraising coefficient. */
+  fundraising: Record<Body, number>;
+  /** Points added to every race's fundamentals toward the side facing the Republican. */
+  offset: Record<Body, number>;
   /** The national draw's fraction of the shared variance, the rest split between region and lean band; null keeps the backtest's proportions. */
   nationalShare: Record<Body, number | null>;
 };
@@ -137,8 +145,11 @@ function errorParts(m: Model, office: Body, grouped: boolean, t: Tuning) {
 export type Matchup =
   | { kind: "contest"; left: "D" | "I"; leftName: string; rightName: string }
   | { kind: "uncontested"; side: Side; alone: boolean }
-  /** Two candidates of one party, or a top-two race with no Republican: partisanship can't separate them. */
-  | { kind: "open" };
+  /**
+   * Two candidates of one party, or a top-two race with no Republican: partisanship can't separate them. `side` is the
+   * party every candidate belongs to, when they all do: whoever wins, the seat is that party's.
+   */
+  | { kind: "open"; side?: Side };
 
 const sideOf = (party: string): Side | null => (/^democrat/i.test(party) ? "D" : /^republican/i.test(party) ? "R" : /independent/i.test(party) ? "I" : null);
 /** States whose general elections are top-two runoffs, where a race can lack a Republican without being one-sided. */
@@ -157,7 +168,11 @@ export function matchup(r: Pick<RaceSummary, "state" | "candidates">, incumbent?
   if (challenger === "I" && rep.length === 1 && ind.length) return { kind: "contest", left: "I", leftName: ind[0].name, rightName: rep[0].name };
   if (d.length && rep.length) return { kind: "contest", left: "D", leftName: d[0].name, rightName: rep[0].name };
   if (rep.length === 1 && ind.length) return { kind: "contest", left: "I", leftName: ind[0].name, rightName: rep[0].name };
-  if (d.length > 1 || rep.length > 1 || ind.length > 1) return { kind: "open" };
+  if (d.length > 1 || rep.length > 1 || ind.length > 1) {
+    const sides = new Set(r.candidates.map((c) => sideOf(c.party)));
+    const [only] = sides;
+    return sides.size === 1 && only ? { kind: "open", side: only } : { kind: "open" };
+  }
   if (TOP_TWO.has(r.state) && r.candidates.length > 1) return { kind: "open" };
   const only = d[0] ?? rep[0];
   if (only) return { kind: "uncontested", side: sideOf(only.party)!, alone: r.candidates.length === 1 };
@@ -238,7 +253,7 @@ export function phiInverse(p: number): number {
   return ((((((a[0] * s + a[1]) * s + a[2]) * s + a[3]) * s + a[4]) * s + a[5]) * r) / (((((b[0] * s + b[1]) * s + b[2]) * s + b[3]) * s + b[4]) * s + 1);
 }
 
-export const pollWeight = (count: number, full: number = PARAMS.polls.full) => (count >= 2 ? PARAMS.polls.max * Math.min(1, count / full) : 0);
+export const pollWeight = (count: number, full: number = PARAMS.polls.full, max: number = PARAMS.polls.max) => (count >= 2 ? max * Math.min(1, count / full) : 0);
 
 export function marketWeight(volume: number | undefined, office: Body, t: Tuning = TUNING): number {
   const { min, full } = PARAMS.markets;
@@ -260,7 +275,7 @@ export function forecastRace(m: Matchup, x: Inputs, t: Tuning = TUNING): Forecas
   const empty = { names: null, margin: null, lean: null, incumbency: 0, fundamentals: null, environment: null, pollWeight: 0, pollMargin: null, marketWeight: 0, market: null };
   if (m.kind === "open") {
     const priced = Object.entries(x.market?.odds ?? {}).filter(([, p]) => p > 0);
-    if (priced.length < 2) return null;
+    if (priced.length < 2) return m.side ? { ...empty, odds: { [m.side]: 1 }, left: m.side } : null;
     const [top] = priced.sort((a, b) => b[1] - a[1]);
     return { ...empty, odds: Object.fromEntries(priced), left: top[0] as Side, marketWeight: 1 };
   }
@@ -279,9 +294,9 @@ export function forecastRace(m: Matchup, x: Inputs, t: Tuning = TUNING): Forecas
   const clamp = (v: number, cap: number) => Math.max(-cap, Math.min(cap, v));
   const incumbency = x.incumbent === null ? 0 : (x.incumbent === "R" ? -1 : x.incumbent === m.left ? 1 : 0) * c.incumbent * t.incumbency[body];
   const personal = x.incumbent !== null && x.personal ? t.personal[body] * c.personal * clamp(x.personal, t.personalCap[body]) : null;
-  const fundraising = hasFund ? (c.fundraising ?? 0) * clamp(x.fundraising!, t.fundraisingCap[body]) : null;
-  const fundamentals = x.lean === null ? null : c.intercept + c.lean * (x.lean - PARAMS.national2024) + environment + incumbency + (personal ?? 0) + (fundraising ?? 0);
-  const wPoll = x.polls ? pollWeight(x.polls.count, t.pollFull[body]) : 0;
+  const fundraising = hasFund ? t.fundraising[body] * (c.fundraising ?? 0) * clamp(x.fundraising!, t.fundraisingCap[body]) : null;
+  const fundamentals = x.lean === null ? null : c.intercept + t.offset[body] + t.lean[body] * c.lean * (x.lean - PARAMS.national2024) + environment + incumbency + (personal ?? 0) + (fundraising ?? 0);
+  const wPoll = x.polls ? pollWeight(x.polls.count, t.pollFull[body], t.pollMax[body]) : 0;
   // Without a lean the polls stand alone; without either there is nothing to model, and the market (if any) decides.
   const margin = fundamentals === null ? (x.polls && x.polls.count >= 2 ? x.polls.margin : null) : (1 - wPoll) * fundamentals + wPoll * (x.polls?.margin ?? 0);
   const base = margin === null ? null : phi(margin / sigma);

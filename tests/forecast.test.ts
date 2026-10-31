@@ -38,7 +38,7 @@ describe("matchup", () => {
   it("calls one-sided races uncontested and same-party or top-two races open", () => {
     expect(matchup({ state: "FL", candidates: [cand("Maxwell Frost", "Democratic")] })).toEqual({ kind: "uncontested", side: "D", alone: true });
     expect(matchup({ state: "MA", candidates: [cand("Richard Neal", "Democratic"), cand("N. Milleron", "Independent/Unenrolled")] })).toEqual({ kind: "uncontested", side: "D", alone: false });
-    expect(matchup({ state: "CA", candidates: [cand("Scott Wiener", "Democratic"), cand("Connie Chan", "Democratic")] })).toEqual({ kind: "open" });
+    expect(matchup({ state: "CA", candidates: [cand("Scott Wiener", "Democratic"), cand("Connie Chan", "Democratic")] })).toEqual({ kind: "open", side: "D" });
     expect(matchup({ state: "CA", candidates: [cand("Richard Pan", "Democratic"), cand("Kevin Kiley", "No Party Preference")] })).toEqual({ kind: "open" });
   });
 });
@@ -48,7 +48,7 @@ describe("forecastRace", () => {
     const f = forecastRace(contest, inputs({ lean: -2, genericBallot: 6.5, incumbent: "D" }))!;
     const c = modelFor("senate", false).coefficients;
     expect(f.environment).toBeCloseTo(TUNING.environment * c.environment * 6.5, 1);
-    expect(f.fundamentals).toBeCloseTo(c.intercept + c.lean * (-2 - PARAMS.national2024) + TUNING.environment * c.environment * 6.5 + TUNING.incumbency.senate * c.incumbent, 1);
+    expect(f.fundamentals).toBeCloseTo(c.intercept + TUNING.offset.senate + TUNING.lean.senate * c.lean * (-2 - PARAMS.national2024) + TUNING.environment * c.environment * 6.5 + TUNING.incumbency.senate * c.incumbent, 1);
     expect(f.odds.D).toBeCloseTo(phi(f.fundamentals! / sigmaOf(modelFor("senate", false), "senate")), 2);
     expect(f.odds.D! + f.odds.R!).toBeCloseTo(1, 6);
   });
@@ -72,8 +72,14 @@ describe("forecastRace", () => {
     const without = forecastRace(contest, inputs({ office: "house", lean: 0, genericBallot: 0 }))!;
     const withMoney = forecastRace(contest, inputs({ office: "house", lean: 0, genericBallot: 0, fundraising: 1 }))!;
     expect(without.fundraising).toBeNull();
-    expect(withMoney.fundraising).toBeCloseTo(modelFor("house", true).coefficients.fundraising! * Math.min(1, TUNING.fundraisingCap.house), 1);
+    expect(withMoney.fundraising).toBeCloseTo(TUNING.fundraising.house * modelFor("house", true).coefficients.fundraising! * Math.min(1, TUNING.fundraisingCap.house), 1);
     expect(withMoney.sigma).toBeLessThan(without.sigma!);
+  });
+
+  it("gives a race between two candidates of one party to that party, whoever wins", () => {
+    const sameParty = matchup({ state: "CA", candidates: [cand("Ken Calvert", "Republican"), cand("Young Kim", "Republican")] });
+    expect(forecastRace(sameParty, inputs({ office: "house", lean: -10 }))?.odds).toEqual({ R: 1 });
+    expect(forecastRace({ kind: "open" }, inputs({ office: "house", lean: -10 }))).toBeNull();
   });
 
   it("governors use the statewide fit without fundraising", () => {
@@ -85,7 +91,20 @@ describe("forecastRace", () => {
     expect(pollWeight(PARAMS.polls.full / 2)).toBeCloseTo(PARAMS.polls.max / 2, 6);
     expect(pollWeight(40)).toBe(PARAMS.polls.max);
     const f = forecastRace(contest, inputs({ lean: 0, polls: { margin: 10, count: 40 } }))!;
-    expect(f.margin).toBeCloseTo((1 - PARAMS.polls.max) * f.fundamentals! + PARAMS.polls.max * 10, 0);
+    const max = TUNING.pollMax.senate;
+    expect(f.margin).toBeCloseTo((1 - max) * f.fundamentals! + max * 10, 0);
+  });
+
+  it("applies each office's lean scale, fundraising scale, offset and poll cap to every race alike", () => {
+    const c = modelFor("house", true).coefficients;
+    const x = inputs({ office: "house", lean: 10, genericBallot: 0, fundraising: 0.4, polls: { margin: 5, count: 40 } });
+    const base = { ...TUNING, lean: { ...TUNING.lean, house: 1 }, fundraising: { ...TUNING.fundraising, house: 1 }, offset: { ...TUNING.offset, house: 0 }, pollMax: { ...TUNING.pollMax, house: 0 } };
+    const f0 = forecastRace(contest, x, base)!;
+    const f1 = forecastRace(contest, x, { ...base, lean: { ...base.lean, house: 0.5 }, fundraising: { ...base.fundraising, house: 2 }, offset: { ...base.offset, house: 3 } })!;
+    expect(f1.fundamentals! - f0.fundamentals!).toBeCloseTo(3 - 0.5 * c.lean * (10 - PARAMS.national2024) + c.fundraising! * Math.min(0.4, TUNING.fundraisingCap.house), 1);
+    const polled = forecastRace(contest, x, { ...base, pollMax: { ...base.pollMax, house: 0.3 } })!;
+    expect(polled.pollWeight).toBeCloseTo(0.3, 6);
+    expect(polled.margin).toBeCloseTo(0.7 * f0.fundamentals! + 0.3 * 5, 0);
   });
 
   it("gives polls at most DDHQ's share of the margin: 45% of the forecast against fundamentals' 30%", () => {
@@ -106,7 +125,7 @@ describe("forecastRace", () => {
 
   it("caps the personal vote and the fundraising ratio at the office's tuned limits, and scales incumbency", () => {
     const c = modelFor("house", true).coefficients;
-    const t = { ...TUNING, personal: { ...TUNING.personal, house: 1 }, personalCap: { ...TUNING.personalCap, house: 4 }, fundraisingCap: { ...TUNING.fundraisingCap, house: 1 }, incumbency: { ...TUNING.incumbency, house: 0.5 } };
+    const t = { ...TUNING, personal: { ...TUNING.personal, house: 1 }, personalCap: { ...TUNING.personalCap, house: 4 }, fundraisingCap: { ...TUNING.fundraisingCap, house: 1 }, fundraising: { ...TUNING.fundraising, house: 1 }, incumbency: { ...TUNING.incumbency, house: 0.5 } };
     const f = forecastRace(contest, inputs({ office: "house", lean: 0, genericBallot: 0, incumbent: "R", personal: -12, fundraising: 2.5 }), t)!;
     expect(f.personal).toBeCloseTo(c.personal * -4, 1);
     expect(f.fundraising).toBeCloseTo(c.fundraising! * 1, 1);
