@@ -7,13 +7,21 @@ const nation: Nation = JSON.parse(readFileSync(new URL("../public/midterms/maps/
 const shape = (st: string) => nation.states.find((s) => s.state === st)!;
 
 describe("labelSpot", () => {
-  it("puts Florida's label on the peninsula, clear of the Gulf coast", () => {
+  it("puts Florida's label in the middle of the peninsula", () => {
     const fl = shape("FL");
     const [x, y] = labelSpot("FL", fl.d)!;
     const [x0, y0, x1, y1] = fl.box;
-    // The peninsula is the eastern part of the state, below the panhandle.
+    // The peninsula is the eastern part of the state, below the panhandle; its middle is the upper half of it, not
+    // the wide south by Lake Okeechobee.
     expect(x).toBeGreaterThan(x0 + (x1 - x0) * 0.55);
     expect(y).toBeGreaterThan(y0 + (y1 - y0) * 0.35);
+    expect(y).toBeLessThan(y0 + (y1 - y0) * 0.6);
+  });
+
+  it("finds every label quickly", () => {
+    const start = performance.now();
+    for (const s of nation.states) labelSpot(s.state, s.d);
+    expect(performance.now() - start).toBeLessThan(500);
   });
 
   it("labels every big state inside its own box and skips small ones", () => {
