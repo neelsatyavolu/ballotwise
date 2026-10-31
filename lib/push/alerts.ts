@@ -1,7 +1,7 @@
 // What to tell each device: pure functions from race calls, seat counts and the clock to notifications.
 import type { CallEvent } from "../midterms/calls";
 import { holderOf, type Side } from "../midterms/holders";
-import { closeWaves, formatET, type CloseWave } from "../midterms/polls";
+import { closeWaves, formatTime, type CloseWave } from "../midterms/polls";
 import type { RaceSummary, Tally } from "../midterms/races";
 import { partyOf, partyTag, raceLabel, STATE_NAMES } from "../midterms/view";
 import type { Environment, Push } from "./apns";
@@ -134,7 +134,7 @@ export function dueWave(now: number, waves: readonly CloseWave[] = closeWaves())
 /** A wave's notification, naming the device's own state first when its polls are among those closing. */
 export function waveMessage(wave: CloseWave, homeState: string | null): Message {
   const list = wave.states.map((s) => (s.part === "all" ? s.state : `${s.state} (${s.part === "most" ? "most" : "rest"})`)).join(", ");
-  const time = formatET(wave.at);
+  const time = formatTime(wave.at);
   const home = homeState ? wave.states.find((s) => s.state === homeState) : undefined;
   const base = { threadId: "polls", collapseId: `polls-${wave.at}` };
   if (home) {

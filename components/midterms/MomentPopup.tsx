@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { callKey, moments, type Moment } from "@/lib/midterms/moments";
-import { stampET } from "@/lib/midterms/polls";
+import { stampTime } from "@/lib/midterms/polls";
 import type { Overview } from "@/lib/midterms/view";
 import { useStored } from "./seen";
 import { useScreens } from "./useScreens";
@@ -77,7 +77,7 @@ export function MomentPopup({ data, starred, inCompanion = false }: { data: Over
           <>
             <p className="mt-moment-kicker small">
               <b className={top.side ? `p-${top.side}` : "warn"}>{top.kicker}</b>
-              <time className="muted" dateTime={new Date(top.at).toISOString()}>{stampET(top.at)}</time>
+              <time className="muted" dateTime={new Date(top.at).toISOString()}>{stampTime(top.at)}</time>
             </p>
             <h2 id="mt-moment-title">{top.title}</h2>
             <p>{top.body}</p>

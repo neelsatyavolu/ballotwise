@@ -16,7 +16,7 @@ import { holderOf, leadingFlip, outcomeOf } from "./holders";
 import { raceMarkets, type Line, type MarketBook, type Point } from "./marketHistory";
 import { CHAMBER_HISTORY_KEY, HISTORY_KEY, POLLS_KEY, raceKey, readOdds, type ChamberHistory, type ForecastHistory, type Signal } from "./odds";
 import type { RacePolls } from "./pollAverage";
-import { stampET } from "./polls";
+import { stampTime } from "./polls";
 import { balance, type CountyResult, type Office, type RaceSummary } from "./races";
 import { raceLabel, STATE_NAMES } from "./view";
 
@@ -163,13 +163,13 @@ async function raceDetail(ctx: ChatContext, id: number, counties: boolean, count
     rankedChoice: r.rcv ? { round: r.round ?? null } : undefined,
     about: r.about,
     local: r.local,
-    call: r.call ? { ...r.call, at: stampET(r.call.at) } : null,
+    call: r.call ? { ...r.call, at: stampTime(r.call.at) } : null,
     callPending: found.callPending,
-    callHistory: calls.map((e) => ({ kind: e.kind, winner: e.winner, previous: e.previous, at: stampET(e.at) })),
+    callHistory: calls.map((e) => ({ kind: e.kind, winner: e.winner, previous: e.previous, at: stampTime(e.at) })),
     stale: found.stale,
     signal: signalOut(r.signal),
     forecastHistory: line && history ? { side: line.side, chanceBySide: thinDays(history.days, line.p.map((p) => (p === null ? null : Math.round(p * 100)))) } : null,
-    recentCount: "history" in found ? found.history.map((o) => ({ ...o, at: stampET(o.at) })) : [],
+    recentCount: "history" in found ? found.history.map((o) => ({ ...o, at: stampTime(o.at) })) : [],
     counties: counties
       ? { total: r.counties.length, shown: Math.min(countyLimit, r.counties.length), byVotes: byVotes.slice(0, countyLimit).map(countyRow) }
       : `${r.counties.length} counties; call again with counties: true for them.`,
@@ -249,7 +249,7 @@ async function chamberForecast(ctx: ChatContext, chamber: "house" | "senate" | "
   };
   const chambers = chamber ? [chamber] : (["house", "senate", "governor"] as const);
   return {
-    updated: odds ? stampET(odds.at) : null,
+    updated: odds ? stampTime(odds.at) : null,
     genericBallot: odds?.polls?.generic ?? null,
     ...Object.fromEntries(chambers.map((c) => [c, one(c)])),
   };
@@ -355,7 +355,7 @@ export function chatTools(ctx: ChatContext, onChange: (focusId: string | null) =
       args: z.object({ office: z.enum(OFFICES).optional(), limit: z.number().int().min(1).max(100).default(30) }),
       label: () => "Recent race calls",
       run: async (a: { office?: Office; limit: number }) =>
-        (await listCallEvents(ctx.db, a)).map((e) => ({ race: name(e.raceId), raceId: e.raceId, kind: e.kind, winner: e.winner, party: e.party, previous: e.previous, at: stampET(e.at) })),
+        (await listCallEvents(ctx.db, a)).map((e) => ({ race: name(e.raceId), raceId: e.raceId, kind: e.kind, winner: e.winner, party: e.party, previous: e.previous, at: stampTime(e.at) })),
     },
     {
       name: "search_local_races",

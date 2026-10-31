@@ -4,7 +4,7 @@ import type { Progress } from "../grok/research";
 import { chatTools, type ChatContext } from "./chatTools";
 import { racesPrompt, type ChatMessage } from "./dashboard";
 import { isGrid } from "./decisionView";
-import { closeWaves, formatET, stampET } from "./polls";
+import { closeWaves, formatTime, stampTime, zoneAbbr } from "./polls";
 
 /** A reply is cut to this length, so it still fits the history the client sends back. */
 export const MAX_REPLY = 6000;
@@ -33,7 +33,7 @@ How to answer:
 /** The poll-closing schedule, one line per time. */
 function closingTimes(): string {
   return closeWaves()
-    .map((w) => `${formatET(w.at)}: ${w.states.map((s) => (s.part === "all" ? s.state : `${s.state} (${s.part})`)).join(", ")}`)
+    .map((w) => `${formatTime(w.at)}: ${w.states.map((s) => (s.part === "all" ? s.state : `${s.state} (${s.part})`)).join(", ")}`)
     .join("\n");
 }
 
@@ -53,7 +53,7 @@ export async function chatTurn(
   let change: { focusId: string | null } | null = null;
   const tools = chatTools({ ...ctx, openId: open }, (focusId) => (change = { focusId }));
   const context = [
-    `Now: ${new Date(ctx.now).toISOString()} (${stampET(ctx.now)} ET)`,
+    `Now: ${new Date(ctx.now).toISOString()} (${stampTime(ctx.now)} ${zoneAbbr(ctx.now)})`,
     `Races:\n${racesPrompt(ctx.races)}`,
     `Starred races: ${ctx.starred.length ? ctx.starred.join(", ") : "none"}`,
     `Dashboards:\n${JSON.stringify(sections.map((d) => ({ id: d.id, ...d.layout })))}`,

@@ -84,19 +84,68 @@ export function countdown(ms: number): string {
   return days ? `${days}d ${clock}` : clock;
 }
 
-const ET = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
+const EASTERN = "America/New_York";
 
-/** "7:30 PM ET". */
-export function formatET(ms: number): string {
-  // Newer ICU puts a narrow no-break space before AM/PM.
-  return `${ET.format(ms).replace(/\s/g, " ")} ET`;
+function formatters(zone: string) {
+  const name = (style: "short" | "shortGeneric" | "longGeneric") => {
+    const f = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: style });
+    return (ms: number) => f.formatToParts(ms).find((p) => p.type === "timeZoneName")?.value ?? "";
+  };
+  const generic = name("shortGeneric");
+  const plain = name("short");
+  return {
+    time: new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "numeric", minute: "2-digit" }),
+    day: new Intl.DateTimeFormat("en-US", { timeZone: zone, month: "short", day: "numeric" }),
+    // "ET", "PT", "MST"; where the generic name is long ("United Kingdom Time"), the plain one ("GMT", "GMT+5:30").
+    abbr: (ms: number) => (/^[A-Z]{1,4}$/.test(generic(ms)) ? generic(ms) : plain(ms)),
+    long: name("longGeneric"),
+  };
 }
 
-const ET_DAY = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" });
+/**
+ * The zone times are shown in. Eastern on the server and while a page hydrates, so the HTML matches; then the
+ * viewer's own (see ZoneRoot). Server-side text (push alerts, the chat's tools) stays Eastern.
+ */
+let zone = EASTERN;
+let fmt = formatters(EASTERN);
 
-/** "9:29 PM" on Nov 3, Eastern; on any other day the date goes in front: "Nov 4, 12:40 AM". */
-export function stampET(ms: number): string {
-  const time = formatET(ms).replace(" ET", "");
-  const day = ET_DAY.format(ms);
+/** The browser's time zone, or Eastern when it can't say. */
+export function viewerZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || EASTERN;
+  } catch {
+    return EASTERN;
+  }
+}
+
+export function setTimeZone(next: string) {
+  if (next === zone) return;
+  try {
+    fmt = formatters(next);
+    zone = next;
+  } catch {
+    // An unknown zone keeps the current one.
+  }
+}
+
+/** The zone's short name at `ms`: "ET", "PT", "GMT". */
+export const zoneAbbr = (ms: number) => fmt.abbr(ms);
+
+/** The zone's full name: "Eastern Time", "Pacific Time". */
+export const zoneName = (ms: number) => fmt.long(ms);
+
+/** "Nov 3" in the shown zone. */
+export const dayLabel = (ms: number) => fmt.day.format(ms);
+
+/** "7:30 PM" in the shown zone. Newer ICU puts a narrow no-break space before AM/PM; it becomes a plain one. */
+export const timeOnly = (ms: number) => fmt.time.format(ms).replace(/\s/g, " ");
+
+/** "7:30 PM ET", in the shown zone. */
+export const formatTime = (ms: number) => `${timeOnly(ms)} ${zoneAbbr(ms)}`;
+
+/** "9:29 PM" on Nov 3; on any other day the date goes in front: "Nov 4, 12:40 AM". In the shown zone, no zone name. */
+export function stampTime(ms: number): string {
+  const time = timeOnly(ms);
+  const day = dayLabel(ms);
   return day === "Nov 3" ? time : `${day}, ${time}`;
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { explore, fromQuery, QUERY_KEYS, toQuery, type Filters } from "@/lib/midterms/explore";
-import { stampET } from "@/lib/midterms/polls";
+import { stampTime } from "@/lib/midterms/polls";
 import { OFFICE_LABEL, partyTag, type Office, type Overview } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
 import { ControlStrip } from "./ControlStrip";
@@ -55,7 +55,7 @@ function LatestLink({ races }: { races: Overview["races"] }) {
   const what = r.call!.withdrawn ? `call for ${r.call!.replaced} withdrawn` : won ? `${won.name}${partyTag(won.party) ? ` (${partyTag(won.party)})` : ""}${r.call!.replaced ? `, changed from ${r.call!.replaced}` : ""}` : "updated";
   return (
     <a href="#latest-calls" className={`mt-el-latest small${correction ? " warn" : ""}`}>
-      <b>{correction ? "Correction" : "Latest call"}</b> {stampET(r.call!.at)} · {shortLabel(r)}: {what} →
+      <b>{correction ? "Correction" : "Latest call"}</b> {stampTime(r.call!.at)} · {shortLabel(r)}: {what} →
     </a>
   );
 }

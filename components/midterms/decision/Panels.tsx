@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { clockNow } from "@/lib/midterms/clock";
 import type { ChamberOffice, Panel } from "@/lib/midterms/decisionView";
 import { projection } from "@/lib/midterms/forecastTab";
-import { stampET, stateFinal, electionModeDefault } from "@/lib/midterms/polls";
+import { formatTime, stampTime, stateFinal, electionModeDefault, zoneAbbr } from "@/lib/midterms/polls";
 import { fmt, lead, leading, raceLabel, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "../Balance";
 import { CallsFeed } from "../CallsFeed";
@@ -24,7 +24,6 @@ import { useDashboardData, type RaceData } from "./data";
 const CHAMBER_NAME: Record<ChamberOffice, string> = { house: "2026 U.S. House", senate: "2026 U.S. Senate", governor: "2026 Governor" };
 const day = (iso: string) => Date.parse(`${iso}T12:00:00Z`) / 1000;
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-const TIME = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
 const SMALL = { w: 320, h: 150 };
 
 const Empty = ({ children }: { children: string }) => <p className="mt-dv-empty">{children}</p>;
@@ -53,7 +52,7 @@ function Status({ race }: { race: RaceSummary }) {
   if (race.candidates.some((c) => c.winner)) return <span className="called">Called</span>;
   if (ahead) return <span>Lead {ahead.margin.toFixed(1)} pts</span>;
   const final = stateFinal(race.state);
-  return <span>{final && final > clockNow() ? `Polls close ${stampET(final)} ET` : "No results yet"}</span>;
+  return <span>{final && final > clockNow() ? `Polls close ${stampTime(final)} ${zoneAbbr(final)}` : "No results yet"}</span>;
 }
 
 function Topline({ id, short }: { id?: number; short: boolean }) {
@@ -91,7 +90,7 @@ function VoteDrops({ id }: { id?: number }) {
         const added = o.total - (history[i + 1]?.total ?? 0);
         return (
           <li key={o.at}>
-            <span className="muted">{TIME.format(o.at)} ET</span>
+            <span className="muted">{formatTime(o.at)}</span>
             <b>{added > 0 ? `+${fmt(added)}` : fmt(added)} votes</b>
             <span>{o.leadName ? `${o.leadName} +${(o.margin ?? 0).toFixed(1)}` : "—"}</span>
             {o.corrected && <span className="muted">corrected</span>}
@@ -114,7 +113,7 @@ function VoteHistory({ id }: { id?: number }) {
       step={1}
       size={SMALL}
       value={(v) => `${v.toFixed(1)} pts`}
-      date={(t) => `${TIME.format(t * 1000)} ET`}
+      date={(t) => formatTime(t * 1000)}
       label="The leader's margin after each vote drop"
       empty="No vote drops reported yet."
     />

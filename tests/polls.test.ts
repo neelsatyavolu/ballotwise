@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { closeWaves, countdown, ELECTION_DAY_START, electionModeDefault, formatET, nextWave, POLL_CLOSE, stampET, stateCloses, stateFinal } from "../lib/midterms/polls";
+import { closeWaves, countdown, ELECTION_DAY_START, electionModeDefault, formatTime, nextWave, POLL_CLOSE, setTimeZone, stampTime, stateCloses, stateFinal } from "../lib/midterms/polls";
 
 const at = (iso: string) => Date.parse(iso);
 
@@ -51,17 +51,17 @@ describe("countdown", () => {
   });
 });
 
-describe("formatET", () => {
+describe("formatTime", () => {
   it("shows Eastern clock times", () => {
-    expect(formatET(at("2026-11-04T00:30:00Z"))).toBe("7:30 PM ET");
-    expect(formatET(at("2026-11-04T05:00:00Z"))).toBe("12:00 AM ET");
+    expect(formatTime(at("2026-11-04T00:30:00Z"))).toBe("7:30 PM ET");
+    expect(formatTime(at("2026-11-04T05:00:00Z"))).toBe("12:00 AM ET");
   });
 });
 
-describe("stampET", () => {
+describe("stampTime", () => {
   it("adds the date only off Nov 3", () => {
-    expect(stampET(at("2026-11-04T02:29:00Z"))).toBe("9:29 PM");
-    expect(stampET(at("2026-11-04T05:40:00Z"))).toBe("Nov 4, 12:40 AM");
+    expect(stampTime(at("2026-11-04T02:29:00Z"))).toBe("9:29 PM");
+    expect(stampTime(at("2026-11-04T05:40:00Z"))).toBe("Nov 4, 12:40 AM");
   });
 });
 
@@ -69,5 +69,21 @@ describe("stateFinal", () => {
   it("is the later close for split states", () => {
     expect(stateFinal("FL")).toBe(at("2026-11-04T01:00:00Z"));
     expect(stateFinal("GA")).toBe(stateCloses("GA"));
+  });
+});
+
+describe("times in the viewer's zone", () => {
+  it("shows times, days and the zone's name in the zone set, Eastern by default", () => {
+    try {
+      setTimeZone("America/Los_Angeles");
+      expect(formatTime(at("2026-11-04T00:30:00Z"))).toBe("4:30 PM PT");
+      // 12:40 AM Eastern on Nov 4 is still Nov 3 in California.
+      expect(stampTime(at("2026-11-04T05:40:00Z"))).toBe("9:40 PM");
+      setTimeZone("Europe/London");
+      expect(formatTime(at("2026-11-04T00:30:00Z"))).toBe("12:30 AM GMT");
+    } finally {
+      setTimeZone("America/New_York");
+    }
+    expect(formatTime(at("2026-11-04T00:30:00Z"))).toBe("7:30 PM ET");
   });
 });

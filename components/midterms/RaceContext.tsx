@@ -1,7 +1,7 @@
 // Rendered inside the tracker's client components.
 import { EARLY_REPORTING, isEarly, statusOf } from "@/lib/midterms/explore";
 import { holderOf, leadingFlip, outcomeOf } from "@/lib/midterms/holders";
-import { stampET, stateFinal } from "@/lib/midterms/polls";
+import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { fmt, lead, marginLabel, partyOf, partyTag } from "@/lib/midterms/view";
@@ -18,17 +18,17 @@ export function RaceStatus({ race, now }: { race: RaceDetail; now: number }) {
   const holder = holderOf(race);
   const final = stateFinal(race.state);
   let text: string;
-  if (won) text = `${won.name} (${partyTag(won.party) || won.party || "no party"}) won${race.call && !race.call.withdrawn ? ` · call seen ${stampET(race.call.at)} ET` : ""}${o ? ` · ${o.side} ${o.gain ? "gain" : "hold"}` : ""}`;
-  else if (race.call?.withdrawn) text = `The call for ${race.call.replaced} was withdrawn at ${stampET(race.call.at)} ET`;
+  if (won) text = `${won.name} (${partyTag(won.party) || won.party || "no party"}) won${race.call && !race.call.withdrawn ? ` · call seen ${stampTime(race.call.at)} ${zoneAbbr(race.call.at)}` : ""}${o ? ` · ${o.side} ${o.gain ? "gain" : "hold"}` : ""}`;
+  else if (race.call?.withdrawn) text = `The call for ${race.call.replaced} was withdrawn at ${stampTime(race.call.at)} ${zoneAbbr(race.call.at)}`;
   else if (statusOf(race) === "counting" && ahead && ahead.margin === 0) text = "Tied in the count so far";
   else if (statusOf(race) === "counting" && ahead) text = `${ahead.leader.name} leads by ${ahead.margin.toFixed(1)} points${second ? `, ${fmt(ahead.leader.votes - second.votes)} votes` : ""}${isEarly(race) ? `, an early count (under ${EARLY_REPORTING}% reporting)` : ""}${flip ? ` · would be a ${flip} flip` : ""}`;
-  else text = final && final > now ? `No votes yet · polls close ${stampET(final)} ET` : "No votes counted yet";
+  else text = final && final > now ? `No votes yet · polls close ${stampTime(final)} ${zoneAbbr(final)}` : "No votes counted yet";
   return (
     <p className={`mt-race-status${won ? " called" : race.call?.withdrawn ? " warn" : ""}`}>
       <b>{text}</b>
       {holder && race.office !== "measure" && <span className="muted"> · seat held by {holder} going in</span>}
       {race.call?.replaced && !race.call.withdrawn && won && <span className="mt-flag warn">Call changed from {race.call.replaced}</span>}
-      {race.missing && <span className="mt-flag warn">civicAPI left this race out of its latest update; these are the last numbers we have{race.lastSeen ? `, as of ${stampET(race.lastSeen)} ET` : ""}</span>}
+      {race.missing && <span className="mt-flag warn">civicAPI left this race out of its latest update; these are the last numbers we have{race.lastSeen ? `, as of ${stampTime(race.lastSeen)} ${zoneAbbr(race.lastSeen)}` : ""}</span>}
     </p>
   );
 }
@@ -76,7 +76,7 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
       <h2 id="context">Counting so far</h2>
       <ul>
         <li>
-          {Number.isFinite(updated) ? `${source} last updated ${race.source ? "its results" : "this race"} at ${stampET(updated)} ET` : `${source} gives no update time for this race`}; Ballotwise checked at {stampET(fetchedAt)} ET.
+          {Number.isFinite(updated) ? `${source} last updated ${race.source ? "its results" : "this race"} at ${stampTime(updated)} ${zoneAbbr(updated)}` : `${source} gives no update time for this race`}; Ballotwise checked at {stampTime(fetchedAt)} {zoneAbbr(fetchedAt)}.
         </li>
         <li>
           {race.total === 0 ? "No votes counted yet." : race.reportingUnknown || !race.reporting ? `${source} has votes but gives no reporting figure for this race.` : `${Math.round(race.reporting)}% reporting, ${race.source ? `${source}'s count of precincts` : "civicAPI's estimate of precincts or ballot batches"} in. It isn't the share of the expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? "; mail, provisional and late ballots can still come in" : ""}.`}
@@ -115,7 +115,7 @@ export function VoteUpdates({ history }: { history: readonly Observation[] }) {
             const delta = prev ? h.total - prev.total : null;
             return (
               <tr key={h.at}>
-                <td>{stampET(h.at)}</td>
+                <td>{stampTime(h.at)}</td>
                 <td className="num">{fmt(h.total)}</td>
                 <td className="num">{delta === null ? "—" : `${delta >= 0 ? "+" : "−"}${fmt(Math.abs(delta))}`}{h.corrected && <span className="mt-flag warn"> correction</span>}</td>
                 <td>{h.leadName ? `${h.leadName}${h.leadParty && partyTag(h.leadParty) ? ` (${partyTag(h.leadParty)})` : ""} +${(h.margin ?? 0).toFixed(1)}` : "—"}</td>

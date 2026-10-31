@@ -4,7 +4,7 @@ import { memo, useContext, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EARLY_REPORTING, favoredSide, groupOf, isCompetitive, isEarly, isWatch, leaderOf, statusOf, tierOf, type Group, type Sort } from "@/lib/midterms/explore";
 import { leadingFlip, outcomeOf } from "@/lib/midterms/holders";
-import { stampET, stateFinal } from "@/lib/midterms/polls";
+import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import { fmt, lead, signalLine, type RaceSummary } from "@/lib/midterms/view";
 import { CandidateTable, lastName } from "./CandidateTable";
 import { partyColor } from "./party";
@@ -42,7 +42,7 @@ function TrendLine({ race, now }: { race: RaceSummary; now: number }) {
   if (!t || race.candidates.some((c) => c.winner)) return null;
   const ahead = lead(race.candidates);
   const parts: string[] = [];
-  const at = stampET(t.since);
+  const at = stampTime(t.since);
   if (t.votesAdded) parts.push(t.votesAdded > 0 ? `${fmt(t.votesAdded)} more votes since ${at}` : `${fmt(-t.votesAdded)} fewer votes since ${at} (a correction)`);
   if (ahead && t.prevLeader && t.prevLeader !== ahead.leader.name) parts.push(`${lastName(t.prevLeader)} led then`);
   else if (ahead && t.prevMargin !== null && Math.abs(t.prevMargin - ahead.margin) >= 0.1) parts.push(`lead was ${t.prevMargin.toFixed(1)} then`);
@@ -56,7 +56,7 @@ function Status({ race, now }: { race: RaceSummary; now: number }) {
   return (
     <>
       <StatusText race={race} now={now} />
-      {race.missing && <span className="mt-flag warn" title="civicAPI left this race out of its latest answer; these are the last numbers we saw">{race.lastSeen ? `Not updated · numbers as of ${stampET(race.lastSeen)}` : "Not updated"}</span>}
+      {race.missing && <span className="mt-flag warn" title="civicAPI left this race out of its latest answer; these are the last numbers we saw">{race.lastSeen ? `Not updated · numbers as of ${stampTime(race.lastSeen)}` : "Not updated"}</span>}
     </>
   );
 }
@@ -68,12 +68,12 @@ function StatusText({ race, now }: { race: RaceSummary; now: number }) {
     const o = outcomeOf(race);
     return (
       <span className="mt-res-status called" title="Called by civicAPI's decision desk; the time is when Ballotwise first saw the call">
-        {race.call ? `Call seen ${stampET(race.call.at)}` : "Called"}
+        {race.call ? `Call seen ${stampTime(race.call.at)}` : "Called"}
         {o && <span className={`mt-flag${o.gain ? ` gain p-${o.side}` : ""}`}>{o.side} {o.gain ? "gain" : "hold"}</span>}
       </span>
     );
   }
-  if (race.call?.withdrawn) return <span className="mt-res-status warn">Call withdrawn {stampET(race.call.at)}</span>;
+  if (race.call?.withdrawn) return <span className="mt-res-status warn">Call withdrawn {stampTime(race.call.at)}</span>;
   if (status === "counting") {
     const flip = leadingFlip(race);
     return (
@@ -85,7 +85,7 @@ function StatusText({ race, now }: { race: RaceSummary; now: number }) {
     );
   }
   const final = stateFinal(race.state);
-  return <span className="mt-res-status muted" title="When the state's last scheduled polls close; some districts may close earlier">{final && final > now ? `Polls close ${stampET(final)} ET` : "Awaiting votes"}</span>;
+  return <span className="mt-res-status muted" title="When the state's last scheduled polls close; some districts may close earlier">{final && final > now ? `Polls close ${stampTime(final)} ${zoneAbbr(final)}` : "Awaiting votes"}</span>;
 }
 
 /** The lead as a solid party-colored badge ("+4.21% Smith") and the gap in votes. */

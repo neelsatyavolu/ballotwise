@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { MOCK_ELECTION_EMAILS, readMock, setMock, type Mock } from "@/lib/midterms/clock";
-import { ELECTION_DAY_START, stampET } from "@/lib/midterms/polls";
+import { ELECTION_DAY_START, stampTime, zoneAbbr } from "@/lib/midterms/polls";
 import { useAccount } from "@/components/AccountProvider";
 import { useClock } from "./hooks";
 
@@ -36,7 +36,7 @@ export function MockElection() {
     return (
       <div className="mt-mock on" role="region" aria-label="Mock election night">
         <b>Mock night</b>
-        <span className="num">{stampET(now)} ET</span>
+        <span className="num">{stampTime(now)} {zoneAbbr(now)}</span>
         <select aria-label="Speed" value={mock.speed} onChange={(e) => setMock(hoursNow, Number(e.target.value))}>
           {SPEEDS.map((s) => (
             <option key={s} value={s}>{s}×</option>
@@ -61,7 +61,7 @@ export function MockElection() {
         Start at{" "}
         <select value={start} onChange={(e) => setStart(Number(e.target.value))}>
           {STARTS.map((h) => (
-            <option key={h} value={h}>{stampET(ELECTION_DAY_START + h * HOUR)}</option>
+            <option key={h} value={h}>{stampTime(ELECTION_DAY_START + h * HOUR)}</option>
           ))}
         </select>
       </label>

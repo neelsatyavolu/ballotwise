@@ -1,6 +1,6 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
-import { stampET, stateFinal } from "@/lib/midterms/polls";
+import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import { lead, raceLabel, RATING_LABEL, signalLine, type RaceSummary } from "@/lib/midterms/view";
 import { CandidateTable } from "./CandidateTable";
 import { useClock } from "./hooks";
@@ -30,7 +30,7 @@ function CardStatus({ race }: { race: RaceSummary }) {
   if (race.candidates.some((c) => c.winner)) return <span className="called">Called</span>;
   if (ahead) return <span>Lead {ahead.margin.toFixed(1)} pts</span>;
   const final = stateFinal(race.state);
-  return <span>{final && final > now ? `Polls close ${stampET(final)} ET` : "No results yet"}</span>;
+  return <span>{final && final > now ? `Polls close ${stampTime(final)} ${zoneAbbr(final)}` : "No results yet"}</span>;
 }
 
 /** One race at a glance: the top candidates as a results table, a stacked vote bar once votes are in, and how much is counted. */

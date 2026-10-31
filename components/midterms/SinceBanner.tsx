@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useEffect } from "react";
-import { stampET } from "@/lib/midterms/polls";
+import { stampTime } from "@/lib/midterms/polls";
 import type { RaceSummary } from "@/lib/midterms/view";
 import { useSince } from "./seen";
 
@@ -43,7 +43,7 @@ export function SinceBanner({ races, children }: { races: readonly RaceSummary[]
       {counted && since && parts.length > 0 && (
         <div className="mt-since small" role="status">
           <span>
-            <b>Since {stampET(since.at)}:</b> {parts.join(", ")}
+            <b>Since {stampTime(since.at)}:</b> {parts.join(", ")}
           </span>
           <button type="button" className="mt-linkish" onClick={mark} aria-label="Dismiss: mark everything seen">
             Dismiss

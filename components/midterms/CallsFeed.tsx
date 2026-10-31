@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/client";
 import { holderOf, outcomeOf } from "@/lib/midterms/holders";
-import { stampET } from "@/lib/midterms/polls";
+import { stampTime } from "@/lib/midterms/polls";
 import { colorOf, OFFICE_LABEL, partyOf, partyTag, type CallEvent, type Office, type RaceSummary } from "@/lib/midterms/view";
 import { CallAlerts } from "./CallAlerts";
 import { shortLabel } from "./PollClose";
@@ -160,7 +160,7 @@ export function CallsFeed({ races, events: given, counts, office, children }: { 
             const margin = current && won?.winner ? winnerMargin(r, e.winner!) : null;
             return (
               <li key={e.id} className={`${isNew(e) ? "new" : ""}${current ? "" : " old"}`}>
-                <time className="muted" dateTime={new Date(e.at).toISOString()}>{stampET(e.at)}</time>
+                <time className="muted" dateTime={new Date(e.at).toISOString()}>{stampTime(e.at)}</time>
                 <span className="mt-el-call-main">
                   <Link href={`/midterms/${r.id}`}>{shortLabel(r)}</Link>
                   {scope === "all" && <span className="muted small"> {r.office === "measure" ? "measure" : OFFICE_LABEL[r.office].toLowerCase()}</span>}

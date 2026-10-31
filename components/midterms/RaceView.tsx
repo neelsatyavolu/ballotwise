@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { stampET, stateFinal } from "@/lib/midterms/polls";
+import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { OFFICE_LABEL, raceLabel, signalLine, STATE_NAMES } from "@/lib/midterms/view";
@@ -91,7 +91,7 @@ export function RaceView({ id }: { id: number }) {
         {data.callPending && <p className="muted small">The call status is catching up with the latest count; it will settle on the next update.</p>}
         <p className="mt-meta small">
           <span title={reportingText(race).title}>{reportingText(race).long}</span>
-          {close && close.getTime() !== stateFinal(race.state) && <span title="civicAPI's closing time for this race, which differs from the state's last scheduled closing">civicAPI lists polls closing {stampET(close.getTime())} ET</span>}
+          {close && close.getTime() !== stateFinal(race.state) && <span title="civicAPI's closing time for this race, which differs from the state's last scheduled closing">civicAPI lists polls closing {stampTime(close.getTime())} {zoneAbbr(close.getTime())}</span>}
           <span>
             Checked <CheckedAgo at={data.fetchedAt} />
             {data.stale && " (results source is slow; showing the last good count)"}
@@ -110,7 +110,7 @@ export function RaceView({ id }: { id: number }) {
             <CandidateTable
               race={race}
               share
-              status={called ? `${called.name} declared the winner` : race.total > 0 ? "Total votes" : closes && closes > now ? `Polls close ${stampET(closes)} ET` : "No results yet"}
+              status={called ? `${called.name} declared the winner` : race.total > 0 ? "Total votes" : closes && closes > now ? `Polls close ${stampTime(closes)} ${zoneAbbr(closes)}` : "No results yet"}
             />
           </div>
           {race.total > 0 && <TurnoutLine race={race} />}

@@ -14,7 +14,7 @@ import { type ChatHandle } from "./ChatDock";
 import { ElectionToggle, useElectionMode } from "./electionModeState";
 import { useClock, useDashboards, useLive, useStars } from "./hooks";
 import { ForecastTip, WatchNote } from "./ForecastTip";
-import { electionModeDefault } from "@/lib/midterms/polls";
+import { closeWaves, electionModeDefault, formatTime } from "@/lib/midterms/polls";
 import { NationMap, type NationFill } from "./maps";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
@@ -41,6 +41,8 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 const OFFICES: Office[] = ["senate", "governor", "house", "measure"];
 const PAGE = 60;
+/** When the night's first polls close. */
+const FIRST_CLOSE = closeWaves()[0].at;
 /** Cards per office in the overview's key races before "Show more". */
 const SECTION = 10;
 
@@ -239,7 +241,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       <ModeNav current="/midterms" />
       <header className="mt-hero">
         <h1>Midterms 2026</h1>
-        <span className="mt-kicker">{counting ? `Live results, checked every ${Math.round(live.interval / 1000)} seconds` : "Tuesday, Nov 3 · first polls close at 6:00 PM ET"}</span>
+        <span className="mt-kicker">{counting ? `Live results, checked every ${Math.round(live.interval / 1000)} seconds` : `Tuesday, Nov 3 · first polls close at ${formatTime(FIRST_CLOSE)}`}</span>
         {data && (
           <span className="mt-updated small">
             <LiveDot at={data.fetchedAt} stale={data.stale} idle={!counting} /> {counting ? "" : "No votes counted yet · "}Checked <CheckedAgo at={data.fetchedAt} />

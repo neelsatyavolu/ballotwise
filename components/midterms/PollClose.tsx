@@ -1,15 +1,13 @@
 "use client";
 
-import { closeWaves, countdown, ELECTION_DAY_START, filedAt, formatET, nextWave, type CloseWave } from "@/lib/midterms/polls";
+import { closeWaves, countdown, dayLabel, ELECTION_DAY_START, filedAt, formatTime, nextWave, timeOnly, zoneName, type CloseWave } from "@/lib/midterms/polls";
 import { OFFICE_LABEL, raceLabel, STATE_NAMES, type Office, type RaceSummary } from "@/lib/midterms/view";
 import { useClock } from "./hooks";
 
 const WAVES = closeWaves();
-const DAY = 86_400_000;
 /** 6 a.m. Eastern on Nov 3, when the first polls open. */
 const POLLS_OPEN = ELECTION_DAY_START + 6 * 3_600_000;
 
-const dayOf = (ms: number) => (ms < ELECTION_DAY_START + DAY ? "Nov 3" : "Nov 4");
 
 const listed = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
@@ -53,7 +51,7 @@ export function NextClose({ races, onPick }: { races: readonly RaceSummary[]; on
       <section className="mt-cs-card mt-cs-next" aria-label="Poll closings">
         <div className="mt-cs-head"><h2>Polls</h2></div>
         <b className="mt-cs-clock done">All closed</b>
-        <p className="mt-cs-foot small">The last polls closed at {formatET(WAVES.at(-1)!.at)}. Counting goes on for days in some states.</p>
+        <p className="mt-cs-foot small">The last polls closed at {formatTime(WAVES.at(-1)!.at)}. Counting goes on for days in some states.</p>
       </section>
     );
   }
@@ -62,7 +60,7 @@ export function NextClose({ races, onPick }: { races: readonly RaceSummary[]; on
     <section className="mt-cs-card mt-cs-next" aria-label="Next poll closing">
       <div className="mt-cs-head">
         <h2>{now < POLLS_OPEN ? "First polls close" : "Next polls close"}</h2>
-        <span className="small"><strong>{formatET(next.at)}</strong> · {dayOf(next.at)}</span>
+        <span className="small"><strong>{formatTime(next.at)}</strong> · {dayLabel(next.at)}</span>
       </div>
       <b className="mt-cs-clock" role="timer" aria-live="off">{countdown(next.at - now)}</b>
       <p className="mt-cs-foot small">
@@ -84,7 +82,7 @@ export function PollSchedule({ races, picked = [], onPick }: { races: readonly R
     <section className="mt-el-sched" aria-label="Poll closing schedule" data-panel="schedule">
       <div className="mt-section-head tight">
         <h2>Poll closings</h2>
-        <span className="muted small">Eastern · * part of a state</span>
+        <span className="muted small">{zoneName(now)} · * part of a state</span>
       </div>
       <ol>
         {WAVES.map((w) => {
@@ -97,19 +95,19 @@ export function PollSchedule({ races, picked = [], onPick }: { races: readonly R
             <li key={w.at} className={`${closed ? "closed" : ""}${isNext ? " next" : ""}`}>
               <details open={isNext}>
                 <summary>
-                  <b>{formatET(w.at).replace(" ET", "")}</b>
+                  <b>{timeOnly(w.at)}</b>
                   <span className="mt-el-sched-states">{w.states.map((s) => (s.part === "all" ? s.state : `${s.state}*`)).join(" ")}</span>
-                  <span className="mt-el-sched-status">{closed ? "Closed" : isNext ? countdown(w.at - now) : dayOf(w.at)}</span>
+                  <span className="mt-el-sched-status">{closed ? "Closed" : isNext ? countdown(w.at - now) : dayLabel(w.at)}</span>
                 </summary>
                 <p className="small">{closingPlaces(w.states)}.</p>
               </details>
               {filed.length > 0 && !onPick ? (
-                <span className="mt-chip" title={`${filed.length} races filed under ${formatET(w.at)}`}>
+                <span className="mt-chip" title={`${filed.length} races filed under ${formatTime(w.at)}`}>
                   {filed.length}
                   {partial > 0 && "*"}
                 </span>
               ) : filed.length > 0 && onPick ? (
-                <button type="button" className={`mt-chip${on ? " on" : ""}`} aria-pressed={on} aria-label={`${on ? "Stop showing" : "Show"} the ${filed.length} races filed under ${formatET(w.at)}${partial ? `, ${partial} in states where only some polls close then` : ""}`} onClick={() => onPick(w.at)}>
+                <button type="button" className={`mt-chip${on ? " on" : ""}`} aria-pressed={on} aria-label={`${on ? "Stop showing" : "Show"} the ${filed.length} races filed under ${formatTime(w.at)}${partial ? `, ${partial} in states where only some polls close then` : ""}`} onClick={() => onPick(w.at)}>
                   {filed.length}
                   {partial > 0 && "*"}
                 </button>

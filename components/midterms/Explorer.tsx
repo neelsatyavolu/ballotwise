@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { activeCount, DEFAULT_FILTERS, explore, viewCounts, type Filters, type Leader, type Sort, type Status, type Tier, type View } from "@/lib/midterms/explore";
-import { closeWaves, formatET } from "@/lib/midterms/polls";
+import { closeWaves, formatTime, timeOnly, zoneAbbr } from "@/lib/midterms/polls";
 import { STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { useClock } from "./hooks";
 import { RaceSearchButton } from "./RaceSearch";
@@ -75,7 +75,7 @@ function ActiveChips({ f, set }: { f: Filters; set: (next: Partial<Filters>) => 
     ...f.leaders.map((l) => ({ key: `l${l}`, label: LEADERS.find((x) => x.id === l)!.label, clear: { leaders: f.leaders.filter((x) => x !== l) } })),
     ...(f.maxMargin !== null ? [{ key: "m", label: `Lead ≤ ${f.maxMargin} pts`, clear: { maxMargin: null } }] : []),
     ...(f.minReporting !== null ? [{ key: "in", label: `≥ ${f.minReporting}% reporting`, clear: { minReporting: null } }] : []),
-    ...f.waves.map((w) => ({ key: `w${w}`, label: `Polls close ${formatET(w)}`, clear: { waves: f.waves.filter((x) => x !== w) } })),
+    ...f.waves.map((w) => ({ key: `w${w}`, label: `Polls close ${formatTime(w)}`, clear: { waves: f.waves.filter((x) => x !== w) } })),
   ];
   if (!chips.length) return null;
   return (
@@ -109,7 +109,7 @@ function Panel({ f, set, states, onClose }: { f: Filters; set: (next: Partial<Fi
       <Chips label="Who's ahead" options={LEADERS} picked={f.leaders} onToggle={(l) => set({ leaders: toggle(f.leaders, l) })} />
       <Chips label="Lead at most" options={MARGINS.map((m) => ({ id: m, label: `${m} pts` }))} picked={f.maxMargin === null ? [] : [f.maxMargin]} onToggle={(m) => set({ maxMargin: f.maxMargin === m ? null : m })} />
       <Chips label="Reporting at least" options={REPORTING.map((p) => ({ id: p, label: `${p}%` }))} picked={f.minReporting === null ? [] : [f.minReporting]} onToggle={(p) => set({ minReporting: f.minReporting === p ? null : p })} />
-      <Chips label="Last polls close (Eastern)" options={WAVES.map((w) => ({ id: w.at, label: formatET(w.at).replace(" ET", "") }))} picked={f.waves} onToggle={(w) => set({ waves: toggle(f.waves, w) })} />
+      <Chips label={`Last polls close (${zoneAbbr(WAVES[0].at)})`} options={WAVES.map((w) => ({ id: w.at, label: timeOnly(w.at) }))} picked={f.waves} onToggle={(w) => set({ waves: toggle(f.waves, w) })} />
       <button type="button" className="btn secondary small" onClick={onClose}>Done</button>
     </div>
   );
