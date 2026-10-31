@@ -204,13 +204,13 @@ const EXPERTS = range(0, 0.6, 0.1);
 const SHARE = range(0, 0.9, 0.05);
 /**
  * DDHQ's published method (votes-docs.decisiondeskhq.com/forecast-methodology), held fixed rather than searched: no
- * expert ratings, markets at 25% of the chance, one national factor behind every race's shared error, and no personal
- * vote in the Senate. The House keeps incumbency and the personal vote: our fit was made with them, and dropping them
- * after the fit moves every incumbent's seat away from DDHQ's. Governors add candidate quality (the personal vote) to
+ * expert ratings, markets at 25% of the chance, and one national factor behind every race's shared error. Congress keeps
+ * incumbency and the personal vote, which DDHQ's method doesn't list: our fit was made with them, dropping them after
+ * the fit moves incumbents' seats away from DDHQ's, and without Susan Collins's DDHQ's Maine toss-up reads Lean D. Governors add candidate quality (the personal vote) to
  * the margin in full, as DDHQ's governor fundamentals are a plain sum of baseline, incumbency and quality, and search
  * the rest.
  */
-const METHOD = { house: { experts: 0, max: 0.25, nationalShare: 1 }, senate: { experts: 0, max: 0.25, personal: 0, nationalShare: 1 }, governor: { personal: 1 / M.FIT.senateNoFundraising.coefficients.personal } };
+const METHOD = { house: { experts: 0, max: 0.25, nationalShare: 1 }, senate: { experts: 0, max: 0.25, nationalShare: 1 }, governor: { personal: 1 / M.FIT.senateNoFundraising.coefficients.personal } };
 /** A setting's search values: the method's own where it fixes one. */
 const grid = (office, key, values) => (METHOD[office]?.[key] === undefined ? values : [METHOD[office][key]]);
 /** Settings shared by every office, searched as a full grid. */
