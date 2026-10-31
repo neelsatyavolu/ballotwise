@@ -1239,6 +1239,27 @@ body:has(.wrap.mt.mt-dv) main { padding-top: 0; }
 .mt-bell { margin-left: auto; border: 1px solid var(--rule); border-radius: 4px; background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; padding: 2px 8px; cursor: pointer; white-space: nowrap; }
 .mt-bell.on { color: var(--ink); border-color: var(--accent); }
 .mt-bell:hover { color: var(--ink); }
+.mt-bell + .mt-bell { margin-left: 0; }
+
+/* The election-night pop-up: one big moment in the middle of the screen, others listed under it. */
+.mt-moment { width: min(480px, calc(100vw - 32px)); margin: auto; padding: 24px; background: var(--sheet); color: var(--ink); border: 1px solid var(--el-line); border-radius: 8px; }
+.mt-moment::backdrop { background: rgb(0 0 0 / 0.6); }
+.mt-moment[open] { display: grid; gap: 10px; animation: mt-moment-in 0.18s ease-out; }
+/* Its switch sits in the calls feed's heading row, so the title undoes that row's small grey label style. */
+.mt .mt-moment h2 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; text-transform: none; color: var(--ink); }
+.mt-moment p { margin: 0; }
+.mt-moment-kicker { display: flex; justify-content: space-between; gap: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+.mt-moment-kicker time { text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.mt-moment .p-D { color: var(--dem-ink); }
+.mt-moment .p-R { color: var(--rep-ink); }
+.mt-moment .p-I { color: var(--oth); }
+.mt-moment .warn { color: var(--no); }
+.mt-moment-also { display: grid; gap: 4px; margin: 4px 0 0; padding: 10px 0 0; border-top: 1px solid var(--rule); list-style: none; }
+.mt-moment-also b { margin-right: 4px; }
+.mt-moment-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+.mt-moment-actions .mt-linkish { margin-left: auto; color: var(--muted); }
+@keyframes mt-moment-in { from { opacity: 0; transform: scale(0.97); } }
+@media (prefers-reduced-motion: reduce) { .mt-moment[open] { animation: none; } }
 /* The 2024 comparison under a race's candidates: a headline with its caveat. */
 .mt-turnout { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet); }
 .mt-turnout p { margin: 0; }
@@ -1441,3 +1462,11 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
   .mt-ev-summary { grid-template-columns: 1fr; }
   .mt-ev-summary > div { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 12px; }
 }
+
+/* Development only: the mock election night switch, pinned bottom center (clear of Next's dev badge and the chat button). */
+.mt-mock { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: calc(100vw - 32px); padding: 8px 12px; background: var(--sheet); color: var(--ink); border: 1px dashed var(--el-line); border-radius: 8px; font: inherit; font-size: 13px; }
+button.mt-mock { cursor: pointer; font-weight: 600; color: var(--muted); }
+button.mt-mock:hover { color: var(--ink); }
+.mt-mock.on { border: 1px solid var(--accent); }
+.mt-mock.on b { color: var(--accent); }
+.mt-mock select { font: inherit; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); }

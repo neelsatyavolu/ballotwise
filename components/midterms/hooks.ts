@@ -143,7 +143,8 @@ export function useLive<T>(path: string | null) {
       inFlight = controller;
       const timeout = setTimeout(() => controller.abort(), LIVE_TIMEOUT_MS);
       try {
-        const etag = held.current?.path === path ? held.current.etag : null;
+        // A preview asks for the whole answer each time, so a running mock night re-simulates it at its new time.
+        const etag = held.current?.path === path && simAt() === null ? held.current.etag : null;
         const answer = await requestLive<T>(path, etag, controller.signal);
         const data = answer.same ? null : await previewed(path, answer.data);
         if (done) return;

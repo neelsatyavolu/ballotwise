@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { holderOf, outcomeOf } from "@/lib/midterms/holders";
 import type { Coverage } from "@/lib/midterms/coverage";
+import { CONTROL_NEED } from "@/lib/midterms/moments";
 import { leading, partyOf, type Overview, type RaceSummary, type Tally } from "@/lib/midterms/view";
 import { CheckedAgo } from "./CheckedAgo";
 
@@ -10,8 +11,7 @@ type Chamber = "senate" | "house" | "governor";
 type Seats = { D: number; R: number; other: number };
 
 const TITLE: Record<Chamber, string> = { senate: "Senate", house: "House", governor: "Governors" };
-/** Seats each side needs for control. The vice president breaks Senate ties for Republicans. Governors aren't a chamber. */
-const NEED: Record<Chamber, { D: number; R: number } | null> = { senate: { D: 51, R: 50 }, house: { D: 218, R: 218 }, governor: null };
+const NEED: Record<Chamber, { D: number; R: number } | null> = { ...CONTROL_NEED, governor: null };
 const NOTE: Record<Chamber, string> = {
   senate: "Not up: the 65 seats not on the ballot. Angus King and Bernie Sanders, independents who caucus with Democrats, count as D.",
   house: "All 435 seats are on the ballot.",

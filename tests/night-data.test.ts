@@ -284,6 +284,14 @@ describe("election-night preview", () => {
     expect(oldestFirst.map((e) => e.at)).toEqual([...oldestFirst.map((e) => e.at)].sort((a, b) => a - b));
   });
 
+  it("keeps each call's time and number as the night moves on, so a running mock night never renumbers its calls", () => {
+    const races = [georgia, ...others];
+    const early = simulateOverview(overview(races), ELECTION_DAY_START + 20.5 * HOUR).callEvents ?? [];
+    const later = simulateOverview(overview(races), ELECTION_DAY_START + 21 * HOUR).callEvents ?? [];
+    expect(early.length).toBeGreaterThan(0);
+    for (const e of early) expect(later).toContainEqual(e);
+  });
+
   it("withdraws one Senate call at 10 p.m. and makes it again at 11", () => {
     const at = (h: number) => simulateOverview(overview([georgia]), ELECTION_DAY_START + h * HOUR);
     expect(at(21.5).races[0]).toMatchObject({ calledFor: expect.any(String), call: { withdrawn: false } });

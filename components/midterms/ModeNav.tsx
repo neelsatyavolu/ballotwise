@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { MockElection } from "./MockElection";
 
 const MODES = [
   { href: "/midterms", label: "Overview" },
@@ -44,6 +45,7 @@ export function ModeNav({ current }: { current?: ModeHref }) {
     <>
       {tabs(false)}
       {slot && createPortal(tabs(true), slot)}
+      {process.env.NODE_ENV === "development" && <MockElection />}
     </>
   );
 }

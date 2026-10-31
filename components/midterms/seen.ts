@@ -4,20 +4,16 @@
 // just without memory, when storage is off.
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { clockNow } from "@/lib/midterms/clock";
+import { clockNow, simAt } from "@/lib/midterms/clock";
 import { isEarly } from "@/lib/midterms/explore";
 import { outcomeOf } from "@/lib/midterms/holders";
 import { lead, type RaceSummary } from "@/lib/midterms/view";
 
 const CHANGED = "mt-seen";
 
-/** A simulated night (`?sim=`) keeps its own memory, so a rehearsal never shows up on the real night. */
+/** A simulated night (`?sim=` or a mock night) keeps its own memory, so a rehearsal never shows up on the real night. */
 function scoped(key: string): string {
-  try {
-    return new URLSearchParams(window.location.search).has("sim") ? `${key}:sim` : key;
-  } catch {
-    return key;
-  }
+  return simAt() !== null ? `${key}:sim` : key;
 }
 
 function read(key: string): string | null {

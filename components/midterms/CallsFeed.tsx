@@ -42,8 +42,8 @@ function winnerMargin(r: RaceSummary, name: string): number | null {
   return ((won.votes - best) / total) * 100;
 }
 
-/** Every call, changed call and withdrawal, newest first, with seats changing party pinned on top. */
-export function CallsFeed({ races, events: given, counts, office }: { races: readonly RaceSummary[]; events?: CallEvent[]; counts?: Record<Office, number>; office: Office | "all" }) {
+/** Every call, changed call and withdrawal, newest first, with seats changing party pinned on top. `children` sit beside the alerts switch: election mode puts its pop-up switch there. */
+export function CallsFeed({ races, events: given, counts, office, children }: { races: readonly RaceSummary[]; events?: CallEvent[]; counts?: Record<Office, number>; office: Office | "all"; children?: React.ReactNode }) {
   const [all, setAll] = useState(false);
   const [everyOffice, setEveryOffice] = useState(false);
   const scope = everyOffice ? "all" : office;
@@ -105,6 +105,7 @@ export function CallsFeed({ races, events: given, counts, office }: { races: rea
       <div className="mt-section-head tight">
         <h2>Latest calls</h2>
         <CallAlerts events={live} races={races} />
+        {children}
         <span className="muted small">
           {total ? `${total} so far${shown.length < total ? `, latest ${Math.min(shown.length, all ? shown.length : SHOWN)} shown` : ""}` : "None yet"}
           {office !== "all" && (

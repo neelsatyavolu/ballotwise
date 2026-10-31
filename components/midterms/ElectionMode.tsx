@@ -10,6 +10,7 @@ import { ControlStrip } from "./ControlStrip";
 import { ElectionMap } from "./ElectionMap";
 import { Explorer } from "./Explorer";
 import { type useStars } from "./hooks";
+import { MomentPopup } from "./MomentPopup";
 import { NextClose, PollSchedule, shortLabel } from "./PollClose";
 import { SeatBoard, type FillMode } from "./SeatBoard";
 import { RailContext } from "./railSplit";
@@ -123,7 +124,9 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
           {mapOffice === "house" ? <SeatBoard races={data.races} selected={f.states} onState={pickState} matching={matching} mode={fillMode} /> : <ElectionMap office={mapOffice} races={data.races} selected={f.states} onState={pickState} mode={fillMode} />}
         </div>
         <div className="mt-el-callbox" ref={setCallbox}>
-          <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office={f.office} />
+          <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office={f.office}>
+            <MomentPopup data={data} starred={stars.ids} />
+          </CallsFeed>
         </div>
         <div className="mt-el-schedbox" ref={setSchedbox}>
           <PollSchedule races={f.office === "all" ? data.races : data.races.filter((r) => r.office === f.office)} picked={f.waves} onPick={(at) => set({ waves: toggle(f.waves, at) })} />

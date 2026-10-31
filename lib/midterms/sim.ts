@@ -33,15 +33,37 @@ function finalMargin(r: RaceSummary): number {
   return (15 + rand(r.id, 3) * 30) * (holder === "R" ? -1 : holder === "D" ? 1 : rand(r.id, 8) < 0.5 ? -1 : 1);
 }
 
+/** How much of a race is counted at `at`, hours after its polls `close`, and the Democratic (or Yes) lead then. */
+function progress(r: RaceSummary, close: number, at: number): { reporting: number; margin: number } {
+  const hours = (at - close) / HOUR;
+  const reporting = Math.min(99, Math.round(100 * (1 - Math.exp(-hours / (1.2 + rand(r.id, 4) * 1.5)))));
+  // Early counts wander from the final result and settle as more is counted.
+  return { reporting, margin: finalMargin(r) + (rand(r.id, 5) - 0.5) * 16 * (1 - reporting / 100) };
+}
+
+function callableAt(r: RaceSummary, close: number, at: number): boolean {
+  const { reporting, margin } = progress(r, close, at);
+  const lead = Math.abs(margin);
+  return at >= (stateFinal(r.state) ?? close) && (reporting >= 97 || (lead > 12 && reporting > 15) || (lead > 6 && reporting > 60) || (lead > 2.5 && reporting > 88));
+}
+
+const CALL_STEP = 5 * 60_000;
+
+/**
+ * When the race is first called, by `at`, or null if not yet: the first moment its count is callable, checked every
+ * five minutes from a race-specific start. A call stays made, so its time never moves as the night goes on.
+ */
+function calledAt(r: RaceSummary, close: number, at: number): number | null {
+  const from = (stateFinal(r.state) ?? close) + rand(r.id, 7) * CALL_STEP;
+  for (let t = from; t <= at; t += CALL_STEP) if (callableAt(r, close, t)) return t;
+  return null;
+}
+
 function simulateRace(r: RaceSummary, at: number): RaceSummary {
   const close = stateCloses(r.state);
   if (close === null || at < close) return r;
-  const hours = (at - close) / HOUR;
-  const reporting = Math.min(99, Math.round(100 * (1 - Math.exp(-hours / (1.2 + rand(r.id, 4) * 1.5)))));
+  const { reporting, margin } = progress(r, close, at);
   if (reporting <= 0) return r;
-  const final = finalMargin(r);
-  // Early counts wander from the final result and settle as more is counted.
-  const margin = final + (rand(r.id, 5) - 0.5) * 16 * (1 - reporting / 100);
   const turnout = (r.office === "house" ? 320_000 : 2_600_000) * (0.5 + rand(r.id, 6) * 1.5);
   const total = Math.round((turnout * reporting) / 100);
   const yesSide = r.office === "measure";
@@ -53,8 +75,8 @@ function simulateRace(r: RaceSummary, at: number): RaceSummary {
     if (second?.name === name) return (1 - minor) * (0.5 - margin / 200);
     return minor / Math.max(1, r.candidates.length - 2);
   };
-  const lead = Math.abs(margin);
-  const callable = at >= (stateFinal(r.state) ?? close) && (reporting >= 97 || (lead > 12 && reporting > 15) || (lead > 6 && reporting > 60) || (lead > 2.5 && reporting > 88));
+  const callAt = calledAt(r, close, at);
+  const callable = callAt !== null;
   const counted = r.candidates
     .map((c) => {
       const votes = first || second ? Math.round(total * share(c.name)) : Math.round(total / r.candidates.length);
@@ -70,7 +92,7 @@ function simulateRace(r: RaceSummary, at: number): RaceSummary {
     // A made-up last quarter hour: some votes added and the lead a little different.
     trend: callable ? null : { since: at - 15 * 60_000, baselineAt: at - 15 * 60_000, votesAdded: Math.round(total * 0.1 * (1 - reporting / 100)), prevMargin: Math.abs(margin + (rand(r.id, 9) - 0.5) * 3), prevLeader: null, lastChange: at - rand(r.id, 10) * 12 * 60_000 },
     calledFor: callable ? counted[0].name : null,
-    call: callable ? { id: r.id, at: Math.max(stateFinal(r.state) ?? close, at - rand(r.id, 7) * Math.min(at - close, 1.5 * HOUR)), winner: counted[0].name, replaced: null, withdrawn: false } : null,
+    call: callAt !== null ? { id: r.id, at: callAt, winner: counted[0].name, replaced: null, withdrawn: false } : null,
   };
 }
 
