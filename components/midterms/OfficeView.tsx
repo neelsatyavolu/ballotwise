@@ -134,7 +134,7 @@ export function SeatHeader({ office, data, forecast = null }: { office: Office; 
 }
 
 export function OfficeView({ office, initialState }: { office: Office; initialState: string | null }) {
-  const { data, error } = useLive<Overview>("/api/midterms", { office });
+  const { data, catalogData, error } = useLive<Overview>("/api/midterms", { office });
   const forecast = useLive<ForecastOverview>("/api/midterms/forecast").data;
   const favorites = useStars();
   const [focus, setFocus] = useState<string | null>(initialState);
@@ -155,6 +155,8 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const statewide = office === "senate" || office === "governor";
   const shownId = focus ? (picked && inState.some((r) => r.id === picked) ? picked : statewide ? (inState[0]?.id ?? null) : null) : null;
   const shown = inState.find((r) => r.id === shownId) ?? null;
+  // The race before a Votes Pro (DDHQ) overlay, which clears its polls and market signal: whether those panels are coming.
+  const publicSignal = (catalogData?.races.find((r) => r.id === shownId) ?? shown)?.signal;
   const detail = useLive<{ race: RaceDetail }>(shownId ? `/api/midterms/race/${shownId}` : null);
   const districtFills = useMemo(() => {
     if (office !== "house") return undefined;
@@ -233,14 +235,14 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                       </p>
                       {detail.data && <VotesLeftPanel race={detail.data.race} />}
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
-                      {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} />}
+                      {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} pollsExpected={!!publicSignal?.polls} />}
                     </>
                   )}
                   {inState.length > 1 && (
                     <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} selectedId={shownId} />
                   )}
                   {/* The market viewer comes last, below everything else for the state. */}
-                  {shown && shown.office !== "measure" && <MarketPanel key={shown.id} raceId={shown.id} expected={!!shown.signal?.market} />}
+                  {shown && shown.office !== "measure" && <MarketPanel key={shown.id} raceId={shown.id} expected={!!publicSignal?.market} />}
                 </>
               )}
             </aside>

@@ -191,9 +191,9 @@ export function RaceView({ id }: { id: number }) {
             * Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
-          {race.office !== "measure" && <RaceInsights race={race} ddhq={active} />}
+          {race.office !== "measure" && <RaceInsights race={race} ddhq={active} pollsExpected={!!(loaded ?? race).signal?.polls} />}
           {data.history && <VoteUpdates history={data.history} />}
-          {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!race.signal?.market} />}
+          {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
         </section>
 
         <section aria-labelledby="map">
