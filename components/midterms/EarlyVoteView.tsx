@@ -142,7 +142,7 @@ export function EarlyVoteView({ initialState }: { initialState: string | null })
         <>
           <NationSummary states={states} />
           <div className="mt-office mt-in">
-            <div>
+            <div className="mt-ev-mapcol">
               <ZoomMap fills={fills} focus={focus} onFocus={setFocus} countyFills={countyFills} raceId={null} label={`Map of early votes cast as a share of the 2024 vote${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}`} />
               <TurnoutLegend />
             </div>
