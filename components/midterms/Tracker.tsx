@@ -8,11 +8,14 @@ import { ColumnsSkeleton, OfficeSkeleton, OverviewSkeleton, RaceSkeleton } from 
 
 type Skeleton = "overview" | "office" | "columns" | "race" | "slim";
 
-/** Shown while the server reads the cached results, so the header and tabs are up before the numbers arrive. */
-export function TrackerFallback({ current, skeleton = "slim" }: { current?: ModeHref; skeleton?: Skeleton }) {
+/**
+ * Shown while the server reads the cached results, so the header and tabs are up before the numbers arrive. A wall
+ * screen passes `nav={false}`: the tabs mount the two-screen setup, which a wall stays out of.
+ */
+export function TrackerFallback({ current, skeleton = "slim", nav = true }: { current?: ModeHref; skeleton?: Skeleton; nav?: boolean }) {
   return (
     <div className="wrap mt">
-      <ModeNav current={current} />
+      {nav && <ModeNav current={current} />}
       {skeleton === "overview" ? <OverviewSkeleton /> : skeleton === "office" ? <OfficeSkeleton /> : skeleton === "columns" ? <ColumnsSkeleton /> : skeleton === "race" ? <RaceSkeleton /> : <p className="muted">Loading results…</p>}
     </div>
   );
@@ -30,13 +33,13 @@ async function Seeds({ kind, arg, children }: { kind: SeedKind; arg: string; chi
  * Streams the tabs immediately, then sends the page with its results already in the HTML.
  * `map` starts the nation outline download with the document, ahead of the script that draws it.
  */
-export async function TrackerShell({ kind = "tracker", arg = "", map = false, skeleton = "slim", current, children }: { kind?: SeedKind; arg?: string; map?: boolean; skeleton?: Skeleton; current?: ModeHref; children: ReactNode }) {
+export async function TrackerShell({ kind = "tracker", arg = "", map = false, skeleton = "slim", current, nav = true, children }: { kind?: SeedKind; arg?: string; map?: boolean; skeleton?: Skeleton; current?: ModeHref; nav?: boolean; children: ReactNode }) {
   // Client navigations already have the outline in memory, so a preload there is a wasted request.
   const preload = map && isDocumentRequest(await headers());
   return (
     <>
       {preload ? <link rel="preload" href="/midterms/maps/US.json" as="fetch" crossOrigin="anonymous" /> : null}
-      <Suspense fallback={<TrackerFallback current={current} skeleton={skeleton} />}>
+      <Suspense fallback={<TrackerFallback current={current} skeleton={skeleton} nav={nav} />}>
         <Seeds kind={kind} arg={arg}>{children}</Seeds>
       </Suspense>
     </>
