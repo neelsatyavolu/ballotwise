@@ -352,7 +352,6 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-cs-foot { margin: 0; color: var(--muted); }
 /* The 8 PM wave alone names over 20 states: two lines, the full list on hover. */
 .mt-cs-places { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.mt-cs-next { border-left: 4px solid var(--red); }
 .mt-cs-clock { font-family: var(--serif); font-size: 30px; font-weight: 600; line-height: 1.05; color: var(--red); font-variant-numeric: tabular-nums; }
 .mt-cs-clock.done { color: var(--ink); font-size: 24px; }
 
@@ -574,7 +573,6 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-cs-bar i { background: var(--ink); }
 .mt-el .mt-cs-need { font-size: 12px; font-weight: 600; }
 .mt-el .mt-cs-sub, .mt-el .mt-cs-foot, .mt-el .mt-cs-more summary { font-size: 12px; }
-.mt-el .mt-cs-next { border-left-width: 1px; box-shadow: inset 4px 0 0 var(--red); }
 .mt-el .mt-cs-clock { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
 .mt-el .mt-cs-clock.done { font-size: 24px; }
 .mt-el .mt-cs-mini .d { color: var(--dem-ink); }
@@ -1180,8 +1178,6 @@ body:has(.wrap.mt.mt-sbs-page) .site-footer .wrap { max-width: none; padding: 0 
   .mt-ev-mapcol > .mt-zoom svg { width: 100%; height: 100%; aspect-ratio: auto; }
   .mt-ev-mapcol > .mt-legend { flex: none; }
 }
-/* The next-poll-closing card: the red countdown marks it; no thick side bar against the rounded corners. */
-.mt .mt-cs-next { border-left: 1px solid var(--rule); }
 
 /* Decision View dashboards: a dotted grid of panels, after DDHQ's Decision View. */
 .wrap.mt.mt-dv { max-width: none; background: var(--paper); color: var(--ink); padding: 0 12px 12px; min-height: 100vh; }

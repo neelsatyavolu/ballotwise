@@ -245,7 +245,6 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       <ModeNav current="/midterms" />
       <header className="mt-hero">
         <h1>Midterms 2026</h1>
-        {desk.enabled && <span className="mt-kicker">{desk.forecast ? "Decision Desk HQ · Your Votes Pro forecast" : desk.forecastStatus === "error" ? "DDHQ unavailable · Ballotwise forecast fallback" : "Loading Decision Desk HQ forecast…"}</span>}
         <span className="mt-kicker">{counting ? `Live results, checked every ${Math.round(live.interval / 1000)} seconds` : `Tuesday, Nov 3 · first polls close at ${formatTime(FIRST_CLOSE)}`}</span>
         {data && (
           <span className="mt-updated small">
