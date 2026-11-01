@@ -25,8 +25,13 @@ export type WallOffice = Extract<Office, "senate" | "house">;
 const TITLE: Record<WallOffice, string> = { senate: "Senate", house: "House" };
 /** The most rows the closest-races table holds; the screen shows as many as fit. */
 const MAX_ROWS = 60;
-/** How many of the tour's next races show under the whole-country map; more get too narrow to read. */
-const UP_NEXT = 2;
+/**
+ * How many of the tour's next races the wall lays out. Under the whole-country map two fit side by side (wall.css
+ * hides the third); an ultrawide stacks them beside the map, as many as fit.
+ */
+const UP_NEXT = 3;
+/** How far a card starts below its place as it fades in (.mt-in in midterms.css), plus a pixel of rounding. */
+const SLIDE_PX = 5;
 /** No star column on a wall: nothing on it is clicked. */
 const NO_STARS = { ids: null, toggle: () => {} };
 const noop = () => {};
@@ -53,9 +58,9 @@ function subscribeSize(onChange: () => void) {
   };
 }
 
-/** How much bigger than normal to draw: grown to the window's width, times the viewer's +/- adjustment. */
+/** How much bigger than normal to draw: grown to the window, times the viewer's +/- adjustment. */
 function useWallScale(office: WallOffice): number {
-  const scale = useSyncExternalStore(subscribeSize, () => autoScale(window.innerWidth) * readAdjust(office), () => 1);
+  const scale = useSyncExternalStore(subscribeSize, () => autoScale(window.innerWidth, window.innerHeight) * readAdjust(office), () => 1);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const key = e.key === "=" ? "+" : e.key;
@@ -95,10 +100,7 @@ function useWakeLock() {
   }, []);
 }
 
-/**
- * The tour's current stop (a race id, or null for the whole country) and, on the whole country, the races it visits
- * next. Moves on by itself.
- */
+/** The tour's current stop (a race id, or null for the whole country) and the races it visits next. Moves on by itself. */
 function useTour(stops: readonly (number | null)[]): { stop: number | null; upNext: number[] } {
   const [i, setI] = useState(0);
   const at = i % stops.length;
@@ -107,23 +109,26 @@ function useTour(stops: readonly (number | null)[]): { stop: number | null; upNe
     const t = setTimeout(() => setI(at + 1), stop === null ? NATION_MS : RACE_MS);
     return () => clearTimeout(t);
   }, [at, stop]);
-  const rest = stops.slice(at + 1);
-  const leg = rest.slice(0, rest.indexOf(null) === -1 ? rest.length : rest.indexOf(null));
-  return { stop, upNext: stop === null ? (leg as number[]).slice(0, UP_NEXT) : [] };
+  const ahead = [...stops.slice(at + 1), ...stops.slice(0, at)].filter((id): id is number => id !== null && id !== stop);
+  return { stop, upNext: ahead.slice(0, UP_NEXT) };
 }
 
 /**
  * Hides every `items` element inside `box` from the first one that runs past the box's bottom, so a list fills its
- * space with whole rows instead of one cut in half. Runs after every render and whenever the box or its contents change.
+ * space with whole rows instead of one cut in half. Runs after every render and whenever the box or its contents change;
+ * `ready` is false until the box is on the page (the wall draws its lists once results arrive).
  */
-function useFit(box: RefObject<HTMLElement | null>, items: string) {
+function useFit(box: RefObject<HTMLElement | null>, items: string, ready: boolean) {
   const fit = () => {
     const el = box.current;
     if (!el) return;
     const all = [...el.querySelectorAll<HTMLElement>(items)];
     all.forEach((x) => (x.hidden = false));
-    const bottom = el.getBoundingClientRect().bottom;
-    const first = all.findIndex((x) => x.getBoundingClientRect().bottom > bottom + 1);
+    const rect = el.getBoundingClientRect();
+    // Showing a card again restarts its fade-in (.mt-in), which starts it a few pixels low; that doesn't count as
+    // running past the bottom. The slack is in screen pixels, so it grows with the wall's scale.
+    const slack = SLIDE_PX * (rect.height / (el.offsetHeight || 1));
+    const first = all.findIndex((x) => x.getBoundingClientRect().bottom > rect.bottom + slack);
     if (first >= 0) all.slice(first).forEach((x) => (x.hidden = true));
   };
   useLayoutEffect(fit);
@@ -141,7 +146,7 @@ function useFit(box: RefObject<HTMLElement | null>, items: string) {
     };
     // fit reads only the ref and the selector.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [box, items]);
+  }, [box, items, ready]);
 }
 
 /** The map, zoomed out to the country or into the tour's current race with its counties (or districts) shaded. */
@@ -218,8 +223,10 @@ export function Wall({ office }: { office: WallOffice }) {
   const closing = nextWave(useClock(60_000)) !== null;
   const table = useRef<HTMLElement>(null);
   const side = useRef<HTMLElement>(null);
-  useFit(table, ".mt-rows tbody tr");
-  useFit(side, ".mt-el-calllist > li");
+  const detail = useRef<HTMLDivElement>(null);
+  useFit(table, ".mt-rows tbody tr", !!data);
+  useFit(detail, ".mt-wall-upnext .mt-card", !!data);
+  useFit(side, ".mt-el-calllist > li", !!data);
 
   return (
     <div className="mt mt-wall" style={{ "--wall-scale": scale } as CSSProperties}>
@@ -248,13 +255,15 @@ export function Wall({ office }: { office: WallOffice }) {
                 <div className="mt-wall-map">
                   <TourMap office={office} races={races} updatedAt={data.ratings.updatedAt} results={results} race={stop} />
                 </div>
-                {stop ? (
-                  <ul className="mt-grid one mt-wall-spot mt-in" key={stop.id}>
-                    <RaceCard race={stop} starred={null} onStar={noop} />
-                  </ul>
-                ) : (
-                  next.length > 0 && (
-                    <div className="mt-wall-upnext mt-in">
+                {/* Under the map, the toured race or (on the whole country) the next ones; an ultrawide shows both. */}
+                <div className="mt-wall-detail" ref={detail}>
+                  {stop && (
+                    <ul className="mt-grid one mt-wall-spot mt-in" key={stop.id}>
+                      <RaceCard race={stop} starred={null} onStar={noop} />
+                    </ul>
+                  )}
+                  {next.length > 0 && (
+                    <div className="mt-wall-upnext mt-in" key={`next-${stopId}`}>
                       <h3>Up next on the tour</h3>
                       <ul className="mt-grid">
                         {next.map((r) => (
@@ -262,8 +271,8 @@ export function Wall({ office }: { office: WallOffice }) {
                         ))}
                       </ul>
                     </div>
-                  )
-                )}
+                  )}
+                </div>
               </section>
               <section className="mt-wall-cards" aria-label="Closest races" ref={table}>
                 <div className="mt-section-head tight">

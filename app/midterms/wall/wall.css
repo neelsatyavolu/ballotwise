@@ -29,8 +29,12 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 /* Nothing on a wall is clicked: no back button over the map, no hover cards. */
 .mt-wall .mt-zoom-back, .mt-wall .mt-star { display: none; }
 .mt-wall .mt-map * { cursor: default; }
-.mt-wall-spot { margin-top: 10px; }
-.mt-wall-upnext { margin-top: 10px; }
+.mt-wall-detail { flex: none; display: grid; gap: 10px; margin-top: 10px; }
+.mt-wall-detail:empty { display: none; }
+/* Beside a toured race there's no room for what's next, and two next races fit side by side. */
+.mt-wall-spot ~ .mt-wall-upnext, .mt-wall-upnext .mt-card:nth-child(n + 3) { display: none; }
+/* Up-next cards that don't fit are hidden (Wall.tsx useFit); with none left, so is the heading. */
+.mt-wall-upnext:not(:has(.mt-card:not([hidden]))) { display: none; }
 .mt-wall-upnext h3 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .mt-wall-upnext .mt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 /* Rows and calls that don't fit are hidden whole (Wall.tsx useFit); some of them set their own display. */
@@ -54,4 +58,16 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 }
 @media (max-aspect-ratio: 1 / 1) {
   .mt-wall-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); }
+}
+
+/* An ultrawide puts the tour's race card beside the map instead of under it, so the map keeps its height, and the
+   table gets more room. */
+@media (min-aspect-ratio: 2 / 1) {
+  .mt-wall-body { grid-template-columns: minmax(0, 2.7fr) minmax(0, 1fr) minmax(300px, 0.6fr); }
+  .mt-wall-tour { display: grid; grid-template-columns: minmax(0, 2.3fr) minmax(360px, 1fr); grid-template-rows: auto minmax(0, 1fr); column-gap: 16px; align-items: start; }
+  .mt-wall-tour > .mt-section-head { grid-column: 1 / -1; }
+  .mt-wall-map { height: 100%; }
+  .mt-wall-detail { margin-top: 0; height: 100%; min-height: 0; overflow: hidden; align-content: start; }
+  .mt-wall-spot ~ .mt-wall-upnext, .mt-wall-upnext .mt-card:nth-child(n + 3) { display: grid; }
+  .mt-wall-upnext .mt-grid { grid-template-columns: minmax(0, 1fr); }
 }

@@ -31,14 +31,18 @@ export function tourStops(raceIds: readonly number[]): (number | null)[] {
   return stops.length ? stops : [null];
 }
 
-/** Below this width the wall draws at normal size; wider screens get proportionally bigger type, up to MAX_AUTO. */
+/**
+ * Within this size the wall draws at normal size; bigger screens get proportionally bigger type, up to MAX_AUTO.
+ * Whichever side runs out first sets the size, so an ultrawide grows by its height and gets the extra width as room.
+ */
 const BASE_WIDTH = 1600;
+const BASE_HEIGHT = 900;
 const MAX_AUTO = 3;
 const round = (n: number) => Math.round(n * 10) / 10;
 
-/** How much bigger than normal to draw the wall on a window this many CSS pixels wide. */
-export function autoScale(width: number): number {
-  return round(Math.min(MAX_AUTO, Math.max(1, width / BASE_WIDTH)));
+/** How much bigger than normal to draw the wall in a window this many CSS pixels wide and tall. */
+export function autoScale(width: number, height: number): number {
+  return round(Math.min(MAX_AUTO, Math.max(1, Math.min(width / BASE_WIDTH, height / BASE_HEIGHT))));
 }
 
 /** The viewer's own adjustment on top of autoScale, after pressing +, - or 0 (back to 1). */

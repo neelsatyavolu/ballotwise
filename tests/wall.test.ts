@@ -42,11 +42,17 @@ describe("wall tour", () => {
 });
 
 describe("wall scale", () => {
-  it("grows type with the screen's width, within limits", () => {
-    expect(autoScale(1280)).toBe(1);
-    expect(autoScale(1920)).toBe(1.2);
-    expect(autoScale(3840)).toBe(2.4);
-    expect(autoScale(10_000)).toBe(3);
+  it("grows type with the screen, within limits", () => {
+    expect(autoScale(1280, 1024)).toBe(1);
+    expect(autoScale(1920, 1080)).toBe(1.2);
+    expect(autoScale(3840, 2160)).toBe(2.4);
+    expect(autoScale(10_000, 10_000)).toBe(3);
+  });
+
+  it("sizes an ultrawide by its height, so the wall isn't squashed into a strip", () => {
+    expect(autoScale(3440, 1440)).toBe(1.6);
+    expect(autoScale(2560, 1080)).toBe(1.2);
+    expect(autoScale(5120, 1440)).toBe(1.6);
   });
 
   it("steps the viewer's adjustment in tenths and never shrinks below half size", () => {
