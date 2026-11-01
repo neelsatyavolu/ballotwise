@@ -17,7 +17,8 @@ export type Rating = "tossup" | "lean-d" | "lean-r" | "lean-i" | "likely-d" | "l
 export type RatedRace = { office: Office; state: string; district?: number | null; rating: Rating; note?: string };
 
 /** `color` is civicAPI's own color for a candidate, set only in races outside the tracked offices, where most run without a party. */
-export type Candidate = { name: string; party: string; votes: number; pct: number; winner: boolean; incumbent: boolean; color?: string };
+/** `photo` is a headshot URL from Decision Desk HQ, set only on a signed-in DDHQ user's private view. */
+export type Candidate = { name: string; party: string; votes: number; pct: number; winner: boolean; incumbent: boolean; color?: string; photo?: string };
 export type RaceSummary = {
   id: number;
   office: Office;

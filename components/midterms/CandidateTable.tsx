@@ -10,7 +10,7 @@ import { PickTag, usePicks } from "./picks";
 import { reportingText } from "./reporting";
 
 export const lastName = (name: string) => {
-  const parts = name.replace(/,? (Jr|Sr|II|III|IV)\.?$/i, "").split(" ");
+  const parts = name.trim().replace(/,? (Jr|Sr|II|III|IV)\.?$/i, "").split(/\s+/);
   // "de la Cruz", "Van Hollen": keep lowercase particles with the surname.
   let i = parts.length - 1;
   while (i > 0 && /^(de|la|van|von|del|da|di|le)$/i.test(parts[i - 1])) i -= 1;
@@ -20,7 +20,7 @@ export const lastName = (name: string) => {
 export const initials = (name: string) => {
   const parts = name.replace(/[^\p{L}\s'-]/gu, " ").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "?";
-  return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + lastName(name)[0]).toUpperCase();
+  return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + (lastName(name)[0] ?? "")).toUpperCase();
 };
 
 /** Party as a results desk abbreviates it: DEM, GOP, LIB, GRE, IND, or the party's own short tag. */

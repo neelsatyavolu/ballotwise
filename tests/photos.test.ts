@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { raceKey } from "../lib/midterms/odds";
-import { photoKey } from "../lib/midterms/photos";
+import { photoKey, photoOf } from "../lib/midterms/photos";
 import { candidates2026, placeholders, raceTitles } from "../scripts/ballotpedia.mjs";
 import { firstInitial, lookupNames, nameParts, raceKey as buildKey, sameName, seatSurname } from "../scripts/photo-names.mjs";
 
@@ -41,6 +41,16 @@ describe("candidate photo names", () => {
   it("looks candidates up by their own capitalization, with nickname forms", () => {
     expect(lookupNames("James C. “Jim” McDermott")).toEqual(expect.arrayContaining(["James McDermott", "Jim McDermott"]));
     expect(lookupNames("Michael Quirk")).toContain("Mike Quirk");
+  });
+
+  it("finds a photo under another spelling of the same person in the same race, and nobody else's", () => {
+    const ca16 = { office: "house" as const, state: "CA", district: 16 };
+    // civicAPI lists "Peter Sundin Soulé"; Decision Desk HQ calls him "Peter Soulé".
+    expect(photoOf(ca16, "Peter Soulé")).toBe(photoOf(ca16, "Peter Sundin Soulé"));
+    expect(photoOf(ca16, "Peter Soulé")).toBeTruthy();
+    expect(photoOf(ca16, "Sam Liccardo ")).toBe(photoOf(ca16, "Sam Liccardo"));
+    expect(photoOf({ ...ca16, district: 17 }, "Peter Soulé")).toBeNull();
+    expect(photoOf(ca16, "Paul Soulé")).toBeNull();
   });
 
   it("files photos under the same race key the odds use", () => {

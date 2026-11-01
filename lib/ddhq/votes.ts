@@ -18,7 +18,7 @@ const OFFICE_QUERY: Record<Exclude<Office, "measure">, { q: string; office: stri
 export type DdhqSide = "D" | "R" | "I";
 export type DdhqForecast = { name: string; party: DdhqSide; probability: number };
 export type DdhqCall = { name: string; at: string };
-export type DdhqCandidate = { name: string; party: string; votes: number; pct: number; winner: boolean; incumbent: boolean };
+export type DdhqCandidate = { name: string; party: string; votes: number; pct: number; winner: boolean; incumbent: boolean; photo?: string };
 export type DdhqCounty = { fips: string; name?: string; total?: number; reporting?: number; candidates: { name: string; party: string; votes: number; pct: number }[] };
 /** `candidates` is null when Votes didn't send a count, so the civicAPI numbers stay. */
 export type DdhqRace = { forecast: DdhqForecast[]; rating?: Rating | null; updatedAt?: number | null; resultsUpdatedAt?: string; reporting?: number; call: DdhqCall | null; candidates: DdhqCandidate[] | null; counties: DdhqCounty[]; total: number };
@@ -58,10 +58,19 @@ function sideOf(abbrev: string | undefined): DdhqSide {
   return "I";
 }
 
+/** A full name from its parts. Votes leaves stray spaces in some, like CA-16's lastName "Soulé ". */
+function joinName(...parts: (string | undefined)[]): string {
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
 function personName(candidate: { firstName?: string; lastName?: string; name?: string } | undefined): string {
   if (!candidate) return "";
-  if (candidate.name) return candidate.name;
-  return [candidate.firstName, candidate.lastName].filter(Boolean).join(" ");
+  return candidate.name?.trim() ? joinName(candidate.name) : joinName(candidate.firstName, candidate.lastName);
+}
+
+/** Votes' own headshot for a candidate, only from its image host; it sends null when it has none. */
+function photoOf(image: unknown): string | undefined {
+  return typeof image === "string" && /^https:\/\/data\.ddhq\.io\/[\w./-]+\.(?:png|jpe?g|webp)$/i.test(image) ? image : undefined;
 }
 
 function sameDistrict(office: Exclude<Office, "measure">, district: number | null, raw: string | undefined): boolean {
@@ -138,10 +147,11 @@ export function readResults(body: unknown): DdhqResults {
   const percents: unknown[] = [];
   for (const line of lines) {
     if (!line || typeof line !== "object") continue;
-    const record = line as { firstName?: string; lastName?: string; votes?: number; percent?: number; winner?: boolean; incumbent?: boolean; party?: { name?: string; abbrev?: string } };
-    const name = [record.firstName, record.lastName].filter(Boolean).join(" ");
+    const record = line as { firstName?: string; lastName?: string; votes?: number; percent?: number; winner?: boolean; incumbent?: boolean; image?: unknown; party?: { name?: string; abbrev?: string } };
+    const name = joinName(record.firstName, record.lastName);
     if (!name) continue;
     percents.push(record.percent);
+    const photo = photoOf(record.image);
     candidates.push({
       name,
       party: partyName(record.party),
@@ -149,6 +159,7 @@ export function readResults(body: unknown): DdhqResults {
       pct: 0,
       winner: record.winner === true,
       incumbent: record.incumbent === true,
+      ...(photo ? { photo } : {}),
     });
   }
   const total = countOf(data?.totalVotes) ?? candidates.reduce((sum, candidate) => sum + candidate.votes, 0);
@@ -162,7 +173,7 @@ export function readResults(body: unknown): DdhqResults {
       const record = area as { fips?: string; county?: string; liveTurnoutEstimate?: { totalVotes?: unknown; precinctsIn?: unknown; precinctsTot?: unknown }; candidates?: { first_name?: string; last_name?: string; votes?: number; percent?: number; party?: { name?: string; abbrev?: string } }[] };
       if (!record.fips || !Array.isArray(record.candidates)) continue;
       const rows = record.candidates.flatMap((candidate) => {
-        const name = [candidate.first_name, candidate.last_name].filter(Boolean).join(" ");
+        const name = joinName(candidate.first_name, candidate.last_name);
         if (!name) return [];
         const votes = countOf(candidate.votes) ?? 0;
         return [{ name, party: partyName(candidate.party), votes, percent: candidate.percent }];
@@ -192,7 +203,7 @@ export function readCall(body: unknown): DdhqCall | null {
     if (!record.winner) continue;
     const at = timestampOf(record.called_at);
     if (!at) continue;
-    const name = [record.firstName, record.lastName].filter(Boolean).join(" ");
+    const name = joinName(record.firstName, record.lastName);
     if (name) return { name, at };
   }
   return null;

@@ -100,6 +100,21 @@ describe("Decision Desk HQ race mapping", () => {
     expect(readForecast({})).toEqual([]);
     expect(readResults({})).toEqual({ candidates: null, counties: [], total: 0 });
   });
+
+  it("trims the stray spaces Votes leaves in names, and keeps only Votes' own candidate photos", () => {
+    // CA-16, Nov 1 2026: Votes sent lastName "Soulé " with a trailing space.
+    const body = { raceData: { toplineResults: [
+      { firstName: "Sam", lastName: "Liccardo", votes: 0, percent: 0, image: "https://data.ddhq.io/evs/candidates/53116.png", party: { name: "Democratic" } },
+      { firstName: "Peter", lastName: "Soulé ", votes: 0, percent: 0, image: "https://data.ddhq.io/evs/candidates/860591.png", party: { name: "Republican" } },
+      { firstName: " Ann ", lastName: "Lee", votes: 0, percent: 0, image: null, party: { name: "Libertarian" } },
+      { firstName: "Bo", lastName: "Fox", votes: 0, percent: 0, image: "http://evil.example/x.png", party: { name: "Green" } },
+    ] } };
+    const rows = readResults(body).candidates!;
+    expect(rows.map((row) => row.name)).toEqual(["Sam Liccardo", "Peter Soulé", "Ann Lee", "Bo Fox"]);
+    expect(rows.map((row) => row.photo)).toEqual(["https://data.ddhq.io/evs/candidates/53116.png", "https://data.ddhq.io/evs/candidates/860591.png", undefined, undefined]);
+    expect(readForecast({ parties: [{ shortAbbrev: "R", winProbability: 0.01, candidates: [{ firstName: "Peter", lastName: "Soulé " }] }] })).toEqual([{ name: "Peter Soulé", party: "R", probability: 0.01 }]);
+    expect(readCall({ raceData: { toplineResults: [{ winner: true, called_at: "2026-11-04T03:00:00Z", firstName: "Peter", lastName: "Soulé " }] } })).toEqual({ name: "Peter Soulé", at: "2026-11-04T03:00:00.000Z" });
+  });
 });
 
 describe("Votes email code", () => {

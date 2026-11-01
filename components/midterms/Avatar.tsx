@@ -5,11 +5,11 @@ import type { RaceSummary } from "@/lib/midterms/view";
 import { partyColor } from "./party";
 
 /**
- * A candidate's round avatar in a ring of their party's color: their photo when we have one we're sure of,
- * otherwise (or if the image fails to load) `children`, usually their initials.
+ * A candidate's round avatar in a ring of their party's color: Decision Desk HQ's headshot when the signed-in user's
+ * DDHQ data carries one, else our photo when we have one we're sure of, otherwise (or if the image fails to load) `children`, usually their initials.
  */
-export function Avatar({ race, candidate, className, children }: { race: Pick<RaceSummary, "office" | "state" | "district">; candidate: { name: string; party: string }; className?: string; children: ReactNode }) {
-  const url = photoOf(race, candidate.name);
+export function Avatar({ race, candidate, className, children }: { race: Pick<RaceSummary, "office" | "state" | "district">; candidate: { name: string; party: string; photo?: string }; className?: string; children: ReactNode }) {
+  const url = candidate.photo ?? photoOf(race, candidate.name);
   const [failed, setFailed] = useState(false);
   const photo = url && !failed;
   return (

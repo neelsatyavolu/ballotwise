@@ -18,7 +18,7 @@ export function deskFor(race: object): DdhqRace | undefined {
 }
 
 function candidate(row: DdhqCandidate): Candidate {
-  return { name: row.name, party: row.party, votes: row.votes, pct: row.pct, winner: row.winner, incumbent: row.incumbent };
+  return { name: row.name, party: row.party, votes: row.votes, pct: row.pct, winner: row.winner, incumbent: row.incumbent, ...(row.photo ? { photo: row.photo } : {}) };
 }
 
 function forecastOf(desk: DdhqRace): Forecast {
