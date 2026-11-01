@@ -16,7 +16,7 @@ function scoped(key: string): string {
   return simAt() !== null ? `${key}:sim` : key;
 }
 
-function read(key: string): string | null {
+export function readStored(key: string): string | null {
   try {
     return localStorage.getItem(scoped(key));
   } catch {
@@ -45,7 +45,7 @@ function subscribe(onChange: () => void) {
 
 /** One stored string, kept in step across components and tabs. Null when unset or on the server. */
 export function useStored(key: string): [string | null, (value: string | null) => void] {
-  const value = useSyncExternalStore(subscribe, () => read(key), () => null);
+  const value = useSyncExternalStore(subscribe, () => readStored(key), () => null);
   const set = useCallback((next: string | null) => writeStored(key, next), [key]);
   return [value, set];
 }

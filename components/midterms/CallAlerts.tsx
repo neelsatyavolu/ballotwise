@@ -4,12 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import type { CallEvent, RaceSummary } from "@/lib/midterms/view";
 import { callKey } from "@/lib/midterms/moments";
 import { shortLabel } from "./PollClose";
-import { useStored } from "./seen";
+import { readStored, useStored, writeStored } from "./seen";
 
 const KEY = "mt-call-alerts";
+/** The switch for the corner pop-ups every page shows on a call (CallPopups). */
+export const POPUPS_KEY = "mt-call-popups";
+
+/** Whether this browser asked for call alerts and allows them. */
+export function notificationsOn(): boolean {
+  return typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted" && readStored(KEY) === "on";
+}
+
+/** Asks for notification permission and turns call alerts on; false when the browser refuses. */
+export async function turnOnNotifications(): Promise<boolean> {
+  const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+  if (permission === "granted") writeStored(KEY, "on");
+  return permission === "granted";
+}
 
 /** A short two-note chime, made on the spot so there's no sound file to load. */
-function chime() {
+export function chime() {
   try {
     const ctx = new AudioContext();
     [880, 1320].forEach((hz, i) => {
@@ -37,18 +51,21 @@ function describe(e: CallEvent, r: RaceSummary | undefined): { title: string; bo
 }
 
 /**
- * Opt-in alerts for calls, changed calls and withdrawals: a browser notification and a short chime, once per event.
- * Vote updates never alert. Events already on screen when alerts are turned on (or the page opens) don't alert.
+ * The switch for call alerts: a browser notification and a short chime for calls, changed calls and withdrawals.
+ * Public calls are announced on every page by CallPopups; this sends only a Decision Desk HQ viewer's own calls
+ * (`currentOnly`), which that page alone knows. Events already on screen when alerts are turned on don't alert.
+ * While the corner pop-ups are switched off, it also offers to turn them back on.
  */
 export function CallAlerts({ events, races, currentOnly = false }: { events: readonly CallEvent[]; races: readonly RaceSummary[]; currentOnly?: boolean }) {
   const [stored, setStored] = useStored(KEY);
+  const [popups, setPopups] = useStored(POPUPS_KEY);
   const supported = typeof window !== "undefined" && "Notification" in window;
   const on = stored === "on" && supported && Notification.permission === "granted";
   const [denied, setDenied] = useState(false);
   const seen = useRef<Set<string> | null>(null);
 
   useEffect(() => {
-    if (!on) {
+    if (!on || !currentOnly) {
       seen.current = null;
       return;
     }
@@ -70,16 +87,21 @@ export function CallAlerts({ events, races, currentOnly = false }: { events: rea
       }
     }
     chime();
-  }, [on, events, races]);
+  }, [on, currentOnly, events, races]);
 
-  if (!supported) return null;
+  const unmute = popups === "off" && (
+    <button type="button" className="mt-bell" onClick={() => setPopups(null)} title="New calls pop up in the corner of every page. Tap to turn them back on.">
+      Call pop-ups off
+    </button>
+  );
+  if (!supported) return unmute || null;
   const toggle = async () => {
     if (on) return setStored("off");
-    const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
-    setDenied(permission !== "granted");
-    if (permission === "granted") setStored("on");
+    setDenied(!(await turnOnNotifications()));
   };
   return (
+    <>
+    {unmute}
     <button
       type="button"
       className={`mt-bell${on ? " on" : ""}`}
@@ -89,5 +111,6 @@ export function CallAlerts({ events, races, currentOnly = false }: { events: rea
     >
       {denied ? "Alerts blocked" : on ? "Alerts on" : "Alerts off"}
     </button>
+    </>
   );
 }

@@ -1589,3 +1589,19 @@ body:has(> .mt-companion) { overflow: hidden; }
 .mt-moment-note .p-I { color: var(--oth); }
 .mt-moment-note .warn { color: var(--no); }
 @media (prefers-reduced-motion: reduce) { .mt-moment-note { animation: none; } }
+
+/* A race call's pop-up, in the corner of every tracker page (CallPopups). Newest on top; it leaves on its own. */
+.mt-callpops { position: fixed; right: 20px; bottom: 20px; z-index: 47; display: grid; gap: 8px; width: min(340px, calc(100vw - 32px)); }
+.mt-callpop { position: relative; display: grid; gap: 2px; padding: 12px 40px 12px 16px; background: var(--sheet); color: var(--ink); border: 1px solid var(--el-line); border-left: 3px solid var(--accent); border-radius: 8px; animation: mt-moment-in 0.18s ease-out; }
+.mt-callpop p { margin: 0; }
+.mt-callpop-kicker b { font-weight: 700; }
+.mt-callpop .p-D { color: var(--dem-ink); }
+.mt-callpop .p-R { color: var(--rep-ink); }
+.mt-callpop .p-I { color: var(--oth); }
+.mt-callpop .warn { color: var(--no); }
+.mt-callpop-race { color: var(--ink); font-size: 16px; font-weight: 700; letter-spacing: -0.01em; text-decoration: none; }
+.mt-callpop-race:hover { text-decoration: underline; }
+.mt-callpop-x { position: absolute; top: 6px; right: 6px; }
+.mt-callpop-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 14px; margin: 0; justify-self: end; padding: 6px 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
+@media (max-width: 600px) { .mt-callpops { right: 16px; bottom: 16px; } }
+@media (prefers-reduced-motion: reduce) { .mt-callpop { animation: none; } }
