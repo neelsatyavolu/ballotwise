@@ -11,9 +11,14 @@ const MAX_TOUR = 12;
 /** The map returns to the whole country after this many races. */
 const RACES_PER_LEG = 3;
 
-/** The races the map zooms into: this office's uncalled toss-ups, then its uncalled leans, closest first. */
+/**
+ * The races the map zooms into: this office's uncalled toss-ups, then its uncalled leans, closest first. Once every
+ * one of those is called, the closest of the office's races with votes counted, so the map still has results to show.
+ */
 export function tourRaces(races: readonly RaceSummary[], office: Office): RaceSummary[] {
-  return races.filter((r) => r.office === office && (isWatch(r) || isCompetitive(r))).sort(closestFirst).slice(0, MAX_TOUR);
+  const mine = races.filter((r) => r.office === office);
+  const open = mine.filter((r) => isWatch(r) || isCompetitive(r));
+  return (open.length ? open : mine.filter((r) => r.total > 0)).sort(closestFirst).slice(0, MAX_TOUR);
 }
 
 /** The tour's stops: null is the whole country, shown first and again after every few races. */

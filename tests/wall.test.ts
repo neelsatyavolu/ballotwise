@@ -23,6 +23,13 @@ describe("wall tour", () => {
     expect(tourRaces([safe, lean, called, house, tossup], "senate").map((r: RaceSummary) => r.id)).toEqual([tossup.id, lean.id]);
   });
 
+  it("tours the closest counted races once every close one is called", () => {
+    const close = race({ rating: "tossup", votes: [51, 49], winner: 0 });
+    const wide = race({ rating: "likely-d", votes: [70, 30], winner: 0 });
+    const uncounted = race({ rating: "likely-r" });
+    expect(tourRaces([wide, uncounted, close], "senate").map((r: RaceSummary) => r.id)).toEqual([close.id, wide.id]);
+  });
+
   it("caps the tour so a big night still comes back around", () => {
     const many = Array.from({ length: 30 }, () => race({ office: "house", rating: "tossup" }));
     expect(tourRaces(many, "house")).toHaveLength(12);

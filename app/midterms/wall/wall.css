@@ -2,6 +2,8 @@
    is laid out at the window's size divided by --wall-scale and then scaled up by it, so every part of the tracker it
    reuses grows together. */
 body:has(.mt-wall) { overflow: hidden; }
+/* The calls column already lists every call; the corner pop-ups would cover it. */
+body:has(.mt-wall) .mt-callpops { display: none; }
 .mt-wall { position: fixed; inset: 0; z-index: 40; overflow: hidden; background: var(--paper); color: var(--ink); --s: var(--wall-scale, 1); }
 .mt-wall-stage {
   width: calc(100vw / var(--s)); height: calc(100dvh / var(--s));
@@ -20,23 +22,36 @@ body:has(.mt-wall) { overflow: hidden; }
 /* Map and tour, closest races, latest calls. */
 .mt-wall-body { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(260px, 0.5fr); gap: 16px; }
 .mt-wall-tour, .mt-wall-cards, .mt-wall-side { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
-.mt-wall-tour .mt-map { flex: 0 1 auto; min-height: 0; padding: 0; border: 0; background: none; }
-.mt-wall-tour .mt-zoom svg { max-height: calc(58dvh / var(--s)); }
+/* The map takes whatever height the race card under it leaves, drawn as big as fits. */
+.mt-wall-map { flex: 1 1 0; min-height: 0; }
+.mt-wall-map .mt-map { height: 100%; padding: 0; border: 0; background: none; }
+.mt-wall-map .mt-zoom svg { width: 100%; height: 100%; aspect-ratio: auto; }
 /* Nothing on a wall is clicked: no back button over the map, no hover cards. */
 .mt-wall .mt-zoom-back, .mt-wall .mt-star { display: none; }
 .mt-wall .mt-map * { cursor: default; }
 .mt-wall-spot { margin-top: 10px; }
+.mt-wall-upnext { margin-top: 10px; }
+.mt-wall-upnext h3 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt-wall-upnext .mt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+/* Rows and calls that don't fit are hidden whole (Wall.tsx useFit); some of them set their own display. */
+.mt-wall [hidden] { display: none !important; }
 /* The closest races fill their column; rows past the bottom are cut off rather than scrolled to. */
 .mt-wall-cards > .mt-rows-wrap { flex: 0 1 auto; min-height: 0; max-height: none; overflow: hidden; }
 .mt-wall .mt-rows { font-size: 15px; }
 .mt-wall .mt-rows td { padding: 6px 8px; }
-.mt-wall-side { gap: 16px; }
+/* Upcoming poll closings (closed ones and each wave's list of places dropped), then the calls filling the rest. */
+.mt-wall-side { gap: 16px; overflow: hidden; }
+.mt-wall-side > .mt-el-sched { flex: none; }
+.mt-wall-side > :last-child { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.mt-wall .mt-el-sched li.closed, .mt-wall .mt-el-sched details > p { display: none; }
 .mt-wall-side .mt-el-calllist { max-height: none; }
-.mt-wall-side > * { min-height: 0; }
+.mt-wall .mt-el-about, .mt-wall .mt-el-calls-meta, .mt-wall .mt-el-calls > .btn { display: none; }
 
-/* A narrow or portrait monitor stacks the map over the cards and drops the calls column. */
-@media (max-aspect-ratio: 4 / 3) {
-  .mt-wall-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+/* A squarer monitor drops the calls column; a portrait one stacks the map over the table. */
+@media (max-aspect-ratio: 3 / 2) {
+  .mt-wall-body { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
   .mt-wall-side { display: none; }
-  .mt-wall-tour .mt-zoom svg { max-height: calc(40dvh / var(--s)); }
+}
+@media (max-aspect-ratio: 1 / 1) {
+  .mt-wall-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); }
 }

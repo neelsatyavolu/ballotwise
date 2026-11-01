@@ -4,7 +4,7 @@
 // and the type grows with the screen (+ and - adjust it). It never joins the two-screen setup, so a wall on a monitor
 // plugged into the same computer can't take over as the main screen or become a companion.
 
-import { useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { closestFirst } from "@/lib/midterms/explore";
 import { countdown, electionModeDefault, formatTime, nextWave } from "@/lib/midterms/polls";
@@ -17,6 +17,7 @@ import { fillFor } from "./county";
 import { useClock, useLive } from "./hooks";
 import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills } from "./OfficeView";
 import { RaceCard } from "./RaceCard";
+import { PollSchedule } from "./PollClose";
 import { RaceRows } from "./RaceRows";
 import { ZoomMap, type Fill } from "./ZoomMap";
 
@@ -24,6 +25,8 @@ export type WallOffice = Extract<Office, "senate" | "house">;
 const TITLE: Record<WallOffice, string> = { senate: "Senate", house: "House" };
 /** The most rows the closest-races table holds; the screen shows as many as fit. */
 const MAX_ROWS = 60;
+/** How many of the tour's next races show under the whole-country map; more get too narrow to read. */
+const UP_NEXT = 2;
 /** No star column on a wall: nothing on it is clicked. */
 const NO_STARS = { ids: null, toggle: () => {} };
 const noop = () => {};
@@ -92,8 +95,11 @@ function useWakeLock() {
   }, []);
 }
 
-/** The tour's current stop: a race id, or null for the whole country. Moves on by itself. */
-function useTour(stops: readonly (number | null)[]): number | null {
+/**
+ * The tour's current stop (a race id, or null for the whole country) and, on the whole country, the races it visits
+ * next. Moves on by itself.
+ */
+function useTour(stops: readonly (number | null)[]): { stop: number | null; upNext: number[] } {
   const [i, setI] = useState(0);
   const at = i % stops.length;
   const stop = stops[at];
@@ -101,7 +107,41 @@ function useTour(stops: readonly (number | null)[]): number | null {
     const t = setTimeout(() => setI(at + 1), stop === null ? NATION_MS : RACE_MS);
     return () => clearTimeout(t);
   }, [at, stop]);
-  return stop;
+  const rest = stops.slice(at + 1);
+  const leg = rest.slice(0, rest.indexOf(null) === -1 ? rest.length : rest.indexOf(null));
+  return { stop, upNext: stop === null ? (leg as number[]).slice(0, UP_NEXT) : [] };
+}
+
+/**
+ * Hides every `items` element inside `box` from the first one that runs past the box's bottom, so a list fills its
+ * space with whole rows instead of one cut in half. Runs after every render and whenever the box or its contents change.
+ */
+function useFit(box: RefObject<HTMLElement | null>, items: string) {
+  const fit = () => {
+    const el = box.current;
+    if (!el) return;
+    const all = [...el.querySelectorAll<HTMLElement>(items)];
+    all.forEach((x) => (x.hidden = false));
+    const bottom = el.getBoundingClientRect().bottom;
+    const first = all.findIndex((x) => x.getBoundingClientRect().bottom > bottom + 1);
+    if (first >= 0) all.slice(first).forEach((x) => (x.hidden = true));
+  };
+  useLayoutEffect(fit);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const size = new ResizeObserver(() => fit());
+    size.observe(el);
+    // A list that loads or redraws on its own (the calls feed) changes without this component rendering.
+    const content = new MutationObserver(() => fit());
+    content.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => {
+      size.disconnect();
+      content.disconnect();
+    };
+    // fit reads only the ref and the selector.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [box, items]);
 }
 
 /** The map, zoomed out to the country or into the tour's current race with its counties (or districts) shaded. */
@@ -171,8 +211,15 @@ export function Wall({ office }: { office: WallOffice }) {
   const closest = useMemo(() => [...races].sort(closestFirst).slice(0, MAX_ROWS), [races]);
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
   const stops = useMemo(() => tourStops(tour.map((r) => r.id)), [tour]);
-  const stopId = useTour(stops);
+  const { stop: stopId, upNext } = useTour(stops);
   const stop = races.find((r) => r.id === stopId) ?? null;
+  const next = upNext.map((id) => races.find((r) => r.id === id)).filter((r): r is RaceSummary => !!r);
+  // Poll closings matter until the last polls close; after that the calls get the whole column.
+  const closing = nextWave(useClock(60_000)) !== null;
+  const table = useRef<HTMLElement>(null);
+  const side = useRef<HTMLElement>(null);
+  useFit(table, ".mt-rows tbody tr");
+  useFit(side, ".mt-el-calllist > li");
 
   return (
     <div className="mt mt-wall" style={{ "--wall-scale": scale } as CSSProperties}>
@@ -198,21 +245,35 @@ export function Wall({ office }: { office: WallOffice }) {
                   <h2>{stop ? `${STATE_NAMES[stop.state] ?? stop.state}${office === "house" && stop.district !== null ? ` · District ${stop.district || "at large"}` : ""}` : "Every race"}</h2>
                   {tour.length > 0 && <span className="muted small">Touring the {tour.length} closest</span>}
                 </div>
-                <TourMap office={office} races={races} updatedAt={data.ratings.updatedAt} results={results} race={stop} />
-                {stop && (
+                <div className="mt-wall-map">
+                  <TourMap office={office} races={races} updatedAt={data.ratings.updatedAt} results={results} race={stop} />
+                </div>
+                {stop ? (
                   <ul className="mt-grid one mt-wall-spot mt-in" key={stop.id}>
                     <RaceCard race={stop} starred={null} onStar={noop} />
                   </ul>
+                ) : (
+                  next.length > 0 && (
+                    <div className="mt-wall-upnext mt-in">
+                      <h3>Up next on the tour</h3>
+                      <ul className="mt-grid">
+                        {next.map((r) => (
+                          <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
+                        ))}
+                      </ul>
+                    </div>
+                  )
                 )}
               </section>
-              <section className="mt-wall-cards" aria-label="Closest races">
+              <section className="mt-wall-cards" aria-label="Closest races" ref={table}>
                 <div className="mt-section-head tight">
                   <h2>Closest races</h2>
                   <span className="muted small">{races.length} races</span>
                 </div>
                 <RaceRows races={closest} star={NO_STARS} selectedId={stopId} />
               </section>
-              <aside className="mt-wall-side" aria-label="Latest calls">
+              <aside className="mt-wall-side" aria-label="Latest calls" ref={side}>
+                {closing && <PollSchedule races={races} />}
                 <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office={office} />
               </aside>
             </div>
