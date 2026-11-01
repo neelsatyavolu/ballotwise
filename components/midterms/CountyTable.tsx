@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { clockNow } from "@/lib/midterms/clock";
 import { stateFinal } from "@/lib/midterms/polls";
 import type { CountyResult, RaceDetail } from "@/lib/midterms/races";
-import { fmt, lead, marginLabel, pct, twoWay } from "@/lib/midterms/view";
+import { byTown, fmt, lead, marginLabel, pct, twoWay } from "@/lib/midterms/view";
 import { partyColor } from "./party";
 
 type Key = "name" | "leader" | "total" | "reporting" | "out" | "margin" | "baseline" | "shift";
@@ -40,7 +40,7 @@ export function CountyTable({ race, selected, onSelect }: { race: RaceDetail; se
   // Once the state's polls have closed, the counties furthest below their 2024 vote come first.
   const closed = (stateFinal(race.state) ?? Infinity) <= clockNow();
   const [sort, setSort] = useState<{ key: Key; desc: boolean }>({ key: statewide && closed ? "out" : "total", desc: true });
-  const unit = race.counties.some((c) => c.fips) ? "county" : "town";
+  const unit = byTown(race.counties) ? "town" : "county";
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();

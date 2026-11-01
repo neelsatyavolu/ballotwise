@@ -3,9 +3,9 @@ import type { Districts } from "../lib/ballot/census";
 import { resetCivicMemo } from "../lib/midterms/civic";
 import { COUNTY_ID_BASE, resetCountyMemo } from "../lib/midterms/county";
 import { countyFips, localRaces } from "../lib/midterms/local";
-import { FIRST_POLLS_OPEN } from "../lib/midterms/races";
+import { LAST_CLOSE } from "../lib/midterms/races";
 
-const AFTER_POLLS = FIRST_POLLS_OPEN + 3_600_000;
+const AFTER_POLLS = LAST_CLOSE + 3_600_000;
 const NOV_3 = "2026-11-03T05:00:00.000Z";
 
 const base: Districts = { state: "", county: null, place: null, congressional: null, stateSenate: null, stateHouse: null, schoolDistrict: null };

@@ -2,13 +2,14 @@ import { z } from "zod";
 import countyNames from "./countyNames.json";
 import { MEASURES } from "./data";
 import { fipsOf } from "./earlyVote";
+import lean2026 from "./lean2026.json";
 import type { Signal } from "./odds";
-import { POLL_CLOSE, stateFinal } from "./polls";
+import { lastName } from "./pollAverage";
+import { POLL_CLOSE, stateCloses, stateFinal } from "./polls";
+import { TOWN_NAMES, townCodes } from "./towns";
 import { partyOf, STATE_NAMES } from "./view";
 
 export const ELECTION_DATE = "2026-11-03";
-/** The first polls open at 6 a.m. Eastern. civicAPI has shown test counts before then, so earlier numbers are ignored. */
-export const FIRST_POLLS_OPEN = Date.parse("2026-11-03T11:00:00Z");
 
 export type Office = "senate" | "house" | "governor" | "measure";
 /** Lean and likely carry the favored side: d, r, or i (an independent, like Nebraska's Senate race). */
@@ -150,7 +151,17 @@ function partyRank(party: string): number {
 }
 
 /** The last scheduled poll closing of the night, for a race in a state the closing table doesn't list. */
-const LAST_CLOSE = Math.max(...Object.keys(POLL_CLOSE).map((s) => stateFinal(s) ?? 0));
+export const LAST_CLOSE = Math.max(...Object.keys(POLL_CLOSE).map((s) => stateFinal(s) ?? 0));
+
+/**
+ * Whether a Nov 3 race's numbers are hidden. No state counts a vote before its first polls close, and civicAPI
+ * rehearses with test counts and test calls ahead of the night, so anything earlier is a test. `test` is civicAPI's
+ * own test_data flag, which only a single race's answer carries; a race it marks is never shown.
+ */
+export const resultsHidden = (state: string, now: number, test = false) => test || now < (stateCloses(state) ?? LAST_CLOSE);
+
+/** Whether civicAPI marks a race's answer as test data. */
+export const isTestData = (input: unknown) => (input as { test_data?: unknown } | null)?.test_data === true;
 
 /** Whether every poll in `state` has closed by `now`. A Nov 3 race elsewhere waits for the night's last closing. */
 const pollsClosed = (state: string, now: number) => now >= (stateFinal(state) ?? LAST_CLOSE);
@@ -176,6 +187,20 @@ function candidates(list: z.output<typeof civicCandidate>[], unopposedCalled = t
 }
 
 const ratingKey = (office: Office, state: string, district: number | null | undefined) => `${office}:${state}:${district ?? ""}`;
+
+/** Each seat's holder going in, keyed like odds.ts's raceKey. */
+const HOLDERS = (lean2026 as { incumbents: Record<string, string> }).incumbents;
+const firstInitial = (name: string) => name.trim().toLowerCase().normalize("NFD").replace(/[^a-z]/g, "")[0] ?? "";
+
+/**
+ * Marks the seat's holder when civicAPI leaves its own incumbent flag empty, as it does in most races: the candidate
+ * with the holder's last name and first initial ("Chuy Garcia" isn't "Patty Garcia").
+ */
+function withIncumbent(list: Candidate[], office: Office, state: string, district: number | null): Candidate[] {
+  const holder = HOLDERS[`${office}:${state}:${office === "house" ? (district ?? 0) : ""}`];
+  if (!holder || list.some((c) => c.incumbent)) return list;
+  return list.map((c) => (lastName(c.name) === lastName(holder) && firstInitial(c.name) === firstInitial(holder) ? { ...c, incumbent: true } : c));
+}
 
 /** Whether an answer left out who won: no candidates at all, or none carrying a winner field. */
 const callUnknownIn = (list: readonly z.output<typeof civicCandidate>[]) => list.every((c) => c.winner == null);
@@ -204,7 +229,7 @@ export function summarize(input: unknown, ratings: readonly RatedRace[], now = I
   if (!office) return null;
   const state = race.province ?? "";
   const district = office === "house" ? districtOf(race.district) : null;
-  const list = candidates(race.candidates, pollsClosed(state, now));
+  const list = withIncumbent(candidates(race.candidates, pollsClosed(state, now)), office, state, district);
   const key = ratingKey(office, state, district);
   return {
     id: (input as { id?: number }).id ?? 0,
@@ -273,10 +298,12 @@ const COUNTY_NAMES = countyNames as Record<string, Record<string, string>>;
 
 /**
  * Each region's county FIPS code. civicAPI leaves some states' codes out (Alaska's boroughs), so those are matched by
- * name to the map's counties. A state that reports by town keeps none: most of its places match no county, and a town
- * can share its county's name (Hartford).
+ * name to the map's counties. A New England state reports by town, so its places get town codes instead (see towns.ts);
+ * matched to counties, most would match none, and a town can share its county's name (Hartford).
  */
 function countyCodes(state: string, regions: readonly { name: string; fips?: string | null }[]): (string | null)[] {
+  const towns = townCodes(state, regions);
+  if (towns) return towns;
   const given = regions.map((r) => r.fips ?? null);
   const names = COUNTY_NAMES[state];
   const missing = regions.filter((r) => !r.fips);
@@ -297,7 +324,7 @@ function mergeShared(state: string, counties: CountyResult[]): CountyResult[] {
     const total = group.reduce((sum, g) => sum + g.total, 0);
     return {
       fips,
-      name: COUNTY_NAMES[state]?.[fips] ?? group[0].name,
+      name: COUNTY_NAMES[state]?.[fips] ?? TOWN_NAMES[state]?.[fips] ?? group[0].name,
       reporting: total ? group.reduce((sum, g) => sum + g.reporting * g.total, 0) / total : group.reduce((sum, g) => sum + g.reporting, 0) / group.length,
       ...(group.some((g) => g.reportingUnknown) && { reportingUnknown: true as const }),
       total,
@@ -317,7 +344,8 @@ function mergeShared(state: string, counties: CountyResult[]): CountyResult[] {
 export function raceDetail(summary: RaceSummary, input: unknown, baseline: Readonly<Record<string, readonly [number, number, number]>>, now = Infinity): RaceDetail {
   const race = civicDetail.parse(input);
   const nov3 = race.election_date.startsWith(ELECTION_DATE);
-  const list = candidates(race.candidates, !nov3 || pollsClosed(summary.state, now));
+  const counted = candidates(race.candidates, !nov3 || pollsClosed(summary.state, now));
+  const list = summary.local ? counted : withIncumbent(counted, summary.office, summary.state, summary.district);
   const regions = Object.values(race.region_results ?? {});
   const codes = countyCodes(summary.state, regions);
   const named = codes.some((code, i) => code !== (regions[i].fips ?? null));
@@ -390,6 +418,11 @@ export function balance(races: readonly RaceSummary[]) {
 /** The race as it stood before any results: no votes, no calls. */
 export function blankResults<T extends RaceSummary>(race: T): T {
   return { ...race, reporting: 0, total: 0, candidates: race.candidates.map((c) => ({ ...c, votes: 0, pct: 0, winner: false })) };
+}
+
+/** A race page before any results: no votes or calls, statewide or in any county. */
+export function blankDetail(race: RaceDetail): RaceDetail {
+  return { ...blankResults(race), counties: race.counties.map((c) => ({ ...c, reporting: 0, total: 0, candidates: c.candidates.map((x) => ({ ...x, votes: 0, pct: 0 })) })) };
 }
 
 /** The races with each one's rating looked up afresh (null when unrated). */

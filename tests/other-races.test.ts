@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchOtherRace, resetCivicMemo, searchRaces, searchResults } from "../lib/midterms/civic";
-import { FIRST_POLLS_OPEN, summarizeOther } from "../lib/midterms/races";
+import { LAST_CLOSE, summarizeOther } from "../lib/midterms/races";
+import { stateCloses } from "../lib/midterms/polls";
 
-const AFTER_POLLS = FIRST_POLLS_OPEN + 3_600_000;
+const AFTER_POLLS = LAST_CLOSE + 3_600_000;
 const BASELINE = { "05007": [1, 2, 3], "05143": [3, 2, 6] } as const;
 
 const mayor = {
@@ -85,7 +86,7 @@ describe("fetchOtherRace", () => {
 
   it("shows no numbers for a Nov 3 race before polls open, as with tracked races", async () => {
     vi.stubGlobal("fetch", async () => Response.json(mayor));
-    const found = (await fetchOtherRace(161607, FIRST_POLLS_OPEN - 1, BASELINE))!;
+    const found = (await fetchOtherRace(161607, stateCloses("AR")! - 1, BASELINE))!;
     expect(found.race.total).toBe(0);
     expect(found.race.counties.every((c) => c.total === 0)).toBe(true);
   });

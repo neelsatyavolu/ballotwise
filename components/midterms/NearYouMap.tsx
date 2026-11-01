@@ -73,7 +73,8 @@ export function NearYouMap({ state, fips, raceId, side }: { state: string; fips:
   const detail = useLive<{ race: RaceDetail }>(raceId ? `/api/midterms/race/${raceId}` : null);
   const race = detail.data?.race ?? null;
   const hasEarly = !!early.data && !early.data.byTown && early.data.counties.some((c) => c.fips);
-  const modes = (["early", "results", "2024"] as const).filter((m) => (m === "early" ? hasEarly : !!race?.counties.some((c) => c.fips)));
+  // A town map (New England) has no 2024 presidential vote to show.
+  const modes = (["early", "results", "2024"] as const).filter((m) => (m === "early" ? hasEarly : !!race?.counties.some((c) => (m === "2024" ? c.fips && c.pres2024 : c.fips))));
   const [picked, setPicked] = useState<MapMode | null>(null);
   // Once votes are counted the race's count leads; before that, the early vote is what's moving.
   const mode = picked && modes.includes(picked) ? picked : race && race.total > 0 && modes.includes("results") ? "results" : modes[0] ?? null;

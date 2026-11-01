@@ -1,5 +1,6 @@
 // Rendered inside the tracker's client components.
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { isTownCode } from "@/lib/midterms/view";
 import { atLeast, boundsOf, framed, useTween, type Box } from "./zoom";
 
 export type City = { name: string; at: [number, number] };
@@ -133,9 +134,13 @@ export function CityLabels({ cities, view }: { cities: readonly City[]; view: re
 
 export type CountyFill = { fill: string; tip: ReactNode; active: boolean };
 
-/** A state's counties. Counties without a fill (outside a House district, say) are drawn faint. The selected county is zoomed to. */
+/**
+ * A state's counties, or its towns when the fills are keyed by town (New England reports by town). Places without a
+ * fill (outside a House district, say) are drawn faint. The selected one is zoomed to.
+ */
 export function CountyMap({ state, fills, selected, onSelect }: { state: string; fills: Map<string, CountyFill>; selected: string | null; onSelect: (fips: string | null) => void }) {
-  const map = useMap<StateMap>(state);
+  const towns = useMemo(() => [...fills.keys()].some(isTownCode), [fills]);
+  const map = useMap<StateMap>(towns ? `towns/${state}` : state);
   const [tip, setTip] = useState<Tip>(null);
   const [hover, setHover] = useState<string | null>(null);
   const ready = map && map !== "error" ? map : null;
@@ -146,14 +151,14 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
     return b ? framed(atLeast(b, [full[0], full[1], full[0] + full[2], full[1] + full[3]], 0.2)) : full;
   }, [full, selectedPath]);
   const box = useTween(target);
-  if (map === "error") return <p className="muted small">The map couldn&apos;t load. The table below has every county.</p>;
+  if (map === "error") return <p className="muted small">The map couldn&apos;t load. The table below has every {towns ? "town" : "county"}.</p>;
   if (!map) return <div className="mt-map mt-map-loading" aria-busy />;
   const outlines = [...(selectedPath ? [{ d: selectedPath, kind: "selected" as const }] : []), ...(hover ? [{ d: hover, kind: "hover" as const }] : [])];
   return (
     <MapFrame
       viewBox={box.join(" ")}
       tip={tip}
-      label={`County map of ${map.name}`}
+      label={`${towns ? "Town" : "County"} map of ${map.name}`}
       outlines={outlines}
       aspect={`${full[2]} / ${full[3]}`}
       back={

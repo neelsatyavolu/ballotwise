@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { COUNTY_ID_BASE, countyRacesFor, fetchCountyRace, isCountyRace, mergeFound, resetCountyMemo, searchCounty } from "../lib/midterms/county";
 import type { FoundRace } from "../lib/midterms/civic";
-import { FIRST_POLLS_OPEN } from "../lib/midterms/races";
+import { LAST_CLOSE } from "../lib/midterms/races";
+import { stateCloses } from "../lib/midterms/polls";
 
-const AFTER_POLLS = FIRST_POLLS_OPEN + 3_600_000;
+const AFTER_POLLS = LAST_CLOSE + 3_600_000;
 
 // Contests as Santa Clara County's Clarity feed lists them for Nov 3, 2026, trimmed to the fields that matter.
 const contest = (K: string, CAT: string, C: string, VF: number, CH: string[], V: number[], PR = 0, TP = 22) => ({ CATKEY: "C_1", CAT, C, K, VF, TP, PR, CH, P: CH.map(() => ""), V, W: CH.map(() => 0) });
@@ -100,7 +101,7 @@ describe("countyRacesFor", () => {
 
   it("shows no numbers before polls open", async () => {
     vi.stubGlobal("fetch", feed());
-    const { yours } = await countyRacesFor({ city: "Palo Alto city", schools: [] }, FIRST_POLLS_OPEN - 1);
+    const { yours } = await countyRacesFor({ city: "Palo Alto city", schools: [] }, stateCloses("CA")! - 1);
     expect(yours.every((r) => r.total === 0)).toBe(true);
   });
 });
@@ -148,7 +149,7 @@ describe("fetchCountyRace", () => {
 
   it("shows no numbers before polls open, as with civicAPI's races", async () => {
     vi.stubGlobal("fetch", feed());
-    const { race } = (await fetchCountyRace(COUNTY_ID_BASE + 42, FIRST_POLLS_OPEN - 1))!;
+    const { race } = (await fetchCountyRace(COUNTY_ID_BASE + 42, stateCloses("CA")! - 1))!;
     expect(race.total).toBe(0);
     expect(race.reporting).toBe(0);
     expect(race.candidates).toHaveLength(3);

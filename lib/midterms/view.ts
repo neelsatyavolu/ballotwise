@@ -31,6 +31,11 @@ export type Overview = {
 export const SANTA_CLARA_RESULTS = "https://results.enr.clarityelections.com/CA/Santa_Clara/127570/web.345435/#/summary";
 export const STATE_NAMES: Record<string, string> = Object.fromEntries(states.map(([, postal, name]) => [postal, name]));
 
+/** A New England town's code, its 10-digit Census GEOID (see towns.ts); a county's FIPS code has 5. */
+export const isTownCode = (code: string | null | undefined) => code?.length === 10;
+/** Whether a race's breakdown is by town: some place is a mapped town, or nothing has a county code. */
+export const byTown = (counties: readonly { fips: string | null }[]) => !counties.some((c) => c.fips && !isTownCode(c.fips));
+
 export const OFFICE_LABEL: Record<Office, string> = { senate: "Senate", house: "House", governor: "Governor", measure: "Ballot measures" };
 
 export const RATING_LABEL: Record<Rating, string> = {

@@ -4,7 +4,7 @@ import { holderOf, leadingFlip, outcomeOf } from "@/lib/midterms/holders";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { fmt, lead, marginLabel, partyOf, partyTag } from "@/lib/midterms/view";
+import { byTown, fmt, lead, marginLabel, partyOf, partyTag } from "@/lib/midterms/view";
 import { isDesk } from "@/lib/ddhq/apply";
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -84,7 +84,7 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
         </li>
         {regions.length > 1 && (
           <li>
-            {withVotes.length} of {regions.length} {regions.some((c) => c.fips) ? "counties" : "towns"} have reported votes
+            {withVotes.length} of {regions.length} {byTown(regions) ? "towns" : "counties"} have reported votes
             {withVotes.length ? `; ${source} reports 100% for ${regions.filter((c) => c.reporting >= 100).length} of them` : ""}.
           </li>
         )}

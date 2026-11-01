@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CivicError, FRESH_MS, SEARCH_LIMIT, withColors, type Fetched, type FoundRace } from "./civic";
-import { blankResults, ELECTION_DATE, FIRST_POLLS_OPEN, raceDetail, summarizeOther, type RaceDetail, type RaceSummary } from "./races";
+import { blankResults, ELECTION_DATE, raceDetail, resultsHidden, summarizeOther, type RaceDetail, type RaceSummary } from "./races";
 import { SANTA_CLARA_RESULTS } from "./view";
 
 // Santa Clara County's own election-night results, for the city, school and district races and local measures that
@@ -207,8 +207,8 @@ export async function fetchCountyRace(id: number, now: number): Promise<Fetched<
   if (!summary) return null;
   const colors = new Map(summary.candidates.map((c) => [c.name, c.color]));
   const detail: RaceDetail = { ...withColors(raceDetail(summary, input, {}, now), colors), ...countyFields(contest) };
-  // Like civicAPI's races, a Nov 3 race shows no numbers before polls open, in case the county posts test counts.
-  return { race: now < FIRST_POLLS_OPEN ? blankResults(detail) : detail, fetchedAt: at, stale };
+  // Like civicAPI's races, a Nov 3 race shows no numbers before California's polls close, in case the county posts test counts.
+  return { race: resultsHidden(detail.state, now) ? blankResults(detail) : detail, fetchedAt: at, stale };
 }
 
 /** Where an address votes, as the Census names it: "Palo Alto city", "Mountain View Whisman Elementary School District". */
@@ -232,7 +232,7 @@ function serves(c: Contest, area: Area): boolean {
 
 function summaryOf(c: Contest, updated: string | null, now: number): RaceSummary | null {
   const summary = summarizeOther(asCivic(c, updated), now);
-  return summary && { ...(now < FIRST_POLLS_OPEN ? blankResults(summary) : summary), ...countyFields(c) };
+  return summary && { ...(resultsHidden(summary.state, now) ? blankResults(summary) : summary), ...countyFields(c) };
 }
 
 /**

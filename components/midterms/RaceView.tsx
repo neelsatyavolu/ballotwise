@@ -9,7 +9,7 @@ import { useAccount } from "@/components/AccountProvider";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { OFFICE_LABEL, raceLabel, signalLine, STATE_NAMES } from "@/lib/midterms/view";
+import { byTown, OFFICE_LABEL, raceLabel, signalLine, STATE_NAMES } from "@/lib/midterms/view";
 import { CandidateTable } from "./CandidateTable";
 import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
@@ -107,6 +107,9 @@ export function RaceView({ id }: { id: number }) {
 
   const label = raceLabel(race);
   const mapped = race.counties.some((c) => c.fips);
+  const towns = byTown(race.counties);
+  // There's no 2024 presidential vote by town, so a town map has no 2024 view.
+  const modes = (["results", "reporting", "2024"] as const).filter((m) => m !== "2024" || race.counties.some((c) => c.fips && c.pres2024));
   const called = race.candidates.find((c) => c.winner);
   const closes = stateFinal(race.state);
   const close = race.pollsClose ? new Date(race.pollsClose) : null;
@@ -195,10 +198,10 @@ export function RaceView({ id }: { id: number }) {
 
         <section aria-labelledby="map">
           <div className="mt-section-head">
-            <h2 id="map">Counties</h2>
+            <h2 id="map">{towns ? "Towns" : "Counties"}</h2>
             {mapped && (
               <div className="mt-seg" role="group" aria-label="Map shows">
-                {(["results", "reporting", "2024"] as const).map((m) => (
+                {modes.map((m) => (
                   <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}>
                     {m === "results" ? "Leader" : m === "reporting" ? "Reporting" : "2024 president"}
                   </button>
@@ -219,7 +222,7 @@ export function RaceView({ id }: { id: number }) {
                   : "This state reports one statewide total, so there's no county map."}
             </p>
           )}
-          {mapped && race.office === "house" && <p className="muted small">Shaded counties are all or partly in this district.</p>}
+          {mapped && race.office === "house" && <p className="muted small">Shaded {towns ? "towns are" : "counties are all or partly"} in this district.</p>}
         </section>
       </div>
 

@@ -5,7 +5,7 @@ import { resetCallsMemo } from "../lib/midterms/calls";
 import { overview } from "../lib/midterms/catalog";
 import { resetCivicMemo, SERVE_STALE_MS, WAIT_MS } from "../lib/midterms/civic";
 import { resetHistoryMemo } from "../lib/midterms/history";
-import { FIRST_POLLS_OPEN } from "../lib/midterms/races";
+import { stateCloses } from "../lib/midterms/polls";
 import { testDb } from "./sqlite-db";
 
 // Election night as a page sees it: a sequence of civicAPI answers through overview(), polled the way the client
@@ -83,7 +83,7 @@ describe("election night, poll by poll", () => {
 
     // Before the polls open, any numbers civicAPI already has are blanked.
     answer = { senate: [ga(3, 500, 400, null), nc(0)] };
-    const before = await settle(db, FIRST_POLLS_OPEN - MINUTE);
+    const before = await settle(db, stateCloses("GA")! - MINUTE);
     expect(georgia(before)).toMatchObject({ reporting: 0, total: 0 });
     expect(georgia(before).candidates.every((c) => c.votes === 0 && !c.winner)).toBe(true);
     expect(before.callEvents).toEqual([]);

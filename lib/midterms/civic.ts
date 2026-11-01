@@ -1,7 +1,7 @@
 import type { Db } from "../auth/accounts";
 import { coverageOf, type Coverage } from "./coverage";
 import { z } from "zod";
-import { applyRatings, blankResults, ELECTION_DATE, FIRST_POLLS_OPEN, raceDetail, summarize, summarizeOther, type Office, type RaceDetail, type RaceSummary, type RatedRace } from "./races";
+import { applyRatings, blankDetail, blankResults, ELECTION_DATE, isTestData, raceDetail, resultsHidden, summarize, summarizeOther, type Office, type RaceDetail, type RaceSummary, type RatedRace } from "./races";
 import { STATE_NAMES } from "./view";
 
 // civicAPI (civicapi.org): free, keyless live results sourced from each Secretary of State. Its terms ask for attribution.
@@ -336,7 +336,7 @@ async function fetchRaces(now: number): Promise<{ races: RaceSummary[]; failed: 
   for (const page of pages) {
     for (const raw of "races" in page ? page.races : []) {
       const race = summarize(raw, [], now);
-      if (race && !byId.has(race.id)) byId.set(race.id, now < FIRST_POLLS_OPEN ? blankResults(race) : race);
+      if (race && !byId.has(race.id)) byId.set(race.id, resultsHidden(race.state, now, isTestData(raw)) ? blankResults(race) : race);
     }
   }
   return { races: [...byId.values()], failed };
@@ -448,8 +448,9 @@ export async function fetchRace(summary: RaceSummary, now: number, baseline: Rea
   const memo = raceMemo.get(summary.id);
   if (memo && now - memo.at < FRESH_MS) return { race: memo.value, fetchedAt: memo.at, stale: false };
   try {
-    const detail = raceDetail(summary, await civic(`race/${summary.id}`), baseline, now);
-    const race = now < FIRST_POLLS_OPEN ? { ...blankResults(detail), counties: detail.counties.map((c) => ({ ...c, reporting: 0, total: 0, candidates: c.candidates.map((x) => ({ ...x, votes: 0, pct: 0 })) })) } : detail;
+    const input = await civic(`race/${summary.id}`);
+    const detail = raceDetail(summary, input, baseline, now);
+    const race = resultsHidden(summary.state, now, isTestData(input)) ? blankDetail(detail) : detail;
     raceMemo.set(summary.id, { at: now, value: race });
     return { race, fetchedAt: now, stale: false };
   } catch (err) {
@@ -509,8 +510,8 @@ export async function fetchOtherRace(id: number, now: number, baseline: Readonly
     return null;
   }
   const detail = withColors(raceDetail(summary, input, baseline, now), new Map(summary.candidates.map((c) => [c.name, c.color])));
-  // Like tracked races, a Nov 3 race shows no numbers before polls open: civicAPI posts test counts beforehand.
-  const race = summary.local?.date === ELECTION_DATE && now < FIRST_POLLS_OPEN ? { ...blankResults(detail), counties: detail.counties.map((c) => ({ ...c, reporting: 0, total: 0, candidates: c.candidates.map((x) => ({ ...x, votes: 0, pct: 0 })) })) } : detail;
+  // Like tracked races, a Nov 3 race shows no numbers before its state's polls close: civicAPI posts test counts beforehand.
+  const race = isTestData(input) || (summary.local?.date === ELECTION_DATE && resultsHidden(summary.state, now)) ? blankDetail(detail) : detail;
   remember(otherMemo, id, { at: now, value: race });
   return { race, fetchedAt: now, stale: false };
 }
@@ -558,7 +559,7 @@ export async function searchRaces(query: string, now: number): Promise<FoundRace
 
 /**
  * civicAPI's Nov 3 races matching `query`, with their numbers, for the races near an address. Fresh for FRESH_MS; on a
- * civicAPI failure the last answer is used, marked stale. Like race pages, no numbers show before polls open.
+ * civicAPI failure the last answer is used, marked stale. Like race pages, no numbers show before the state's polls close.
  */
 export async function searchLive(query: string, now: number): Promise<{ races: RaceSummary[]; stale: boolean }> {
   const key = query.toLowerCase();
@@ -578,7 +579,7 @@ export async function searchLive(query: string, now: number): Promise<{ races: R
   const races = (Array.isArray(found) ? found : []).flatMap((input) => {
     const race = summarizeOther(input, now);
     if (race?.local?.date !== ELECTION_DATE) return [];
-    return [now < FIRST_POLLS_OPEN ? blankResults(race) : race];
+    return [resultsHidden(race.state, now, isTestData(input)) ? blankResults(race) : race];
   });
   return { races, stale };
 }
