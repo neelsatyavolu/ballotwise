@@ -256,8 +256,14 @@ export async function votesIsPro(cookie: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * A 401 from a Votes feed, just after Clerk minted the token for it. Only Clerk's mint (clerk.ts) ends a connection: a
+ * one-off 401 here must not disconnect an account mid-count, so it's a temporary failure the next poll retries.
+ */
+export const VOTES_REJECTED = "Decision Desk HQ didn't accept this request just now. It will try again shortly.";
+
 function refused(res: Response): void {
-  if (res.status === 401) throw new AccountError("The Votes sign-in expired. Connect it again.", 401);
+  if (res.status === 401) throw new AccountError(VOTES_REJECTED, 502);
   if (res.status === 403) throw new AccountError("Decision Desk HQ refused this request for that account.", 403);
 }
 

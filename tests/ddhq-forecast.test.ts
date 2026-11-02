@@ -131,8 +131,8 @@ describe("published DDHQ forecast payload", () => {
     expect(result.races[0]).not.toHaveProperty("id");
   });
 
-  it.each([401, 429, 502])("keeps upstream %s failure classification", async (status) => {
+  it.each([401, 429, 502])("keeps upstream %s temporary, a 401 included (only Clerk's mint ends a connection)", async (status) => {
     vi.mocked(votes).mockResolvedValue(new Response("{}", { status }));
-    await expect(ddhqForecast({ clientToken: "client", sessionId: "s" })).rejects.toMatchObject({ status: status === 401 ? 401 : 502 });
+    await expect(ddhqForecast({ clientToken: "client", sessionId: "s" })).rejects.toMatchObject({ status: 502 });
   });
 });

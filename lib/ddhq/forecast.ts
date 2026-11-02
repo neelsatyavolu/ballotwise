@@ -6,7 +6,7 @@ import type { ChamberPoint } from "../midterms/odds";
 import { votesSessionCookie } from "./clerk";
 import type { DdhqForecastBundle } from "./forecast-types";
 import { publishedRating } from "./rating";
-import { readForecast, rememberRaceIds, seatKey, votes, type DdhqRace, type DdhqSeat } from "./votes";
+import { readForecast, rememberRaceIds, seatKey, votes, VOTES_REJECTED, type DdhqRace, type DdhqSeat } from "./votes";
 import type { DdhqSession } from "./vault";
 
 type Office = DdhqSeat["office"];
@@ -173,7 +173,7 @@ export async function ddhqForecast(session: DdhqSession): Promise<DdhqForecastBu
   const cookie = await votesSessionCookie(session);
   const pages = await Promise.all(OFFICES.map(async (office) => {
     const res = await votes(`/forecast/2026/${office}`, cookie);
-    if (res.status === 401) throw new AccountError("The Votes sign-in expired. Connect it again.", 401);
+    if (res.status === 401) throw new AccountError(VOTES_REJECTED, 502);
     if (!res.ok) unavailable();
     return { office, ...readForecastPage(await res.text(), office) };
   }));

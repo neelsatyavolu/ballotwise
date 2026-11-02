@@ -275,10 +275,10 @@ describe("authenticated DDHQ requests", () => {
     expect((await ddhqSeats(session, seats)).map((row) => row.race)).toEqual([null, null]);
   });
 
-  it.each([401, 429, 502])("preserves auth expiration but keeps batch status %s temporary otherwise", async (status) => {
+  it.each([401, 429, 502])("keeps batch status %s temporary, a 401 included (only Clerk's mint ends a connection)", async (status) => {
     rememberRaceIds([{ key: "senate:GA::g", id: "101" }]);
     bind(async () => json(status, {}));
-    await expect(ddhqSeats(session, seats.slice(0, 1))).rejects.toMatchObject({ status: status === 401 ? 401 : 502 });
+    await expect(ddhqSeats(session, seats.slice(0, 1))).rejects.toMatchObject({ status: 502 });
   });
 
   it("does not mistake a malformed batch wrapper for an empty successful result", async () => {
@@ -319,11 +319,14 @@ describe("authenticated DDHQ requests", () => {
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
   });
 
-  it("propagates a real upstream 401 from any full-board group", async () => {
+  it("keeps the other groups when one full-board group gets a 401", async () => {
     const full = houseSeats(49);
     warm(full);
     bind(async (request) => new URL(request.url).searchParams.get("ids")!.startsWith("125,") ? json(401, {}) : rowsFor(request));
-    await expect(ddhqSeats(session, full)).rejects.toMatchObject({ status: 401 });
+    const rows = await ddhqSeats(session, full);
+    expect(rows).toHaveLength(49);
+    expect(rows.some((row) => row.race)).toBe(true);
+    expect(rows.some((row) => !row.race)).toBe(true);
   });
 
   it("primes a cold full board from the needed forecast page without per-seat searches or retaining its forecasts", async () => {
@@ -369,10 +372,11 @@ describe("authenticated DDHQ requests", () => {
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
   });
 
-  it("does not swallow a metadata-primer 401 as a forecast outage", async () => {
-    const relay = bind(async () => json(401, {}));
-    await expect(ddhqSeats(session, houseSeats(25))).rejects.toMatchObject({ status: 401 });
-    expect(relay).toHaveBeenCalledTimes(1);
+  it("leaves a full board empty, not disconnected, when every Votes feed answers 401", async () => {
+    bind(async () => json(401, {}));
+    const rows = await ddhqSeats(session, houseSeats(25));
+    expect(rows).toHaveLength(25);
+    expect(rows.every((row) => row.race === null)).toBe(true);
   });
 
   it("bounds a stalled full-board primer by the 25-second pass deadline", async () => {

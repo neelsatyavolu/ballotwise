@@ -235,10 +235,10 @@ describe("Votes Chrome egress", () => {
     expect(await votesIsPro("__session=user-a")).toBe(false);
   });
 
-  it.each([false, true])("preserves a real Votes 401 (via egress: %s)", async (viaEgress) => {
+  it.each([false, true])("keeps a Votes 401 temporary (via egress: %s)", async (viaEgress) => {
     vi.stubGlobal("fetch", async () => json(viaEgress ? 429 : 401, {}));
     if (viaEgress) bindEgress(async () => json(401, {}));
-    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 401 });
+    await expect(votesIsPro("__session=user-a")).rejects.toMatchObject({ status: 502 });
   });
 
   it.each([429, 502, 503])("keeps egress %s failures temporary", async (status) => {
