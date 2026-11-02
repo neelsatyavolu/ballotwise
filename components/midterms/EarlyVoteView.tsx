@@ -156,8 +156,8 @@ export function EarlyVoteView({ initialState }: { initialState: string | null })
                   </div>
                   <StateRows states={list} onPick={setFocus} />
                   <p className="muted small">
-                    Tap a state for its counties, party split and who has voted. Party lead is Democrats&apos; share of ballots minus Republicans&apos;, in the {statesWithParty} states with a party count: registration where
-                    the state records it, otherwise Decision Desk HQ&apos;s count.
+                    Tap a state for its counties, party split and who has voted. Party lead is Democrats&apos; share of ballots minus Republicans&apos;, in the {statesWithParty} states with a party count: from civicAPI where
+                    it has registration figures, otherwise from Decision Desk HQ.
                   </p>
                 </>
               ) : (
@@ -188,7 +188,7 @@ export function EarlyVoteView({ initialState }: { initialState: string | null })
           </div>
           <p className="muted small mt-source">
             Counts from <a href="https://civicapi.org/early-vote">civicAPI</a>, compiled from state and county election offices, which each report on their own schedule. These are ballots, not results: no votes are counted
-            until polls close. Party counts for states that don&apos;t record registration are from{" "}
+            until polls close. Where civicAPI has no party for a state&apos;s ballots, the party counts are from{" "}
             <a href="https://votes.decisiondeskhq.com/elections/2026-11-03">Decision Desk HQ</a>. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
         </>
