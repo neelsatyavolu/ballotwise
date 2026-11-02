@@ -17,16 +17,22 @@ const privateOverview = { source: "ddhq" as const, updatedAt: 20, chambers: {}, 
 const desk = (over: Partial<DeskData> = {}): DeskData & { enabled: boolean } => ({ ...EMPTY_DESK, enabled: true, ...over });
 
 describe("DDHQ first-paint policy", () => {
-  it("withholds seeded public projections/results while the connected source is idle or loading", () => {
+  it("shows the public data at once while the connected source is idle or loading (chosen Nov 2)", () => {
+    const publicForecast = { updatedAt: 1, chambers: {}, history: null };
     for (const forecastStatus of ["idle", "loading"] as const) {
-      expect(selectDeskDisplay("/api/midterms", raw, desk({ forecastStatus }))).toMatchObject({ data: null, loading: true });
-      expect(selectDeskDisplay("/api/midterms/forecast", { updatedAt: 1, chambers: {}, history: null }, desk({ forecastStatus }))).toMatchObject({ data: null, loading: true });
+      expect(selectDeskDisplay("/api/midterms", raw, desk({ forecastStatus }))).toMatchObject({ data: raw, loading: false, error: null });
+      expect(selectDeskDisplay("/api/midterms/forecast", publicForecast, desk({ forecastStatus }))).toMatchObject({ data: publicForecast, loading: false });
     }
   });
 
   it("shows all forecasts immediately without waiting for or borrowing public vote leaders", () => {
     const state = desk({ forecast: privateOverview, forecastStatus: "ready", races: new Map([[key, forecast]]) });
-    expect(selectDeskDisplay("/api/midterms", raw, state).loading).toBe(true);
+    // Counts still loading: DDHQ's forecast over the public count, which keeps its own check time.
+    const live = selectDeskDisplay("/api/midterms", raw, state);
+    expect(live.loading).toBe(false);
+    expect(live.data?.races[0].signal?.forecast?.odds.D).toBe(0.8);
+    expect(live.data?.races[0].total).toBe(100);
+    expect(live.data?.fetchedAt).toBe(10);
     const view = selectDeskDisplay("/api/midterms", raw, state, { forecastOnly: true });
     expect(view.loading).toBe(false);
     expect(view.data?.races[0].signal?.forecast?.odds.D).toBe(0.8);
@@ -47,16 +53,15 @@ describe("DDHQ first-paint policy", () => {
     expect(raw.fetchedAt).toBe(10);
   });
 
-  it("keeps election results moving when the forecast is slow, without inserting public projections", () => {
+  it("keeps election results moving when the forecast is slow, showing the public projections until DDHQ's arrive", () => {
     const state = desk({ forecastStatus: "loading", countsReady: new Set([key]), countsFetchedAt: 30,
       races: new Map([[key, { forecast: [], candidates: [{ name: "DDHQ leader", party: "Democratic", votes: 42, pct: 100, winner: false, incumbent: false }], total: 42, call: null, counties: [] }]]) });
     const view = selectDeskDisplay("/api/midterms", raw, state);
     expect(view.loading).toBe(false);
     expect(view.data?.races[0].total).toBe(42);
-    expect(view.data?.races[0].signal).toBeNull();
-    expect(view.data?.races[0].rating).toBeNull();
-    expect(view.data?.forecastSource).toBe("ddhq");
-    expect(selectDeskDisplay("/api/midterms/forecast", null, state).loading).toBe(true);
+    expect(view.data?.races[0].rating).toBe("likely-r");
+    expect(view.data?.forecastSource).toBeUndefined();
+    expect(selectDeskDisplay("/api/midterms/forecast", null, state).loading).toBe(false);
   });
 
   it("permits the public fallback only after the relevant private request fails", () => {
@@ -104,7 +109,10 @@ describe("DDHQ first-paint policy", () => {
     const mixed = { ...raw, races: [race, { ...race, id: 2, office: "house" as const, district: 1 }] };
     const state = desk({ forecast: privateOverview, forecastStatus: "ready", countsFailed: new Set([key]) });
     expect(selectDeskDisplay("/api/midterms", mixed, state, { office: "senate" }).loading).toBe(false);
-    expect(selectDeskDisplay("/api/midterms", mixed, state).loading).toBe(true);
+    // The House race, still loading, shows its public count meanwhile.
+    const all = selectDeskDisplay("/api/midterms", mixed, state);
+    expect(all.loading).toBe(false);
+    expect(all.data?.races[1].total).toBe(100);
     expect(selectDeskDisplay("/api/midterms", raw, { ...state, enabled: false }).data).toBe(raw);
     expect(selectDeskDisplay("/api/midterms", raw, desk(), { office: "measure" }).data).toBe(raw);
     expect(deskRaces("/api/midterms", mixed, "senate")).toEqual([race]);

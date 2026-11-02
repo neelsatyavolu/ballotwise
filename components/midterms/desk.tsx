@@ -4,8 +4,17 @@ import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMem
 import { useAccount } from "@/components/AccountProvider";
 import { ApiError } from "@/lib/client";
 import { simAt } from "@/lib/midterms/clock";
-import { createDeskStore, deskOwner, EMPTY_DESK, type DeskData } from "@/lib/ddhq/store";
+import { createDeskStore, deskOwner, EMPTY_DESK, type DeskData, type DeskStorage } from "@/lib/ddhq/store";
 import type { DdhqSeat } from "@/lib/ddhq/votes";
+
+/** This tab's session storage, or nothing on the server or where the browser blocks it. */
+function tabStorage(): DeskStorage | undefined {
+  try {
+    return typeof window === "undefined" ? undefined : window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
 
 const store = createDeskStore(async <T,>(path: string, body: unknown | undefined, signal: AbortSignal): Promise<T> => {
   const response = await fetch(path, {
@@ -21,14 +30,44 @@ const store = createDeskStore(async <T,>(path: string, body: unknown | undefined
     throw new ApiError(message, response.status);
   }
   return response.json() as Promise<T>;
-});
+}, tabStorage());
 
 type SeatSource = { office: string; state: string; district: number | null; title: string };
 const ServerOwner = createContext<string | null>(null);
 
+/** Screens waiting on a DDHQ request of their own (a race's detail), so the loading note stays up until it's back. */
+const waiters = new Set<symbol>();
+const waiterListeners = new Set<() => void>();
+const subscribeWaiters = (listener: () => void) => {
+  waiterListeners.add(listener);
+  return () => void waiterListeners.delete(listener);
+};
+const anyWaiting = () => waiters.size > 0;
+const notifyWaiters = () => {
+  for (const listener of waiterListeners) listener();
+};
+
+/** Keeps the loading note up while `waiting`. */
+export function useDeskWaiting(waiting: boolean) {
+  const id = useRef(Symbol("desk-waiting"));
+  useEffect(() => {
+    if (!waiting) return;
+    const key = id.current;
+    waiters.add(key);
+    notifyWaiters();
+    return () => {
+      waiters.delete(key);
+      notifyWaiters();
+    };
+  }, [waiting]);
+}
+
+/** Keeps the private data alive, and says so while DDHQ's numbers are still on their way and the public ones show. */
 function DeskKeeper() {
-  useDeskData();
-  return null;
+  const desk = useDeskData();
+  const waiting = useSyncExternalStore(subscribeWaiters, anyWaiting, () => false);
+  const loading = desk.enabled && (waiting || desk.countsPending || (desk.forecastStatus === "loading" && !desk.forecast));
+  return loading ? <p className="mt-desk-loading" role="status">Loading Decision Desk HQ…</p> : null;
 }
 
 /** The tracker layout keeps private data alive across its child-page navigations. */

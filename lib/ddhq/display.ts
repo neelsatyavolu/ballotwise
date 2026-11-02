@@ -36,27 +36,27 @@ function forecastCatalog<T>(path: string | null, raw: T, desk: DeskData): T {
   return raw;
 }
 
-/** Loading is distinct from failure: only a failed private source permits the public fallback. */
+/**
+ * The page as the connected viewer sees it. Nothing waits on DDHQ (chosen Nov 2): until its counts and forecast are
+ * back, the page shows the public data with whatever private data is already in hand (this tab's saved snapshot, or
+ * races already counted), and DeskStatus says DDHQ is loading. DDHQ's numbers replace the public ones as they arrive.
+ */
 export function selectDeskDisplay<T>(path: string | null, raw: T | null, desk: DeskData & { enabled: boolean }, options: DeskDisplayOptions = {}): { data: T | null; loading: boolean; error: string | null; privateSource: boolean } {
   const rows = deskRaces(path, raw, options.office);
   const eligible = path === "/api/midterms/forecast" || path === "/api/midterms" && options.office !== "measure" || rows.length > 0;
   if (!desk.enabled || !eligible) return { data: raw, loading: false, error: null, privateSource: false };
-  const waitingForecast = (options.forecastOnly || path === "/api/midterms/forecast") && !desk.forecast && desk.forecastStatus !== "error";
   const waitingCounts = !options.forecastOnly && rows.some((race) => {
     const key = deskKeyFor(race);
     return !desk.countsReady.has(key) && !desk.countsFailed.has(key);
   });
-  if (waitingForecast || waitingCounts) return { data: null, loading: true, error: null, privateSource: true };
   const failedCounts = !options.forecastOnly && rows.some((race) => desk.countsFailed.has(deskKeyFor(race)));
   const base = options.forecastOnly && desk.forecast ? forecastCatalog(path, raw, desk) : raw;
-  // Live counts must not wait for an unrelated forecast page. Suppress public projections until that page succeeds or fails.
-  const forecast = desk.forecast ?? (desk.forecastStatus !== "error" ? { source: "ddhq" as const, updatedAt: null, chambers: null, history: null } : null);
-  let data = overlayLive(path, base, desk.races, forecast);
+  let data = overlayLive(path, base, desk.races, desk.forecast);
   // Public vote-drop history must not be charted alongside this user's current DDHQ count.
   if (path && /^\/api\/midterms\/race\/\d+$/.test(path) && data && typeof data === "object" && "race" in data && isDesk((data as { race: RaceSummary }).race)) {
     data = { ...data, history: [] };
   }
-  if (!options.forecastOnly && !failedCounts && rows.length && desk.countsFetchedAt && data && typeof data === "object") {
+  if (!options.forecastOnly && !failedCounts && !waitingCounts && rows.length && desk.countsFetchedAt && data && typeof data === "object") {
     data = { ...data, fetchedAt: desk.countsFetchedAt, stale: false };
   }
   return { data, loading: false, error: failedCounts ? desk.countsError ?? "DDHQ results are unavailable. Showing the public fallback." : null, privateSource: !!desk.forecast || rows.some((race) => desk.countsReady.has(deskKeyFor(race))) };

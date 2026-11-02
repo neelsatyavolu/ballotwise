@@ -11,15 +11,24 @@ export type DeskData = {
   countsFailed: ReadonlySet<string>;
   countsError: string | null;
   countsFetchedAt: number | null;
+  /** Some registered seat has no fresh private count yet: it isn't back, or it shows the copy saved in this tab. */
+  countsPending: boolean;
 };
 type Snapshot = DeskData & { owner: string | null };
 type Request = <T>(path: string, body: unknown | undefined, signal: AbortSignal) => Promise<T>;
 type Run = { owner: string; controller: AbortController; expired: () => Promise<void> };
 type Counts = { races: { key: string; race: DdhqRace | null }[] };
+/** Where a tab keeps its last private snapshot (sessionStorage in the browser), so a reload can show it at once. */
+export type DeskStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+/** `checked` dates each count and `forecastAt` the forecast, so a restore can leave out whatever has grown old. */
+type Saved = { owner: string; counts: [string, DdhqRace][]; checked: [string, number][]; forecasts: [string, DdhqRace][]; overview: DeskData["forecast"]; forecastAt: number | null };
+const SAVED_KEY = "ballotwise:ddhq-desk";
+/** A saved snapshot older than this isn't shown while the fresh one loads. */
+export const RESTORE_MS = 30 * 60_000;
 
 export const EMPTY_DESK: Snapshot = {
   owner: null, races: new Map(), forecast: null, forecastStatus: "idle", forecastError: null,
-  countsReady: new Set(), countsFailed: new Set(), countsError: null, countsFetchedAt: null,
+  countsReady: new Set(), countsFailed: new Set(), countsError: null, countsFetchedAt: null, countsPending: false,
 };
 const REFRESH_MS = 60_000;
 export const deskSeatKey = (seat: { office: string; state: string; district: number | null; special?: boolean }) => `${seat.office}:${seat.state}:${seat.office === "house" ? (seat.district ?? 0) : ""}:${seat.special ? "s" : "g"}`;
@@ -32,8 +41,11 @@ export function deskOwner(serverOwner: string | null, account: { loading: boolea
 
 const safeError = (error: unknown, fallback: string) => error instanceof Error && "status" in error && typeof error.status === "number" ? error.message : fallback;
 
-/** Tab-local private data. Run identity guards even requests whose transport ignores abort. */
-export function createDeskStore(request: Request) {
+/**
+ * Tab-local private data. Run identity guards even requests whose transport ignores abort. With `storage`, the last
+ * snapshot is kept for this tab and shown at once on its next connect while a fresh one loads.
+ */
+export function createDeskStore(request: Request, storage?: DeskStorage) {
   const listeners = new Set<() => void>();
   const sources = new Map<symbol, readonly DdhqSeat[]>();
   let seats = new Map<string, DdhqSeat>();
@@ -42,7 +54,11 @@ export function createDeskStore(request: Request) {
   let counts = new Map<string, DdhqRace>();
   let countErrors = new Map<string, string>();
   let checkedAt = new Map<string, number>();
+  /** Seats showing the saved snapshot until their first fresh count. */
+  let restored = new Set<string>();
   let overview: DeskData["forecast"] = null;
+  /** When the forecast in hand was fetched. */
+  let forecastAt: number | null = null;
   let forecastStatus: DeskData["forecastStatus"] = "idle";
   let forecastError: string | null = null;
   let snapshot = EMPTY_DESK;
@@ -70,6 +86,7 @@ export function createDeskStore(request: Request) {
       countsFailed: new Set(countErrors.keys()),
       countsError: [...seats.keys()].map((key) => countErrors.get(key)).find(Boolean) ?? null,
       countsFetchedAt: activeChecks.length ? Math.min(...activeChecks) : null,
+      countsPending: [...seats.keys()].some((key) => restored.has(key) || (counts.get(key)?.candidates == null && !countErrors.has(key))),
     };
     emit();
   }
@@ -86,7 +103,9 @@ export function createDeskStore(request: Request) {
     counts = new Map();
     countErrors = new Map();
     checkedAt = new Map();
+    restored = new Set();
     overview = null;
+    forecastAt = null;
     forecastStatus = "idle";
     forecastError = null;
     snapshot = EMPTY_DESK;
@@ -96,11 +115,43 @@ export function createDeskStore(request: Request) {
   function expired(error: unknown, mine: Run): boolean {
     if (!active(mine)) return true;
     if (error && typeof error === "object" && "status" in error && error.status === 401) {
+      forget();
       disconnect();
       void mine.expired().catch(() => {});
       return true;
     }
     return false;
+  }
+
+  function forget() {
+    try { storage?.removeItem(SAVED_KEY); } catch { /* storage unavailable */ }
+  }
+
+  function persist(mine: Run) {
+    if (!storage || !active(mine)) return;
+    const saved: Saved = { owner: mine.owner, counts: [...counts], checked: [...checkedAt], forecasts: [...forecasts], overview, forecastAt };
+    try { storage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch { /* full or unavailable: the next load just waits */ }
+  }
+
+  /**
+   * This owner's saved snapshot, shown until fresh data replaces it: each count checked, and the forecast fetched,
+   * within RESTORE_MS. Anyone else's is dropped.
+   */
+  function restore(owner: string) {
+    let saved: Saved | null = null;
+    try { saved = JSON.parse(storage?.getItem(SAVED_KEY) ?? "null") as Saved | null; } catch { saved = null; }
+    if (!saved) return;
+    if (saved.owner !== owner) { forget(); return; }
+    const recent = (at: number | null | undefined) => typeof at === "number" && Date.now() - at < RESTORE_MS;
+    const checked = new Map(saved.checked.filter(([, at]) => recent(at)));
+    counts = new Map(saved.counts.filter(([key]) => checked.has(key)));
+    checkedAt = checked;
+    restored = new Set(counts.keys());
+    if (recent(saved.forecastAt)) {
+      forecasts = new Map(saved.forecasts);
+      overview = saved.overview;
+      forecastAt = saved.forecastAt;
+    }
   }
 
   function scheduleCounts(mine: Run) {
@@ -132,6 +183,7 @@ export function createDeskStore(request: Request) {
         if (!active(mine)) return;
         const found = new Map(body?.races.map((row) => [row.key, row.race]) ?? []);
         for (const key of keys) {
+          restored.delete(key);
           counts.delete(key);
           checkedAt.delete(key);
           const race = found.get(key);
@@ -150,7 +202,7 @@ export function createDeskStore(request: Request) {
         publish();
       }
     } finally {
-      if (active(mine)) { counting = false; scheduleCounts(mine); }
+      if (active(mine)) { counting = false; persist(mine); scheduleCounts(mine); }
     }
   }
 
@@ -164,13 +216,16 @@ export function createDeskStore(request: Request) {
       if (!active(mine)) return;
       forecasts = new Map(body.races.map((row) => [row.key, row.race]));
       overview = body.overview;
+      forecastAt = Date.now();
       forecastStatus = "ready";
       forecastError = null;
       publish();
+      persist(mine);
     } catch (error) {
       if (expired(error, mine)) return;
       forecasts = new Map();
       overview = null;
+      forecastAt = null;
       forecastStatus = "error";
       forecastError = safeError(error, "Decision Desk HQ's published forecast is unavailable.");
       publish();
@@ -212,6 +267,7 @@ export function createDeskStore(request: Request) {
       if (run?.owner === owner) return;
       disconnect();
       run = { owner, controller: new AbortController(), expired: onExpired };
+      restore(owner);
       pending = new Set(seats.keys());
       publish();
       void loadForecast(run);

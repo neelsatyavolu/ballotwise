@@ -14,7 +14,7 @@ import { CandidateTable } from "./CandidateTable";
 import { CountyTip, fillFor, type Mode } from "./county";
 import { CountyTable } from "./CountyTable";
 import { pollInterval, useLive, useStars, warmLive } from "./hooks";
-import { useDeskData } from "./desk";
+import { useDeskData, useDeskWaiting } from "./desk";
 import { CountyMap, type CountyFill } from "./maps";
 import { MarketPanel } from "./MarketPanel";
 import { RaceInsights } from "./RaceInsights";
@@ -51,7 +51,12 @@ export function RaceView({ id }: { id: number }) {
   const privateRace = privateDesk.enabled && !!office && office !== "measure" && !loaded?.local;
   const mine = privateRace && reply?.seat === seat ? reply : null;
   const active = mine?.race ?? null;
-  const fallback = mine?.error ? overlayLive(path, catalogData, privateDesk.races, privateDesk.forecast) : null;
+  // While DDHQ's detail loads, and if it fails, the public race shows with any DDHQ board count already in hand.
+  const waiting = privateRace && !active && !mine?.error;
+  const overlaid = mine?.error || waiting ? overlayLive(path, catalogData, privateDesk.races, privateDesk.forecast) : null;
+  // A DDHQ count is never charted beside civicAPI's vote updates.
+  const fallback = overlaid && isDesk(overlaid.race) ? { ...overlaid, history: undefined } : overlaid;
+  useDeskWaiting(waiting);
   const base = fallback ?? rendered ?? (active ? catalogData : null);
   const data = base && active ? { ...base, race: applyDesk(base.race, active), fetchedAt: mine!.at, stale: false, history: undefined, callPending: false } : base;
   const race = data?.race;
@@ -95,7 +100,7 @@ export function RaceView({ id }: { id: number }) {
     return out;
   }, [race, mode]);
 
-  if (!data || !race || privateRace && !active && !mine?.error) {
+  if (!data || !race) {
     return (
       <div className="wrap mt">
         {/* The tabs stay in the header while the race loads, so it doesn't jump; none is marked until the office is known. */}

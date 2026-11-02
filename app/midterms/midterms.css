@@ -1555,6 +1555,8 @@ button.mt-mock:hover { color: var(--ink); }
 .mt-mock.on { border: 1px solid var(--accent); }
 .mt-mock.on b { color: var(--accent); }
 .mt-mock select { font: inherit; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); }
+/* Connected to DDHQ: the public numbers show until its own arrive (components/midterms/desk.tsx). */
+.mt-desk-loading { position: fixed; left: 16px; bottom: 16px; z-index: 50; margin: 0; padding: 6px 10px; background: var(--sheet); color: var(--muted); border: 1px solid var(--rule); border-radius: 8px; font-size: 12px; pointer-events: none; }
 
 /*
  * The companion screen: a second tab, on a laptop beside an ultrawide say, covered by the panels the main screen

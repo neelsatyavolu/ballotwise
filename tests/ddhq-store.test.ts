@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createDeskStore, deskOwner, deskSeatKey, EMPTY_DESK } from "../lib/ddhq/store";
+import { createDeskStore, deskOwner, deskSeatKey, EMPTY_DESK, RESTORE_MS, type DeskStorage } from "../lib/ddhq/store";
 import type { DdhqForecastBundle } from "../lib/ddhq/forecast-types";
 import type { DdhqRace, DdhqSeat } from "../lib/ddhq/votes";
 
@@ -16,12 +16,18 @@ const bundle = (rows = [{ key: keyOf(GA), race: race() }]): DdhqForecastBundle =
 });
 type Call = { path: string; body: unknown; signal: AbortSignal; resolve: (value: unknown) => void; reject: (error: unknown) => void };
 
-function setup() {
+function setup(storage?: DeskStorage) {
   const calls: Call[] = [];
   const store = createDeskStore(<T,>(path: string, body: unknown, signal: AbortSignal) => new Promise<T>((resolve, reject) => {
     calls.push({ path, body, signal, resolve: (value) => resolve(value as T), reject });
-  }));
+  }), storage);
   return { store, calls };
+}
+
+/** A sessionStorage stand-in. */
+function memoryStorage(): DeskStorage & { items: Map<string, string> } {
+  const items = new Map<string, string>();
+  return { items, getItem: (k) => items.get(k) ?? null, setItem: (k, v) => void items.set(k, v), removeItem: (k) => void items.delete(k) };
 }
 
 async function settled() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
@@ -413,6 +419,77 @@ describe("private DDHQ store", () => {
     await vi.advanceTimersByTimeAsync(120_000);
     expect(calls.filter((call) => call.path === "/api/ddhq/races")).toHaveLength(1);
     expect(calls.filter((call) => call.path === "/api/ddhq/forecast")).toHaveLength(2);
+  });
+
+  it("flags counts pending until every registered seat has a fresh answer", async () => {
+    const { store, calls } = setup();
+    store.setSeats(Symbol(), [GA, MI]); store.connect("A", async () => {});
+    expect(store.getSnapshot().countsPending).toBe(true);
+    calls[1].resolve({ races: [{ key: keyOf(GA), race: count }, { key: keyOf(MI), race: null }] }); await settled();
+    // GA counted, MI failed: nothing left to wait for.
+    expect(store.getSnapshot().countsPending).toBe(false);
+  });
+
+  it("shows this tab's saved snapshot at once on the next connect, marked pending until fresh", async () => {
+    const storage = memoryStorage();
+    const first = setup(storage);
+    first.store.setSeats(Symbol(), [GA]); first.store.connect("A", async () => {});
+    first.calls[0].resolve(bundle()); first.calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    first.store.disconnect();
+
+    const next = setup(storage);
+    next.store.setSeats(Symbol(), [GA]); next.store.connect("A", async () => {});
+    const shown = next.store.getSnapshot();
+    expect(shown.races.get(keyOf(GA))).toMatchObject({ total: 100, forecast: [{ probability: 0.7 }] });
+    expect(shown.forecast).toMatchObject({ source: "ddhq" });
+    expect(shown.countsPending).toBe(true);
+    next.calls[1].resolve({ races: [{ key: keyOf(GA), race: { ...count, total: 150 } }] }); await settled();
+    expect(next.store.getSnapshot()).toMatchObject({ countsPending: false });
+    expect(next.store.getSnapshot().races.get(keyOf(GA))?.total).toBe(150);
+  });
+
+  it("never shows another account's or an old saved snapshot, and drops it on a 401", async () => {
+    const storage = memoryStorage();
+    const first = setup(storage);
+    first.store.setSeats(Symbol(), [GA]); first.store.connect("A", async () => {});
+    first.calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    first.store.disconnect();
+
+    const other = setup(storage);
+    other.store.setSeats(Symbol(), [GA]); other.store.connect("B", async () => {});
+    expect(other.store.getSnapshot().races.size).toBe(0);
+    expect(storage.items.size).toBe(0);
+    other.store.disconnect();
+
+    const again = setup(storage);
+    again.store.setSeats(Symbol(), [GA]); again.store.connect("A", async () => {});
+    again.calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    again.store.disconnect();
+    vi.setSystemTime(Date.now() + RESTORE_MS);
+    const late = setup(storage);
+    late.store.setSeats(Symbol(), [GA]); late.store.connect("A", async () => {});
+    expect(late.store.getSnapshot().races.size).toBe(0);
+
+    late.calls[1].resolve({ races: [{ key: keyOf(GA), race: count }] }); await settled();
+    expect(storage.items.size).toBe(1);
+    await vi.advanceTimersByTimeAsync(120_000);
+    late.calls.at(-1)!.reject({ status: 401 }); await settled();
+    expect(storage.items.size).toBe(0);
+  });
+
+  it("restores only counts checked within RESTORE_MS, even when the forecast saved with them is fresh", async () => {
+    const storage = memoryStorage();
+    const now = Date.now();
+    storage.setItem("ballotwise:ddhq-desk", JSON.stringify({
+      owner: "A", counts: [[keyOf(GA), count], [keyOf(MI), count]], checked: [[keyOf(GA), now - RESTORE_MS], [keyOf(MI), now - 1000]],
+      forecasts: [[keyOf(GA), race()]], overview: bundle().overview, forecastAt: now - 1000,
+    }));
+    const { store } = setup(storage);
+    store.setSeats(Symbol(), [GA, MI]); store.connect("A", async () => {});
+    const shown = store.getSnapshot();
+    expect(shown.countsReady.has(keyOf(GA))).toBe(false);
+    expect(shown.countsReady.has(keyOf(MI))).toBe(true);
+    expect(shown.forecast).toMatchObject({ source: "ddhq" });
   });
 
   it("clears and refreshes account state only on 401", async () => {
