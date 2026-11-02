@@ -149,7 +149,11 @@ type Known = Map<number, { race: RaceSummary; seen: number }>;
  * Races an operator has retired on purpose (a duplicate listing, say). Nothing else ever removes a race: one
  * civicAPI leaves out is kept with its last numbers and `missing: true`.
  */
-export const RETIRED_RACE_IDS: ReadonlySet<number> = new Set<number>();
+export const RETIRED_RACE_IDS: ReadonlySet<number> = new Set<number>([
+  // Second listings of Washington's three statewide initiatives (IP26-645, IL26-001, IL26-638), which civicAPI has
+  // since deleted (404 on Nov 2); the first listings, 130145, 87525 and 130146, are the ones it counts.
+  131486, 131487, 131488,
+]);
 
 export function resetCivicMemo() {
   catalogMemo = null;
@@ -161,6 +165,7 @@ export function resetCivicMemo() {
   otherMemo.clear();
   searchMemo.clear();
   areaMemo.clear();
+  strayStart = 0;
 }
 
 /**
@@ -342,6 +347,39 @@ async function fetchRaces(now: number): Promise<{ races: RaceSummary[]; failed: 
   return { races: [...byId.values()], failed };
 }
 
+/** At most this many strays are fetched one by one per refresh, so a search gone wrong can't fan out to hundreds. */
+const MAX_STRAYS = 12;
+/** All strays together get this long; any still unanswered stay missing with their last numbers. */
+const STRAYS_BUDGET_MS = 8_000;
+/** Where the next refresh's strays start, so that past MAX_STRAYS each one still gets its turn. */
+let strayStart = 0;
+
+/**
+ * Registered measures the searches have stopped listing but civicAPI still answers for by id: on Nov 2 it relabeled
+ * Washington's three statewide initiatives "Local" with no race type. Each is summarized as the statewide measure it
+ * was registered as. One civicAPI no longer has (404) or that fails is left out, so it stays missing.
+ */
+async function fetchStrays(searched: readonly RaceSummary[], registered: ReadonlyMap<number, Registered> | null, now: number): Promise<RaceSummary[]> {
+  const listed = new Set(searched.map((r) => r.id));
+  const all = [...(registered?.values() ?? [])].filter((r) => r.office === "measure" && !listed.has(r.race_id) && !RETIRED_RACE_IDS.has(r.race_id)).sort((a, b) => a.race_id - b.race_id);
+  if (all.length === 0) return [];
+  const start = strayStart % all.length;
+  const strays = [...all.slice(start), ...all.slice(0, start)].slice(0, MAX_STRAYS);
+  strayStart = start + strays.length;
+  const deadline = Date.now() + STRAYS_BUDGET_MS;
+  const found = await pooled(strays, 3, async (r): Promise<RaceSummary | null> => {
+    try {
+      const raw = (await civic(`race/${r.race_id}`, deadline)) as Record<string, unknown>;
+      if (raw.province !== r.state) return null;
+      const race = summarize({ ...raw, id: r.race_id, type: "Referendum", election_type: "Statewide" }, [], now);
+      return race && (resultsHidden(race.state, now, isTestData(raw)) ? blankResults(race) : race);
+    } catch {
+      return null;
+    }
+  });
+  return found.filter((r): r is RaceSummary => r !== null);
+}
+
 const served = (memo: Stored, ratings: readonly RatedRace[], stale: boolean) => ({
   races: applyRatings(memo.value, ratings),
   coverage: coverageOf(memo.value),
@@ -370,6 +408,15 @@ export async function fetchCatalog(
   if (catalogMemo && now - catalogMemo.at < FRESH_MS) return served(catalogMemo, ratings, false);
   const revalidate = serveStale && background ? background : null;
   if (revalidate && catalogMemo && now - catalogMemo.at < SERVE_STALE_MS) return refreshAfter(catalogMemo, ratings, now, revalidate, db);
+  // An isolate left idle past SERVE_STALE_MS holds an old catalog, while the cron keeps D1's newer: serve D1's at
+  // once, as a fresh isolate does, rather than wait up to WAIT_MS on civicAPI.
+  if (revalidate && catalogMemo && db) {
+    const stored = fromSnapshots(await readRaceSnapshots(db));
+    if (stored && catalogMemo && stored.at > catalogMemo.at && now - stored.at < SERVE_STALE_MS) {
+      catalogMemo = stored;
+      return refreshAfter(stored, ratings, now, revalidate, db);
+    }
+  }
   // A fresh isolate has no memo, so D1 stands in for it; it's read while civicAPI is asked.
   const warm = catalogMemo;
   const snapshots = warm || !db ? Promise.resolve(null) : readRaceSnapshots(db);
@@ -411,10 +458,12 @@ function latest(now: number, db: Db | undefined, background: ((work: Promise<unk
 /** Asks civicAPI for every race, keeps the ones it left out, saves the result to memory and D1. Throws on CivicError. */
 async function load(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Snapshots | null>): Promise<Stored> {
   const registeredRaces = registry(db, now);
-  const { races: fetched, failed } = await fetchRaces(now);
+  const { races: searched, failed } = await fetchRaces(now);
   if (failed.length) console.error(`midterms: civicAPI failed for ${failed.join(", ")}; those races keep their last known numbers`);
-  let known = warm ? knownFrom(warm) : ((await snapshots)?.known ?? new Map());
   const registered = await registeredRaces;
+  // A partial answer leaves out every race of the failed types, so strays are only looked for in a complete one.
+  const fetched = failed.length ? searched : [...searched, ...(await fetchStrays(searched, registered, now))];
+  let known = warm ? knownFrom(warm) : ((await snapshots)?.known ?? new Map());
   const listed = new Set(fetched.map((r) => r.id));
   // Registered races this isolate has no numbers for: another isolate saw them, so D1 may hold their numbers.
   if (db && warm && [...(registered?.keys() ?? [])].some((id) => !listed.has(id) && !known.has(id))) {

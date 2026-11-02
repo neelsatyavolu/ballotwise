@@ -152,6 +152,63 @@ describe("fetchCatalog with races civicAPI leaves out", () => {
     expect(back.races.find((r) => r.id === 119)).toMatchObject({ reporting: 90 });
   });
 
+  // As with Washington's statewide initiatives on Nov 2: relabeled "Local" with no race type, so the searches drop
+  // them, while each one's own page still counts it.
+  const relabeled = () => ({ election_name: "Ohio Issue 1", election_type: "Local", election_date: "2026-11-03T05:00:00.000Z", country: "US", province: "OH", district: null, percent_reporting: 55, candidates: [{ name: "Yes", party: "Nonpartisan", votes: 900, winner: false }, { name: "No", party: "Nonpartisan", votes: 100, winner: false }] });
+  function serveStray(byType: typeof FULL, asked: string[]) {
+    vi.stubGlobal("fetch", async (url: string) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith("/race/search")) {
+        const type = decodeURIComponent(u.searchParams.get("type") ?? "");
+        return type === "Proposition" && !byType.Proposition ? new Response("down", { status: 503 }) : new Response(JSON.stringify({ races: byType[type] ?? [] }));
+      }
+      asked.push(u.pathname);
+      return u.pathname.endsWith("/race/21") ? new Response(JSON.stringify(relabeled())) : new Response("gone", { status: 404 });
+    });
+  }
+
+  it("fetches a registered measure the searches stopped listing by its id, still as a statewide measure", async () => {
+    const db = testDb();
+    await at(0, FULL, db);
+    const asked: string[] = [];
+    serveStray({ ...FULL, Referendum: [FULL.Referendum[0]], Proposition: [] }, asked);
+    const next = await fetchCatalog(NOW + 2 * MINUTE, [], db);
+    expect(asked).toEqual(["/api/v2/race/21"]);
+    const issue = next.races.find((r) => r.id === 21);
+    expect(issue).toMatchObject({ office: "measure", state: "OH", reporting: 55, total: 1000 });
+    expect(issue?.missing).toBeUndefined();
+    expect(next.races).toHaveLength(26);
+  });
+
+  it("leaves a stray civicAPI no longer has missing, and asks for none while a race type is failing", async () => {
+    const db = testDb();
+    await at(0, FULL, db);
+    const asked: string[] = [];
+    serveStray({ ...FULL, Referendum: [FULL.Referendum[1]], Proposition: [] }, asked);
+    const gone = await fetchCatalog(NOW + 2 * MINUTE, [], db);
+    expect(asked).toEqual(["/api/v2/race/20"]);
+    expect(gone.races.find((r) => r.id === 20)).toMatchObject({ missing: true, lastSeen: NOW });
+
+    asked.length = 0;
+    // Proposition left out of byType: its search fails, so the catalog is partial and no race is fetched by id.
+    serveStray({ ...FULL, Referendum: [FULL.Referendum[0]] }, asked);
+    await fetchCatalog(NOW + 4 * MINUTE, [], db);
+    expect(asked).toEqual([]);
+  });
+
+  it("gives every stray a turn when there are more than one refresh fetches", async () => {
+    const db = testDb();
+    const measures = Array.from({ length: 14 }, (_, i) => race(200 + i, "Referendum", `Ohio Issue ${i + 1}`, { province: "OH" }));
+    await at(0, { ...FULL, Referendum: measures }, db);
+    const asked: string[] = [];
+    serveStray({ ...FULL, Referendum: [], Proposition: [] }, asked);
+    await fetchCatalog(NOW + 2 * MINUTE, [], db);
+    expect(asked).toHaveLength(12);
+    asked.length = 0;
+    await fetchCatalog(NOW + 4 * MINUTE, [], db);
+    expect(asked.slice(0, 2)).toEqual(["/api/v2/race/212", "/api/v2/race/213"]);
+  });
+
   it("drops only races on the retired list", async () => {
     await at(0, FULL);
     (RETIRED_RACE_IDS as Set<number>).add(119);
@@ -364,6 +421,31 @@ describe("fetchCatalog serving a recent catalog while it refreshes", () => {
     expect(await fetchCatalog(NOW + 5 * MINUTE, [], undefined, () => {}, true)).toMatchObject({ fetchedAt: NOW + 5 * MINUTE });
     serve(withSenate(iowa, texas));
     expect(await fetchCatalog(NOW + 6 * MINUTE, [], undefined, undefined, true)).toMatchObject({ fetchedAt: NOW + 6 * MINUTE });
+  });
+
+  it("serves an isolate left idle D1's newer copy at once instead of waiting on civicAPI", async () => {
+    const db = testDb();
+    // This isolate's catalog is from NOW; the cron (another isolate) has kept D1's current since.
+    await at(0, FULL, db);
+    vi.resetModules();
+    const cron = await import("../lib/midterms/civic");
+    serve(withSenate(iowa));
+    await cron.fetchCatalog(NOW + 4 * MINUTE, [], db);
+    // civicAPI now never answers: a view that waited on it would hang.
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
+    const work: Promise<unknown>[] = [];
+    const served = await fetchCatalog(NOW + 5 * MINUTE, [], db, (w) => work.push(w), true);
+    expect(served).toMatchObject({ fetchedAt: NOW + 4 * MINUTE, stale: false });
+    expect(served.races.some((r) => r.id === 3)).toBe(true);
+    expect(work).toHaveLength(1);
+  });
+
+  it("still waits on civicAPI when D1's copy is no newer than the idle isolate's", async () => {
+    const db = testDb();
+    await at(0, FULL, db);
+    serve(withSenate(iowa));
+    const served = await fetchCatalog(NOW + 5 * MINUTE, [], db, () => {}, true);
+    expect(served).toMatchObject({ fetchedAt: NOW + 5 * MINUTE, stale: false });
   });
 
   it("serves a fresh isolate D1's recent snapshots, then refreshes", async () => {
