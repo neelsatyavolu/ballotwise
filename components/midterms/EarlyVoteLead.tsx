@@ -1,5 +1,5 @@
 // The "who's ahead" card at the top of a state's early vote panel.
-import type { EarlyStateDetail, Lean, PartySplit } from "@/lib/midterms/earlyVote";
+import type { EarlyStateDetail, Lean, PartySource, PartySplit } from "@/lib/midterms/earlyVote";
 import { fmt, marginLabel } from "@/lib/midterms/view";
 
 /** Below this many points either way, the card calls it even. */
@@ -28,9 +28,10 @@ function Head({ who, margin, estimate }: { who: string; margin: number; estimate
   );
 }
 
-function ByRegistration({ party }: { party: PartySplit }) {
+function ByParty({ party, from }: { party: PartySplit; from: PartySource }) {
   const margin = ((party.dem - party.rep) / (party.dem + party.rep + party.other)) * 100;
-  const who = Math.abs(margin) < EVEN ? "Democrats and Republicans even" : margin > 0 ? "Registered Democrats ahead" : "Registered Republicans ahead";
+  const kind = from === "ddhq" ? "" : "Registered ";
+  const who = Math.abs(margin) < EVEN ? "Democrats and Republicans even" : `${kind}${margin > 0 ? "Democrats" : "Republicans"} ahead`;
   return (
     <>
       <Head who={who} margin={margin} />
@@ -38,7 +39,10 @@ function ByRegistration({ party }: { party: PartySplit }) {
       <p className="small">
         {fmt(party.dem)} Democrats · {fmt(party.rep)} Republicans · {fmt(party.other)} other or none
       </p>
-      <p className="muted small">Registration isn&apos;t a vote: many voters cross party lines, and Democrats vote by mail more than Republicans do.</p>
+      <p className="muted small">
+        {from === "ddhq" && "Party counts from Decision Desk HQ, which assigns a party from its voter data where the state doesn't register one. "}
+        {from === "ddhq" ? "A party" : "Registration"} isn&apos;t a vote: many voters cross party lines, and Democrats vote by mail more than Republicans do.
+      </p>
     </>
   );
 }
@@ -74,7 +78,7 @@ export function LeadCard({ detail }: { detail: EarlyStateDetail }) {
   return (
     <section className="mt-ev-lead" aria-labelledby="ev-lead">
       <h3 id="ev-lead">Who&apos;s ahead in early ballots</h3>
-      {detail.party ? <ByRegistration party={detail.party} /> : <ByCounty lean={detail.lean!} />}
+      {detail.party ? <ByParty party={detail.party} from={detail.partyFrom} /> : <ByCounty lean={detail.lean!} />}
     </section>
   );
 }

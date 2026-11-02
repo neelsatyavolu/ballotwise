@@ -13,6 +13,9 @@ CURL_WRITEFUNC_ERROR = 0xFFFFFFFF
 PRIVATE = {"cache-control": "private, no-store"}
 SEARCH_KEYS = {"q", "filterYear", "filterState", "filterOffice"}
 AUTH_STATUSES = {"signed-in", "signed-out", "handshake"}
+# DDHQ's early vote by party is public (no login), so it goes without any session: never send a user's cookie to it.
+ABEV = "/api/abev/election"
+ABEV_KEYS = {"state", "election_date", "is_primary", "is_ballot_prop"}
 
 
 @dataclass
@@ -45,14 +48,32 @@ def valid_path(path):
         return not query
     if parsed.path == "/api/races/batch/topline":
         return set(query) == {"ids"} and bool(re.fullmatch(r"[0-9]+(?:,[0-9]+){0,23}", query["ids"]))
+    if parsed.path == ABEV:
+        return (
+            set(query) == ABEV_KEYS
+            and bool(re.fullmatch(r"[A-Z]{2}", query["state"]))
+            and bool(re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", query["election_date"]))
+            and query["is_primary"] == "false"
+            and query["is_ballot_prop"] == "false"
+        )
     if parsed.path == "/api/vote-history":
         return set(query) == {"race_id"} and bool(re.fullmatch(r"[0-9]+", query["race_id"]))
     return parsed.path == "/api/searchv2" and set(query) == SEARCH_KEYS and all(query.values())
 
 
+def is_public(path):
+    return urlsplit(path).path == ABEV
+
+
 async def relay(client, method, path, cookie):
-    if method != "GET" or not valid_path(path) or len(cookie) > 8192 or not re.fullmatch(r"__session=[A-Za-z0-9._-]+", cookie):
+    if method != "GET" or not valid_path(path):
         return error(400)
+    public = is_public(path)
+    if public and cookie:
+        return error(400)
+    if not public and (len(cookie) > 8192 or not re.fullmatch(r"__session=[A-Za-z0-9._-]+", cookie)):
+        return error(400)
+    session = {} if public else {"cookie": cookie, "authorization": "Bearer " + cookie.removeprefix("__session=")}
     body = bytearray()
     page = path.startswith("/forecast/2026/")
     content_type = "text/x-component" if page else "application/json"
@@ -75,8 +96,7 @@ async def relay(client, method, path, cookie):
                     "sec-fetch-dest": "empty",
                     "sec-fetch-mode": "cors",
                     "sec-fetch-site": "same-origin",
-                    "cookie": cookie,
-                    "authorization": "Bearer " + cookie.removeprefix("__session="),
+                    **session,
                 },
                 allow_redirects=False,
                 discard_cookies=True,
@@ -116,10 +136,10 @@ def create_app():
 
     async def handle(request):
         cookies = request.headers.getall("cookie", [])
-        if len(cookies) != 1 or request.can_read_body:
+        if len(cookies) > 1 or request.can_read_body:
             result = error(400)
         else:
-            result = await relay(client, request.method, request.raw_path, cookies[0])
+            result = await relay(client, request.method, request.raw_path, cookies[0] if cookies else "")
         return web.Response(status=result.status, body=result.body, headers=result.headers)
 
     app.cleanup_ctx.append(lifetime)

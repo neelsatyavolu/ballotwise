@@ -18,7 +18,7 @@ function StateTip({ s }: { s: EarlyState }) {
       <span>{fmt(s.cast)} ballots cast{share !== null && ` · ${pct(share)} of the 2024 vote`}</span>
       <span className="muted">
         Mail {fmt(s.returned)} · in person {fmt(s.inperson)}
-        {s.party && ` · registration ${partyLead(s.party)}`}
+        {s.party && ` · ${s.partyFrom === "ddhq" ? "party" : "registration"} ${partyLead(s.party)}`}
       </span>
     </div>
   );
@@ -33,7 +33,7 @@ function StateRows({ states, onPick }: { states: EarlyState[]; onPick: (state: s
             <th>State</th>
             <th className="num">Ballots</th>
             <th className="num">Of 2024</th>
-            <th className="num">Reg. lead</th>
+            <th className="num">Party lead</th>
           </tr>
         </thead>
         <tbody>
@@ -58,7 +58,7 @@ function StateRows({ states, onPick }: { states: EarlyState[]; onPick: (state: s
   );
 }
 
-/** The nation's totals and the registration split across the states that report one. */
+/** The nation's totals and the party split across the states that have one. */
 function NationSummary({ states }: { states: EarlyState[] }) {
   const counts = states.reduce((t, s) => ({ requested: t.requested + s.requested, returned: t.returned + s.returned, inperson: t.inperson + s.inperson, cast: t.cast + s.cast }), { requested: 0, returned: 0, inperson: 0, cast: 0 });
   const withParty = states.filter((s) => s.party);
@@ -69,7 +69,7 @@ function NationSummary({ states }: { states: EarlyState[] }) {
       {party && (
         <div>
           <p className="small">
-            In the {withParty.length} states that record party registration ({fmt(withParty.reduce((n, s) => n + s.cast, 0))} ballots):
+            In the {withParty.length} states with a party count ({fmt(withParty.reduce((n, s) => n + s.cast, 0))} ballots):
           </p>
           <PartyBar party={party} />
         </div>
@@ -113,7 +113,7 @@ export function EarlyVoteView({ initialState }: { initialState: string | null })
           <div className="mt-ev-tip">
             <b>{c.name}</b>
             <span>{fmt(c.cast)} ballots cast{share !== null && ` · ${pct(share)} of the 2024 vote`}</span>
-            {c.party && <span className="muted">Registration {partyLead(c.party)}</span>}
+            {c.party && <span className="muted">{shown.partyFrom === "ddhq" ? "Party" : "Registration"} {partyLead(c.party)}</span>}
           </div>
         ),
       });
@@ -156,7 +156,8 @@ export function EarlyVoteView({ initialState }: { initialState: string | null })
                   </div>
                   <StateRows states={list} onPick={setFocus} />
                   <p className="muted small">
-                    Tap a state for its counties, party registration and who has voted. Reg. lead is registered Democrats&apos; share of ballots minus Republicans&apos;, in the {statesWithParty} states that record it.
+                    Tap a state for its counties, party split and who has voted. Party lead is Democrats&apos; share of ballots minus Republicans&apos;, in the {statesWithParty} states with a party count: registration where
+                    the state records it, otherwise Decision Desk HQ&apos;s count.
                   </p>
                 </>
               ) : (
@@ -187,7 +188,8 @@ export function EarlyVoteView({ initialState }: { initialState: string | null })
           </div>
           <p className="muted small mt-source">
             Counts from <a href="https://civicapi.org/early-vote">civicAPI</a>, compiled from state and county election offices, which each report on their own schedule. These are ballots, not results: no votes are counted
-            until polls close. <Link href="/midterms/credits">Sources and credits</Link>
+            until polls close. Party counts for states that don&apos;t record registration are from{" "}
+            <a href="https://votes.decisiondeskhq.com/elections/2026-11-03">Decision Desk HQ</a>. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
         </>
       )}

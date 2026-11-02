@@ -97,7 +97,7 @@ function VersusPrior({ detail }: { detail: EarlyStateDetail }) {
       <p className="small">
         {fmt(detail.cast)} early ballots so far, against {fmt(prior.cast)} by {dayLabel(prior.date)}, 2024, the same day before that election:{" "}
         <b>{change >= 0 ? `${pct(change)} more` : `${pct(-change)} fewer`}</b>.
-        {detail.party && prior.party && (
+        {detail.partyFrom === "registration" && detail.party && prior.party && (
           <>
             {" "}
             Registration lead {partyLead(prior.party)} then, <b>{partyLead(detail.party)}</b> now.
@@ -153,7 +153,7 @@ function Demographics({ detail }: { detail: EarlyStateDetail }) {
   );
 }
 
-function CountyRows({ counties, byTown, party }: { counties: EarlyCounty[]; byTown: boolean; party: boolean }) {
+function CountyRows({ counties, byTown, party }: { counties: EarlyCounty[]; byTown: boolean; party: string | null }) {
   const share = counties.some((c) => c.base2024);
   return (
     <section aria-labelledby="ev-counties">
@@ -165,7 +165,7 @@ function CountyRows({ counties, byTown, party }: { counties: EarlyCounty[]; byTo
               <th>{byTown ? "Town" : "County"}</th>
               <th className="num">Ballots</th>
               {share && <th className="num">Of 2024</th>}
-              {party && <th className="num">Reg. lead</th>}
+              {party && <th className="num">{party}</th>}
             </tr>
           </thead>
           <tbody>
@@ -195,7 +195,7 @@ export function StatePanel({ detail }: { detail: EarlyStateDetail }) {
       <Stats counts={detail} base2024={detail.base2024} />
       <VersusPrior detail={detail} />
       <Demographics detail={detail} />
-      {detail.counties.length > 0 && <CountyRows counties={detail.counties} byTown={detail.byTown} party={!!detail.party} />}
+      {detail.counties.length > 0 && <CountyRows counties={detail.counties} byTown={detail.byTown} party={detail.party ? (detail.partyFrom === "ddhq" ? "Party lead" : "Reg. lead") : null} />}
     </div>
   );
 }

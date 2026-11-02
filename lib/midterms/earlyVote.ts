@@ -2,6 +2,7 @@
 // (compiled from state election offices). Pure shaping only; earlyVoteSource.ts does the fetching.
 import { z } from "zod";
 import baseline from "./baseline2024.json";
+import type { DdhqEarly } from "./ddhqEarly";
 import states from "./states.json";
 import { STATE_NAMES } from "./view";
 
@@ -16,7 +17,9 @@ export type Feeds = { returned: EarlyFeed; inperson: EarlyFeed; requested: Early
 export type PartySplit = { dem: number; rep: number; other: number };
 /** `cast` is mail ballots returned plus in-person early votes; `requested` counts mail ballots sent or asked for. */
 export type Counts = { requested: number; returned: number; inperson: number; cast: number; party: PartySplit | null };
-export type EarlyState = Counts & { state: string; base2024: number | null };
+/** Where a state's party split comes from: civicAPI's registration figures, Decision Desk HQ's counts, or nowhere. */
+export type PartySource = "registration" | "ddhq" | null;
+export type EarlyState = Counts & { state: string; base2024: number | null; partyFrom: PartySource };
 export type EarlyCounty = Counts & { name: string; fips: string | null; base2024: number | null };
 export type Breakdown = { label: string; votes: number }[];
 export type Demographics = Partial<Record<"age" | "gender" | "race", Breakdown>>;
@@ -35,6 +38,7 @@ export type EarlyStateDetail = Counts & {
   asOf: string | null;
   state: string;
   base2024: number | null;
+  partyFrom: PartySource;
   counties: EarlyCounty[];
   /** The state reports by town (New England), so its places aren't counties and the map can't show them. */
   byTown: boolean;
@@ -113,7 +117,10 @@ const latest = (feeds: Feeds) => [feeds.returned, feeds.inperson, feeds.requeste
 /** Every state civicAPI has early votes for, most ballots first. */
 export function nationOf(feeds: Feeds): Omit<EarlyNation, "fetchedAt"> {
   const codes = new Set([feeds.returned, feeds.inperson, feeds.requested].flatMap((f) => Object.keys(f.regions)).filter((s) => s in STATE_NAMES));
-  const list = [...codes].map((state) => ({ state, ...countsOf(feeds, (f) => f.regions[state]), base2024: stateBase[state] ?? null }));
+  const list = [...codes].map((state) => {
+    const counts = countsOf(feeds, (f) => f.regions[state]);
+    return { state, ...counts, base2024: stateBase[state] ?? null, partyFrom: counts.party ? ("registration" as const) : null };
+  });
   return { asOf: latest(feeds), states: list.sort((a, b) => b.cast - a.cast || b.requested - a.requested) };
 }
 
@@ -217,3 +224,17 @@ export function priorOf(date: string, returned: EarlyFeed | null, inperson: Earl
 }
 
 export const isState = (code: string) => /^[A-Z]{2}$/.test(code) && code in STATE_NAMES && code in stateFips;
+
+/** The two-digit FIPS code of a state, by postal code. */
+export const fipsOfState = (state: string): string | null => stateFips[state] ?? null;
+
+/** Fills in each state's party split from Decision Desk HQ where civicAPI has none; a state civicAPI covers keeps its own. */
+export function fillNationParty(states: readonly EarlyState[], ddhq: Readonly<Record<string, DdhqEarly | null>>): EarlyState[] {
+  return states.map((s) => (s.party || !ddhq[s.state] ? s : { ...s, party: ddhq[s.state]!.state, partyFrom: "ddhq" }));
+}
+
+/** The same for one state and its counties. */
+export function fillStateParty(detail: EarlyStateDetail, ddhq: DdhqEarly | null): EarlyStateDetail {
+  if (detail.party || !ddhq) return detail;
+  return { ...detail, party: ddhq.state, partyFrom: "ddhq", counties: detail.counties.map((c) => ({ ...c, party: (c.fips && ddhq.counties[c.fips]) || null })) };
+}

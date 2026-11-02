@@ -5,7 +5,25 @@ import { getCached, putCached } from "../cache";
 import { db } from "../env";
 import { civic, CivicNotFound, pooled } from "./civic";
 import names from "./countyNames.json";
-import { breakdown, countiesOf, earlyFeed, leanOf, nationOf, priorDate, priorOf, stateTotals, type Demographics, type EarlyFeed, type EarlyNation, type EarlyStateDetail, type Feeds } from "./earlyVote";
+import { ddhqEarly } from "./ddhqEarly";
+import {
+  breakdown,
+  countiesOf,
+  earlyFeed,
+  fillNationParty,
+  fillStateParty,
+  fipsOfState,
+  leanOf,
+  nationOf,
+  priorDate,
+  priorOf,
+  stateTotals,
+  type Demographics,
+  type EarlyFeed,
+  type EarlyNation,
+  type EarlyStateDetail,
+  type Feeds,
+} from "./earlyVote";
 import { createServe } from "./staleServe";
 
 /** How long a fetched answer is reused before asking civicAPI again. */
@@ -33,7 +51,9 @@ export class EarlyVoteMissing extends Error {}
  * first visitors wait on civicAPI. With a copy in hand, a visitor waits at most 6 seconds for a refresh.
  */
 /** The saved copies' key prefix; changed whenever an answer's shape does, so older copies aren't served as current. */
-const KEY = "earlyvote2";
+const KEY = "earlyvote3";
+/** Decision Desk HQ requests at once, filling in the party for states civicAPI has none for. */
+const DDHQ_LANES = 4;
 
 const cached = createServe({
   now: Date.now,
@@ -62,12 +82,23 @@ async function feedsFor(state: string, deadline: number): Promise<{ feeds: Feeds
   return { feeds: { returned: returned ?? empty, inperson: inperson ?? empty, requested: requested ?? empty }, found: !!(returned || inperson || requested) };
 }
 
+/** Decision Desk HQ's party counts for a state, or null; a failure leaves the state without a party split. */
+function ddhqFor(state: string, deadline: number) {
+  const fips = fipsOfState(state);
+  return fips ? ddhqEarly(state, fips, deadline) : Promise.resolve(null);
+}
+
 /** Every reporting state's counts. */
 export function earlyNation(): Promise<EarlyNation> {
   return cached("US", async () => {
-    const { feeds, found } = await feedsFor("US", Date.now() + BUDGET_MS);
+    const deadline = Date.now() + BUDGET_MS;
+    const { feeds, found } = await feedsFor("US", deadline);
     if (!found) throw new EarlyVoteMissing("civicAPI has no early vote data yet.");
-    return { fetchedAt: Date.now(), ...nationOf(feeds) };
+    const nation = nationOf(feeds);
+    const missing = nation.states.filter((s) => !s.party).map((s) => s.state);
+    const answers = await pooled(missing, DDHQ_LANES, (state) => ddhqFor(state, deadline));
+    const ddhq = Object.fromEntries(missing.map((state, i) => [state, answers[i]]));
+    return { fetchedAt: Date.now(), ...nation, states: fillNationParty(nation.states, ddhq) };
   });
 }
 
@@ -104,15 +135,17 @@ export function earlyState(state: string): Promise<EarlyStateDetail> {
     if (!found) throw new EarlyVoteMissing("No early vote numbers for this state yet.");
     const totals = stateTotals(state, feeds);
     const date = totals.asOf ? priorDate(totals.asOf) : null;
-    const [prior, demo] = await Promise.all([
+    const [prior, demo, ddhq] = await Promise.all([
       date
         ? Promise.all([feed(`historical/2024/${state}/returned?date=${date}`, deadline), feed(`historical/2024/${state}/inperson?date=${date}`, deadline)])
             .then(([r, i]) => priorOf(date, r, i))
             .catch(() => null)
         : null,
       demographicsOf(state, deadline),
+      totals.party ? null : ddhqFor(state, deadline),
     ]);
     const { counties, byTown } = countiesOf(feeds, (names as Record<string, Record<string, string>>)[state] ?? {});
-    return { fetchedAt: Date.now(), state, ...totals, counties, byTown, prior, demographics: demo, lean: leanOf(state, counties) };
+    const detail: EarlyStateDetail = { fetchedAt: Date.now(), state, ...totals, partyFrom: totals.party ? "registration" : null, counties, byTown, prior, demographics: demo, lean: leanOf(state, counties) };
+    return fillStateParty(detail, ddhq);
   });
 }

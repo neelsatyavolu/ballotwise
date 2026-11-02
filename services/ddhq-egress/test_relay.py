@@ -71,6 +71,36 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await relay.relay(client, "GET", path, COOKIE)).status, 400)
                 self.assertEqual(client.calls, [])
 
+    async def test_public_early_vote_goes_without_a_session(self):
+        path = "/api/abev/election?state=GA&election_date=2026-11-03&is_primary=false&is_ballot_prop=false"
+        client = Client(body=b"[]")
+        self.assertEqual((await relay.relay(client, "GET", path, "")).status, 200)
+        sent = client.calls[0][1]["headers"]
+        self.assertEqual(client.calls[0][0], relay.ORIGIN + path)
+        self.assertNotIn("cookie", sent)
+        self.assertNotIn("authorization", sent)
+        client = Client()
+        self.assertEqual((await relay.relay(client, "GET", path, COOKIE)).status, 400)
+        self.assertEqual(client.calls, [])
+
+    async def test_public_early_vote_query_is_fixed(self):
+        base = "/api/abev/election?"
+        for query in [
+            "state=GA&election_date=2026-11-03&is_primary=false",
+            "state=ga&election_date=2026-11-03&is_primary=false&is_ballot_prop=false",
+            "state=GA&election_date=tomorrow&is_primary=false&is_ballot_prop=false",
+            "state=GA&election_date=2026-11-03&is_primary=true&is_ballot_prop=false",
+            "state=GA&election_date=2026-11-03&is_primary=false&url=https://evil.test",
+            "state=GA&state=PA&election_date=2026-11-03&is_primary=false",
+        ]:
+            with self.subTest(query=query):
+                client = Client()
+                self.assertEqual((await relay.relay(client, "GET", base + query, "")).status, 400)
+                self.assertEqual(client.calls, [])
+        client = Client()
+        self.assertEqual((await relay.relay(client, "GET", "/api/abev/timeseries?state=GA&election_date=2026-11-03&is_primary=false&is_ballot_prop=false", "")).status, 400)
+        self.assertEqual(client.calls, [])
+
     async def test_requires_one_session_cookie_and_get(self):
         for cookie in ["", "__client=client-token", COOKIE + "; other=x", COOKIE + ", __session=other", COOKIE + "\n", "__session=", "__session=" + "x" * 8192]:
             with self.subTest(cookie_shape=cookie[:10]):
