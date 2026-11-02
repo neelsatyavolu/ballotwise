@@ -20,7 +20,7 @@ import { OfficeSkeleton } from "./Skeleton";
 import { ZoomMap, type Fill } from "./ZoomMap";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { ForecastTip, WatchNote } from "./ForecastTip";
-import { VotesLeftPanel, VotesLeftTip } from "./VotesLeft";
+import { VotesLeftCard, VotesLeftTip } from "./VotesLeft";
 
 const TITLE: Record<Office, string> = { senate: "Senate", house: "House", governor: "Governors", measure: "Ballot measures" };
 const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -157,6 +157,8 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const shown = inState.find((r) => r.id === shownId) ?? null;
   // The race before a Votes Pro (DDHQ) overlay, which clears its polls and market signal: whether those panels are coming.
   const publicSignal = (catalogData?.races.find((r) => r.id === shownId) ?? shown)?.signal;
+  // Once the shown race is counting, votes left takes the place of its polls and markets.
+  const counting = !!shown && shown.total > 0;
   const detail = useLive<{ race: RaceDetail }>(shownId ? `/api/midterms/race/${shownId}` : null);
   const districtFills = useMemo(() => {
     if (office !== "house") return undefined;
@@ -233,16 +235,16 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                       <p className="small">
                         <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>
                       </p>
-                      {detail.data && <VotesLeftPanel race={detail.data.race} />}
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
-                      {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} pollsExpected={!!publicSignal?.polls} />}
+                      {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} pollsExpected={!!publicSignal?.polls} polls={!counting} />}
+                      {counting && detail.data && <VotesLeftCard race={detail.data.race} />}
                     </>
                   )}
                   {inState.length > 1 && (
                     <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} selectedId={shownId} />
                   )}
                   {/* The market viewer comes last, below everything else for the state. */}
-                  {shown && shown.office !== "measure" && <MarketPanel key={shown.id} raceId={shown.id} expected={!!publicSignal?.market} />}
+                  {shown && shown.office !== "measure" && !counting && <MarketPanel key={shown.id} raceId={shown.id} expected={!!publicSignal?.market} />}
                 </>
               )}
             </aside>

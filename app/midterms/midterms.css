@@ -1606,3 +1606,5 @@ body:has(> .mt-companion) { overflow: hidden; }
 .mt-callpop-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 14px; margin: 0; justify-self: end; padding: 6px 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
 @media (max-width: 600px) { .mt-callpops { right: 16px; bottom: 16px; } }
 @media (prefers-reduced-motion: reduce) { .mt-callpop { animation: none; } }
+/* A state panel's votes-left card, in place of polls and markets once its race is counting. */
+.mt-votes-left-card p:not(.mt-mk-q, .mt-mk-lead) { margin: 0; }

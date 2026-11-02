@@ -3,7 +3,7 @@
 
 import type { RaceDetail } from "@/lib/midterms/races";
 import { votesLeft, type Share, type VotesLeft as Estimate } from "@/lib/midterms/votesLeft";
-import { fmt } from "@/lib/midterms/view";
+import { colorOf, fmt } from "@/lib/midterms/view";
 import { lastName } from "./CandidateTable";
 import { useLive } from "./hooks";
 
@@ -56,6 +56,56 @@ export function VotesLeftPanel({ race }: { race: RaceDetail }) {
         {est.unknown > 0 && ` ${est.unknown} ${est.unknown === 1 ? "county has" : "counties have"} nothing counted and no 2024 vote to go on, so ${est.unknown === 1 ? "it isn't" : "they aren't"} included.`}
       </p>
     </div>
+  );
+}
+
+/**
+ * The estimate as a card for a state's panel once its race is counting, where it takes the place of polls and
+ * markets: votes left, how the top two would split them, what that means, and where they are.
+ */
+export function VotesLeftCard({ race }: { race: RaceDetail }) {
+  const est = votesLeft(race);
+  if (!est) return null;
+  const top = [est.leader, est.runnerUp];
+  const both = est.leader.votes + est.runnerUp.votes;
+  const says = outlook(race, est);
+  return (
+    <section className="mt-mk" aria-label="Votes left">
+      <h3 className="mt-mk-head">Votes left</h3>
+      <div className="mt-mk-card mt-votes-left-card">
+        <p className="mt-mk-q">Estimated votes still to count</p>
+        {est.left === 0 ? (
+          <p className="mt-mk-lead">Little or nothing left</p>
+        ) : (
+          <>
+            <p className="mt-mk-lead">About {approx(est.left)}</p>
+            {both > 0 && (
+              <div className="mt-fc-split" role="img" aria-label={top.map((s) => `about ${approx(s.votes)} for ${s.name}`).join(", ")}>
+                {top.map((s) => (
+                  <span key={s.name} style={{ width: `${(s.votes / both) * 100}%`, background: colorOf(s) }} />
+                ))}
+              </div>
+            )}
+            <ul className="mt-mk-legend">
+              {top.map((s) => (
+                <li key={s.name}>
+                  <svg width="10" height="10" aria-hidden>
+                    <rect width="10" height="10" rx="2" style={{ fill: colorOf(s) }} />
+                  </svg>
+                  {short(s)} <span>~{approx(s.votes)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="small">{says.charAt(0).toUpperCase() + says.slice(1)}.</p>
+            {est.places.length > 0 && <p className="muted small">Most are in {est.places.map((p) => placeLabel(est, p)).join(", ")}.</p>}
+          </>
+        )}
+        <p className="muted small">
+          {CAVEAT}
+          {est.unknown > 0 && ` ${est.unknown} ${est.unknown === 1 ? "county has" : "counties have"} nothing counted and no 2024 vote to go on, so ${est.unknown === 1 ? "it isn't" : "they aren't"} included.`}
+        </p>
+      </div>
+    </section>
   );
 }
 

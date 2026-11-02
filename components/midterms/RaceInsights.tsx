@@ -246,9 +246,9 @@ function DdhqCard({ race }: { race: DdhqRace }) {
 /**
  * A race's forecast and polls, like DDHQ's race page; each panel is left out when there's nothing to show.
  * `pollsExpected` shows the Polls placeholder while they load. Pass it from the public race when a DDHQ overlay
- * has cleared this race's signal, which would otherwise hide the placeholder.
+ * has cleared this race's signal, which would otherwise hide the placeholder. `polls={false}` leaves Polls out.
  */
-export function RaceInsights({ race, ddhq, pollsExpected = !!race.signal?.polls }: { race: RaceSummary; ddhq?: DdhqRace | null; pollsExpected?: boolean }) {
+export function RaceInsights({ race, ddhq, pollsExpected = !!race.signal?.polls, polls = true }: { race: RaceSummary; ddhq?: DdhqRace | null; pollsExpected?: boolean; polls?: boolean }) {
   const { data, error } = useLive<Insights>(`/api/midterms/race/${race.id}/forecast`);
   const loading = !data && !error;
   const forecast = race.signal?.forecast ?? null;
@@ -268,8 +268,8 @@ export function RaceInsights({ race, ddhq, pollsExpected = !!race.signal?.polls 
           </section>
         )
       )}
-      {loading && pollsExpected && <PollsSkeleton />}
-      {data?.polls && data.polls.rows.length > 0 && (
+      {polls && loading && pollsExpected && <PollsSkeleton />}
+      {polls && data?.polls && data.polls.rows.length > 0 && (
         <section className="mt-mk" aria-label="Polls">
           <h3 className="mt-mk-head" id="polls">
             Polls
