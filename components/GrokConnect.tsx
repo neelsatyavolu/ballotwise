@@ -11,9 +11,9 @@ const LABEL: Record<Provider, string> = { grok: "Grok", codex: "ChatGPT" };
  * Grok's and ChatGPT's sign-ins show a code (or land on a localhost page) instead of returning to this site,
  * so the person pastes what they were shown. Grok is the default and recommended choice.
  */
-export function GrokConnect() {
+export function GrokConnect({ initial }: { initial?: Provider } = {}) {
   const { grok, provider: connected, refresh } = useAccount();
-  const [provider, setProvider] = useState<Provider>(connected ?? "grok");
+  const [provider, setProvider] = useState<Provider>(initial ?? connected ?? "grok");
   const [opened, setOpened] = useState(false);
   const [callback, setCallback] = useState("");
   const [error, setError] = useState<string | null>(null);
