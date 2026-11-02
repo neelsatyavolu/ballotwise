@@ -88,8 +88,12 @@ body:has(.mt-wall) .mt-callpops { display: none; }
   .mt-wall-tour { grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr); }
 }
 
-/* The toured race's card, and under it the votes-left estimate while it counts. */
+/* The toured race's card, and the votes-left estimate while it counts: beside the card under the map, so the map
+   keeps its height; under it beside the map on an ultrawide, which has height to spare. */
 .mt-wall-spot { display: grid; gap: 10px; }
+@media not (min-aspect-ratio: 2 / 1) {
+  .mt-wall-spot:has(.mt-votes-left-card) { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
 /* Tighter on a wall, with the count beside its label, so the map above keeps its height. */
 .mt-wall-spot .mt-votes-left-card { grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 12px; row-gap: 4px; padding: 10px 14px; }
 .mt-wall-spot .mt-votes-left-card > * { grid-column: 1 / -1; }
