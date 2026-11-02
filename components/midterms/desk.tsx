@@ -3,6 +3,7 @@
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { useAccount } from "@/components/AccountProvider";
 import { ApiError } from "@/lib/client";
+import { simAt } from "@/lib/midterms/clock";
 import { createDeskStore, deskOwner, EMPTY_DESK, type DeskData } from "@/lib/ddhq/store";
 import type { DdhqSeat } from "@/lib/ddhq/votes";
 
@@ -51,12 +52,20 @@ export function useDeskSeats(races: readonly SeatSource[]) {
   }, []);
 }
 
-/** Only the active account can read its private snapshot, including before effects run. */
+const noSubscribe = () => () => {};
+const rehearsing = () => simAt() !== null;
+
+/**
+ * Only the active account can read its private snapshot, including before effects run. A mock night or `?sim=`
+ * preview turns DDHQ off: its real counts (none before Nov 3) would cover the made-up ones. The server never runs
+ * one, so the first render matches the server's and the switch happens right after.
+ */
 export function useDeskData(): DeskData & { enabled: boolean; owner: string | null } {
   const account = useAccount();
   const { refresh } = account;
   const serverOwner = useContext(ServerOwner);
-  const owner = deskOwner(serverOwner, account);
+  const rehearsal = useSyncExternalStore(noSubscribe, rehearsing, () => false);
+  const owner = rehearsal ? null : deskOwner(serverOwner, account);
   const snapshot = useSyncExternalStore(store.subscribe, () => store.getForOwner(owner), () => EMPTY_DESK);
   useEffect(() => {
     if (owner) store.connect(owner, refresh);
