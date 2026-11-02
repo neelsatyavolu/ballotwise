@@ -4,12 +4,12 @@ import type { Office, Rating, RaceSummary } from "./races";
 import { partyOf } from "./view";
 
 /**
- * Pop-ups are for the competitive Senate and House races: those rated likely, lean or toss-up. Safe seats have no
- * rating, and governors and ballot measures don't pop up. A race's rating freezes once it starts counting (see
- * refreshOdds), so by the time it's called this is still its pre-election rating.
+ * Pop-ups are for the closest Senate and House races: those rated lean or toss-up. Likely and safe seats, governors
+ * and ballot measures don't pop up. A race's rating freezes once it starts counting (see refreshOdds), so by the time
+ * it's called this is still its pre-election rating.
  */
 export function popsUp(office: Office, rating: Rating | null | undefined): boolean {
-  return (office === "senate" || office === "house") && !!rating;
+  return (office === "senate" || office === "house") && (rating === "tossup" || !!rating?.startsWith("lean-"));
 }
 
 /** One call as the pop-up shows it: "Flip" over "Georgia Senate", then "Jon Ossoff (D) wins, taking the seat…". */

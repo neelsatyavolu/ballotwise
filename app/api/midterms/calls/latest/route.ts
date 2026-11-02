@@ -14,7 +14,7 @@ const LATEST = 20;
 const SCAN = 400;
 
 /**
- * The newest race calls, changed calls and withdrawals in competitive Senate and House races (see popsUp), each with
+ * The newest race calls, changed calls and withdrawals in lean and toss-up Senate and House races (see popsUp), each with
  * the words the phone alerts use, for the pop-up every tracker page shows when one is called. Small, so a page can ask every few seconds, even in a hidden tab.
  */
 export async function GET() {

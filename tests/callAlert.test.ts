@@ -29,13 +29,15 @@ describe("callAlert", () => {
 });
 
 describe("popsUp", () => {
-  it("pops up calls in Senate and House races rated likely, lean or toss-up", () => {
+  it("pops up calls in Senate and House races rated lean or toss-up", () => {
     expect(popsUp("senate", "tossup")).toBe(true);
     expect(popsUp("house", "lean-r")).toBe(true);
-    expect(popsUp("house", "likely-d")).toBe(true);
+    expect(popsUp("senate", "lean-i")).toBe(true);
   });
 
-  it("leaves out safe seats, governors and ballot measures", () => {
+  it("leaves out likely and safe seats, governors and ballot measures", () => {
+    expect(popsUp("house", "likely-d")).toBe(false);
+    expect(popsUp("senate", "likely-r")).toBe(false);
     expect(popsUp("senate", null)).toBe(false);
     expect(popsUp("house", undefined)).toBe(false);
     expect(popsUp("governor", "tossup")).toBe(false);

@@ -23,7 +23,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 type Shown = CallAlert & { until: number };
 
 /**
- * Every tracker page, whichever tab it's on, pops up a note in the corner when a competitive Senate or House race (see
+ * Every tracker page, whichever tab it's on, pops up a note in the corner when a lean or toss-up Senate or House race (see
  * popsUp) is called, its call changes or the call is withdrawn. Calls already made when the page opens don't pop. In a
  * hidden browser tab it keeps checking only when browser alerts are on (the bell in Latest calls, or the button here),
  * and sends a system notification instead.
