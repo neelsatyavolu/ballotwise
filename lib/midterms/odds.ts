@@ -1,5 +1,5 @@
 import type { Db } from "../auth/accounts";
-import { getCached, putCached } from "../cache";
+import { forgetShared, getCached, getCachedShared, putCached } from "../cache";
 import { chamberViews, forecastRace, leanBucket, matchup, PARAMS, ratingOf, TUNING, type Chambers, type Forecast, type Inputs, type Matchup, type Side, type Tuning } from "./forecast";
 import divisions from "./divisions.json";
 import fec2026 from "./fec2026.json";
@@ -509,6 +509,7 @@ async function rebuild(db: Db, races: readonly RaceSummary[], now: number): Prom
     .prepare("INSERT INTO research_cache (key, data, created_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, created_at = excluded.created_at WHERE excluded.created_at >= research_cache.created_at")
     .bind(KEY, JSON.stringify(snapshot), now)
     .run();
+  forgetShared(KEY);
   // Only a fresh poll fetch carries the per-race lists and the generic ballot's trend.
   const fresh = polls && "detail" in polls ? (polls as { at: number } & PollsResult) : null;
   if (fresh) await putCached(db, POLLS_KEY, fresh.detail, now);
@@ -626,7 +627,7 @@ export function evidenceAt(snapshot: OddsSnapshot | null): number | null {
 }
 
 export function readOdds(db: Db, now: number): Promise<OddsSnapshot | null> {
-  return getCached<OddsSnapshot>(db, KEY, now);
+  return getCachedShared<OddsSnapshot>(db, KEY, now);
 }
 
 /** The snapshot's ratings in the form the race catalog attaches to races. */

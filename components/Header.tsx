@@ -34,7 +34,7 @@ export function Header() {
   return (
     <header className="site-header">
       <div className="wrap">
-        <Link href="/" className="brand" aria-label="Ballotwise home">
+        <Link href="/" className="brand" aria-label="Ballotwise home" prefetch={false}>
           <span className="brand-mark" aria-hidden />
           Ballotwise
         </Link>
@@ -42,7 +42,7 @@ export function Header() {
         <div id="header-slot" className="header-slot" />
         <nav className="nav" aria-label="Main">
           <Link href="/midterms" className="section-link">Midterms</Link>
-          <Link href="/method" className="wide-only section-link">How it works</Link>
+          <Link href="/method" className="wide-only section-link" prefetch={false}>How it works</Link>
           {loading ? null : user ? (
             <>
             <Link href="/ballot">My ballot</Link>
@@ -52,8 +52,8 @@ export function Header() {
             </>
           ) : (
             <>
-              <Link href="/signin">Sign in</Link>
-              <Link href="/signup" className="btn">
+              <Link href="/signin" prefetch={false}>Sign in</Link>
+              <Link href="/signup" className="btn" prefetch={false}>
                 Create account
               </Link>
             </>

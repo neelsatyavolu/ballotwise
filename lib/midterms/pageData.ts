@@ -5,7 +5,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { cache } from "react";
 import { headers } from "next/headers";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
-import { getCached } from "@/lib/cache";
+import { getCachedShared } from "@/lib/cache";
 import { db } from "@/lib/env";
 import { bareRaces, otherRace, overview, race } from "@/lib/midterms/catalog";
 import { isDocumentRequest } from "@/lib/midterms/documentRequest";
@@ -37,7 +37,7 @@ async function stamp(work: Promise<{ fetchedAt: number }>): Promise<LiveSeed | n
 
 async function forecastSeed(now: number): Promise<LiveSeed | null> {
   try {
-    const [odds, history] = await Promise.all([readOdds(db(), now), getCached<ChamberHistory>(db(), CHAMBER_HISTORY_KEY, now)]);
+    const [odds, history] = await Promise.all([readOdds(db(), now), getCachedShared<ChamberHistory>(db(), CHAMBER_HISTORY_KEY, now)]);
     const data: ForecastOverview = { updatedAt: odds?.at ?? null, chambers: odds?.chambers && "governor" in odds.chambers ? odds.chambers : null, history };
     return { data, etag: null };
   } catch (err) {

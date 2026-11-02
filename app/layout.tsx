@@ -33,10 +33,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <div className="wrap">
               <span>Ballotwise is nonpartisan and not affiliated with any campaign, party, or election office.</span>
               <span className="footer-links">
-                <Link href="/method">How it works</Link>
-                <Link href="/terms">Terms</Link>
-                <Link href="/privacy">Privacy</Link>
-                <Link href="/account">Account</Link>
+                {/* Not prefetched: every page view would otherwise render each of these on the server. */}
+                <Link href="/method" prefetch={false}>How it works</Link>
+                <Link href="/terms" prefetch={false}>Terms</Link>
+                <Link href="/privacy" prefetch={false}>Privacy</Link>
+                <Link href="/account" prefetch={false}>Account</Link>
               </span>
             </div>
           </footer>

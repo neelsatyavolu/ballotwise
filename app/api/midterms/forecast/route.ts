@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCached } from "@/lib/cache";
+import { getCachedShared } from "@/lib/cache";
 import { db } from "@/lib/env";
 import type { Chambers, RatingCounts } from "@/lib/midterms/forecast";
 import { CHAMBER_HISTORY_KEY, readOdds, type ChamberHistory } from "@/lib/midterms/odds";
@@ -19,7 +19,7 @@ export type ForecastOverview = {
 export async function GET() {
   try {
     const now = Date.now();
-    const [odds, history] = await Promise.all([readOdds(db(), now), getCached<ChamberHistory>(db(), CHAMBER_HISTORY_KEY, now)]);
+    const [odds, history] = await Promise.all([readOdds(db(), now), getCachedShared<ChamberHistory>(db(), CHAMBER_HISTORY_KEY, now)]);
     const body: ForecastOverview = { updatedAt: odds?.at ?? null, chambers: odds?.chambers && "governor" in odds.chambers ? odds.chambers : null, history };
     return NextResponse.json(body, { headers: { "cache-control": "public, max-age=60" } });
   } catch (err) {
