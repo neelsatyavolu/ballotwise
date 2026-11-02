@@ -5,7 +5,7 @@ import { holderOf } from "./holders";
 import { ELECTION_DAY_START, stateCloses, stateFinal } from "./polls";
 import { balance, type CountyResult, type RaceDetail, type RaceSummary } from "./races";
 import type { Overview } from "./view";
-import { MIDTERM_TURNOUT } from "./votesLeft";
+import { MIDTERM_TURNOUT, turnoutPrior } from "./votesLeft";
 import baseline from "./baseline2024.json";
 import states from "./states.json";
 
@@ -68,7 +68,7 @@ const DISTRICT_2024 = 155_500_000 / 435;
  */
 function turnoutOf(r: RaceSummary): number {
   const base = r.office === "house" ? DISTRICT_2024 : (pres2024[r.state] ?? 2_600_000 / MIDTERM_TURNOUT);
-  return base * MIDTERM_TURNOUT * (0.85 + rand(r.id, 6) * 0.3);
+  return base * turnoutPrior(r) * (0.85 + rand(r.id, 6) * 0.3);
 }
 
 /**

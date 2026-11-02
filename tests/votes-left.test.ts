@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CountyResult, RaceDetail } from "../lib/midterms/races";
-import { MIDTERM_TURNOUT, votesLeft } from "../lib/midterms/votesLeft";
+import { CONTESTED_TURNOUT, MIDTERM_TURNOUT, votesLeft } from "../lib/midterms/votesLeft";
 
 const county = (name: string, d: number, r: number, reporting: number, pres?: [number, number, number]): CountyResult => ({
   fips: null,
@@ -60,11 +60,18 @@ describe("votesLeft", () => {
     expect(est.left).toBe(Math.round((800 * (5000 + k * MIDTERM_TURNOUT)) / (10_000 + k)));
   });
 
+  it("starts a rated race at the higher turnout of a contested state", () => {
+    const quiet = [county("Done", 50, 50, 100), county("Quiet", 0, 0, 0, [400, 400, 1000])];
+    expect(votesLeft(race(quiet))!.left).toBe(Math.round(1000 * MIDTERM_TURNOUT));
+    expect(votesLeft(race(quiet, { rating: "tossup" }))!.left).toBe(Math.round(1000 * CONTESTED_TURNOUT));
+  });
+
   it("doesn't scale up a county that counted its mail before its precincts", () => {
-    // 600 counted with 2% of precincts in: scaled up that's 30,000, against 750 expected from 2024.
+    // 600 counted with 2% of precincts in: scaled up that's 30,000, against about 1000 × turnout expected from 2024.
     const est = votesLeft(race([county("Mail first", 300, 300, 2, [500, 500, 1000]), county("Done", 50, 50, 100)]))!;
-    expect(est.left).toBeGreaterThan(140);
-    expect(est.left).toBeLessThan(175);
+    const expected = 1000 * MIDTERM_TURNOUT - 600;
+    expect(est.left).toBeGreaterThan(expected - 10);
+    expect(est.left).toBeLessThan(expected + 25);
   });
 
   it("leaves out House counties with nothing counted, since a district covers only parts of them", () => {

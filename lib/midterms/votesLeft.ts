@@ -22,10 +22,19 @@ const PLACES = 3;
 const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
 
 /**
- * A midterm's vote as a share of the presidential vote two years before: 2022 cast about 0.68 of 2020's, 2018 about
- * 0.83 of 2016's. The estimate starts here and moves toward what the counted counties show.
+ * This midterm's vote as a share of 2024's presidential vote, where the estimate starts before moving toward what the
+ * counted counties show. 2022 cast about 0.68 of 2020's presidential vote and 2018 about 0.83 of 2016's. 2026 runs
+ * high: 57 million early ballots by Nov 2, a quarter more than 2022's whole early vote, and Kalshi's House turnout
+ * market centered near 117 million votes, which puts the nation near 0.77.
  */
-export const MIDTERM_TURNOUT = 0.75;
+export const MIDTERM_TURNOUT = 0.77;
+/**
+ * The same for a state with a competitive race: in 2022 those ran about 0.07 above the nation (Georgia, Pennsylvania,
+ * Wisconsin and Arizona cast 0.76 to 0.81 of their 2020 vote, against 0.68 nationally).
+ */
+export const CONTESTED_TURNOUT = 0.83;
+/** Where a race's turnout starts: higher for one rated likely, lean or toss-up. */
+export const turnoutPrior = (race: Pick<RaceDetail, "rating">) => (race.rating ? CONTESTED_TURNOUT : MIDTERM_TURNOUT);
 /** How much the starting turnout weighs, as a share of the state's 2024 vote: counted counties outweigh it past this. */
 const PRIOR_WEIGHT = 0.05;
 /**
@@ -42,11 +51,11 @@ function scaledOf(c: CountyResult): number | null {
 }
 
 /**
- * This year's vote against 2024's: MIDTERM_TURNOUT, moved toward what the counted counties show as more of the state
- * counts. Each county's scaled-up count weighs by how far it's counted (see TRUST): a county that counts its mail
- * first can show a big count a few precincts in, and scaling that up would put its turnout many times too high.
+ * This year's vote against 2024's: `prior` (see turnoutPrior), moved toward what the counted counties show as more of
+ * the state counts. Each county's scaled-up count weighs by how far it's counted (see TRUST): a county that counts its
+ * mail first can show a big count a few precincts in, and scaling that up would put its turnout many times too high.
  */
-function turnoutOf(counties: readonly CountyResult[]): number {
+function turnoutOf(counties: readonly CountyResult[], prior: number): number {
   const k = sum(counties.map((c) => c.pres2024?.total ?? 0)) * PRIOR_WEIGHT;
   const used = counties.flatMap((c) => {
     const scaled = scaledOf(c);
@@ -54,7 +63,7 @@ function turnoutOf(counties: readonly CountyResult[]): number {
   });
   const counted = sum(used.map((u) => u.w * u.scaled));
   const pres = sum(used.map((u) => u.w * u.pres));
-  return k + pres > 0 ? (counted + k * MIDTERM_TURNOUT) / (pres + k) : MIDTERM_TURNOUT;
+  return k + pres > 0 ? (counted + k * prior) / (pres + k) : prior;
 }
 
 /**
@@ -125,7 +134,7 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
   const overall: [number, number] = [a.votes / race.total, b.votes / race.total];
   // One region, or none, is the race itself.
   const counties: readonly CountyResult[] = race.counties.length > 1 ? race.counties : [{ fips: null, name: race.title, reporting: race.reporting, total: race.total, candidates: race.candidates, ...(race.reportingUnknown && { reportingUnknown: true as const }), baseline2024: null, pres2024: null }];
-  const turnout = turnoutOf(counties);
+  const turnout = turnoutOf(counties, turnoutPrior(race));
   const swing = swingOf(counties);
   const estimated = counties.map((c) => ({ c, left: leftIn(c, turnout, statewide) }));
   const rows = estimated.flatMap(({ c, left }) => {
