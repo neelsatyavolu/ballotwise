@@ -55,7 +55,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
    * small city district can be found from across a room.
    */
   nationDistrict?: string | null;
-  /** A control laid over the map's bottom-left corner. */
+  /** A control laid over the map's bottom-right corner. */
   corner?: ReactNode;
 }) {
   const [nation, setNation] = useState<Nation | null | "error">(null);

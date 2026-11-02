@@ -265,9 +265,11 @@
 .mt-zoom-county { fill: color-mix(in srgb, var(--rule) 70%, var(--sheet)); stroke: var(--sheet); stroke-width: 0.8; transition: fill 0.4s; cursor: pointer; }
 .mt-zoom-back { position: absolute; top: 10px; left: 10px; z-index: 2; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 4px 12px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--ink); }
 .mt-zoom-back:hover { border-color: var(--ink); }
-/* A control in the map's bottom-left corner (the Senate and House maps' 2024 switch). */
-.mt-zoom-corner { position: absolute; left: 10px; bottom: 10px; z-index: 2; }
-.mt-year-toggle button { padding: 4px 10px; font-size: 12px; }
+/* A control in the map's bottom-right corner (the Senate and House maps' 2024 switch): open water past Florida on the
+   national map, where the bottom-left would cover Alaska. Stacked to stay small. */
+.mt-zoom-corner { position: absolute; right: 4px; bottom: 4px; z-index: 2; }
+.mt .mt-year-toggle { flex-direction: column; }
+.mt .mt-year-toggle.mt-seg button { padding: 3px 7px; }
 
 @media (max-width: 1000px) {
   .mt-office { grid-template-columns: 1fr; }

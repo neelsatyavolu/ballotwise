@@ -92,7 +92,7 @@ function Year2024Toggle({ on, onChange }: { on: boolean; onChange: (on: boolean)
   return (
     <div className="mt-seg mt-year-toggle" role="group" aria-label="Map year">
       <button type="button" aria-pressed={!on} onClick={() => onChange(false)}>2026</button>
-      <button type="button" aria-pressed={on} onClick={() => onChange(true)} title="Each state and district shaded by the 2024 presidential margin">2024 president</button>
+      <button type="button" aria-pressed={on} onClick={() => onChange(true)} title="The 2024 presidential result: each state and district shaded by Harris's or Trump's margin" aria-label="2024 president">2024</button>
     </div>
   );
 }
