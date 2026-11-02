@@ -12,9 +12,13 @@ export const UNAVAILABLE = "Live results are unavailable right now. They'll come
 /** Ratings older than this are refreshed in the background on the next page load (the cron job normally keeps them fresh). */
 const ODDS_STALE_MS = 10 * 60 * 1000;
 
-/** Every race with no ratings attached, for jobs that compute ratings. */
-export async function bareRaces(now: number, db?: Db): Promise<RaceSummary[]> {
-  return (await fetchCatalog(now, [], db)).races;
+/**
+ * Every race with no ratings attached, for jobs that compute ratings and for routes that only look a race up by id.
+ * With `background`, a recent catalog is served at once and refreshed after the response, as the overview does,
+ * instead of waiting on a full civicAPI fetch (17 seconds or more on a busy night).
+ */
+export async function bareRaces(now: number, db?: Db, background?: (work: Promise<unknown>) => void): Promise<RaceSummary[]> {
+  return (await fetchCatalog(now, [], db, background, !!background)).races;
 }
 
 /**

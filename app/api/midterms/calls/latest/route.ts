@@ -1,3 +1,4 @@
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/env";
 import { listCallEvents } from "@/lib/midterms/calls";
@@ -19,7 +20,7 @@ const SCAN = 400;
 export async function GET() {
   try {
     const now = Date.now();
-    const [events, races, odds] = await Promise.all([listCallEvents(db(), { limit: SCAN }), bareRaces(now, db()), readOdds(db(), now)]);
+    const [events, races, odds] = await Promise.all([listCallEvents(db(), { limit: SCAN }), bareRaces(now, db(), (work) => getCloudflareContext().ctx.waitUntil(work)), readOdds(db(), now)]);
     const byId = new Map(races.map((r) => [r.id, r]));
     const shown = events.filter((e) => {
       const race = byId.get(e.raceId);

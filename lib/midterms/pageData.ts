@@ -62,9 +62,9 @@ async function raceSeed(id: number, now: number): Promise<LiveSeed | null> {
  * panel just loads it after hydration as before.
  */
 async function panelSeeds(id: number, now: number): Promise<Record<string, LiveSeed>> {
-  const found = (await bareRaces(now, db())).find((r) => r.id === id);
+  const found = (await bareRaces(now, db(), (work) => getCloudflareContext().ctx.waitUntil(work))).find((r) => r.id === id);
   if (!found || found.office === "measure") return {};
-  const [insights, markets] = await Promise.allSettled([raceInsights(db(), found, now), raceMarkets(db(), found, now)]);
+  const [insights, markets] = await Promise.allSettled([raceInsights(db(), found, now), raceMarkets(db(), found, now, (work) => getCloudflareContext().ctx.waitUntil(work))]);
   const seeds: Record<string, LiveSeed> = {};
   if (insights.status === "fulfilled") seeds[`/api/midterms/race/${id}/forecast`] = { data: insights.value, etag: null };
   else console.error("forecast panel seed failed:", insights.reason);

@@ -232,10 +232,34 @@ async function kalshi(race: Race, now: number): Promise<MarketBook | null> {
 
 const cacheKey = (id: number) => `midterms:markets:${id}`;
 
-/** Both markets' histories for a race, from the saved copy while it's fresh, else fetched and saved again. */
-export async function raceMarkets(db: Db, race: Race, now: number): Promise<RaceMarkets> {
+/** Refreshes under way in this isolate, by race id, so a burst of visitors starts one fetch per race, not one each. */
+const refreshing = new Map<number, Promise<RaceMarkets>>();
+
+/**
+ * Both markets' histories for a race, from the saved copy while it's fresh, else fetched and saved again. With
+ * `background`, an older saved copy (under KEEP_MS) is served at once and refreshed after the response: asking both
+ * markets can take 12 seconds or more, and a few minutes' lag in a price chart doesn't matter.
+ */
+export async function raceMarkets(db: Db, race: Race, now: number, background?: (work: Promise<unknown>) => void): Promise<RaceMarkets> {
   const saved = await getCached<RaceMarkets>(db, cacheKey(race.id), now);
   if (saved && now - saved.at < FRESH_MS) return saved;
+  const running = refreshing.get(race.id);
+  if (background && saved && now - saved.at < KEEP_MS) {
+    if (!running) background(refresh(db, race, now, saved).catch((err) => console.error("midterms markets refresh failed:", err)));
+    return saved;
+  }
+  return running ?? refresh(db, race, now, saved);
+}
+
+function refresh(db: Db, race: Race, now: number, saved: RaceMarkets | null): Promise<RaceMarkets> {
+  const work = fetchMarkets(db, race, now, saved).finally(() => {
+    if (refreshing.get(race.id) === work) refreshing.delete(race.id);
+  });
+  refreshing.set(race.id, work);
+  return work;
+}
+
+async function fetchMarkets(db: Db, race: Race, now: number, saved: RaceMarkets | null): Promise<RaceMarkets> {
   // A failed source keeps the history it last answered with, for a while.
   const keep = (name: "polymarket" | "kalshi") => {
     const old = saved?.[name];

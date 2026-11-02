@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { kalshiEvents, kalshiOutcomes, parseKalshiCandles, parsePolyHistory, polyOutcomes, question, thin, type KalshiMarket, type PolyEvent } from "../lib/midterms/marketHistory";
+import { describe, expect, it, vi } from "vitest";
+import { kalshiEvents, kalshiOutcomes, parseKalshiCandles, parsePolyHistory, polyOutcomes, question, raceMarkets, thin, type KalshiMarket, type PolyEvent } from "../lib/midterms/marketHistory";
 
 const race = (over: Partial<Parameters<typeof question>[0]> = {}) => ({
   id: 1,
@@ -102,5 +102,47 @@ describe("market panel data", () => {
       [1793250000, 0.984],
     ]);
     expect(parseKalshiCandles(null)).toEqual([]);
+  });
+});
+
+describe("raceMarkets", () => {
+  const saved = { at: 0, polymarket: null, kalshi: null };
+  const fakeDb = (row: unknown) => {
+    const writes: unknown[] = [];
+    const db = {
+      prepare: () => ({
+        bind: (...args: unknown[]) => ({
+          first: async () => (row ? { data: JSON.stringify(row) } : null),
+          run: async () => void writes.push(args),
+        }),
+      }),
+    };
+    return { db: db as unknown as Parameters<typeof raceMarkets>[0], writes };
+  };
+
+  it("serves an older saved copy at once and refreshes it after the response", async () => {
+    const { db } = fakeDb(saved);
+    const later: Promise<unknown>[] = [];
+    const fetches = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    try {
+      const out = await raceMarkets(db, race(), 10 * 60_000, (work) => later.push(work));
+      expect(out).toEqual(saved);
+      expect(later).toHaveLength(1);
+      await Promise.all(later);
+    } finally {
+      fetches.mockRestore();
+    }
+  });
+
+  it("waits for the markets when there's no background to refresh in", async () => {
+    const { db, writes } = fakeDb(saved);
+    const fetches = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    try {
+      const out = await raceMarkets(db, race({ id: 2 }), 10 * 60_000);
+      expect(out.at).toBe(10 * 60_000);
+      expect(writes).toHaveLength(1);
+    } finally {
+      fetches.mockRestore();
+    }
   });
 });
