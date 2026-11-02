@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountError, signUp } from "../lib/auth/accounts";
 import { applyDesk, isDesk, overlayLive } from "../lib/ddhq/apply";
-import { finishVotesCode, startVotesCode, votesSessionCookie } from "../lib/ddhq/clerk";
+import { clearVotesCookies, finishVotesCode, forgetVotesCookie, startVotesCode, votesSessionCookie } from "../lib/ddhq/clerk";
 import { deleteDdhqPending, loadDdhqPending, storeDdhqPending } from "../lib/ddhq/pending";
 import { deleteDdhqSession, hasDdhqSession, loadDdhqSession, storeDdhqSession, unseal } from "../lib/ddhq/vault";
 import { chromeVotes } from "../lib/ddhq/chrome";
@@ -174,6 +174,32 @@ describe("Votes email code", () => {
     for (const status of [403, 404, 429, 502]) {
       vi.stubGlobal("fetch", async () => json(status, {}));
       await expect(votesSessionCookie({ clientToken: "client-jwt", sessionId: "sess_1" })).rejects.toMatchObject({ status: 502 });
+    }
+  });
+
+  it("reuses a minted cookie until shortly before it expires, shares a mint, and drops a refused one", async () => {
+    clearVotesCookies();
+    const jwtFor = (exp: number, tag: string) => `h.${Buffer.from(JSON.stringify({ exp: Math.floor(exp / 1000), tag })).toString("base64url")}.s`;
+    let mints = 0;
+    vi.stubGlobal("fetch", async () => json(200, { jwt: jwtFor(Date.now() + 60_000, `t${++mints}`) }));
+    const session = { clientToken: "client-jwt", sessionId: "sess_cache" };
+    const [a, b] = await Promise.all([votesSessionCookie(session), votesSessionCookie(session)]);
+    expect(a).toBe(b);
+    expect(await votesSessionCookie(session)).toBe(a);
+    expect(mints).toBe(1);
+    // Refused by a Votes feed: the next call mints again.
+    forgetVotesCookie(a);
+    const c = await votesSessionCookie(session);
+    expect(c).not.toBe(a);
+    expect(mints).toBe(2);
+    // Within 15 seconds of expiring: minted again.
+    vi.useFakeTimers({ now: Date.now() + 46_000 });
+    try {
+      expect(await votesSessionCookie(session)).not.toBe(c);
+      expect(mints).toBe(3);
+    } finally {
+      vi.useRealTimers();
+      clearVotesCookies();
     }
   });
 });

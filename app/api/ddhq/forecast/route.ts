@@ -1,8 +1,10 @@
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextResponse } from "next/server";
 import { AccountError } from "@/lib/auth/accounts";
 import { currentUser } from "@/lib/auth/session";
 import { ddhqForecast } from "@/lib/ddhq/forecast";
 import { deleteDdhqSession, loadDdhqSession } from "@/lib/ddhq/vault";
+import { loadRaceIds, saveRaceIds } from "@/lib/ddhq/votes";
 import { appEnv, db } from "@/lib/env";
 
 const headers = { "cache-control": "private, no-store" };
@@ -15,7 +17,11 @@ export async function GET() {
   const saved = await loadDdhqSession(db(), key, user.id);
   if (!saved) return NextResponse.json({ error: "Connect a Votes Pro account to see Decision Desk HQ here." }, { status: 404, headers });
   try {
-    return NextResponse.json(await ddhqForecast(saved.session), { headers });
+    await loadRaceIds(db());
+    const bundle = await ddhqForecast(saved.session);
+    // The forecast pages list every seat's race id: saved so other isolates' board passes skip relearning them.
+    getCloudflareContext().ctx.waitUntil(saveRaceIds(db()));
+    return NextResponse.json(bundle, { headers });
   } catch (err) {
     if (err instanceof AccountError && err.status === 401) await deleteDdhqSession(db(), user.id);
     return NextResponse.json({ error: err instanceof AccountError ? err.message : "Decision Desk HQ didn't answer." }, { status: err instanceof AccountError ? err.status : 502, headers });

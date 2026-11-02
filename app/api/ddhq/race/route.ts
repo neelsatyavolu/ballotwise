@@ -1,9 +1,10 @@
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { AccountError } from "@/lib/auth/accounts";
 import { currentUser } from "@/lib/auth/session";
 import { deleteDdhqSession, loadDdhqSession } from "@/lib/ddhq/vault";
-import { ddhqRace } from "@/lib/ddhq/votes";
+import { ddhqRace, loadRaceIds, saveRaceIds } from "@/lib/ddhq/votes";
 import { appEnv, db } from "@/lib/env";
 
 const PRIVATE = { "cache-control": "private, no-store" };
@@ -32,7 +33,9 @@ export async function GET(req: NextRequest) {
   if (!saved) return NextResponse.json({ error: "Connect a Votes Pro account to see Decision Desk HQ here." }, { status: 404, headers: PRIVATE });
 
   try {
+    await loadRaceIds(db());
     const race = await ddhqRace(saved.session, parsed.data.office, parsed.data.state, parsed.data.district ?? null, parsed.data.special === "1", req.signal);
+    getCloudflareContext().ctx.waitUntil(saveRaceIds(db()));
     if (!race) return NextResponse.json({ error: "Decision Desk HQ doesn't list that race." }, { status: 404, headers: PRIVATE });
     return NextResponse.json(race, { headers: PRIVATE });
   } catch (err) {

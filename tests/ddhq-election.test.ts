@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountError } from "../lib/auth/accounts";
 import { applyDesk, deskKeyFor, isDesk, overlayLive } from "../lib/ddhq/apply";
-import { clearSeatCache, ddhqRace, ddhqSeats, readCall, readResults, rememberRaceIds, type DdhqRace, type DdhqSeat } from "../lib/ddhq/votes";
+import { clearSeatCache, ddhqRace, ddhqSeats, loadRaceIds, readCall, readResults, rememberRaceIds, saveRaceIds, type DdhqRace, type DdhqSeat } from "../lib/ddhq/votes";
+import { testDb } from "./sqlite-db";
 import { appEnv } from "../lib/env";
 import { balance, HOLDOVER, type RaceDetail, type RaceSummary } from "../lib/midterms/races";
 import { callKey } from "../lib/midterms/moments";
@@ -347,6 +348,37 @@ describe("authenticated DDHQ requests", () => {
     const refreshed = await ddhqSeats(session, full);
     expect(refreshed.every((row) => row.race?.total === 2)).toBe(true);
     expect(relay.mock.calls.filter(([request]) => new URL(request.url).pathname.startsWith("/forecast/"))).toHaveLength(1);
+  });
+
+  it("lets a new isolate skip the forecast-page primer with the race ids another isolate saved", async () => {
+    const db = testDb();
+    const full = houseSeats(25);
+    const relay = bind(async (request) => {
+      const path = new URL(request.url).pathname;
+      if (path === "/forecast/2026/house") return new Response(pageFor(full), { headers: { "content-type": "text/x-component" } });
+      return rowsFor(request);
+    });
+    await loadRaceIds(db);
+    await ddhqSeats(session, full);
+    await saveRaceIds(db);
+    expect(relay.mock.calls.filter(([request]) => new URL(request.url).pathname.startsWith("/forecast/"))).toHaveLength(1);
+
+    clearSeatCache();
+    relay.mockClear();
+    await loadRaceIds(db);
+    const result = await ddhqSeats(session, full);
+    expect(result.every((row) => row.race?.total === 1)).toBe(true);
+    expect(relay.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual(["/api/races/batch/topline", "/api/races/batch/topline"]);
+
+    // A corrected id is saved although the number of mappings didn't change.
+    const first = deskKeyFor({ ...full[0], title: "General" });
+    rememberRaceIds([{ key: first, id: "999" }]);
+    await saveRaceIds(db);
+    clearSeatCache();
+    await loadRaceIds(db);
+    relay.mockClear();
+    await ddhqSeats(session, full);
+    expect(relay.mock.calls.some(([request]) => new URL(request.url).searchParams.get("ids")?.split(",").includes("999"))).toBe(true);
   });
 
   it.each(["unavailable", "refused page", "changed payload"])("still gets counts through bounded search when the metadata primer has %s", async (failure) => {

@@ -91,8 +91,55 @@ async function clerk(path: string, body: URLSearchParams | null, client: string 
   return { res, json, client: clientToken(res) ?? client };
 }
 
-/** A short-lived session cookie for votes.decisiondeskhq.com, minted from the stored client token. */
-export async function votesSessionCookie(session: DdhqSession): Promise<string> {
+/** A minted cookie is reused until this long before its token expires, so each DDHQ call needn't ask Clerk first. */
+const TOKEN_MARGIN_MS = 15_000;
+/** Per isolate, by session: the last minted cookie and until when it's reused, and any mint under way. */
+const minted = new Map<string, { cookie: string; until: number }>();
+const minting = new Map<string, Promise<string>>();
+
+/** When a session JWT expires (ms), or null when it can't be read. */
+function expiresAt(jwt: string): number | null {
+  try {
+    const part = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const exp = (JSON.parse(atob(part.padEnd(part.length + ((4 - (part.length % 4)) % 4), "="))) as { exp?: unknown }).exp;
+    return typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Stops reusing `cookie`, after a Votes feed refused it, so the next call mints a fresh one. */
+export function forgetVotesCookie(cookie: string): void {
+  for (const [key, held] of minted) if (held.cookie === cookie) minted.delete(key);
+}
+
+export function clearVotesCookies(): void {
+  minted.clear();
+  minting.clear();
+}
+
+/**
+ * A short-lived session cookie for votes.decisiondeskhq.com, minted from the stored client token. This isolate reuses
+ * it until shortly before it expires, and requests arriving together share one mint.
+ */
+export function votesSessionCookie(session: DdhqSession): Promise<string> {
+  const key = `${session.sessionId}\n${session.clientToken}`;
+  const held = minted.get(key);
+  if (held && Date.now() < held.until) return Promise.resolve(held.cookie);
+  const running = minting.get(key);
+  if (running) return running;
+  const work = mintVotesCookie(session)
+    .then((cookie) => {
+      const exp = expiresAt(cookie.slice("__session=".length));
+      if (exp !== null && exp - TOKEN_MARGIN_MS > Date.now()) minted.set(key, { cookie, until: exp - TOKEN_MARGIN_MS });
+      return cookie;
+    })
+    .finally(() => minting.delete(key));
+  minting.set(key, work);
+  return work;
+}
+
+async function mintVotesCookie(session: DdhqSession): Promise<string> {
   const minted = await clerk(`/v1/client/sessions/${session.sessionId}/tokens`, new URLSearchParams(), session.clientToken);
   const jwt = sessionJwt(minted.json);
   if (jwt && minted.res.ok) return `__session=${jwt}`;

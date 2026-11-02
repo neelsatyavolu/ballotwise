@@ -1,8 +1,9 @@
-import { AccountError } from "../auth/accounts";
+import { AccountError, type Db } from "../auth/accounts";
+import { getCached, putCached } from "../cache";
 import { STATE_NAMES } from "../midterms/view";
 import type { Office, Rating } from "../midterms/races";
 import { chromeVotes } from "./chrome";
-import { votesSessionCookie } from "./clerk";
+import { forgetVotesCookie, votesSessionCookie } from "./clerk";
 import type { DdhqSession } from "./vault";
 import { publishedRating } from "./rating";
 
@@ -29,12 +30,58 @@ export type DdhqSeat = { state: string; office: Exclude<Office, "measure">; dist
 const ids = new Map<string, { id: string; at: number }>();
 const ID_TTL = 6 * 60 * 60 * 1000;
 
+/** D1's copy of the public seat-to-race-id mappings, shared by every isolate. */
+const IDS_KEY = "ddhq:race-ids";
+let idsLoaded = false;
+/** The mappings changed (one learned, corrected or dropped) since D1's copy was last written. */
+let idsChanged = false;
+
+/** Sets a mapping, noting a change for saveRaceIds when the id is new. */
+function setId(key: string, id: string): void {
+  if (ids.get(key)?.id !== id) idsChanged = true;
+  ids.set(key, { id, at: Date.now() });
+}
+
+function dropId(key: string): void {
+  if (ids.delete(key)) idsChanged = true;
+}
+
 export function clearSeatCache(): void {
   ids.clear();
+  idsLoaded = false;
+  idsChanged = false;
+}
+
+/**
+ * Adds the mappings other isolates saved, once per isolate, so a new one needn't relearn them from DDHQ's forecast
+ * pages (a cold board pass otherwise fetches all three first). Only public race ids, never results.
+ */
+export async function loadRaceIds(db: Db): Promise<void> {
+  if (idsLoaded) return;
+  idsLoaded = true;
+  try {
+    const saved = await getCached<Record<string, string>>(db, IDS_KEY, Date.now());
+    const at = Date.now();
+    for (const [key, id] of Object.entries(saved ?? {})) if (!ids.has(key) && /^\d+$/.test(id)) ids.set(key, { id, at });
+  } catch (err) {
+    console.error("ddhq race ids read failed:", err instanceof Error ? err.message : err);
+  }
+}
+
+/** Saves this isolate's mappings when any changed since the last save, corrections and drops included. Never throws. */
+export async function saveRaceIds(db: Db): Promise<void> {
+  if (!idsChanged) return;
+  idsChanged = false;
+  try {
+    await putCached(db, IDS_KEY, Object.fromEntries([...ids].map(([key, { id }]) => [key, id])), Date.now());
+  } catch (err) {
+    idsChanged = true;
+    console.error("ddhq race ids save failed:", err instanceof Error ? err.message : err);
+  }
 }
 
 export function rememberRaceIds(rows: readonly { key: string; id: string }[]): void {
-  for (const row of rows) ids.set(row.key, { id: row.id, at: Date.now() });
+  for (const row of rows) setId(row.key, row.id);
 }
 
 export function seatKey(seat: { office: string; state: string; district: number | null; special?: boolean }): string {
@@ -231,6 +278,8 @@ export async function votes(path: string, cookie: string, signal?: AbortSignal):
     signal,
   });
   checkActive(signal);
+  // A refused token isn't reused: the next call mints a fresh one, and Clerk's answer then says if the session ended.
+  if (res.status === 401) forgetVotesCookie(cookie);
   const redirected = res.status >= 300 && res.status < 400;
   const contentType = res.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
   const unexpected = res.ok ? contentType !== accept : res.status === 403 && contentType !== "application/json";
@@ -287,8 +336,8 @@ async function findRace(cookie: string, office: Exclude<Office, "measure">, stat
   const body = (await res.json()) as { results?: SearchHit[] };
   checkActive(signal);
   const id = pickRace(body.results ?? [], office, district, special);
-  if (id) ids.set(key, { id, at: Date.now() });
-  else ids.delete(key);
+  if (id) setId(key, id);
+  else dropId(key);
   return id;
 }
 
@@ -304,7 +353,7 @@ async function loadRace(cookie: string, office: Exclude<Office, "measure">, stat
   if (!raceRes.ok && raceRes.status !== 404) throw new AccountError("Decision Desk HQ didn't answer.", 502);
   if (forecastRes.status === 404 && raceRes.status === 404) {
     const key = seatKey({ office, state, district, special });
-    if (ids.get(key)?.id === id) ids.delete(key);
+    if (ids.get(key)?.id === id) dropId(key);
     return null;
   }
   const forecastBody = forecastRes.ok ? await forecastRes.json() as { rating?: unknown; updatedAt?: unknown } : null;
