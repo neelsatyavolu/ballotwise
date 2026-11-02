@@ -71,3 +71,10 @@ body:has(.mt-wall) .mt-callpops { display: none; }
   .mt-wall-spot ~ .mt-wall-upnext, .mt-wall-upnext .mt-card:nth-child(n + 3) { display: grid; }
   .mt-wall-upnext .mt-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* The toured race's card, and under it the votes-left estimate while it counts. */
+.mt-wall-spot { display: grid; gap: 10px; }
+/* Tighter on a wall, with the count beside its label, so the map above keeps its height. */
+.mt-wall-spot .mt-votes-left-card { grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 12px; row-gap: 4px; padding: 10px 14px; }
+.mt-wall-spot .mt-votes-left-card > * { grid-column: 1 / -1; }
+.mt-wall-spot .mt-votes-left-card > .mt-mk-q, .mt-wall-spot .mt-votes-left-card > .mt-mk-lead { grid-column: auto; }

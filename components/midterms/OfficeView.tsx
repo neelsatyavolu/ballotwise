@@ -236,8 +236,8 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                         <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>
                       </p>
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
-                      {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} pollsExpected={!!publicSignal?.polls} polls={!counting} />}
                       {counting && detail.data && <VotesLeftCard race={detail.data.race} />}
+                      {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} pollsExpected={!!publicSignal?.polls} polls={!counting} />}
                     </>
                   )}
                   {inState.length > 1 && (

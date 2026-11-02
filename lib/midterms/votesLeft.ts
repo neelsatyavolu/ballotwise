@@ -22,22 +22,57 @@ const PLACES = 3;
 const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
 
 /**
- * How many votes a county will end with: its count scaled up by its reporting figure, or, with nothing counted, its
- * 2024 presidential vote at the turnout the counted counties show. A House district covers parts of counties, so
- * whole-county 2024 totals can't stand in there. Null when there's nothing to go on.
+ * A midterm's vote as a share of the presidential vote two years before: 2022 cast about 0.68 of 2020's, 2018 about
+ * 0.83 of 2016's. The estimate starts here and moves toward what the counted counties show.
  */
-function expectedOf(c: CountyResult, turnout: number | null, statewide: boolean): number | null {
-  if (c.reporting >= 100) return c.total;
-  if (c.total > 0 && c.reporting > 0 && !c.reportingUnknown) return (c.total * 100) / c.reporting;
-  if (statewide && c.pres2024 && turnout !== null) return Math.max(c.total, c.pres2024.total * turnout);
-  return null;
+export const MIDTERM_TURNOUT = 0.75;
+/** How much the starting turnout weighs, as a share of the state's 2024 vote: counted counties outweigh it past this. */
+const PRIOR_WEIGHT = 0.05;
+/**
+ * How far a county's scaled-up count is trusted: its reporting share to this power. Cubed, a county half counted
+ * weighs an eighth and one 90% counted about three quarters. Tuned on mock nights, with every county counted evenly
+ * and with half of them counting mail before precincts (there, average error fell from far off to about 6%).
+ */
+const TRUST = 3;
+const trust = (c: CountyResult) => Math.min(1, c.reporting / 100) ** TRUST;
+
+/** A county's count scaled up by its reporting figure, or null when the figure can't be used. */
+function scaledOf(c: CountyResult): number | null {
+  return c.total > 0 && c.reporting > 0 && !c.reportingUnknown ? (c.total * 100) / Math.min(100, c.reporting) : null;
 }
 
-/** This year's vote against 2024's in the counties whose count can be scaled up, or null when none can. */
-function turnoutOf(counties: readonly CountyResult[]): number | null {
-  const scaled = counties.filter((c) => c.pres2024 && c.total > 0 && c.reporting > 0 && !c.reportingUnknown);
-  const pres = sum(scaled.map((c) => c.pres2024!.total));
-  return pres ? sum(scaled.map((c) => (c.total * 100) / Math.min(100, c.reporting))) / pres : null;
+/**
+ * This year's vote against 2024's: MIDTERM_TURNOUT, moved toward what the counted counties show as more of the state
+ * counts. Each county's scaled-up count weighs by how far it's counted (see TRUST): a county that counts its mail
+ * first can show a big count a few precincts in, and scaling that up would put its turnout many times too high.
+ */
+function turnoutOf(counties: readonly CountyResult[]): number {
+  const k = sum(counties.map((c) => c.pres2024?.total ?? 0)) * PRIOR_WEIGHT;
+  const used = counties.flatMap((c) => {
+    const scaled = scaledOf(c);
+    return c.pres2024?.total && scaled !== null ? [{ w: trust(c), scaled, pres: c.pres2024.total }] : [];
+  });
+  const counted = sum(used.map((u) => u.w * u.scaled));
+  const pres = sum(used.map((u) => u.w * u.pres));
+  return k + pres > 0 ? (counted + k * MIDTERM_TURNOUT) / (pres + k) : MIDTERM_TURNOUT;
+}
+
+/**
+ * Roughly how many votes a county has left. Two guesses: its count scaled up by its reporting figure, and its 2024
+ * presidential vote at this year's turnout less what's counted. The reporting figure counts precincts, and many
+ * counties count early and mail ballots before any precinct, so a county a few precincts in can already have most of
+ * its vote; scaled up, that's many times too much. The 2024 guess leads until the count is well along, and the scaled
+ * count takes over as it nears done (see TRUST). A House district covers parts of counties, so whole-county 2024 votes
+ * can't stand in and only the scaled count is used. Null when neither is known.
+ */
+function leftIn(c: CountyResult, turnout: number, statewide: boolean): number | null {
+  if (c.reporting >= 100) return 0;
+  const scaled = scaledOf(c);
+  const prior = statewide && c.pres2024?.total ? Math.max(0, c.pres2024.total * turnout - c.total) : null;
+  if (scaled === null) return prior;
+  if (prior === null) return scaled - c.total;
+  const w = trust(c);
+  return w * (scaled - c.total) + (1 - w) * prior;
 }
 
 /**
@@ -77,7 +112,7 @@ function sharesIn(c: CountyResult, names: readonly [string, string], parties: re
 
 /**
  * Roughly how many votes are left in a race still counting and how they might split between the two leaders, from each
- * county's count, reporting figure and 2024 vote, moved by the swing since 2024 where nothing is counted yet.
+ * county's count, reporting figure and 2024 vote (see leftIn), moved by the swing since 2024 where nothing is counted yet.
  * civicAPI's reporting figure counts precincts or ballot batches, not ballots, and late mail can lean differently, so
  * it's an estimate to read loosely. Null before any votes, once called, or with fewer than two candidates.
  */
@@ -90,12 +125,10 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
   const overall: [number, number] = [a.votes / race.total, b.votes / race.total];
   // One region, or none, is the race itself.
   const counties: readonly CountyResult[] = race.counties.length > 1 ? race.counties : [{ fips: null, name: race.title, reporting: race.reporting, total: race.total, candidates: race.candidates, ...(race.reportingUnknown && { reportingUnknown: true as const }), baseline2024: null, pres2024: null }];
-  const turnout = statewide ? turnoutOf(counties) : null;
+  const turnout = turnoutOf(counties);
   const swing = swingOf(counties);
-  const estimated = counties.map((c) => ({ c, expected: expectedOf(c, turnout, statewide) }));
-  const rows = estimated.flatMap(({ c, expected }) => {
-    if (expected === null) return [];
-    const left = Math.max(0, expected - c.total);
+  const estimated = counties.map((c) => ({ c, left: leftIn(c, turnout, statewide) }));
+  const rows = estimated.flatMap(({ c, left }) => {
     if (!left) return [];
     const [sa, sb] = sharesIn(c, names, parties, overall, swing);
     return [{ name: c.name, left, a: left * sa, b: left * sb, edge: sa + sb > 0 ? (sa - sb) * 100 : null }];
@@ -108,6 +141,6 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
       .sort((x, y) => y.left - x.left)
       .slice(0, PLACES)
       .map((r) => ({ name: r.name, left: Math.round(r.left), edge: r.edge })),
-    unknown: estimated.filter((e) => e.expected === null).length,
+    unknown: estimated.filter((e) => e.left === null).length,
   };
 }

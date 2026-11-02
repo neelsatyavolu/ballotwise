@@ -61,9 +61,10 @@ export function VotesLeftPanel({ race }: { race: RaceDetail }) {
 
 /**
  * The estimate as a card for a state's panel once its race is counting, where it takes the place of polls and
- * markets: votes left, how the top two would split them, what that means, and where they are.
+ * markets: votes left, how the top two would split them, what that means, and where they are. `brief` drops the
+ * heading and the caveat, for a wall screen read from across the room.
  */
-export function VotesLeftCard({ race }: { race: RaceDetail }) {
+export function VotesLeftCard({ race, brief = false }: { race: RaceDetail; brief?: boolean }) {
   const est = votesLeft(race);
   if (!est) return null;
   const top = [est.leader, est.runnerUp];
@@ -71,7 +72,7 @@ export function VotesLeftCard({ race }: { race: RaceDetail }) {
   const says = outlook(race, est);
   return (
     <section className="mt-mk" aria-label="Votes left">
-      <h3 className="mt-mk-head">Votes left</h3>
+      {!brief && <h3 className="mt-mk-head">Votes left</h3>}
       <div className="mt-mk-card mt-votes-left-card">
         <p className="mt-mk-q">Estimated votes still to count</p>
         {est.left === 0 ? (
@@ -100,10 +101,12 @@ export function VotesLeftCard({ race }: { race: RaceDetail }) {
             {est.places.length > 0 && <p className="muted small">Most are in {est.places.map((p) => placeLabel(est, p)).join(", ")}.</p>}
           </>
         )}
-        <p className="muted small">
-          {CAVEAT}
-          {est.unknown > 0 && ` ${est.unknown} ${est.unknown === 1 ? "county has" : "counties have"} nothing counted and no 2024 vote to go on, so ${est.unknown === 1 ? "it isn't" : "they aren't"} included.`}
-        </p>
+        {!brief && (
+          <p className="muted small">
+            {CAVEAT}
+            {est.unknown > 0 && ` ${est.unknown} ${est.unknown === 1 ? "county has" : "counties have"} nothing counted and no 2024 vote to go on, so ${est.unknown === 1 ? "it isn't" : "they aren't"} included.`}
+          </p>
+        )}
       </div>
     </section>
   );

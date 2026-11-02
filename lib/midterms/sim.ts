@@ -5,6 +5,9 @@ import { holderOf } from "./holders";
 import { ELECTION_DAY_START, stateCloses, stateFinal } from "./polls";
 import { balance, type CountyResult, type RaceDetail, type RaceSummary } from "./races";
 import type { Overview } from "./view";
+import { MIDTERM_TURNOUT } from "./votesLeft";
+import baseline from "./baseline2024.json";
+import states from "./states.json";
 
 const HOUR = 3_600_000;
 /** One race's call is withdrawn at 10 p.m. Eastern and made again at 11, so previews show both in the feed and on the map. */
@@ -49,6 +52,25 @@ function callableAt(r: RaceSummary, close: number, at: number): boolean {
 
 const CALL_STEP = 5 * 60_000;
 
+const postalOf: Record<string, string> = Object.fromEntries(states.map(([fips, postal]) => [fips, postal]));
+/** Each state's 2024 presidential vote, summed from its counties. */
+const pres2024: Record<string, number> = {};
+for (const [fips, [, , total]] of Object.entries(baseline as Record<string, number[]>)) {
+  const postal = postalOf[fips.slice(0, 2)];
+  if (postal) pres2024[postal] = (pres2024[postal] ?? 0) + total;
+}
+/** The average House district's 2024 presidential vote. */
+const DISTRICT_2024 = 155_500_000 / 435;
+
+/**
+ * How many votes a race ends with: its state's (or an average district's) 2024 presidential vote at a usual midterm
+ * turnout, give or take 15%, so a mock night's votes-left estimate has a real-sized count to estimate.
+ */
+function turnoutOf(r: RaceSummary): number {
+  const base = r.office === "house" ? DISTRICT_2024 : (pres2024[r.state] ?? 2_600_000 / MIDTERM_TURNOUT);
+  return base * MIDTERM_TURNOUT * (0.85 + rand(r.id, 6) * 0.3);
+}
+
 /**
  * When the race is first called, by `at`, or null if not yet: the first moment its count is callable, checked every
  * five minutes from a race-specific start. A call stays made, so its time never moves as the night goes on.
@@ -84,8 +106,7 @@ function simulateRace(r: RaceSummary, at: number): RaceSummary {
   if (close === null || at < close) return r;
   const { reporting, margin } = progress(r, close, at);
   if (reporting <= 0) return r;
-  const turnout = (r.office === "house" ? 320_000 : 2_600_000) * (0.5 + rand(r.id, 6) * 1.5);
-  const total = Math.round((turnout * reporting) / 100);
+  const total = Math.round((turnoutOf(r) * reporting) / 100);
   const callAt = calledAt(r, close, at);
   const callable = callAt !== null;
   const counted = r.candidates

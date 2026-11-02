@@ -9,6 +9,7 @@ import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { closestFirst } from "@/lib/midterms/explore";
 import { countdown, electionModeDefault, formatTime, nextWave } from "@/lib/midterms/polls";
 import type { RaceDetail } from "@/lib/midterms/races";
+import { votesLeft } from "@/lib/midterms/votesLeft";
 import { autoScale, NATION_MS, nextScale, RACE_MS, tourRaces, tourStops } from "@/lib/midterms/wall";
 import { raceLabel, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
@@ -19,6 +20,7 @@ import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills
 import { RaceCard } from "./RaceCard";
 import { PollSchedule } from "./PollClose";
 import { RaceRows } from "./RaceRows";
+import { VotesLeftCard } from "./VotesLeft";
 import { ZoomMap, type Fill } from "./ZoomMap";
 
 export type WallOffice = Extract<Office, "senate" | "house">;
@@ -150,7 +152,7 @@ function useFit(box: RefObject<HTMLElement | null>, items: string, ready: boolea
 }
 
 /** The map, zoomed out to the country or into the tour's current race with its counties (or districts) shaded. */
-function TourMap({ office, races, updatedAt, results, race }: { office: WallOffice; races: RaceSummary[]; updatedAt: number | null; results: boolean; race: RaceSummary | null }) {
+function TourMap({ office, races, updatedAt, results, race, detail }: { office: WallOffice; races: RaceSummary[]; updatedAt: number | null; results: boolean; race: RaceSummary | null; detail: RaceDetail | null }) {
   const focus = race?.state ?? null;
   const fills = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
   const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
@@ -160,13 +162,12 @@ function TourMap({ office, races, updatedAt, results, race }: { office: WallOffi
     for (const r of races.filter((x) => x.state === focus).sort(regularFirst)) if (r.district !== null && !out.has(r.district)) out.set(r.district, districtFill(r, updatedAt, results));
     return out;
   }, [office, races, focus, updatedAt, results]);
-  const detail = useLive<{ race: RaceDetail }>(race ? `/api/midterms/race/${race.id}` : null);
   const countyFills = useMemo(() => {
-    if (!detail.data) return undefined;
+    if (!detail) return undefined;
     const out = new Map<string, Fill>();
-    for (const c of detail.data.race.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: null });
+    for (const c of detail.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: null });
     return out;
-  }, [detail.data]);
+  }, [detail]);
   return (
     <ZoomMap
       fills={fills}
@@ -218,6 +219,9 @@ export function Wall({ office }: { office: WallOffice }) {
   const stops = useMemo(() => tourStops(tour.map((r) => r.id)), [tour]);
   const { stop: stopId, upNext } = useTour(stops);
   const stop = races.find((r) => r.id === stopId) ?? null;
+  // The toured race with its counties, for the map's shading and the votes-left estimate under its card.
+  const stopDetail = useLive<{ race: RaceDetail }>(stop ? `/api/midterms/race/${stop.id}` : null).data?.race ?? null;
+  const left = stop && stop.total > 0 && stopDetail?.id === stop.id && votesLeft(stopDetail) ? stopDetail : null;
   const next = upNext.map((id) => races.find((r) => r.id === id)).filter((r): r is RaceSummary => !!r);
   // Poll closings matter until the last polls close; after that the calls get the whole column.
   const closing = nextWave(useClock(60_000)) !== null;
@@ -253,14 +257,18 @@ export function Wall({ office }: { office: WallOffice }) {
                   {tour.length > 0 && <span className="muted small">Touring the {tour.length} closest</span>}
                 </div>
                 <div className="mt-wall-map">
-                  <TourMap office={office} races={races} updatedAt={data.ratings.updatedAt} results={results} race={stop} />
+                  <TourMap office={office} races={races} updatedAt={data.ratings.updatedAt} results={results} race={stop} detail={stopDetail} />
                 </div>
                 {/* Under the map, the toured race or (on the whole country) the next ones; an ultrawide shows both. */}
                 <div className="mt-wall-detail" ref={detail}>
                   {stop && (
-                    <ul className="mt-grid one mt-wall-spot mt-in" key={stop.id}>
-                      <RaceCard race={stop} starred={null} onStar={noop} />
-                    </ul>
+                    <div className="mt-wall-spot mt-in" key={stop.id}>
+                      {/* While the estimate shows, the card keeps to the top two so the map keeps its room. */}
+                      <ul className="mt-grid one">
+                        <RaceCard race={stop} starred={null} onStar={noop} limit={left ? 2 : undefined} />
+                      </ul>
+                      {left && <VotesLeftCard race={left} brief />}
+                    </div>
                   )}
                   {next.length > 0 && (
                     <div className="mt-wall-upnext mt-in" key={`next-${stopId}`}>

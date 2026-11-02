@@ -33,8 +33,8 @@ const RACE: RaceDetail = {
   ],
   pollsClose: null,
   updated: null,
-  // A big blue city, suburbs and a lot of red rural counties.
-  counties: [county("13121", 500_000, 46), county("13135", 400_000, 15), ...Array.from({ length: 12 }, (_, i) => county(String(13001 + i * 2), 60_000, -45))],
+  // A big blue city, suburbs and a lot of red rural counties, adding up to about Georgia's 2024 vote, as the sim's count does.
+  counties: [county("13121", 1_600_000, 46), county("13135", 1_300_000, 15), ...Array.from({ length: 12 }, (_, i) => county(String(13001 + i * 2), 195_000, -45))],
 };
 
 const dLead = (votes: (party: string) => number, total: number) => ((votes("Democratic") - votes("Republican")) / total) * 100;
