@@ -51,7 +51,9 @@ export function useTween(target: Box): Box {
     const origin = from.current;
     let frame = 0;
     const step = (now: number) => {
-      const t = Math.min(1, (now - start) / ZOOM_MS);
+      // A frame's timestamp can come before `start`; clamped, the first frame holds still instead of easing backward
+      // past the origin (and, zooming out from a small box, drawing a negative view box).
+      const t = Math.min(1, Math.max(0, (now - start) / ZOOM_MS));
       const e = 1 - (1 - t) ** 3;
       const next = origin.map((v, i) => v + (target[i] - v) * e) as Box;
       from.current = next;

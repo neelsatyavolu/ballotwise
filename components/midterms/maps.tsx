@@ -1,6 +1,7 @@
 // Rendered inside the tracker's client components.
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type DOMAttributes, type ReactNode, type RefObject } from "react";
 import { isTownCode } from "@/lib/midterms/view";
+import { HoverCard, keyOf, useMapHover } from "./mapHover";
 import { atLeast, boundsOf, framed, useTween, type Box } from "./zoom";
 
 export type City = { name: string; at: [number, number] };
@@ -40,34 +41,21 @@ function useMap<T>(name: string): T | null | "error" {
   return map;
 }
 
-/** `right` and `low` say the pointer is in the map's right or bottom half, so a stylesheet can open the card toward the middle. */
-type Tip = { x: number; y: number; right?: boolean; low?: boolean; content: ReactNode } | null;
-
 /** `outlines` are drawn above every shape, so neighbors can't cover part of a hovered or selected border. */
-/** `aspect` holds the map's shape while its view box zooms. */
-function MapFrame({ viewBox, children, tip, label, outlines, back, aspect }: { viewBox: string; children: ReactNode; tip: Tip; label: string; outlines: { d: string; kind: "hover" | "selected" }[]; back?: ReactNode; aspect?: string }) {
+/** `aspect` holds the map's shape while its view box zooms. `events` are the <svg>'s, which handle every shape's. */
+function MapFrame({ viewBox, children, card, label, outlines, back, aspect, wrap, events }: { viewBox: string; children: ReactNode; card: ReactNode; label: string; outlines: { d: string; kind: "hover" | "selected" }[]; back?: ReactNode; aspect?: string; wrap: RefObject<HTMLDivElement | null>; events: DOMAttributes<SVGSVGElement> }) {
   return (
-    <div className="mt-map">
+    <div className="mt-map" ref={wrap}>
       {back}
-      <svg viewBox={viewBox} role="img" aria-label={label} style={aspect ? { aspectRatio: aspect } : undefined}>
+      <svg viewBox={viewBox} role="img" aria-label={label} style={aspect ? { aspectRatio: aspect } : undefined} {...events}>
         {children}
         {outlines.map((o, i) => (
           <path key={`${o.kind}${i}`} d={o.d} className={`mt-line ${o.kind}`} vectorEffect="non-scaling-stroke" />
         ))}
       </svg>
-      {tip && (
-        <div className="mt-tip" style={{ left: tip.x, top: tip.y }} data-right={tip.right || undefined} data-low={tip.low || undefined} role="status">
-          {tip.content}
-        </div>
-      )}
+      {card}
     </div>
   );
-}
-
-/** Tooltip position relative to the map box, from a pointer event on one of its shapes. */
-function tipAt(e: React.PointerEvent<SVGElement>) {
-  const box = (e.currentTarget.ownerSVGElement ?? e.currentTarget).parentElement!.getBoundingClientRect();
-  return { x: e.clientX - box.left, y: e.clientY - box.top, right: e.clientX - box.left > box.width / 2, low: e.clientY - box.top > box.height / 2 };
 }
 
 const MAX_LABELS = 8;
@@ -141,8 +129,8 @@ export type CountyFill = { fill: string; tip: ReactNode; active: boolean };
 export function CountyMap({ state, fills, selected, onSelect }: { state: string; fills: Map<string, CountyFill>; selected: string | null; onSelect: (fips: string | null) => void }) {
   const towns = useMemo(() => [...fills.keys()].some(isTownCode), [fills]);
   const map = useMap<StateMap>(towns ? `towns/${state}` : state);
-  const [tip, setTip] = useState<Tip>(null);
-  const [hover, setHover] = useState<string | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const hover = useMapHover(wrap);
   const ready = map && map !== "error" ? map : null;
   const selectedPath = ready?.counties.find((c) => c.fips === selected)?.d;
   const full = useMemo(() => (ready?.viewBox ?? "0 0 640 440").split(" ").map(Number) as Box, [ready]);
@@ -151,16 +139,45 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
     return b ? framed(atLeast(b, [full[0], full[1], full[0] + full[2], full[1] + full[3]], 0.2)) : full;
   }, [full, selectedPath]);
   const box = useTween(target);
+  const byFips = useMemo(() => new Map(ready?.counties.map((c) => [c.fips, c]) ?? []), [ready]);
+  // Drawn once per change to the data, not on every frame of a zoom or every hover; the <svg> handles their events.
+  const shapes = useMemo(
+    () =>
+      ready && (
+        <>
+          <path d={ready.outline} className="mt-outline" vectorEffect="non-scaling-stroke" />
+          {ready.counties.map((c) => {
+            const f = fills.get(c.fips);
+            return <path key={c.fips} data-k={c.fips} d={c.d} vectorEffect="non-scaling-stroke" className={`mt-county${f?.active ? " active" : ""}`} style={{ fill: f?.fill }} />;
+          })}
+        </>
+      ),
+    [ready, fills],
+  );
   if (map === "error") return <p className="muted small">The map couldn&apos;t load. The table below has every {towns ? "town" : "county"}.</p>;
   if (!map) return <div className="mt-map mt-map-loading" aria-busy />;
-  const outlines = [...(selectedPath ? [{ d: selectedPath, kind: "selected" as const }] : []), ...(hover ? [{ d: hover, kind: "hover" as const }] : [])];
+  const hovered = hover.at && fills.has(hover.at.key) ? byFips.get(hover.at.key) : undefined;
+  const outlines = [...(selectedPath ? [{ d: selectedPath, kind: "selected" as const }] : []), ...(hovered ? [{ d: hovered.d, kind: "hover" as const }] : [])];
   return (
     <MapFrame
+      wrap={wrap}
       viewBox={box.join(" ")}
-      tip={tip}
+      card={hover.at && hovered && <HoverCard at={hover.at} card={hover.card}>{fills.get(hovered.fips)?.tip}</HoverCard>}
       label={`${towns ? "Town" : "County"} map of ${map.name}`}
       outlines={outlines}
       aspect={`${full[2]} / ${full[3]}`}
+      events={{
+        onPointerMove: (e) => {
+          const k = keyOf(e);
+          if (k && fills.has(k)) hover.move(e, k);
+          else hover.leave();
+        },
+        onPointerLeave: hover.leave,
+        onClick: (e) => {
+          const k = keyOf(e);
+          if (k && fills.get(k)?.active) onSelect(selected === k ? null : k);
+        },
+      }}
       back={
         selectedPath && (
           <button type="button" className="mt-zoom-back" onClick={() => onSelect(null)}>
@@ -169,29 +186,7 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
         )
       }
     >
-      <path d={map.outline} className="mt-outline" vectorEffect="non-scaling-stroke" />
-      {map.counties.map((c) => {
-        const f = fills.get(c.fips);
-        return (
-          <path
-            key={c.fips}
-            d={c.d}
-            vectorEffect="non-scaling-stroke"
-            className={`mt-county${f?.active ? " active" : ""}`}
-            style={{ fill: f?.fill }}
-            onPointerMove={(e) => {
-              if (!f) return;
-              setTip({ ...tipAt(e), content: f.tip });
-              setHover(c.d);
-            }}
-            onPointerLeave={() => {
-              setTip(null);
-              setHover(null);
-            }}
-            onClick={() => f?.active && onSelect(selected === c.fips ? null : c.fips)}
-          />
-        );
-      })}
+      {shapes}
       {map.cities && <CityLabels cities={map.cities} view={target} />}
     </MapFrame>
   );
@@ -241,57 +236,85 @@ export type NationFill = { fill: string; tip: ReactNode; label?: string; flip?: 
  */
 export function NationMap({ fills, onPick, label, selected = [], districts = false }: { fills: Map<string, NationFill>; onPick: (key: string) => void; label: string; selected?: readonly string[]; districts?: boolean }) {
   const map = useMap<NationMap>("US");
-  const [tip, setTip] = useState<Tip>(null);
-  const [hover, setHover] = useState<string | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const hover = useMapHover(wrap);
+  // The shape focused from the keyboard, outlined like a hovered one.
+  const [focused, setFocused] = useState<string | null>(null);
   const patternId = usePatternId();
   const districtStates = useMemo(() => (districts ? [...new Set([...fills.keys()].map((k) => k.split("-")[0]))].sort() : null), [districts, fills]);
   const districtShapes = useDistrictShapes(districtStates);
+  const ready = map && map !== "error" ? map : null;
+  const shapes: Shape[] | null = useMemo(() => (districts ? districtShapes : ready ? ready.states.map((s) => ({ key: s.state, name: s.name, d: s.d })) : null), [districts, districtShapes, ready]);
+  const byKey = useMemo(() => new Map(shapes?.map((s) => [s.key, s]) ?? []), [shapes]);
+  // Drawn once per change to the data, not on every hover; the <svg> handles their events.
+  const layers = useMemo(
+    () =>
+      ready &&
+      shapes && (
+        <>
+          <FlipStripes id={patternId} size={7} />
+          {shapes.map((s) => {
+            const f = fills.get(s.key);
+            return (
+              <path
+                key={s.key}
+                data-k={s.key}
+                d={s.d}
+                className={`mt-county${f ? " active" : ""}`}
+                style={{ fill: f?.fill }}
+                tabIndex={f ? 0 : undefined}
+                role={f ? "button" : undefined}
+                aria-label={f ? `${s.name}${f.label ? `: ${f.label}` : ""}${f.flip ? ", projected to change party" : ""}` : undefined}
+                aria-pressed={f ? selected.includes(s.key) : undefined}
+              />
+            );
+          })}
+          {shapes.map((s) => fills.get(s.key)?.flip && <path key={`flip-${s.key}`} d={s.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
+          <path d={ready.borders} className="mt-borders" />
+          {shapes.map((s) => fills.get(s.key)?.lean && <path key={`lean-${s.key}`} d={s.d} className="mt-watch lean" vectorEffect="non-scaling-stroke" />)}
+          {shapes.map((s) => fills.get(s.key)?.watch && <path key={`watch-${s.key}`} d={s.d} className="mt-watch" vectorEffect="non-scaling-stroke" />)}
+        </>
+      ),
+    [ready, shapes, fills, selected, patternId],
+  );
   if (map === "error") return null;
-  const shapes: Shape[] | null = districts ? districtShapes : map ? map.states.map((s) => ({ key: s.state, name: s.name, d: s.d })) : null;
-  if (!map || !shapes) return <div className="mt-map mt-map-loading nation" aria-busy />;
+  if (!ready || !shapes) return <div className="mt-map mt-map-loading nation" aria-busy />;
+  const hovered = hover.at ? byKey.get(hover.at.key) : undefined;
+  const lit = [hover.at?.key, focused].find((k) => k && fills.has(k));
   const outlines = [
-    ...map.states.filter((s) => selected.includes(s.state)).map((s) => ({ d: s.d, kind: "selected" as const })),
-    ...(hover ? [{ d: hover, kind: "hover" as const }] : []),
+    ...ready.states.filter((s) => selected.includes(s.state)).map((s) => ({ d: s.d, kind: "selected" as const })),
+    ...(lit && byKey.get(lit) ? [{ d: byKey.get(lit)!.d, kind: "hover" as const }] : []),
   ];
   return (
-    <MapFrame viewBox={map.viewBox} tip={tip} label={label} outlines={outlines}>
-      <FlipStripes id={patternId} size={7} />
-      {shapes.map((s) => {
-        const f = fills.get(s.key);
-        return (
-          <path
-            key={s.key}
-            d={s.d}
-            className={`mt-county${f ? " active" : ""}`}
-            style={{ fill: f?.fill }}
-            tabIndex={f ? 0 : undefined}
-            role={f ? "button" : undefined}
-            aria-label={f ? `${s.name}${f.label ? `: ${f.label}` : ""}${f.flip ? ", projected to change party" : ""}` : undefined}
-            aria-pressed={f ? selected.includes(s.key) : undefined}
-            onPointerMove={(e) => {
-              setTip({ ...tipAt(e), content: f?.tip ?? <b>{s.name}</b> });
-              setHover(f ? s.d : null);
-            }}
-            onPointerLeave={() => {
-              setTip(null);
-              setHover(null);
-            }}
-            onFocus={() => setHover(f ? s.d : null)}
-            onBlur={() => setHover(null)}
-            onKeyDown={(e) => {
-              if (f && (e.key === "Enter" || e.key === " ")) {
-                e.preventDefault();
-                onPick(s.key);
-              }
-            }}
-            onClick={() => f && onPick(s.key)}
-          />
-        );
-      })}
-      {shapes.map((s) => fills.get(s.key)?.flip && <path key={`flip-${s.key}`} d={s.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
-      <path d={map.borders} className="mt-borders" />
-      {shapes.map((s) => fills.get(s.key)?.lean && <path key={`lean-${s.key}`} d={s.d} className="mt-watch lean" vectorEffect="non-scaling-stroke" />)}
-      {shapes.map((s) => fills.get(s.key)?.watch && <path key={`watch-${s.key}`} d={s.d} className="mt-watch" vectorEffect="non-scaling-stroke" />)}
+    <MapFrame
+      wrap={wrap}
+      viewBox={ready.viewBox}
+      card={hover.at && hovered && <HoverCard at={hover.at} card={hover.card}>{fills.get(hovered.key)?.tip ?? <b>{hovered.name}</b>}</HoverCard>}
+      label={label}
+      outlines={outlines}
+      events={{
+        onPointerMove: (e) => {
+          const k = keyOf(e);
+          if (k && byKey.has(k)) hover.move(e, k);
+          else hover.leave();
+        },
+        onPointerLeave: hover.leave,
+        onFocus: (e) => setFocused(keyOf(e)),
+        onBlur: () => setFocused(null),
+        onKeyDown: (e) => {
+          const k = keyOf(e);
+          if (k && fills.has(k) && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            onPick(k);
+          }
+        },
+        onClick: (e) => {
+          const k = keyOf(e);
+          if (k && fills.has(k)) onPick(k);
+        },
+      }}
+    >
+      {layers}
     </MapFrame>
   );
 }

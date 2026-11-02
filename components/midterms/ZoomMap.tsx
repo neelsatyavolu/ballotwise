@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { labelSpot } from "@/lib/midterms/labelSpot";
 import { CityLabels, FlipStripes, loadMap, useDistrictShapes, usePatternId, type City } from "./maps";
+import { HoverCard, keyOf, useMapHover } from "./mapHover";
 import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zoom";
 
 type Nation = { viewBox: string; borders: string; states: { state: string; name: string; d: string; box: [number, number, number, number] }[] };
@@ -51,11 +52,9 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   const [nation, setNation] = useState<Nation | null | "error">(null);
   const [layer, setLayer] = useState<{ state: string; data: Layer } | null>(null);
   const [lines, setLines] = useState<{ state: string; data: Districts } | null>(null);
-  const [tip, setTip] = useState<{ x: number; y: number; right: boolean; low: boolean; content: ReactNode } | null>(null);
   const patternId = usePatternId();
-  // Outlines are drawn in a layer above every shape, so neighbors can't cover part of them.
-  const [hover, setHover] = useState<string | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
+  const hover = useMapHover(wrap);
   // A clicked county, zoomed to until it's clicked again or the state or race changes.
   const [zoomed, setZoomed] = useState<{ fips: string; focus: string; raceId: number | null } | null>(null);
 
@@ -120,16 +119,131 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   const target = countyBox ?? live ?? (kept.focus === focus ? kept.box : framed(focused!.box));
   const box = useTween(target);
 
-  if (nation === "error") return <p className="muted small">The map couldn&apos;t load. The list has every race.</p>;
-  if (!nation) return <div className="mt-map mt-map-loading nation" aria-busy />;
-
-  const showTip = (e: React.PointerEvent, content: ReactNode) => {
-    const r = wrap.current!.getBoundingClientRect();
-    // In the right or bottom half, the card opens toward the middle so it never runs off the map.
-    setTip({ x: e.clientX - r.left, y: e.clientY - r.top, right: e.clientX - r.left > r.width / 2, low: e.clientY - r.top > r.height / 2, content });
-  };
-  const focusedPath = focused?.d;
+  const nat = nation && nation !== "error" ? nation : null;
   const cities = focus && layer?.state === focus ? layer.data.cities : undefined;
+  const byState = useMemo(() => new Map(nat?.states.map((st) => [st.state, st]) ?? []), [nat]);
+  const byNationDistrict = useMemo(() => new Map(allDistricts?.map((d) => [d.key, d]) ?? []), [allDistricts]);
+  const byDistrict = useMemo(() => new Map(districts?.map((d) => [d.district, d]) ?? []), [districts]);
+  const byCounty = useMemo(() => new Map(counties?.map((c) => [c.fips, c]) ?? []), [counties]);
+
+  // The shapes are drawn once per change to the data, not on every frame of a zoom or every hover: each layer below
+  // is memoized, and pointer events are handled once on the <svg> by the `data-k` key of the shape under the pointer
+  // ("s:PA" a state, "n:PA-7" a district on the national view, "d:7" a district in the zoomed state, "c:42003" a county).
+  const stateLayer = useMemo(
+    () =>
+      nat && (
+        <>
+          {nat.states.map((st) => {
+            const f = fills.get(st.state);
+            const dim = focus && st.state !== focus;
+            return <path key={st.state} data-k={`s:${st.state}`} d={st.d} vectorEffect="non-scaling-stroke" className={`mt-state${f ? " active" : ""}${dim ? " dim" : ""}`} style={{ fill: f?.fill }} />;
+          })}
+          {nat.states.map((st) => fills.get(st.state)?.flip && <path key={`flip-${st.state}`} d={st.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
+          <path d={nat.borders} className="mt-borders" vectorEffect="non-scaling-stroke" />
+        </>
+      ),
+    [nat, fills, focus, patternId],
+  );
+  const nationDistrictLayer = useMemo(
+    () =>
+      nat && !focus && nationDistricts && (
+        <>
+          {allDistricts?.map((d) => {
+            const f = nationDistricts.get(d.key);
+            return <path key={d.key} data-k={`n:${d.key}`} d={d.d} vectorEffect="non-scaling-stroke" className={`mt-nation-district${f ? " active" : ""}`} style={{ fill: f?.fill }} />;
+          })}
+          {allDistricts?.map((d) => nationDistricts.get(d.key)?.flip && <path key={`flip-${d.key}`} d={d.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
+          <path d={nat.borders} className="mt-borders strong" vectorEffect="non-scaling-stroke" />
+        </>
+      ),
+    [nat, focus, nationDistricts, allDistricts, patternId],
+  );
+  const placeLayer = useMemo(
+    () =>
+      showDistricts ? (
+        <>
+          {showDistricts.map((d) => {
+            const f = districtFills?.get(d.district);
+            return <path key={d.district} data-k={`d:${d.district}`} d={d.d} vectorEffect="non-scaling-stroke" className={`mt-zoom-county${f ? " active" : ""}`} style={{ fill: f?.fill }} />;
+          })}
+          {showDistricts.map((d) => districtFills?.get(d.district)?.flip && <path key={`flip-${d.district}`} d={d.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
+        </>
+      ) : (
+        counties?.map((c) => {
+          const f = countyFills?.get(c.fips);
+          return <path key={c.fips} data-k={`c:${c.fips}`} d={c.d} vectorEffect="non-scaling-stroke" className={`mt-zoom-county${f ? " active" : ""}`} style={{ fill: f?.fill }} />;
+        })
+      ),
+    [showDistricts, districtFills, counties, countyFills, patternId],
+  );
+  // Election night: pre-election toss-ups get a yellow outline, called or not, and uncalled leans a thinner dashed
+  // one. Leans go first so a toss-up's outline sits on top where they meet.
+  const watchLayer = useMemo(() => {
+    const outline = (kind: "lean" | "watch") => {
+      const cls = kind === "lean" ? "mt-watch lean" : "mt-watch";
+      return (
+        <>
+          {nat && !focus && !nationDistricts && nat.states.map((st) => fills.get(st.state)?.[kind] && <path key={`${kind}-${st.state}`} d={st.d} className={cls} vectorEffect="non-scaling-stroke" />)}
+          {!focus && nationDistricts && allDistricts?.map((d) => nationDistricts.get(d.key)?.[kind] && <path key={`${kind}-${d.key}`} d={d.d} className={cls} vectorEffect="non-scaling-stroke" />)}
+          {showDistricts?.map((d) => districtFills?.get(d.district)?.[kind] && <path key={`${kind}-d${d.district}`} d={d.d} className={cls} vectorEffect="non-scaling-stroke" />)}
+        </>
+      );
+    };
+    return (
+      <>
+        {outline("lean")}
+        {outline("watch")}
+      </>
+    );
+  }, [nat, focus, nationDistricts, allDistricts, showDistricts, districtFills, fills]);
+  const labelLayer = useMemo(
+    () =>
+      !focus &&
+      labels.map((l) => (
+        <text key={l.state} x={l.at[0]} y={l.at[1]} className="mt-state-label" textAnchor="middle" dominantBaseline="central" aria-hidden>
+          {l.state}
+          {l.called && <tspan className="mt-state-check"> ✓</tspan>}
+        </text>
+      )),
+    [focus, labels],
+  );
+
+  if (nation === "error") return <p className="muted small">The map couldn&apos;t load. The list has every race.</p>;
+  if (!nat) return <div className="mt-map mt-map-loading nation" aria-busy />;
+
+  /** The hover card and outline for a shape's key, or null when it has none (a state under a zoomed-in one). */
+  const hit = (k: string): { d: string | null; tip: ReactNode } | null => {
+    const id = k.slice(2);
+    if (k.startsWith("s:")) {
+      const st = byState.get(id);
+      if (!st || counties || districts) return null;
+      const f = fills.get(id);
+      return { d: f ? st.d : null, tip: f?.tip ?? <b>{st.name}</b> };
+    }
+    if (k.startsWith("n:")) {
+      const d = byNationDistrict.get(id);
+      return d ? { d: d.d, tip: nationDistricts?.get(id)?.tip ?? <b>{d.name}</b> } : null;
+    }
+    if (k.startsWith("d:")) {
+      const d = byDistrict.get(Number(id));
+      return d ? { d: d.d, tip: districtFills?.get(d.district)?.tip ?? <b>{focus}-{d.district || "AL"}</b> } : null;
+    }
+    const c = byCounty.get(id);
+    return c ? { d: c.d, tip: countyFills?.get(id)?.tip ?? <b>{c.name}</b> } : null;
+  };
+  const pick = (k: string) => {
+    const id = k.slice(2);
+    if (k.startsWith("s:")) {
+      if (fills.has(id)) onFocus(id === focus ? null : id);
+    } else if (k.startsWith("n:")) {
+      if (nationDistricts?.has(id)) onPickNationDistrict?.(id);
+    } else if (k.startsWith("d:")) {
+      if (districtFills?.has(Number(id))) onPickDistrict?.(Number(id));
+    } else if (focus) {
+      setZoomed(county?.fips === id ? null : { fips: id, focus, raceId });
+    }
+  };
+  const hovered = hover.at ? hit(hover.at.key) : null;
 
   return (
     <div className="mt-map mt-zoom" ref={wrap}>
@@ -143,128 +257,40 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
             ← All states
           </button>
         ))}
-      <svg viewBox={box.join(" ")} role="img" aria-label={label}>
+      <svg
+        viewBox={box.join(" ")}
+        role="img"
+        aria-label={label}
+        onPointerMove={(e) => {
+          const k = keyOf(e);
+          if (k && hit(k)) hover.move(e, k);
+          else hover.leave();
+        }}
+        onPointerLeave={hover.leave}
+        onClick={(e) => {
+          const k = keyOf(e);
+          if (k) pick(k);
+        }}
+      >
         {/* Stripes keep the same width on screen as the map zooms. */}
         <FlipStripes id={patternId} size={box[2] / 140} />
-        {nation.states.map((s) => {
-          const f = fills.get(s.state);
-          const dim = focus && s.state !== focus;
-          return (
-            <path
-              key={s.state}
-              d={s.d}
-              vectorEffect="non-scaling-stroke"
-              className={`mt-state${f ? " active" : ""}${dim ? " dim" : ""}`}
-              style={{ fill: f?.fill }}
-              onPointerMove={(e) => {
-                if (counties || districts) return;
-                showTip(e, f?.tip ?? <b>{s.name}</b>);
-                setHover(f ? s.d : null);
-              }}
-              onPointerLeave={() => {
-                setTip(null);
-                setHover(null);
-              }}
-              onClick={() => f && onFocus(s.state === focus ? null : s.state)}
-            />
-          );
-        })}
-        {nation.states.map((s) => fills.get(s.state)?.flip && <path key={`flip-${s.state}`} d={s.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
-        <path d={nation.borders} className="mt-borders" vectorEffect="non-scaling-stroke" />
-        {!focus &&
-          nationDistricts &&
-          allDistricts?.map((d) => {
-            const f = nationDistricts.get(d.key);
-            return (
-              <path
-                key={d.key}
-                d={d.d}
-                vectorEffect="non-scaling-stroke"
-                className={`mt-nation-district${f ? " active" : ""}`}
-                style={{ fill: f?.fill }}
-                onPointerMove={(e) => {
-                  showTip(e, f?.tip ?? <b>{d.name}</b>);
-                  setHover(d.d);
-                }}
-                onPointerLeave={() => {
-                  setTip(null);
-                  setHover(null);
-                }}
-                onClick={() => f && onPickNationDistrict?.(d.key)}
-              />
-            );
-          })}
-        {!focus && nationDistricts && allDistricts?.map((d) => nationDistricts.get(d.key)?.flip && <path key={`flip-${d.key}`} d={d.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
-        {!focus && nationDistricts && <path d={nation.borders} className="mt-borders strong" vectorEffect="non-scaling-stroke" />}
-        {showDistricts?.map((d) => {
-          const f = districtFills?.get(d.district);
-          return (
-            <path
-              key={d.district}
-              d={d.d}
-              vectorEffect="non-scaling-stroke"
-              className={`mt-zoom-county${f ? " active" : ""}`}
-              style={{ fill: f?.fill }}
-              onPointerMove={(e) => {
-                showTip(e, f?.tip ?? <b>{focus}-{d.district || "AL"}</b>);
-                setHover(d.d);
-              }}
-              onPointerLeave={() => {
-                setTip(null);
-                setHover(null);
-              }}
-              onClick={() => f && onPickDistrict?.(d.district)}
-            />
-          );
-        })}
-        {showDistricts?.map((d) => districtFills?.get(d.district)?.flip && <path key={`flip-${d.district}`} d={d.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
-        {!showDistricts && counties?.map((c) => {
-          const f = countyFills?.get(c.fips);
-          return (
-            <path
-              key={c.fips}
-              d={c.d}
-              vectorEffect="non-scaling-stroke"
-              className={`mt-zoom-county${f ? " active" : ""}`}
-              style={{ fill: f?.fill }}
-              onPointerMove={(e) => {
-                showTip(e, f?.tip ?? <b>{c.name}</b>);
-                setHover(c.d);
-              }}
-              onPointerLeave={() => {
-                setTip(null);
-                setHover(null);
-              }}
-              onClick={() => focus && setZoomed(county?.fips === c.fips ? null : { fips: c.fips, focus, raceId })}
-            />
-          );
-        })}
+        {stateLayer}
+        {nationDistrictLayer}
+        {placeLayer}
+        {/* Outlines are drawn in a layer above every shape, so neighbors can't cover part of them. */}
         {county && <path d={county.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
         {pickedDistrict && <path d={pickedDistrict.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
-        {focusedPath && <path d={focusedPath} className="mt-line focus" vectorEffect="non-scaling-stroke" />}
-        {/* Election night: pre-election toss-ups get a yellow outline, called or not, and uncalled leans a
-            thinner dashed one. Leans go first so a toss-up's outline sits on top where they meet. */}
-        {!focus && !nationDistricts && nation.states.map((s) => fills.get(s.state)?.lean && <path key={`lean-${s.state}`} d={s.d} className="mt-watch lean" vectorEffect="non-scaling-stroke" />)}
-        {!focus && nationDistricts && allDistricts?.map((d) => nationDistricts.get(d.key)?.lean && <path key={`lean-${d.key}`} d={d.d} className="mt-watch lean" vectorEffect="non-scaling-stroke" />)}
-        {showDistricts?.map((d) => districtFills?.get(d.district)?.lean && <path key={`lean-d${d.district}`} d={d.d} className="mt-watch lean" vectorEffect="non-scaling-stroke" />)}
-        {!focus && !nationDistricts && nation.states.map((s) => fills.get(s.state)?.watch && <path key={`watch-${s.state}`} d={s.d} className="mt-watch" vectorEffect="non-scaling-stroke" />)}
-        {!focus && nationDistricts && allDistricts?.map((d) => nationDistricts.get(d.key)?.watch && <path key={`watch-${d.key}`} d={d.d} className="mt-watch" vectorEffect="non-scaling-stroke" />)}
-        {showDistricts?.map((d) => districtFills?.get(d.district)?.watch && <path key={`watch-d${d.district}`} d={d.d} className="mt-watch" vectorEffect="non-scaling-stroke" />)}
-        {hover && <path d={hover} className="mt-line hover" vectorEffect="non-scaling-stroke" />}
-        {!focus &&
-          labels.map((l) => (
-            <text key={l.state} x={l.at[0]} y={l.at[1]} className="mt-state-label" textAnchor="middle" dominantBaseline="central" aria-hidden>
-              {l.state}
-              {l.called && <tspan className="mt-state-check"> ✓</tspan>}
-            </text>
-          ))}
+        {focused?.d && <path d={focused.d} className="mt-line focus" vectorEffect="non-scaling-stroke" />}
+        {watchLayer}
+        {hovered?.d && <path d={hovered.d} className="mt-line hover" vectorEffect="non-scaling-stroke" />}
+        {labelLayer}
         {/* Laid out for where the zoom is heading, so labels don't reshuffle on every frame. */}
         {cities && <CityLabels cities={cities} view={target} />}
       </svg>
-      {tip && (
-        <div className="mt-tip" style={{ left: tip.x, top: tip.y }} data-right={tip.right || undefined} data-low={tip.low || undefined} role="status">
-          {tip.content}
-        </div>
+      {hover.at && hovered && (
+        <HoverCard at={hover.at} card={hover.card}>
+          {hovered.tip}
+        </HoverCard>
       )}
     </div>
   );
