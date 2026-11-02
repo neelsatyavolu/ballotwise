@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { callAlert } from "../lib/midterms/callAlert";
+import { callAlert, popsUp } from "../lib/midterms/callAlert";
 import type { CallEvent } from "../lib/midterms/calls";
 import type { RaceSummary } from "../lib/midterms/races";
 
@@ -25,5 +25,20 @@ describe("callAlert", () => {
 
   it("still says something when the race isn't in the catalog", () => {
     expect(callAlert(event({}), undefined)).toMatchObject({ kicker: "Called", label: "A race" });
+  });
+});
+
+describe("popsUp", () => {
+  it("pops up calls in Senate and House races rated likely, lean or toss-up", () => {
+    expect(popsUp("senate", "tossup")).toBe(true);
+    expect(popsUp("house", "lean-r")).toBe(true);
+    expect(popsUp("house", "likely-d")).toBe(true);
+  });
+
+  it("leaves out safe seats, governors and ballot measures", () => {
+    expect(popsUp("senate", null)).toBe(false);
+    expect(popsUp("house", undefined)).toBe(false);
+    expect(popsUp("governor", "tossup")).toBe(false);
+    expect(popsUp("measure", null)).toBe(false);
   });
 });

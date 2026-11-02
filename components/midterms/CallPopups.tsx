@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { callAlert, type CallAlert } from "@/lib/midterms/callAlert";
+import { callAlert, popsUp, type CallAlert } from "@/lib/midterms/callAlert";
 import { clockNow, simAt } from "@/lib/midterms/clock";
 import { ELECTION_DAY_START } from "@/lib/midterms/polls";
 import type { Overview } from "@/lib/midterms/view";
@@ -23,9 +23,10 @@ const REQUEST_TIMEOUT_MS = 15_000;
 type Shown = CallAlert & { until: number };
 
 /**
- * Every tracker page, whichever tab it's on, pops up a note in the corner when a race is called, a call changes or
- * one is withdrawn. Calls already made when the page opens don't pop. In a hidden browser tab it keeps checking only
- * when browser alerts are on (the bell in Latest calls, or the button here), and sends a system notification instead.
+ * Every tracker page, whichever tab it's on, pops up a note in the corner when a competitive Senate or House race (see
+ * popsUp) is called, its call changes or the call is withdrawn. Calls already made when the page opens don't pop. In a
+ * hidden browser tab it keeps checking only when browser alerts are on (the bell in Latest calls, or the button here),
+ * and sends a system notification instead.
  */
 export function CallPopups() {
   const [muted, setMuted] = useStored(POPUPS_KEY);
@@ -76,9 +77,11 @@ export function CallPopups() {
   const rehearsal = useMemo(() => simAt() !== null, []);
   const simulated = useLive<Overview>(rehearsal ? "/api/midterms" : null, { forecastOnly: true }).catalogData;
   useEffect(() => {
-    if (!simulated) return;
+    // The page's first answer is the server's, not yet run through the mock night: learning from it would make every
+    // call the night has made so far pop up at once when the simulated one arrives.
+    if (!simulated?.simulated) return;
     const byId = new Map(simulated.races.map((r) => [r.id, r]));
-    take((simulated.callEvents ?? []).map((e) => callAlert(e, byId.get(e.raceId))));
+    take((simulated.callEvents ?? []).filter((e) => popsUp(e.office, byId.get(e.raceId)?.rating)).map((e) => callAlert(e, byId.get(e.raceId))));
   }, [simulated, take]);
 
   useEffect(() => {
