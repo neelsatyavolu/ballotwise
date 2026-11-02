@@ -32,7 +32,7 @@ function raceBounds(state: Bounds, race: Bounds): Bounds {
  * States without a fill have no race of this kind and can't be picked. Given `districtFills`, a state with no
  * county results on show draws its congressional districts instead, and picking one calls `onPickDistrict`.
  */
-export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, districtFills, district, onPickDistrict, nationDistricts, onPickNationDistrict, nationDistrict }: {
+export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, districtFills, district, onPickDistrict, nationDistricts, onPickNationDistrict, nationDistrict, corner }: {
   fills: Map<string, Fill>;
   focus: string | null;
   onFocus: (state: string | null) => void;
@@ -55,6 +55,8 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
    * small city district can be found from across a room.
    */
   nationDistrict?: string | null;
+  /** A control laid over the map's bottom-left corner. */
+  corner?: ReactNode;
 }) {
   const [nation, setNation] = useState<Nation | null | "error">(null);
   const [layer, setLayer] = useState<{ state: string; data: Layer } | null>(null);
@@ -302,6 +304,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
         {/* Laid out for where the zoom is heading, so labels don't reshuffle on every frame. */}
         {cities && <CityLabels cities={cities} view={target} />}
       </svg>
+      {corner && <div className="mt-zoom-corner">{corner}</div>}
       {hover.at && hovered && (
         <HoverCard at={hover.at} card={hover.card}>
           {hovered.tip}

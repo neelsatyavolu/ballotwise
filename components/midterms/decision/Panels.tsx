@@ -18,6 +18,7 @@ import { MarketPanel } from "../MarketPanel";
 import { nationDistrictFills, stateFills } from "../OfficeView";
 import { PollSchedule } from "../PollClose";
 import { RaceInsights } from "../RaceInsights";
+import { leftOf } from "../useVotesLeft";
 import { ZoomMap } from "../ZoomMap";
 import { useDashboardData, type RaceData } from "./data";
 
@@ -56,10 +57,11 @@ function Status({ race }: { race: RaceSummary }) {
 }
 
 function Topline({ id, short }: { id?: number; short: boolean }) {
-  const { race, missing } = useRace(id);
+  const { race, data, missing } = useRace(id);
   if (missing) return <Empty>This race isn&apos;t available.</Empty>;
   if (!race) return <Empty>Loading…</Empty>;
-  const table = <CandidateTable race={race} status={<Status race={race} />} short={short} fill />;
+  // The panel already has the race's counties, so the estimate costs nothing more.
+  const table = <CandidateTable race={race} status={<Status race={race} />} left={leftOf(data?.race)} short={short} fill />;
   // Narrow panels drop the party column: the color bar already says it, and names get the room.
   return short ? <div className="mt-dv-compact">{table}</div> : table;
 }

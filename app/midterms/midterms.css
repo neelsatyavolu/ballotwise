@@ -265,6 +265,9 @@
 .mt-zoom-county { fill: color-mix(in srgb, var(--rule) 70%, var(--sheet)); stroke: var(--sheet); stroke-width: 0.8; transition: fill 0.4s; cursor: pointer; }
 .mt-zoom-back { position: absolute; top: 10px; left: 10px; z-index: 2; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 4px 12px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--ink); }
 .mt-zoom-back:hover { border-color: var(--ink); }
+/* A control in the map's bottom-left corner (the Senate and House maps' 2024 switch). */
+.mt-zoom-corner { position: absolute; left: 10px; bottom: 10px; z-index: 2; }
+.mt-year-toggle button { padding: 4px 10px; font-size: 12px; }
 
 @media (max-width: 1000px) {
   .mt-office { grid-template-columns: 1fr; }
@@ -812,6 +815,8 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-ct-status .mt-res-status { min-height: 18px; }
 .mt-ct-status .called { color: var(--el-reported); font-weight: 600; }
 .mt-ct-report td { border-bottom: 0; }
+/* The estimated votes still to count, under the counted total. */
+.mt-ct-left .num { color: var(--ink); }
 /* The bar runs from the candidate column's edge; the share sits at the right, under the Pct column. */
 .mt-ct-in { display: flex; align-items: center; gap: 10px; }
 .mt-ct-in .num { min-width: 3.5em; text-align: right; }

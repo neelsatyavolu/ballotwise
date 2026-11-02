@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { isEarly } from "@/lib/midterms/explore";
 import { ballotOrder, fmt, partyTag, type RaceSummary } from "@/lib/midterms/view";
 import { pickIn } from "@/lib/midterms/picks";
+import { approx, VOTES_LEFT_CAVEAT } from "@/lib/midterms/votesLeft";
 import { Avatar } from "./Avatar";
 import { partyColor } from "./party";
 import { PickTag, usePicks } from "./picks";
@@ -50,11 +51,12 @@ function Reporting({ race }: { race: RaceSummary }) {
 
 /**
  * A race's candidates as a results-desk table: a party bar, photo or initials, name, party, votes and share on each
- * row, then `status` (when polls close, or how the count stands) with the total votes, then how much is reported.
+ * row, then `status` (when polls close, or how the count stands) with the total votes, the estimated votes still to
+ * count when `left` is given, then how much is reported.
  * `limit` shows only the leaders, with a link to the rest; `short` uses last names for narrow cards; `share` adds a
  * bar beside each percentage; `fill` stretches the table to its card's height, keeping the footer rows at the bottom.
  */
-export function CandidateTable({ race, status, limit, short = false, share = false, fill = false }: { race: RaceSummary; status: ReactNode; limit?: number; short?: boolean; share?: boolean; fill?: boolean }) {
+export function CandidateTable({ race, status, left = null, limit, short = false, share = false, fill = false }: { race: RaceSummary; status: ReactNode; left?: number | null; limit?: number; short?: boolean; share?: boolean; fill?: boolean }) {
   // A local race found by search is carried as a "measure", but a contest between candidates still gets their columns.
   const measure = race.office === "measure" && race.local?.kind !== "candidates";
   // Before votes, the contenders lead (see ballotOrder), so a card's top rows aren't civicAPI's listing order.
@@ -128,6 +130,13 @@ export function CandidateTable({ race, status, limit, short = false, share = fal
           <td className="num">{race.total > 0 && fmt(race.total)}</td>
           <td />
         </tr>
+        {left !== null && (
+          <tr className="mt-ct-left" title={VOTES_LEFT_CAVEAT}>
+            <td colSpan={cols - 2}>Est. votes left</td>
+            <td className="num">~{approx(left)}</td>
+            <td />
+          </tr>
+        )}
         <tr className="mt-ct-report">
           <td colSpan={cols}>
             <Reporting race={race} />

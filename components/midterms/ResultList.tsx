@@ -11,6 +11,7 @@ import { partyColor } from "./party";
 import { shortLabel } from "./PollClose";
 import { RailContext, useRailSplit } from "./railSplit";
 import { RatingTag } from "./RaceCard";
+import { useOnScreen, useVotesLeft } from "./useVotesLeft";
 import { LeadChanged } from "./SinceBanner";
 
 const PAGE = 50;
@@ -126,8 +127,10 @@ const RaceTile = memo(
   function RaceTile({ race, starred, onStar, now, changed }: TileProps) {
   const leader = leaderOf(race);
   const sub = race.about?.text ?? (race.total ? null : signalLine(race.signal, race));
+  const tile = useRef<HTMLElement>(null);
+  const left = useVotesLeft(race, useOnScreen(tile));
   return (
-    <article className={`mt-tile s-${statusOf(race)}${leader ? ` p-${leader}` : ""}${isTossup(race) ? " watch" : isCompetitive(race) ? " lean" : ""}`} aria-label={shortLabel(race)}>
+    <article ref={tile} className={`mt-tile s-${statusOf(race)}${leader ? ` p-${leader}` : ""}${isTossup(race) ? " watch" : isCompetitive(race) ? " lean" : ""}`} aria-label={shortLabel(race)}>
       {race.total > 0 && (
         <span className="mt-tile-share" aria-hidden>
           {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c), opacity: isEarly(race) ? 0.55 : 1 }} />)}
@@ -156,6 +159,7 @@ const RaceTile = memo(
             <Lead race={race} />
           </span>
         }
+        left={left}
       />
       <footer className="mt-tile-foot">
         <TrendLine race={race} now={now} />

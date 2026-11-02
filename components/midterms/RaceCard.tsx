@@ -1,9 +1,11 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
+import { useRef } from "react";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import { lead, raceLabel, RATING_LABEL, signalLine, type RaceSummary } from "@/lib/midterms/view";
 import { CandidateTable } from "./CandidateTable";
 import { useClock } from "./hooks";
+import { useOnScreen, useVotesLeft } from "./useVotesLeft";
 import { partyColor } from "./party";
 
 export function StarButton({ starred, onToggle, label }: { starred: boolean; onToggle: () => void; label: string }) {
@@ -33,12 +35,17 @@ function CardStatus({ race }: { race: RaceSummary }) {
   return <span>{final && final > now ? `Polls close ${stampTime(final)} ${zoneAbbr(final)}` : "No results yet"}</span>;
 }
 
-/** One race at a glance: the top candidates as a results table, a stacked vote bar once votes are in, and how much is counted. */
+/**
+ * One race at a glance: the top candidates as a results table, a stacked vote bar once votes are in, how much is
+ * counted, and the estimated votes still to count.
+ */
 export function RaceCard({ race, starred, onStar, limit = 3 }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void; limit?: number }) {
   const label = raceLabel(race);
   const sub = race.total ? null : signalLine(race.signal, race);
+  const card = useRef<HTMLLIElement>(null);
+  const left = useVotesLeft(race, useOnScreen(card));
   return (
-    <li className="mt-card" data-race={race.id}>
+    <li className="mt-card" data-race={race.id} ref={card}>
       <div className="mt-card-top">
         <Link href={`/midterms/${race.id}`} className="mt-card-title">
           {label}
@@ -53,7 +60,7 @@ export function RaceCard({ race, starred, onStar, limit = 3 }: { race: RaceSumma
           {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c) }} />)}
         </div>
       )}
-      <CandidateTable race={race} limit={limit} short fill status={<CardStatus race={race} />} />
+      <CandidateTable race={race} limit={limit} short fill status={<CardStatus race={race} />} left={left} />
     </li>
   );
 }

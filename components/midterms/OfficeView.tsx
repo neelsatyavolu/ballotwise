@@ -6,6 +6,7 @@ import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { projection } from "@/lib/midterms/forecastTab";
 import { closestFirst, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
+import { districtMargin2024, margin2024Label, stateMargin2024 } from "@/lib/midterms/past2024";
 import { electionModeDefault } from "@/lib/midterms/polls";
 import { colorOf, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
@@ -61,6 +62,39 @@ export function nationDistrictFills(races: RaceSummary[], updatedAt: number | nu
     if (!out.has(key)) out.set(key, districtFill(r, updatedAt, results));
   }
   return out;
+}
+
+/** How a place looks in the map's 2024 view: shaded by the 2024 presidential margin, with it in the hover card. */
+function fill2024(name: string, margin: number | null): Fill {
+  return {
+    fill: margin === null ? "var(--rule)" : shade(margin > 0 ? "var(--dem)" : "var(--rep)", Math.abs(margin)),
+    tip: (
+      <>
+        <b>{name}</b>
+        <div>2024 president: {margin === null ? "no figure" : margin2024Label(margin)}</div>
+      </>
+    ),
+  };
+}
+
+/** The map's 2024 view of the same places `now` colors: states, and House districts keyed "PA-7". */
+const states2024 = (now: Map<string, Fill>) => new Map([...now.keys()].map((st) => [st, fill2024(STATE_NAMES[st] ?? st, stateMargin2024(st))]));
+const nationDistricts2024 = (now: Map<string, Fill>) =>
+  new Map(
+    [...now.keys()].map((key) => {
+      const [st, d] = key.split("-");
+      return [key, fill2024(`${st}-${Number(d) || "AL"}`, districtMargin2024(st, Number(d)))];
+    }),
+  );
+
+/** The Senate and House maps' switch between this year's races and the 2024 presidential result. */
+function Year2024Toggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className="mt-seg mt-year-toggle" role="group" aria-label="Map year">
+      <button type="button" aria-pressed={!on} onClick={() => onChange(false)}>2026</button>
+      <button type="button" aria-pressed={on} onClick={() => onChange(true)} title="Each state and district shaded by the 2024 presidential margin">2024 president</button>
+    </div>
+  );
 }
 
 /** How each state looks on this office's national map. */
@@ -140,13 +174,19 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const [focus, setFocus] = useState<string | null>(initialState);
   const [picked, setPicked] = useState<number | null>(null);
   const [query, setQuery] = useState("");
+  // The Senate and House maps can show the 2024 presidential result in place of this year's races.
+  const offers2024 = office === "senate" || office === "house";
+  const [show2024, setShow2024] = useState(false);
+  const past = offers2024 && show2024;
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
   const updatedAt = data?.ratings.updatedAt ?? null;
   // From election day on, maps drop the forecast and fill in only as results arrive.
   const results = electionModeDefault(useClock(60_000));
-  const fills = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
-  const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
+  const fillsNow = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
+  const fills = useMemo(() => (past ? states2024(fillsNow) : fillsNow), [past, fillsNow]);
+  const nationDistrictsNow = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
+  const nationDistricts = useMemo(() => (past && nationDistrictsNow ? nationDistricts2024(nationDistrictsNow) : nationDistrictsNow), [past, nationDistrictsNow]);
   // House districts go closest to a toss-up first; other offices keep the regular race first, then ballot order.
   const inState = useMemo(
     () => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || (office === "house" ? closestFirst(a, b) : 0) || (a.district ?? 0) - (b.district ?? 0) || a.title.localeCompare(b.title, undefined, { numeric: true })),
@@ -164,15 +204,19 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
     if (office !== "house") return undefined;
     const out = new Map<number, Fill>();
     // inState lists a district's regular race before any special, so the regular one colors it.
-    for (const r of inState) if (r.district !== null && !out.has(r.district)) out.set(r.district, districtFill(r, updatedAt, results));
+    for (const r of inState) {
+      if (r.district === null || out.has(r.district)) continue;
+      out.set(r.district, past ? fill2024(raceLabel(r), districtMargin2024(r.state, r.district)) : districtFill(r, updatedAt, results));
+    }
     return out;
-  }, [office, inState, updatedAt, results]);
+  }, [office, inState, updatedAt, results, past]);
   const countyFills = useMemo(() => {
     if (!detail.data) return null;
+    const mode = past ? "2024" : "results";
     const out = new Map<string, Fill>();
-    for (const c of detail.data.race.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: <CountyTip county={c} /> });
+    for (const c of detail.data.race.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} mode={mode} /> });
     return out;
-  }, [detail.data]);
+  }, [detail.data, past]);
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
     return races.filter((r) => !q || `${raceLabel(r)} ${r.title} ${STATE_NAMES[r.state] ?? ""} ${r.candidates.map((c) => c.name).join(" ")}`.toLowerCase().includes(q)).sort(closestFirst);
@@ -207,7 +251,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
             <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (detail.data ? countyFills : undefined) : null} raceId={shownId} districtFills={districtFills} nationDistricts={nationDistricts} onPickNationDistrict={(key) => {
                 const r = races.find((x) => `${x.state}-${x.district ?? 0}` === key);
                 if (r) zoomTo(r.state, r.id);
-              }} district={shown?.district ?? null} onPickDistrict={(d) => setPicked(shown?.district === d ? null : (inState.find((r) => r.district === d)?.id ?? null))} label={`Map of 2026 ${TITLE[office].toLowerCase()} races${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}`} />
+              }} district={shown?.district ?? null} onPickDistrict={(d) => setPicked(shown?.district === d ? null : (inState.find((r) => r.district === d)?.id ?? null))} label={past ? `Map of the 2024 presidential result where 2026 ${TITLE[office].toLowerCase()} races are${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}` : `Map of 2026 ${TITLE[office].toLowerCase()} races${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}`} corner={offers2024 && <Year2024Toggle on={show2024} onChange={setShow2024} />} />
 
             <aside className="mt-panel" aria-label={focus ? `${STATE_NAMES[focus]} races` : "All races"}>
               {!focus ? (

@@ -2,16 +2,10 @@
 // Rendered on race pages and in map hover cards while a race is counting.
 
 import type { RaceDetail } from "@/lib/midterms/races";
-import { votesLeft, type Share, type VotesLeft as Estimate } from "@/lib/midterms/votesLeft";
-import { colorOf, fmt } from "@/lib/midterms/view";
+import { approx, VOTES_LEFT_CAVEAT as CAVEAT, votesLeft, type Share, type VotesLeft as Estimate } from "@/lib/midterms/votesLeft";
+import { colorOf } from "@/lib/midterms/view";
 import { lastName } from "./CandidateTable";
 import { useLive } from "./hooks";
-
-/** A rough count, so it doesn't read as exact: 182,431 is "182,000", 4,620 is "4,600". */
-function approx(n: number): string {
-  const step = n >= 10_000 ? 1_000 : n >= 1_000 ? 100 : 10;
-  return fmt(Math.round(n / step) * step);
-}
 
 const short = (s: Share) => lastName(s.name);
 
@@ -30,8 +24,6 @@ function placeLabel(est: Estimate, p: Estimate["places"][number]): string {
   if (p.edge === null || Math.round(p.edge) === 0) return p.name;
   return `${p.name} (${short(p.edge > 0 ? est.leader : est.runnerUp)} +${Math.abs(Math.round(p.edge))})`;
 }
-
-const CAVEAT = "A rough estimate: civicAPI's reporting figure counts precincts or ballot batches, not ballots, and late mail can lean differently from the count so far.";
 
 /** The estimate as a race-page panel: how many votes are left, how they'd split, where they are and what it means. */
 export function VotesLeftPanel({ race }: { race: RaceDetail }) {

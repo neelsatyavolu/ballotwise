@@ -1,6 +1,6 @@
 // A rough estimate of the vote still to count in a race, county by county, and how it might split.
 import type { CountyResult, RaceDetail } from "./races";
-import { partyOf } from "./view";
+import { fmt, partyOf } from "./view";
 
 /** One of the two leading candidates and the votes they might get from what's left. */
 export type Share = { name: string; party: string; votes: number };
@@ -17,6 +17,14 @@ export type VotesLeft = {
   /** Counties with nothing counted and no 2024 vote to go on, left out of the estimate. */
   unknown: number;
 };
+
+/** A rough count, so it doesn't read as exact: 182,431 is "182,000", 4,620 is "4,600". */
+export function approx(n: number): string {
+  const step = n >= 10_000 ? 1_000 : n >= 1_000 ? 100 : 10;
+  return fmt(Math.round(n / step) * step);
+}
+
+export const VOTES_LEFT_CAVEAT = "A rough estimate: civicAPI's reporting figure counts precincts or ballot batches, not ballots, and late mail can lean differently from the count so far.";
 
 const PLACES = 3;
 const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
