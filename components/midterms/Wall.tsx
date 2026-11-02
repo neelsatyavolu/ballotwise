@@ -10,7 +10,7 @@ import { closestFirst } from "@/lib/midterms/explore";
 import { countdown, electionModeDefault, formatTime, nextWave } from "@/lib/midterms/polls";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { votesLeft } from "@/lib/midterms/votesLeft";
-import { autoScale, NATION_MS, nextScale, RACE_MS, tourRaces, tourStops } from "@/lib/midterms/wall";
+import { autoScale, nextScale, TOUR, tourRaces, tourStops, type TourPlan } from "@/lib/midterms/wall";
 import { raceLabel, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
@@ -28,8 +28,8 @@ const TITLE: Record<WallOffice, string> = { senate: "Senate", house: "House" };
 /** The most rows the closest-races table holds; the screen shows as many as fit. */
 const MAX_ROWS = 60;
 /**
- * How many of the tour's next races the wall lays out. Under the whole-country map two fit side by side (wall.css
- * hides the third); an ultrawide stacks them beside the map, as many as fit.
+ * How many of the tour's next races get a card. Under the whole-country map two fit side by side (wall.css hides the
+ * third); an ultrawide stacks them beside the map, as many as fit, then lists the rest of the tour as rows.
  */
 const UP_NEXT = 3;
 /** How far a card starts below its place as it fades in (.mt-in in midterms.css), plus a pixel of rounding. */
@@ -102,36 +102,62 @@ function useWakeLock() {
   }, []);
 }
 
-/** The tour's current stop (a race id, or null for the whole country) and the races it visits next. Moves on by itself. */
-function useTour(stops: readonly (number | null)[]): { stop: number | null; upNext: number[] } {
+/** The tour's current stop (a race id, or null for the whole country) and the rest of its races, in the order it visits them. Moves on by itself. */
+function useTour(stops: readonly (number | null)[], plan: TourPlan): { stop: number | null; upNext: number[] } {
   const [i, setI] = useState(0);
   const at = i % stops.length;
   const stop = stops[at];
   useEffect(() => {
-    const t = setTimeout(() => setI(at + 1), stop === null ? NATION_MS : RACE_MS);
+    const t = setTimeout(() => setI(at + 1), stop === null ? plan.nationMs : plan.raceMs);
     return () => clearTimeout(t);
-  }, [at, stop]);
+  }, [at, stop, plan]);
   const ahead = [...stops.slice(at + 1), ...stops.slice(0, at)].filter((id): id is number => id !== null && id !== stop);
-  return { stop, upNext: ahead.slice(0, UP_NEXT) };
+  return { stop, upNext: ahead };
 }
 
 /**
- * Hides every `items` element inside `box` from the first one that runs past the box's bottom, so a list fills its
- * space with whole rows instead of one cut in half. Runs after every render and whenever the box or its contents change;
- * `ready` is false until the box is on the page (the wall draws its lists once results arrive).
+ * Hides every one of `items` from the first that runs past the bottom of `box`, so a list ends on a whole row.
+ * `slidePx` is how far the items may sit below their place while fading in.
  */
-function useFit(box: RefObject<HTMLElement | null>, items: string, ready: boolean) {
+function hidePastBottom(box: HTMLElement, items: HTMLElement[], slidePx = SLIDE_PX) {
+  const rect = box.getBoundingClientRect();
+  // Showing a card again restarts its fade-in (.mt-in), which starts it a few pixels low; that doesn't count as
+  // running past the bottom. The slack is in screen pixels, so it grows with the wall's scale.
+  const slack = slidePx * (rect.height / (box.offsetHeight || 1));
+  const first = items.findIndex((x) => x.getBoundingClientRect().bottom > rect.bottom + slack);
+  if (first >= 0) items.slice(first).forEach((x) => (x.hidden = true));
+}
+
+/** Every element in `box` matching `selector`, shown again so it can be measured. */
+function showAll(box: HTMLElement, selector: string): HTMLElement[] {
+  const all = [...box.querySelectorAll<HTMLElement>(selector)];
+  all.forEach((x) => (x.hidden = false));
+  return all;
+}
+
+const fitList = (selector: string) => (box: HTMLElement) => hidePastBottom(box, showAll(box, selector));
+const fitRows = fitList(".mt-rows tbody tr");
+const fitCalls = fitList(".mt-el-calllist > li");
+
+/** The tour's next races: whole cards first, then rows for the later races, skipping the ones with a card showing. */
+function fitTour(box: HTMLElement) {
+  const cards = showAll(box, ".mt-wall-upnext .mt-card");
+  hidePastBottom(box, cards);
+  const carded = cards.filter((c) => !c.hidden && c.getClientRects().length > 0).length;
+  const rows = showAll(box, ".mt-wall-later tbody tr");
+  rows.slice(0, carded).forEach((x) => (x.hidden = true));
+  // The rows don't fade in, so only rounding is allowed for.
+  hidePastBottom(box, rows.slice(carded), 1);
+}
+
+/**
+ * Runs `fit` on `box` (hiding whatever runs past its bottom, so a list fills its space with whole rows instead of one
+ * cut in half) after every render and whenever the box or its contents change. `ready` is false until the box is on
+ * the page (the wall draws its lists once results arrive).
+ */
+function useFit(box: RefObject<HTMLElement | null>, fitBox: (box: HTMLElement) => void, ready: boolean) {
   const fit = () => {
-    const el = box.current;
-    if (!el) return;
-    const all = [...el.querySelectorAll<HTMLElement>(items)];
-    all.forEach((x) => (x.hidden = false));
-    const rect = el.getBoundingClientRect();
-    // Showing a card again restarts its fade-in (.mt-in), which starts it a few pixels low; that doesn't count as
-    // running past the bottom. The slack is in screen pixels, so it grows with the wall's scale.
-    const slack = SLIDE_PX * (rect.height / (el.offsetHeight || 1));
-    const first = all.findIndex((x) => x.getBoundingClientRect().bottom > rect.bottom + slack);
-    if (first >= 0) all.slice(first).forEach((x) => (x.hidden = true));
+    if (box.current) fitBox(box.current);
   };
   useLayoutEffect(fit);
   useEffect(() => {
@@ -146,13 +172,19 @@ function useFit(box: RefObject<HTMLElement | null>, items: string, ready: boolea
       size.disconnect();
       content.disconnect();
     };
-    // fit reads only the ref and the selector.
+    // fit reads only the ref and the fitting function.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [box, items, ready]);
+  }, [box, fitBox, ready]);
 }
 
-/** The map, zoomed out to the country or into the tour's current race with its counties (or districts) shaded. */
-function TourMap({ office, races, updatedAt, results, race, detail }: { office: WallOffice; races: RaceSummary[]; updatedAt: number | null; results: boolean; race: RaceSummary | null; detail: RaceDetail | null }) {
+/**
+ * The map, zoomed out to the country or into the tour's current race with its counties (or districts) shaded. The
+ * House's stays on the country with the race's district marked (TOUR in wall.ts).
+ */
+function TourMap({ office, races, updatedAt, results, race: toured, detail }: { office: WallOffice; races: RaceSummary[]; updatedAt: number | null; results: boolean; race: RaceSummary | null; detail: RaceDetail | null }) {
+  const zooms = TOUR[office].racesPerLeg !== null;
+  const race = zooms ? toured : null;
+  const marked = !zooms && toured ? `${toured.state}-${toured.district ?? 0}` : null;
   const focus = race?.state ?? null;
   const fills = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
   const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
@@ -177,8 +209,9 @@ function TourMap({ office, races, updatedAt, results, race, detail }: { office: 
       raceId={race?.id ?? null}
       districtFills={districtFills}
       nationDistricts={nationDistricts}
+      nationDistrict={marked}
       district={race?.district ?? null}
-      label={race ? `Map zoomed to ${raceLabel(race)}` : `Map of 2026 ${TITLE[office].toLowerCase()} races`}
+      label={race ? `Map zoomed to ${raceLabel(race)}` : `Map of 2026 ${TITLE[office].toLowerCase()} races${toured ? `, marking ${raceLabel(toured)}` : ""}`}
     />
   );
 }
@@ -216,8 +249,8 @@ export function Wall({ office }: { office: WallOffice }) {
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
   const closest = useMemo(() => [...races].sort(closestFirst).slice(0, MAX_ROWS), [races]);
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
-  const stops = useMemo(() => tourStops(tour.map((r) => r.id)), [tour]);
-  const { stop: stopId, upNext } = useTour(stops);
+  const stops = useMemo(() => tourStops(tour.map((r) => r.id), TOUR[office].racesPerLeg), [tour, office]);
+  const { stop: stopId, upNext } = useTour(stops, TOUR[office]);
   const stop = races.find((r) => r.id === stopId) ?? null;
   // The toured race with its counties, for the map's shading and the votes-left estimate under its card.
   const stopDetail = useLive<{ race: RaceDetail }>(stop ? `/api/midterms/race/${stop.id}` : null).data?.race ?? null;
@@ -228,9 +261,9 @@ export function Wall({ office }: { office: WallOffice }) {
   const table = useRef<HTMLElement>(null);
   const side = useRef<HTMLElement>(null);
   const detail = useRef<HTMLDivElement>(null);
-  useFit(table, ".mt-rows tbody tr", !!data);
-  useFit(detail, ".mt-wall-upnext .mt-card", !!data);
-  useFit(side, ".mt-el-calllist > li", !!data);
+  useFit(table, fitRows, !!data);
+  useFit(detail, fitTour, !!data);
+  useFit(side, fitCalls, !!data);
 
   return (
     <div className="mt mt-wall" style={{ "--wall-scale": scale } as CSSProperties}>
@@ -274,10 +307,17 @@ export function Wall({ office }: { office: WallOffice }) {
                     <div className="mt-wall-upnext mt-in" key={`next-${stopId}`}>
                       <h3>Up next on the tour</h3>
                       <ul className="mt-grid">
-                        {next.map((r) => (
+                        {next.slice(0, UP_NEXT).map((r) => (
                           <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
                         ))}
                       </ul>
+                    </div>
+                  )}
+                  {/* An ultrawide fills the rest of the column with the rest of the tour, a row each. */}
+                  {next.length > 0 && (
+                    <div className="mt-wall-later">
+                      <h3>Later on the tour</h3>
+                      <RaceRows races={next} star={NO_STARS} />
                     </div>
                   )}
                 </div>

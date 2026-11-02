@@ -7,6 +7,8 @@ import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zo
 
 type Nation = { viewBox: string; borders: string; states: { state: string; name: string; d: string; box: [number, number, number, number] }[] };
 type Layer = { counties: { fips: string; name: string; d: string }[]; cities?: City[] };
+/** The ring at the middle of a marked district, in map units (the national map is 975 wide). */
+const MARK_RING = 16;
 type Districts = { districts: { district: number; d: string }[] };
 /** `flip` stripes a state or district projected to change party; `called` marks a state's label with a check. */
 /** `watch` outlines a toss-up in yellow on election night, `lean` an uncalled lean in a thinner dashed yellow. */
@@ -30,7 +32,7 @@ function raceBounds(state: Bounds, race: Bounds): Bounds {
  * States without a fill have no race of this kind and can't be picked. Given `districtFills`, a state with no
  * county results on show draws its congressional districts instead, and picking one calls `onPickDistrict`.
  */
-export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, districtFills, district, onPickDistrict, nationDistricts, onPickNationDistrict }: {
+export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, districtFills, district, onPickDistrict, nationDistricts, onPickNationDistrict, nationDistrict }: {
   fills: Map<string, Fill>;
   focus: string | null;
   onFocus: (state: string | null) => void;
@@ -48,6 +50,11 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   nationDistricts?: Map<string, Fill>;
   /** A district picked on the national view, by its key. */
   onPickNationDistrict?: (key: string) => void;
+  /**
+   * A district marked on the national view without zooming, by its key: outlined, with a ring at its middle so even a
+   * small city district can be found from across a room.
+   */
+  nationDistrict?: string | null;
 }) {
   const [nation, setNation] = useState<Nation | null | "error">(null);
   const [layer, setLayer] = useState<{ state: string; data: Layer } | null>(null);
@@ -123,6 +130,11 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   const cities = focus && layer?.state === focus ? layer.data.cities : undefined;
   const byState = useMemo(() => new Map(nat?.states.map((st) => [st.state, st]) ?? []), [nat]);
   const byNationDistrict = useMemo(() => new Map(allDistricts?.map((d) => [d.key, d]) ?? []), [allDistricts]);
+  const marked = !focus && nationDistrict ? byNationDistrict.get(nationDistrict) : undefined;
+  const markedAt = useMemo(() => {
+    const b = marked && boundsOf([marked.d]);
+    return b ? { x: (b[0] + b[2]) / 2, y: (b[1] + b[3]) / 2 } : null;
+  }, [marked]);
   const byDistrict = useMemo(() => new Map(districts?.map((d) => [d.district, d]) ?? []), [districts]);
   const byCounty = useMemo(() => new Map(counties?.map((c) => [c.fips, c]) ?? []), [counties]);
 
@@ -282,6 +294,9 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
         {pickedDistrict && <path d={pickedDistrict.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
         {focused?.d && <path d={focused.d} className="mt-line focus" vectorEffect="non-scaling-stroke" />}
         {watchLayer}
+        {/* Above the toss-up outlines, which would otherwise hide a marked toss-up's. */}
+        {marked && <path d={marked.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
+        {markedAt && <circle cx={markedAt.x} cy={markedAt.y} r={MARK_RING} className="mt-line mt-mark" vectorEffect="non-scaling-stroke" />}
         {hovered?.d && <path d={hovered.d} className="mt-line hover" vectorEffect="non-scaling-stroke" />}
         {labelLayer}
         {/* Laid out for where the zoom is heading, so labels don't reshuffle on every frame. */}

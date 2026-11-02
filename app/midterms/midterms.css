@@ -280,6 +280,7 @@
 .mt-line.hover { stroke-width: 1.6; }
 .mt-line.selected { stroke-width: 2.4; }
 .mt-line.focus { stroke-width: 1.4; }
+.mt-line.mt-mark { stroke-width: 3; }
 .mt-cities { pointer-events: none; font-weight: 600; }
 .mt-cities circle { fill: var(--ink); stroke: var(--sheet); }
 .mt-cities text { fill: var(--ink); stroke: color-mix(in srgb, var(--sheet) 85%, transparent); stroke-linejoin: round; paint-order: stroke; }
@@ -988,6 +989,17 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 @media (min-width: 2560px) {
   .mt-sbs { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(340px, 0.6fr); }
   .mt-sbs-side { display: grid; gap: 20px; align-content: start; }
+  /*
+   * The calls list takes whatever height the poll closings leave in the column, instead of the column scrolling with
+   * the closings below the fold. The column doesn't count toward the row's height (contain), so a long night of calls
+   * can't stretch it.
+   */
+  .mt-sbs-side { display: flex; flex-direction: column; contain: size; }
+  .mt-sbs-side > .mt-el-calls { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .mt-sbs-side .mt-el-calllist { flex: 1 1 0; min-height: 0; max-height: none; }
+  .mt-sbs-side > .mt-el-sched { flex: none; }
+  /* Closed waves give their room to the calls, as on the wall screens. */
+  .mt-sbs-side .mt-el-sched li.closed, .mt-sbs-side .mt-el-sched:not(:has(li:not(.closed))) { display: none; }
 }
 
 /* Other races: "find any race" on the overview and in a dialog from election mode's toolbar. */
@@ -1569,8 +1581,12 @@ body:has(> .mt-companion) { overflow: hidden; }
  */
 .mt-companion-tossups { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .mt-companion-board { flex: 1 1 0; min-height: 260px; display: flex; flex-direction: column; }
-.mt-companion-board > .mt-sbs-cards { flex: 1 1 0; min-height: 0; overflow: hidden; align-content: start; grid-auto-rows: max-content; }
-.mt-companion .mt-card[hidden] { display: none; }
+.mt-companion-wall { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 12px; }
+.mt-companion-wall > .mt-sbs-cards { flex: none; margin: 0; align-content: start; grid-auto-rows: max-content; }
+/* Under the cards, the next races a row each, in whatever height a card couldn't fill (CompanionBoard.tsx fitWall). */
+.mt-companion-wall > .mt-rows-wrap { flex: none; max-height: none; overflow: hidden; }
+.mt-companion-wall > .mt-rows-wrap:not(:has(tbody tr:not([hidden]))) { display: none; }
+.mt-companion .mt-card[hidden], .mt-companion .mt-rows tr[hidden] { display: none; }
 .mt-companion-tiles { flex: 1 1 0; min-height: 0; display: grid; gap: 12px; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-template-rows: repeat(var(--rows), minmax(0, 1fr)); }
 .mt-companion-tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
 .mt-companion-tile > .mt-grid { flex: none; margin: 0; }

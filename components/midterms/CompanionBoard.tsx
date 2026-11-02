@@ -11,6 +11,7 @@ import { CountyTip, fillFor } from "./county";
 import { useLive, useStars } from "./hooks";
 import { CountyMap, type CountyFill } from "./maps";
 import { RaceCard } from "./RaceCard";
+import { RaceRows } from "./RaceRows";
 
 type Stars = ReturnType<typeof useStars>;
 
@@ -36,37 +37,49 @@ function useSize(el: RefObject<HTMLElement | null>): { w: number; h: number } | 
 }
 
 /**
- * Hides every card from the first one that runs past the bottom of the list, so the wall fills its space without
- * scrolling. Hiding from there on, not each card that's cut off, keeps the cards before it in place.
+ * Fills the wall without scrolling: whole cards until the next would run past the bottom, then the races after them
+ * as one-line rows in the space a card couldn't fill. Hiding from the first that doesn't fit on, not each one that's
+ * cut off, keeps the ones before it in place.
  */
-function fitCards(ul: HTMLUListElement | null) {
-  if (!ul) return;
-  const cards = [...ul.children] as HTMLElement[];
+function fitWall(box: HTMLElement | null) {
+  if (!box) return;
+  const bottom = box.getBoundingClientRect().bottom;
+  const firstPast = (els: HTMLElement[]) => els.findIndex((x) => x.getBoundingClientRect().bottom > bottom + 1);
+  const cards = [...box.querySelectorAll<HTMLElement>(".mt-sbs-cards > *")];
   cards.forEach((c) => (c.hidden = false));
-  const bottom = ul.getBoundingClientRect().bottom;
-  const first = cards.findIndex((c) => c.getBoundingClientRect().bottom > bottom + 1);
+  const first = firstPast(cards);
   // The first card always shows, even on a window too short for it.
   if (first >= 0) cards.slice(Math.max(first, 1)).forEach((c) => (c.hidden = true));
+  const carded = cards.filter((c) => !c.hidden).length;
+  // The rows list the same races in the same order, so the ones with a card showing are skipped.
+  const rows = [...box.querySelectorAll<HTMLElement>(".mt-rows tbody tr")];
+  rows.forEach((row, i) => (row.hidden = i < carded));
+  const rest = rows.slice(carded);
+  const cut = firstPast(rest);
+  if (cut >= 0) rest.slice(cut).forEach((row) => (row.hidden = true));
 }
 
 /** The races the main screen has no card for, closest first (toss-ups lead), as many as fit. */
-function CardWall({ races, stars }: { races: readonly RaceSummary[]; stars: Stars }) {
-  const list = useRef<HTMLUListElement>(null);
-  // After every render (results change cards' heights) and whenever the list changes size.
-  useLayoutEffect(() => fitCards(list.current));
+function CardWall({ races, stars }: { races: RaceSummary[]; stars: Stars }) {
+  const wall = useRef<HTMLDivElement>(null);
+  // After every render (results change cards' heights) and whenever the wall changes size.
+  useLayoutEffect(() => fitWall(wall.current));
   useEffect(() => {
-    const ul = list.current;
-    if (!ul) return;
-    const watch = new ResizeObserver(() => fitCards(ul));
-    watch.observe(ul);
+    const box = wall.current;
+    if (!box) return;
+    const watch = new ResizeObserver(() => fitWall(box));
+    watch.observe(box);
     return () => watch.disconnect();
   }, []);
   return (
-    <ul ref={list} className="mt-grid mt-sbs-cards">
-      {races.map((r) => (
-        <RaceCard key={r.id} race={r} starred={stars.ids ? stars.ids.includes(r.id) : null} onStar={stars.toggle} limit={2} />
-      ))}
-    </ul>
+    <div ref={wall} className="mt-companion-wall">
+      <ul className="mt-grid mt-sbs-cards">
+        {races.map((r) => (
+          <RaceCard key={r.id} race={r} starred={stars.ids ? stars.ids.includes(r.id) : null} onStar={stars.toggle} limit={2} />
+        ))}
+      </ul>
+      <RaceRows races={races} star={stars} />
+    </div>
   );
 }
 

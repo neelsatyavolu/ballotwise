@@ -20,7 +20,7 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 .mt-wall .mt-seats { margin-top: 0; }
 
 /* Map and tour, closest races, latest calls. */
-.mt-wall-body { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(260px, 0.5fr); gap: 16px; }
+.mt-wall-body { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(max-content, 1fr) minmax(260px, 0.5fr); gap: 16px; }
 .mt-wall-tour, .mt-wall-cards, .mt-wall-side { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
 /* The map takes whatever height the race card under it leaves, drawn as big as fits. */
 .mt-wall-map { flex: 1 1 0; min-height: 0; }
@@ -35,8 +35,17 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 .mt-wall-spot ~ .mt-wall-upnext, .mt-wall-upnext .mt-card:nth-child(n + 3) { display: none; }
 /* Up-next cards that don't fit are hidden (Wall.tsx useFit); with none left, so is the heading. */
 .mt-wall-upnext:not(:has(.mt-card:not([hidden]))) { display: none; }
-.mt-wall-upnext h3 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt-wall-upnext h3, .mt-wall-later h3 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .mt-wall-upnext .mt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+/* The rest of the tour as rows, only on an ultrawide (below): name, leader and lead (the table beside it has the
+   rest), the name cut short if it must. */
+.mt-wall-later { display: none; gap: 6px; }
+.mt-wall-later:not(:has(tbody tr:not([hidden]))) { display: none !important; }
+.mt-wall-later .mt-rows-wrap { max-height: none; overflow: hidden; }
+.mt-wall-later .mt-rows { table-layout: fixed; width: 100%; }
+.mt-wall-later .mt-rows :is(th, td):is(:nth-child(2), :nth-child(5)) { display: none; }
+.mt-wall-later .mt-rows th:nth-child(4) { width: 5.5em; }
+.mt-wall-later .mt-rows td:first-child { overflow: hidden; text-overflow: ellipsis; }
 /* Rows and calls that don't fit are hidden whole (Wall.tsx useFit); some of them set their own display. */
 .mt-wall [hidden] { display: none !important; }
 /* The closest races fill their column; rows past the bottom are cut off rather than scrolled to. */
@@ -63,13 +72,20 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 /* An ultrawide puts the tour's race card beside the map instead of under it, so the map keeps its height, and the
    table gets more room. */
 @media (min-aspect-ratio: 2 / 1) {
-  .mt-wall-body { grid-template-columns: minmax(0, 2.7fr) minmax(0, 1fr) minmax(300px, 0.6fr); }
+  .mt-wall-body { grid-template-columns: minmax(0, 2.7fr) minmax(max-content, 1fr) minmax(300px, 0.6fr); }
   .mt-wall-tour { display: grid; grid-template-columns: minmax(0, 2.3fr) minmax(360px, 1fr); grid-template-rows: auto minmax(0, 1fr); column-gap: 16px; align-items: start; }
   .mt-wall-tour > .mt-section-head { grid-column: 1 / -1; }
   .mt-wall-map { height: 100%; }
   .mt-wall-detail { margin-top: 0; height: 100%; min-height: 0; overflow: hidden; align-content: start; }
   .mt-wall-spot ~ .mt-wall-upnext, .mt-wall-upnext .mt-card:nth-child(n + 3) { display: grid; }
   .mt-wall-upnext .mt-grid { grid-template-columns: minmax(0, 1fr); }
+  .mt-wall-later { display: grid; }
+}
+
+/* A super-ultrawide (32:9) is wider than the map can use at its height: the spare width goes to the table and calls. */
+@media (min-aspect-ratio: 3 / 1) {
+  .mt-wall-body { grid-template-columns: minmax(0, 2.4fr) minmax(max-content, 1.1fr) minmax(300px, 0.7fr); }
+  .mt-wall-tour { grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr); }
 }
 
 /* The toured race's card, and under it the votes-left estimate while it counts. */

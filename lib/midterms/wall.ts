@@ -3,13 +3,22 @@
 import { closestFirst, isCompetitive, isWatch } from "./explore";
 import type { Office, RaceSummary } from "./view";
 
-/** How long the map stays on the whole country, and on each race it zooms into. */
-export const NATION_MS = 15_000;
-export const RACE_MS = 12_000;
 /** The most races one trip around the tour visits, so it comes back to the start within a few minutes. */
 const MAX_TOUR = 12;
-/** The map returns to the whole country after this many races. */
-const RACES_PER_LEG = 3;
+
+/**
+ * How each office's tour moves: how long it stays on the whole country and on each race, and after how many races
+ * it goes back to the whole country. A null `racesPerLeg` never leaves it: the map stays on the whole country with
+ * the race marked, and only the race card changes.
+ */
+export type TourPlan = { nationMs: number; raceMs: number; racesPerLeg: number | null };
+export const TOUR: Record<"senate" | "house", TourPlan> = {
+  // The country (who's on track for 51) is up two thirds of the time, between single states zoomed to their counties.
+  senate: { nationMs: 24_000, raceMs: 12_000, racesPerLeg: 1 },
+  // A district zoomed alone is a blob with no context, and the House is won across hundreds of them, so its map stays
+  // on the whole country.
+  house: { nationMs: 0, raceMs: 10_000, racesPerLeg: null },
+};
 
 /**
  * The races the map zooms into: this office's uncalled toss-ups, then its uncalled leans, closest first. Once every
@@ -21,13 +30,9 @@ export function tourRaces(races: readonly RaceSummary[], office: Office): RaceSu
   return (open.length ? open : mine.filter((r) => r.total > 0)).sort(closestFirst).slice(0, MAX_TOUR);
 }
 
-/** The tour's stops: null is the whole country, shown first and again after every few races. */
-export function tourStops(raceIds: readonly number[]): (number | null)[] {
-  const stops: (number | null)[] = [];
-  raceIds.forEach((id, i) => {
-    if (i % RACES_PER_LEG === 0) stops.push(null);
-    stops.push(id);
-  });
+/** The tour's stops: null is the whole country, shown first and again after every `racesPerLeg` races (never when null). */
+export function tourStops(raceIds: readonly number[], racesPerLeg: number | null): (number | null)[] {
+  const stops = raceIds.flatMap((id, i) => (racesPerLeg !== null && i % racesPerLeg === 0 ? [null, id] : [id]));
   return stops.length ? stops : [null];
 }
 

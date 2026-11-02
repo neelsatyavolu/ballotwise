@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoScale, nextScale, tourRaces, tourStops } from "../lib/midterms/wall";
+import { autoScale, nextScale, TOUR, tourRaces, tourStops } from "../lib/midterms/wall";
 import type { RaceSummary } from "../lib/midterms/view";
 
 let nextId = 1;
@@ -36,8 +36,21 @@ describe("wall tour", () => {
   });
 
   it("starts on the whole map and returns to it after every few races", () => {
-    expect(tourStops([1, 2, 3, 4, 5])).toEqual([null, 1, 2, 3, null, 4, 5]);
-    expect(tourStops([])).toEqual([null]);
+    expect(tourStops([1, 2, 3, 4, 5], 3)).toEqual([null, 1, 2, 3, null, 4, 5]);
+    expect(tourStops([1, 2], 1)).toEqual([null, 1, null, 2]);
+    expect(tourStops([], 1)).toEqual([null]);
+  });
+
+  it("keeps the Senate's whole map up most of the time", () => {
+    const { nationMs, raceMs, racesPerLeg } = TOUR.senate;
+    expect(racesPerLeg).not.toBeNull();
+    expect(nationMs / (nationMs + raceMs * racesPerLeg!)).toBeGreaterThan(0.6);
+  });
+
+  it("never leaves the House's whole map: its stops are only the featured races", () => {
+    expect(TOUR.house.racesPerLeg).toBeNull();
+    expect(tourStops([1, 2, 3], TOUR.house.racesPerLeg)).toEqual([1, 2, 3]);
+    expect(tourStops([], TOUR.house.racesPerLeg)).toEqual([null]);
   });
 });
 
