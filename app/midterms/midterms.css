@@ -667,6 +667,22 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 /* A counting race's rough votes-left estimate in its hover card. */
 .mt-tip-left { font-size: 12px; line-height: 1.35; white-space: normal; }
 .mt-el .mt-el-tip > .mt-tip-left { padding: 4px 10px; border-top: 1px solid var(--rule); }
+/* A counting race's hover card (RaceTip): its race card's table, edge to edge. */
+.mt .mt-tip:has(> .mt-race-tip) { width: 320px; min-width: 0; max-width: calc(100vw - 32px); padding: 0; gap: 0; overflow: hidden; }
+.mt-race-tip { display: grid; }
+.mt-race-tip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px 8px 12px; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.mt-race-tip-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-race-tip .mt-ct td, .mt-race-tip .mt-ct th { padding: 0 4px; }
+.mt-race-tip .mt-ct th { padding-top: 6px; padding-bottom: 6px; }
+.mt-race-tip .mt-ct td { height: 30px; }
+.mt-race-tip .mt-ct th:first-child, .mt-race-tip .mt-ct td:first-child { padding-left: 12px; }
+.mt-race-tip .mt-ct th:last-child, .mt-race-tip .mt-ct td:last-child { padding-right: 10px; }
+.mt-race-tip .mt-ct tfoot td { height: 30px; }
+.mt-race-tip .mt-ct-status td { padding-top: 6px; padding-bottom: 6px; }
+.mt-race-tip .mt-ct .mt-avatar { width: 20px; height: 20px; font-size: 8px; }
+.mt-race-tip .mt-ct-who { gap: 6px; }
+.mt-race-tip-note { padding: 6px 12px; border-top: 1px solid var(--rule); color: var(--muted); }
+.mt-race-tip .mt-watch-note { margin: 0; padding: 6px 12px; border-top: 1px solid var(--rule); }
 
 @media (max-width: 720px) {
   .mt .mt-chip { min-height: 34px; }

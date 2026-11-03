@@ -4,17 +4,17 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
+import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isTossup, raceFill } from "@/lib/midterms/explore";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { useDeskData } from "./desk";
 import { projection } from "@/lib/midterms/forecastTab";
 import { holderOf } from "@/lib/midterms/holders";
-import { colorOf, compareRaces, OFFICE_LABEL, pct, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { compareRaces, OFFICE_LABEL, raceLabel, STATE_NAMES, timeAgo, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { BalanceBar } from "./Balance";
 import { type ChatHandle } from "./ChatDock";
 import { ElectionToggle, useElectionMode } from "./electionModeState";
 import { useClock, useDashboards, useLive, useStars } from "./hooks";
-import { ForecastTip, WatchNote } from "./ForecastTip";
+import { ForecastTip } from "./ForecastTip";
 import { closeWaves, formatTime, showsResults } from "@/lib/midterms/polls";
 import { NationMap, type NationFill } from "./maps";
 import { ModeNav } from "./ModeNav";
@@ -24,10 +24,9 @@ import { RaceRows, type Star } from "./RaceRows";
 import { useSimulation } from "./useSimulation";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { SinceBanner } from "./SinceBanner";
-import { reportingText } from "./reporting";
 import { OverviewSkeleton } from "./Skeleton";
 import { replayTour, Tour } from "./Tour";
-import { VotesLeftTip } from "./VotesLeft";
+import { RaceTip } from "./RaceTip";
 
 // Election night, the chat dock and dashboards stay out of the first script. The overview doesn't need them to paint.
 const ElectionNight = dynamic(() => import("./ElectionMode").then((m) => m.ElectionMode), { loading: () => <p className="muted">Loading election mode…</p> });
@@ -85,20 +84,7 @@ function flipLabel(r: RaceSummary, holder: string, to: string): string {
 function mapTip(r: RaceSummary) {
   const flip = flipTo(r);
   const holder = holderOf(r);
-  return (
-    <>
-      <b>{raceLabel(r)}</b>
-      {r.candidates.slice(0, 2).map((c) => (
-        <div key={c.name}>
-          <span className="swatch" style={{ background: colorOf(c) }} /> {c.name} {r.total ? pct(c.pct) : ""}
-        </div>
-      ))}
-      {flip && holder && <div>{flipLabel(r, holder, flip)}</div>}
-      <span className="muted">{reportingText(r).long}</span>
-      {statusOf(r) === "counting" && <VotesLeftTip raceId={r.id} />}
-      <WatchNote race={r} />
-    </>
-  );
+  return <RaceTip race={r}>{flip && holder && flipLabel(r, holder, flip)}</RaceTip>;
 }
 
 const MAP_OFFICES = ["senate", "governor", "house"] as const;

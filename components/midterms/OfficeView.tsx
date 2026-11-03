@@ -5,10 +5,10 @@ import { useMemo, useState } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { projection } from "@/lib/midterms/forecastTab";
-import { closestFirst, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
+import { closestFirst, flipTo, isCompetitive, isTossup, raceFill } from "@/lib/midterms/explore";
 import { districtMargin2024, margin2024Label, stateMargin2024 } from "@/lib/midterms/past2024";
 import { showsResults } from "@/lib/midterms/polls";
-import { colorOf, lead, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { lead, leading, measureCount, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
 import { useClock, useLive, useStars } from "./hooks";
@@ -20,8 +20,9 @@ import { RaceRows } from "./RaceRows";
 import { OfficeSkeleton } from "./Skeleton";
 import { ZoomMap, type Fill } from "./ZoomMap";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
-import { ForecastTip, WatchNote } from "./ForecastTip";
-import { VotesLeftCard, VotesLeftTip } from "./VotesLeft";
+import { ForecastTip } from "./ForecastTip";
+import { VotesLeftCard } from "./VotesLeft";
+import { RaceTip } from "./RaceTip";
 
 const TITLE: Record<Office, string> = { senate: "Senate", house: "House", governor: "Governors", measure: "Ballot measures" };
 const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
@@ -29,29 +30,12 @@ const HREF = { senate: "/midterms/senate", house: "/midterms/house", governor: "
 /** Specials sort after a state's regular race, so the regular one colors the state. */
 export const regularFirst = (a: RaceSummary, b: RaceSummary) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title));
 
-function raceTip(r: RaceSummary) {
-  return (
-    <>
-      <b>{raceLabel(r)}</b>
-      {r.candidates.slice(0, 3).map((c) => (
-        <div key={c.name}>
-          <span className="swatch" style={{ background: colorOf(c) }} /> {c.name} {r.total ? pct(c.pct) : ""}
-          {c.winner && " ✓"}
-        </div>
-      ))}
-      <span className="muted">{r.reporting ? `${Math.round(r.reporting)}% reporting` : "No results yet"}</span>
-      {statusOf(r) === "counting" && <VotesLeftTip raceId={r.id} />}
-      <WatchNote race={r} />
-    </>
-  );
-}
-
 /** A race's hover card: the forecast card before votes, the count after. */
-const hoverTip = (r: RaceSummary, updatedAt: number | null) => (r.total ? raceTip(r) : <ForecastTip race={r} updatedAt={updatedAt} />);
+const hoverTip = (r: RaceSummary, updatedAt: number | null) => (r.total ? <RaceTip race={r} /> : <ForecastTip race={r} updatedAt={updatedAt} />);
 
 /** How a district looks on the House map, nationally or zoomed to its state. */
 export function districtFill(r: RaceSummary, updatedAt: number | null, results: boolean): Fill {
-  return { fill: raceFill(r, results), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), watch: results && isTossup(r), lean: results && isCompetitive(r), tip: hoverTip(r, updatedAt) };
+  return { fill: raceFill(r, results), flip: !!flipTo(r) && (!results || r.total > 0), called: r.candidates.some((c) => c.winner), watch: results && isTossup(r), lean: results && isCompetitive(r), tip: hoverTip(r, updatedAt) };
 }
 
 /** Every House district for the national map, keyed "PA-7" (at-large seats "WY-0"); a district's regular race colors it. */
@@ -116,7 +100,7 @@ export function stateFills(office: Office, races: RaceSummary[], updatedAt: numb
     const name = STATE_NAMES[state] ?? state;
     if (office === "senate" || office === "governor") {
       const r = [...list].sort(regularFirst)[0];
-      out.set(state, { fill: raceFill(r, results), tip: hoverTip(r, updatedAt), flip: !!flipTo(r), called: r.candidates.some((c) => c.winner), watch: results && isTossup(r), lean: results && isCompetitive(r) });
+      out.set(state, { fill: raceFill(r, results), tip: hoverTip(r, updatedAt), flip: !!flipTo(r) && (!results || r.total > 0), called: r.candidates.some((c) => c.winner), watch: results && isTossup(r), lean: results && isCompetitive(r) });
     } else if (office === "house") {
       const ahead = leading(list, "house");
       const won = { D: 0, R: 0 };

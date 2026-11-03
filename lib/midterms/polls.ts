@@ -72,12 +72,11 @@ export function nextWave(now: number): CloseWave | null {
 }
 
 /**
- * Whether maps, seat boards and race panels shade by results: once the first polls close. Before then, on election day
- * too, they show the forecast's colors, since nothing is counted yet.
+ * Whether maps, seat boards and race panels shade by results: from the start of election day, so they sit grey until
+ * the first votes come in rather than showing the forecast's colors.
  */
 export function showsResults(now: number): boolean {
-  const first = closeWaves()[0];
-  return first ? now >= first.at : electionModeDefault(now);
+  return electionModeDefault(now);
 }
 
 /** Election mode is on by default from the start of Nov 3, Eastern, through the count that follows. */

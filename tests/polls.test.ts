@@ -44,11 +44,11 @@ describe("electionModeDefault", () => {
 });
 
 describe("showsResults", () => {
-  it("keeps the forecast's colors on election day until the first polls close", () => {
+  it("drops the forecast's colors from the start of election day, before any polls close", () => {
     const first = closeWaves()[0].at;
-    expect(showsResults(ELECTION_DAY_START + 3_600_000)).toBe(false);
-    expect(showsResults(first - 1)).toBe(false);
-    expect(showsResults(first)).toBe(true);
+    expect(showsResults(ELECTION_DAY_START - 1)).toBe(false);
+    expect(showsResults(ELECTION_DAY_START)).toBe(true);
+    expect(showsResults(first - 1)).toBe(true);
   });
 });
 

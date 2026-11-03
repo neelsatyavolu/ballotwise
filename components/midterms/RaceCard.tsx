@@ -39,7 +39,7 @@ export function PulseTag({ race }: { race: RaceSummary }) {
 }
 
 /** Where a card's count stands, for the footer of its candidates table: called, the lead, or when polls close. */
-function CardStatus({ race }: { race: RaceSummary }) {
+export function CardStatus({ race }: { race: RaceSummary }) {
   const now = useClock(60_000);
   const ahead = lead(race.candidates);
   if (race.candidates.some((c) => c.winner)) return <span className="called">Called</span>;
