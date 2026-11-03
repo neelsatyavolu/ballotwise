@@ -186,12 +186,24 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
           {showDistricts.map((d) => districtFills?.get(d.district)?.flip && <path key={`flip-${d.district}`} d={d.d} className="mt-flip" style={{ fill: `url(#${patternId})` }} />)}
         </>
       ) : (
-        counties?.map((c) => {
-          const f = countyFills?.get(c.fips);
-          return <path key={c.fips} data-k={`c:${c.fips}`} d={c.d} vectorEffect="non-scaling-stroke" className={`mt-zoom-county${f ? " active" : ""}`} style={{ fill: f?.fill }} />;
-        })
+        <>
+          {counties?.map((c) => {
+            const f = countyFills?.get(c.fips);
+            // In a picked district, a county's shading is drawn below, clipped to the district: a county the district
+            // only partly covers would otherwise be shaded past the district's outline.
+            return <path key={c.fips} data-k={`c:${c.fips}`} d={c.d} vectorEffect="non-scaling-stroke" className={`mt-zoom-county${f ? " active" : ""}`} style={{ fill: pickedDistrict ? undefined : f?.fill }} />;
+          })}
+          {pickedDistrict && (
+            <g clipPath={`url(#${patternId}-district)`} pointerEvents="none">
+              {counties?.map((c) => {
+                const f = countyFills?.get(c.fips);
+                return f && <path key={c.fips} d={c.d} vectorEffect="non-scaling-stroke" className="mt-zoom-county active" style={{ fill: f.fill }} />;
+              })}
+            </g>
+          )}
+        </>
       ),
-    [showDistricts, districtFills, counties, countyFills, patternId],
+    [showDistricts, districtFills, counties, countyFills, patternId, pickedDistrict],
   );
   // Election night: pre-election toss-ups get a yellow outline, called or not, and uncalled leans a thinner dashed
   // one. Leans go first so a toss-up's outline sits on top where they meet.
@@ -298,6 +310,13 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
       >
         {/* Stripes keep the same width on screen as the map zooms. */}
         <FlipStripes id={patternId} size={box[2] / 140} />
+        {pickedDistrict && (
+          <defs>
+            <clipPath id={`${patternId}-district`}>
+              <path d={pickedDistrict.d} />
+            </clipPath>
+          </defs>
+        )}
         {stateLayer}
         {nationDistrictLayer}
         {placeLayer}

@@ -16,6 +16,7 @@ import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { fillFor } from "./county";
 import { useClock, useLive } from "./hooks";
 import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills, withLeads } from "./OfficeView";
+import { closingPlaces } from "./PollClose";
 import { RaceCard } from "./RaceCard";
 import { RaceRows } from "./RaceRows";
 import { ROTATE_MS, useRotatingFit } from "./useRotatingFit";
@@ -215,13 +216,17 @@ function TourMap({ office, races, updatedAt, results, race: toured, detail }: { 
   );
 }
 
-/** When the next polls close, in the viewer's zone, with a countdown. */
+/**
+ * When the next polls close and where, in the viewer's zone, with a countdown. A * marks a state where only some polls
+ * close then; the full place names are in the hover title.
+ */
 function NextClose({ now }: { now: number }) {
   const wave = nextWave(now);
   if (!wave) return null;
+  const where = wave.states.map((s) => (s.part === "all" ? s.state : `${s.state}*`)).join(", ");
   return (
-    <span className="mt-wall-next">
-      Next polls close {formatTime(wave.at)} · <b>{countdown(wave.at - now)}</b>
+    <span className="mt-wall-next" title={closingPlaces(wave.states)}>
+      Next polls close {formatTime(wave.at)} in {where} · <b>{countdown(wave.at - now)}</b>
     </span>
   );
 }

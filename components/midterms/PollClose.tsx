@@ -12,7 +12,7 @@ const POLLS_OPEN = ELECTION_DAY_START + 6 * 3_600_000;
 const listed = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
 /** Where polls close at one time, in words: "Most of Indiana and Kentucky", or "Florida, Michigan and the rest of Kansas". */
-function closingPlaces(states: CloseWave["states"]) {
+export function closingPlaces(states: CloseWave["states"]) {
   const names = (part: CloseWave["states"][number]["part"]) => states.filter((s) => s.part === part).map((s) => STATE_NAMES[s.state] ?? s.state);
   const most = names("most");
   const rest = names("rest");
