@@ -1612,7 +1612,9 @@ body:has(> .mt-companion) { overflow: hidden; }
 /* On the election-night screens (side by side, the companion) the calls feed keeps to one line a call: no notes,
    source explainer, office, party tag, margin or "new since you looked", and no buttons for more. */
 :is(.mt-sbs-side, .mt-companion) :is(.mt-el-calls-meta, .mt-el-calls-empty, .mt-el-about, .mt-el-calls-more, .mt-el-call-office, .mt-el-call-party, .mt-el-call-margin) { display: none; }
+:is(.mt-sbs-side, .mt-companion) .mt-el-calllist { overflow: hidden; }
 :is(.mt-sbs-side, .mt-companion) .mt-el-calllist li { align-items: baseline; padding: 4px 10px; font-size: 13px; }
+:is(.mt-sbs-side, .mt-companion) .mt-el-calllist li[hidden] { display: none; }
 :is(.mt-sbs-side, .mt-companion) .mt-el-call-main { display: flex; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; }
 :is(.mt-sbs-side, .mt-companion) .mt-el-call-who { display: inline; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
@@ -1657,13 +1659,6 @@ body:has(> .mt-companion) { overflow: hidden; }
 .mt-cny-cards .mt-card :is(.mt-ct-more, .mt-ct-fill, .mt-ct thead) { display: none; }
 .mt-cny-note { margin: 0; }
 
-/* On the main screen, while the pop-up opens on the companion: a short note in the corner. */
-.mt-moment-note { position: fixed; right: 20px; top: 80px; z-index: 46; max-width: min(360px, calc(100vw - 40px)); margin: 0; padding: 10px 16px; background: var(--sheet); border: 1px solid var(--el-line); border-left: 3px solid var(--accent); border-radius: 8px; animation: mt-moment-in 0.18s ease-out; }
-.mt-moment-note .p-D { color: var(--dem-ink); }
-.mt-moment-note .p-R { color: var(--rep-ink); }
-.mt-moment-note .p-I { color: var(--oth); }
-.mt-moment-note .warn { color: var(--no); }
-@media (prefers-reduced-motion: reduce) { .mt-moment-note { animation: none; } }
 
 /* A race call's pop-up, in the corner of every tracker page (CallPopups). Newest on top; it leaves on its own. */
 .mt-callpops { position: fixed; right: 20px; bottom: 20px; z-index: 47; display: grid; gap: 8px; width: min(340px, calc(100vw - 32px)); }

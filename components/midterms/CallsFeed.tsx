@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/client";
 import { holderOf, outcomeOf } from "@/lib/midterms/holders";
 import { callKey } from "@/lib/midterms/moments";
@@ -10,6 +10,7 @@ import { stampTime } from "@/lib/midterms/polls";
 import { colorOf, OFFICE_LABEL, partyOf, partyTag, type CallEvent, type Office, type RaceSummary } from "@/lib/midterms/view";
 import { CallAlerts } from "./CallAlerts";
 import { shortLabel } from "./PollClose";
+import { useRotatingFit } from "./useRotatingFit";
 import { useStored } from "./seen";
 import { useDeskData } from "./desk";
 
@@ -47,8 +48,12 @@ function winnerMargin(r: RaceSummary, name: string): number | null {
   return ((won.votes - best) / total) * 100;
 }
 
-/** Every call, changed call and withdrawal, newest first, with seats changing party pinned on top. `children` sit beside the alerts switch: election mode puts its pop-up switch there. */
-type CallsFeedProps = { races: readonly RaceSummary[]; events?: CallEvent[]; counts?: Record<Office, number>; office: Office | "all"; children?: React.ReactNode };
+/**
+ * Every call, changed call and withdrawal, newest first, with seats changing party pinned on top. `children` sit beside
+ * the alerts switch: election mode puts its pop-up switch there. `fill` (the election-night screens) lists every loaded
+ * call that fits its column, whole rows only, rather than the latest few and a button for more.
+ */
+type CallsFeedProps = { races: readonly RaceSummary[]; events?: CallEvent[]; counts?: Record<Office, number>; office: Office | "all"; children?: React.ReactNode; fill?: boolean };
 
 export function CallsFeed(props: CallsFeedProps) {
   const { owner } = useDeskData();
@@ -57,8 +62,10 @@ export function CallsFeed(props: CallsFeedProps) {
   return <CallList key={sourceKey} {...props} privateSource={privateSource} sourceKey={sourceKey} />;
 }
 
-function CallList({ races, events: given, counts, office, children, privateSource, sourceKey }: CallsFeedProps & { privateSource: boolean; sourceKey: string }) {
-  const [all, setAll] = useState(false);
+function CallList({ races, events: given, counts, office, children, privateSource, sourceKey, fill = false }: CallsFeedProps & { privateSource: boolean; sourceKey: string }) {
+  const [all, setAll] = useState(fill);
+  const listBox = useRef<HTMLOListElement>(null);
+  useRotatingFit(listBox, null, fill);
   const [allGains, setAllGains] = useState(false);
   const [everyOffice, setEveryOffice] = useState(false);
   const scope = everyOffice ? "all" : office;
@@ -165,7 +172,7 @@ function CallList({ races, events: given, counts, office, children, privateSourc
       {shown.length === 0 ? (
         <p className="mt-el-calls-empty muted small">{privateSource ? "Current calls land here, newest first, as Decision Desk HQ publishes them." : "Calls land here, newest first, as civicAPI's decision desk makes them after polls close."}</p>
       ) : (
-        <ol className="mt-el-calllist">
+        <ol className="mt-el-calllist" ref={fill ? listBox : undefined}>
           {list.map((e) => {
             const r = byId.get(e.raceId)!;
             const current = newestByRace.get(e.raceId) === e.id;

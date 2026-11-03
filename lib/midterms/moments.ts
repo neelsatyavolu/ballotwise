@@ -1,7 +1,8 @@
 // The election-night moments worth interrupting a viewer for, from the overview: a chamber decided, a call changed or
-// withdrawn, a seat changing party, a call in a starred race, a toss-up called. Routine calls stay in the feed.
+// withdrawn, a seat changing party, a call in a starred race, a toss-up or a close lean called. Routine calls stay in
+// the feed.
 import { holderOf } from "./holders";
-import { partyOf, partyTag, raceLabel, type CallEvent, type Overview, type RaceSummary } from "./view";
+import { chances, partyOf, partyTag, raceLabel, type CallEvent, type Overview, type RaceSummary } from "./view";
 
 type Side = "D" | "R" | "I";
 
@@ -12,7 +13,18 @@ const CHAMBER = { senate: "Senate", house: "House" } as const;
 const PARTY = { D: "Democrats", R: "Republicans" } as const;
 
 /** Most important first: lower ranks lead the pop-up when several arrive together. */
-export const RANK = { control: 0, correction: 1, flip: 2, starred: 3, tossup: 4 } as const;
+export const RANK = { control: 0, correction: 1, flip: 2, starred: 3, tossup: 4, lean: 5 } as const;
+
+/** A lean whose favorite the forecast gave less than this is close enough that its call pops up like a toss-up's. */
+export const CLOSE_LEAN = 0.7;
+
+/** A lean the forecast's favorite was under CLOSE_LEAN to win. */
+function closeLean(r: RaceSummary): boolean {
+  if (!r.rating?.startsWith("lean")) return false;
+  const odds = chances(r.signal);
+  const top = odds ? Math.max(...Object.values(odds).filter((p): p is number => typeof p === "number")) : null;
+  return top !== null && top < CLOSE_LEAN;
+}
 
 export type Moment = {
   /** Stable across polls, so the same moment never pops twice. */
@@ -62,6 +74,7 @@ function fromEvent(e: CallEvent, r: RaceSummary, starred: ReadonlySet<number>): 
   }
   if (starred.has(r.id)) return { ...base, rank: RANK.starred, kicker: "Your race is called", body: `${winner} wins.`, side };
   if (r.rating === "tossup") return { ...base, rank: RANK.tossup, kicker: "Toss-up called", body: `${winner} wins${holder && side ? `, a ${side} hold` : ""}.`, side };
+  if (closeLean(r)) return { ...base, rank: RANK.lean, kicker: "Close race called", body: `${winner} wins${holder && side ? `, a ${side} hold` : ""}.`, side };
   return null;
 }
 

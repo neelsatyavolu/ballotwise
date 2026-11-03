@@ -18,6 +18,7 @@ import { useClock, useLive } from "./hooks";
 import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills, withLeads } from "./OfficeView";
 import { closingPlaces } from "./PollClose";
 import { RaceCard } from "./RaceCard";
+import { MomentPopup } from "./MomentPopup";
 import { RaceRows } from "./RaceRows";
 import { ROTATE_MS, useRotatingFit } from "./useRotatingFit";
 import { ZoomMap, type Fill } from "./ZoomMap";
@@ -33,6 +34,8 @@ const MAX_CARDS = 60;
 const UP_NEXT = 3;
 /** How far a card starts below its place as it fades in (.mt-in in midterms.css), plus a pixel of rounding. */
 const SLIDE_PX = 5;
+/** How long a big moment's pop-up stays on a wall, where nobody is there to close it. */
+const POPUP_MS = 30_000;
 /** No star column on a wall: nothing on it is clicked. */
 const NO_STARS = { ids: null, toggle: () => {} };
 const noop = () => {};
@@ -276,6 +279,17 @@ export function Wall({ office }: { office: WallOffice }) {
   const detail = useRef<HTMLDivElement>(null);
   useRotatingFit(grid, office === "house" ? ROTATE_MS : null, !!data);
   useFit(detail, fitTour, !!data);
+  // The toured race's card in the grid is outlined. On the Senate wall, whose grid holds its closest races, the card
+  // under the map shows only for a toured race the grid has no room for.
+  useLayoutEffect(() => {
+    let inGrid = false;
+    for (const card of [...(grid.current?.children ?? [])] as HTMLElement[]) {
+      const on = stopId !== null && Number(card.dataset.race) === stopId && !card.hidden;
+      card.classList.toggle("on", on);
+      inGrid ||= on;
+    }
+    if (detail.current && office === "senate") detail.current.hidden = inGrid;
+  });
 
   return (
     <div className="mt mt-wall" style={{ "--wall-scale": scale } as CSSProperties}>
@@ -283,6 +297,7 @@ export function Wall({ office }: { office: WallOffice }) {
         <header className="mt-wall-head">
           <h1>{TITLE[office]}</h1>
           <MockTag />
+          {data && <MomentPopup data={data} starred={null} closeAfterMs={POPUP_MS} />}
           {data && (
             <span className="mt-wall-status">
               <LiveDot at={data.fetchedAt} stale={data.stale} /> Checked <CheckedAgo at={data.fetchedAt} />
@@ -314,7 +329,8 @@ export function Wall({ office }: { office: WallOffice }) {
                       </ul>
                     </div>
                   )}
-                  {next.length > 0 && (
+                  {/* The Senate's grid already holds its closest races, so only the House's wall lists what's next. */}
+                  {office === "house" && next.length > 0 && (
                     <div className="mt-wall-upnext mt-in" key={`next-${stopId}`}>
                       <h3>Up next on the tour</h3>
                       <ul className="mt-grid">
@@ -325,7 +341,7 @@ export function Wall({ office }: { office: WallOffice }) {
                     </div>
                   )}
                   {/* An ultrawide fills the rest of the column with the rest of the tour, a row each. */}
-                  {next.length > 0 && (
+                  {office === "house" && next.length > 0 && (
                     <div className="mt-wall-later">
                       <h3>Later on the tour</h3>
                       <RaceRows races={next} star={NO_STARS} />
@@ -336,7 +352,7 @@ export function Wall({ office }: { office: WallOffice }) {
               <section className="mt-wall-cards" aria-label={office === "senate" ? "Closest races" : "Toss-up races"}>
                 <div className="mt-section-head tight">
                   <h2>{office === "senate" ? "Closest races" : "Toss-ups"}</h2>
-                  <span className="muted small">{office === "senate" ? `Counting toss-ups and leans first · ${races.length} races` : `${cards.length} races`}</span>
+                  <span className="muted small">{office === "senate" ? `Counting toss-ups, then leans, first · ${races.length} races` : `${cards.length} races`}</span>
                 </div>
                 <ul className="mt-grid" ref={grid}>
                   {cards.map((r) => (

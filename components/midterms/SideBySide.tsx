@@ -13,6 +13,7 @@ import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { CountyTip, fillFor } from "./county";
 import { useClock, useLive, useStars } from "./hooks";
 import { ModeNav } from "./ModeNav";
+import { MomentPopup } from "./MomentPopup";
 import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills, withLeads } from "./OfficeView";
 import { PollSchedule } from "./PollClose";
 import { RaceCard } from "./RaceCard";
@@ -340,6 +341,7 @@ export function SideBySide() {
     <span className="mt-sbs-status">
       <LiveDot at={data.fetchedAt} stale={data.stale} /> Checked <CheckedAgo at={data.fetchedAt} />
       {data.stale && " · source is slow"}
+      <MomentPopup data={data} starred={favorites.ids} />
     </span>
   );
   const third = useThird();
@@ -362,7 +364,7 @@ export function SideBySide() {
             return <OfficeColumn key={c.office} {...c} data={data} forecast={forecast} results={results} star={star} status={i === 0 ? status : undefined} handle={handle} toggle={c.office === "governor" ? <ThirdSwitch third={third} /> : undefined} />;
           })}
           <aside className="mt-sbs-side" aria-label="Latest calls and poll closings">
-            <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" />
+            <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" fill />
             <PollSchedule races={data.races} picked={[]} onPick={() => {}} />
           </aside>
         </div>

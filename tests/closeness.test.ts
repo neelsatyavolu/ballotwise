@@ -19,9 +19,9 @@ const race = (id: number, lead: number, over: Partial<RaceSummary> = {}): RaceSu
 });
 
 describe("closest races", () => {
-  it("puts counting toss-ups and leans first, then other counting races, each closest first", () => {
+  it("puts counting toss-ups first, then counting leans, then other counting races, each closest first", () => {
     const list = [race(1, 1, { rating: "lean-r" }), race(2, 9, { rating: "tossup" }), race(3, 2), race(4, 4, { rating: "tossup" })].sort(closestFirst);
-    expect(list.map((r) => r.id)).toEqual([1, 4, 2, 3]);
+    expect(list.map((r) => r.id)).toEqual([4, 2, 1, 3]);
   });
 
   it("puts called races after the ones still counting, and races with no votes last", () => {

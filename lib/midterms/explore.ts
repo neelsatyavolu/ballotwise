@@ -48,13 +48,14 @@ export const isCompetitive = (r: RaceSummary) => !!r.rating?.startsWith("lean") 
 const contested = (r: RaceSummary) => r.rating === "tossup" || !!r.rating?.startsWith("lean");
 
 /**
- * Where a race sorts among the closest, votes first: toss-ups and leans still counting, then other races still
- * counting, then called races (called toss-ups first), then toss-ups and leans waiting for votes, then the rest.
+ * Where a race sorts among the closest, votes first: toss-ups still counting, then leans still counting, then other
+ * races still counting, then called races (called toss-ups first), then toss-ups and leans waiting for votes (by
+ * rating, so toss-ups first), then the rest.
  */
 function tier(r: RaceSummary): number {
-  if (isCalled(r)) return isTossup(r) ? 2 : 3;
-  if (r.total > 0) return contested(r) ? 0 : 1;
-  return contested(r) ? 4 : 5;
+  if (isCalled(r)) return isTossup(r) ? 3 : 4;
+  if (r.total > 0) return isTossup(r) ? 0 : contested(r) ? 1 : 2;
+  return contested(r) ? 5 : 6;
 }
 
 /**

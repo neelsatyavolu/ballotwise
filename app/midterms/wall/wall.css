@@ -4,6 +4,9 @@
 body:has(.mt-wall) { overflow: hidden; }
 /* The calls column already lists every call; the corner pop-ups would cover it. */
 body:has(.mt-wall) .mt-callpops { display: none; }
+/* Big moments pop up in the middle (MomentPopup), as big as the rest of the wall, and close by themselves: no switch. */
+.mt-wall dialog.mt-moment { zoom: var(--s); }
+.mt-wall .mt-bell { display: none; }
 .mt-wall { position: fixed; inset: 0; z-index: 40; overflow: hidden; background: var(--paper); color: var(--ink); --s: var(--wall-scale, 1); }
 .mt-wall-stage {
   width: calc(100vw / var(--s)); height: calc(100dvh / var(--s));
@@ -88,5 +91,6 @@ body:has(.mt-wall) .mt-callpops { display: none; }
   .mt-wall-tour { grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr); }
 }
 
-/* The toured race's card. */
+/* The toured race's card, and its card in the grid beside the map, outlined (Wall.tsx). */
+.mt-wall .mt-card.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .mt-wall-spot { display: grid; gap: 10px; }

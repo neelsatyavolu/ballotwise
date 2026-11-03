@@ -77,7 +77,7 @@ function Panels({ data, shows, view }: { data: Overview; shows: (p: Panel) => bo
         {view === "near" ? <CompanionNearYou races={data.races} /> : <LiveProjection races={data.races} />}
         {(shows("calls") || shows("schedule")) && (
           <div className="mt-companion-side">
-            {shows("calls") && <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" />}
+            {shows("calls") && <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" fill />}
             {shows("schedule") && <PollSchedule races={data.races} />}
           </div>
         )}

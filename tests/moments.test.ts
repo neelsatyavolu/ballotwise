@@ -55,6 +55,14 @@ describe("election-night moments", () => {
     expect(list[1].body).toBe("Pat Lee (D) wins, a D hold.");
   });
 
+  it("flags a called lean the forecast's favorite was under 70% to win, not a safer one", () => {
+    const signal = (D: number) => ({ market: null, polls: null, rating: null, forecast: { odds: { D, R: 1 - D } } }) as unknown as RaceSummary["signal"];
+    const close = race(1, "GA", { rating: "lean-d", signal: signal(0.64) });
+    const safer = race(2, "GA", { rating: "lean-d", signal: signal(0.78) });
+    const list = moments(data([close, safer], [event(1, 1), event(2, 2)]), new Set());
+    expect(list.map((m) => [m.key, m.kicker, m.rank])).toEqual([["call:1", "Close race called", RANK.lean]]);
+  });
+
   it("announces chamber control once a side reaches the line, ahead of every call", () => {
     const balance = { ...quiet, senate: tally(49, 50, 51), house: tally(218, 190, 218) };
     const list = moments(data([race(1, "NC")], [event(1, 1)], balance), new Set());
