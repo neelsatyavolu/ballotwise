@@ -7,27 +7,26 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { readMock } from "@/lib/midterms/clock";
-import { closestFirst } from "@/lib/midterms/explore";
+import { closestFirst, isTossup } from "@/lib/midterms/explore";
 import { countdown, electionModeDefault, formatTime, nextWave } from "@/lib/midterms/polls";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { votesLeft } from "@/lib/midterms/votesLeft";
 import { autoScale, nextScale, TOUR, tourRaces, tourStops, type TourPlan } from "@/lib/midterms/wall";
 import { lead, raceLabel, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
-import { CallsFeed } from "./CallsFeed";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { fillFor } from "./county";
 import { useClock, useLive } from "./hooks";
 import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills } from "./OfficeView";
 import { RaceCard } from "./RaceCard";
-import { PollSchedule } from "./PollClose";
 import { RaceRows } from "./RaceRows";
+import { ROTATE_MS, useRotatingFit } from "./useRotatingFit";
 import { VotesLeftCard } from "./VotesLeft";
 import { ZoomMap, type Fill } from "./ZoomMap";
 
 export type WallOffice = Extract<Office, "senate" | "house">;
 const TITLE: Record<WallOffice, string> = { senate: "Senate", house: "House" };
-/** The most rows the closest-races table holds; the screen shows as many as fit. */
-const MAX_ROWS = 60;
+/** The most cards the Senate wall lays out; the screen shows as many as fit. */
+const MAX_CARDS = 60;
 /**
  * How many of the tour's next races get a card. Under the whole-country map two fit side by side (wall.css hides the
  * third); an ultrawide stacks them beside the map, as many as fit, then lists the rest of the tour as rows.
@@ -136,9 +135,6 @@ function showAll(box: HTMLElement, selector: string): HTMLElement[] {
   return all;
 }
 
-const fitList = (selector: string) => (box: HTMLElement) => hidePastBottom(box, showAll(box, selector));
-const fitRows = fitList(".mt-rows tbody tr, .mt-wall-grid .mt-card");
-const fitCalls = fitList(".mt-el-calllist > li");
 
 /** The tour's next races: whole cards first, then rows for the later races, skipping the ones with a card showing. */
 function fitTour(box: HTMLElement) {
@@ -270,10 +266,9 @@ export function Wall({ office }: { office: WallOffice }) {
   useWakeLock();
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
-  const closest = useMemo(() => [...races].sort(closestFirst).slice(0, MAX_ROWS), [races]);
-  // The Senate wall shows its closest races (toss-ups first, then the next closest) as cards filling the screen, in
-  // place of the table and the calls column.
-  const cards = office === "senate";
+  // The cards beside the map: the Senate's closest races (toss-ups first, then the next closest), as many as fit; the
+  // House's toss-ups, a screenful at a time when they don't all fit.
+  const cards = useMemo(() => (office === "senate" ? [...races].sort(closestFirst).slice(0, MAX_CARDS) : races.filter(isTossup).sort(closestFirst)), [races, office]);
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
   const stops = useMemo(() => tourStops(tour.map((r) => r.id), TOUR[office].racesPerLeg), [tour, office]);
   const { stop: stopId, upNext } = useTour(stops, TOUR[office]);
@@ -282,14 +277,10 @@ export function Wall({ office }: { office: WallOffice }) {
   const stopDetail = useLive<{ race: RaceDetail }>(stop ? `/api/midterms/race/${stop.id}` : null).data?.race ?? null;
   const left = stop && stop.total > 0 && stopDetail?.id === stop.id && votesLeft(stopDetail) ? stopDetail : null;
   const next = upNext.map((id) => races.find((r) => r.id === id)).filter((r): r is RaceSummary => !!r);
-  // Poll closings matter until the last polls close; after that the calls get the whole column.
-  const closing = nextWave(useClock(60_000)) !== null;
-  const table = useRef<HTMLElement>(null);
-  const side = useRef<HTMLElement>(null);
+  const grid = useRef<HTMLUListElement>(null);
   const detail = useRef<HTMLDivElement>(null);
-  useFit(table, fitRows, !!data);
+  useRotatingFit(grid, office === "house" ? ROTATE_MS : null, !!data);
   useFit(detail, fitTour, !!data);
-  useFit(side, fitCalls, !!data);
 
   return (
     <div className="mt mt-wall" style={{ "--wall-scale": scale } as CSSProperties}>
@@ -310,7 +301,7 @@ export function Wall({ office }: { office: WallOffice }) {
         {data && (
           <>
             <SeatHeader office={office} data={data} forecast={forecast} />
-            <div className={`mt-wall-body${cards ? " no-side" : ""}`}>
+            <div className="mt-wall-body">
               <section className="mt-wall-tour" aria-label="Race tour">
                 <div className="mt-section-head tight">
                   <h2>{stop ? `${STATE_NAMES[stop.state] ?? stop.state}${office === "house" && stop.district !== null ? ` · District ${stop.district || "at large"}` : ""}` : "Every race"}</h2>
@@ -348,33 +339,17 @@ export function Wall({ office }: { office: WallOffice }) {
                   )}
                 </div>
               </section>
-              {cards ? (
-                <section className="mt-wall-cards mt-wall-grid" aria-label="Closest races" ref={table}>
-                  <div className="mt-section-head tight">
-                    <h2>Closest races</h2>
-                    <span className="muted small">Toss-ups first · {races.length} races</span>
-                  </div>
-                  <ul className="mt-grid">
-                    {closest.map((r) => (
-                      <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
-                    ))}
-                  </ul>
-                </section>
-              ) : (
-                <section className="mt-wall-cards" aria-label="Closest races" ref={table}>
-                  <div className="mt-section-head tight">
-                    <h2>Closest races</h2>
-                    <span className="muted small">{races.length} races</span>
-                  </div>
-                  <RaceRows races={closest} star={NO_STARS} selectedId={stopId} />
-                </section>
-              )}
-              {!cards && (
-                <aside className="mt-wall-side" aria-label="Latest calls" ref={side}>
-                  {closing && <PollSchedule races={races} />}
-                  <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office={office} />
-                </aside>
-              )}
+              <section className="mt-wall-cards" aria-label={office === "senate" ? "Closest races" : "Toss-up races"}>
+                <div className="mt-section-head tight">
+                  <h2>{office === "senate" ? "Closest races" : "Toss-ups"}</h2>
+                  <span className="muted small">{office === "senate" ? `Toss-ups first · ${races.length} races` : `${cards.length} races`}</span>
+                </div>
+                <ul className="mt-grid" ref={grid}>
+                  {cards.map((r) => (
+                    <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
+                  ))}
+                </ul>
+              </section>
             </div>
           </>
         )}

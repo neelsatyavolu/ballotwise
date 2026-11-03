@@ -15,9 +15,8 @@ export type TourPlan = { nationMs: number; raceMs: number; racesPerLeg: number |
 export const TOUR: Record<"senate" | "house", TourPlan> = {
   // The country (who's on track for 51) is up two thirds of the time, between single states zoomed to their counties.
   senate: { nationMs: 24_000, raceMs: 12_000, racesPerLeg: 1 },
-  // A district zoomed alone is a blob with no context, and the House is won across hundreds of them, so its map stays
-  // on the whole country.
-  house: { nationMs: 0, raceMs: 10_000, racesPerLeg: null },
+  // The country, then the three toss-ups its "up next" cards show, each zoomed to its state's districts.
+  house: { nationMs: 16_000, raceMs: 10_000, racesPerLeg: 3 },
 };
 
 /**

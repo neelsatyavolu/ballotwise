@@ -1472,6 +1472,9 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
 .mt-sbs-focus { display: grid; gap: 10px; }
 .mt-sbs-focus h3 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .mt-sbs-cards { margin-top: 0; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.mt-sbs-cards > .mt-card[hidden] { display: none; }
+/* Compact, as on the walls: the two leading candidates and the count, no link to the rest, headings or spare height. */
+.mt-sbs-cards .mt-card :is(.mt-ct-more, .mt-ct-fill, .mt-ct thead) { display: none; }
 .mt-sbs-resize { display: none; }
 @media (min-width: 1800px) {
   /* Centered in the 20px gap to the next column: a faint rule that lights up when grabbed. */
@@ -1503,6 +1506,8 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
   .mt-sbs-col .mt-zoom svg { max-height: 46vh; }
   .mt-sbs .mt-sbs-col > .mt-rows-wrap { min-height: 140px; }
   .mt-sbs-col > .mt-sbs-cards, .mt-sbs-col > .mt-sbs-focus { flex: 1 1 0; min-height: 0; overflow-y: auto; align-content: start; }
+  /* Toss-up cards that don't fit wait for their turn (useRotatingFit) instead of being cut off or scrolled to. */
+  .mt-sbs-col > .mt-sbs-cards { overflow: hidden; }
   /* Cards keep their own height and the list scrolls, rather than every card being squeezed to fit. */
   .mt-sbs-col > .mt-sbs-cards, .mt-sbs-col > .mt-sbs-focus { grid-auto-rows: max-content; }
   .mt-sbs-side { min-height: 0; overflow-y: auto; }
@@ -1589,36 +1594,51 @@ button.mt-mock:hover { color: var(--ink); }
 .mt-companion-grid { display: grid; gap: 20px; align-items: start; }
 .mt-companion-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
 @media (min-width: 1100px) {
-  .mt-companion-grid:has(> .mt-companion-tossups):has(> .mt-companion-side) { grid-template-columns: minmax(0, 1fr) minmax(300px, 0.45fr); }
+  .mt-companion-grid:has(> .mt-proj):has(> .mt-companion-side) { grid-template-columns: minmax(0, 1fr) minmax(300px, 0.45fr); }
 }
 .mt-companion .mt-el-calllist { max-height: none; }
-/* The companion fits its window: the toss-up cards and the calls scroll inside their own columns, not the page. */
+/* The companion fits its window: the projection and the calls keep inside their own columns, not the page. */
 .mt-companion { display: flex; flex-direction: column; overflow: hidden; }
 body:has(> .mt-companion) { overflow: hidden; }
 .mt-companion-grid { flex: 1 1 0; min-height: 0; overflow-y: auto; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
 .mt-companion-grid:empty { display: none; }
-/*
- * The board fills the rest of the window (CompanionBoard.tsx): toss-up tiles, each a card over its county map in a
- * grid sized to draw the maps biggest, or a wall of cards trimmed to the ones that fit.
- */
-.mt-companion-tossups { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-.mt-companion-board { flex: 1 1 0; min-height: 260px; display: flex; flex-direction: column; }
-.mt-companion-wall { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 12px; }
-.mt-companion-wall > .mt-sbs-cards { flex: none; margin: 0; align-content: start; grid-auto-rows: max-content; }
-/* Under the cards, the next races a row each, in whatever height a card couldn't fill (CompanionBoard.tsx fitWall). */
-.mt-companion-wall > .mt-rows-wrap { flex: none; max-height: none; overflow: hidden; }
-.mt-companion-wall > .mt-rows-wrap:not(:has(tbody tr:not([hidden]))) { display: none; }
-.mt-companion .mt-card[hidden], .mt-companion .mt-rows tr[hidden] { display: none; }
-.mt-companion-tiles { flex: 1 1 0; min-height: 0; display: grid; gap: 12px; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-template-rows: repeat(var(--rows), minmax(0, 1fr)); }
-.mt-companion-tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
-.mt-companion-tile > .mt-grid { flex: none; margin: 0; }
-.mt-companion-map { flex: 1 1 0; min-height: 0; }
-.mt-companion-map .mt-map { height: 100%; }
-.mt-companion-map .mt-map svg { width: 100%; height: 100%; }
 @media (min-width: 1100px) {
   .mt-companion-grid { overflow: visible; }
-  .mt-companion-board { min-height: 0; }
   .mt-companion-side { min-height: 0; overflow-y: auto; }
+}
+
+/* The companion's live projection (LiveProjection.tsx): a column per chamber filling the window, its deciding races
+   cut to the rows that fit. */
+.mt-proj { display: flex; flex-direction: column; gap: 8px; min-height: 0; min-width: 0; }
+.mt-proj-cols { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.mt-proj-col { display: flex; flex-direction: column; gap: 8px; min-height: 0; min-width: 0; padding: 14px 16px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
+.mt-proj-col h3 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt-proj-col h4 { margin: 6px 0 0; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt-proj-seats { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-variant-numeric: tabular-nums; }
+.mt-proj-seats b { font-size: 44px; line-height: 1; letter-spacing: -0.02em; }
+.mt-proj-seats .d b { color: var(--dem-ink, var(--dem)); }
+.mt-proj-seats .r b { color: var(--rep-ink, var(--rep)); }
+.mt-proj-bar { position: relative; display: flex; height: 14px; background: var(--el-track, var(--rule)); }
+.mt-proj-bar > span { flex: none; height: 100%; }
+.mt-proj-bar > .gap { flex: 1 1 auto; }
+.mt-proj-bar > .d { background: var(--dem); }
+.mt-proj-bar > .r { background: var(--rep); }
+.mt-proj-bar > .soft { opacity: 0.45; }
+.mt-proj-bar::after { content: ""; position: absolute; top: -3px; bottom: -3px; left: var(--majority); width: 2px; background: var(--ink); }
+.mt-proj-control { margin: 0; font-size: 15px; }
+.mt-proj-control.d b { color: var(--dem-ink, var(--dem)); }
+.mt-proj-control.r b { color: var(--rep-ink, var(--rep)); }
+.mt-proj-tally { margin: 0; }
+.mt-proj-races { flex: 1 1 0; min-height: 0; overflow: hidden; list-style: none; margin: 0; padding: 0; }
+.mt-proj-races li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "race chance" "count chance"; column-gap: 10px; padding: 6px 0; border-top: 1px solid var(--rule); font-size: 13px; }
+.mt-proj-races li[hidden] { display: none; }
+.mt-proj-race { grid-area: race; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.mt-proj-count { grid-area: count; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mt-proj-chance { grid-area: chance; align-self: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mt-proj-chance.d { color: var(--dem-ink, var(--dem)); }
+.mt-proj-chance.r { color: var(--rep-ink, var(--rep)); }
+@media (max-width: 900px) {
+  .mt-proj-cols { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* On the main screen, while the pop-up opens on the companion: a short note in the corner. */

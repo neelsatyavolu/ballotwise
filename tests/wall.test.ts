@@ -47,10 +47,9 @@ describe("wall tour", () => {
     expect(nationMs / (nationMs + raceMs * racesPerLeg!)).toBeGreaterThan(0.6);
   });
 
-  it("never leaves the House's whole map: its stops are only the featured races", () => {
-    expect(TOUR.house.racesPerLeg).toBeNull();
-    expect(tourStops([1, 2, 3], TOUR.house.racesPerLeg)).toEqual([1, 2, 3]);
-    expect(tourStops([], TOUR.house.racesPerLeg)).toEqual([null]);
+  it("takes the House from the whole country into the three races its up-next cards show", () => {
+    expect(TOUR.house.racesPerLeg).toBe(3);
+    expect(tourStops([1, 2, 3, 4], TOUR.house.racesPerLeg)).toEqual([null, 1, 2, 3, null, 4]);
   });
 });
 

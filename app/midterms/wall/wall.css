@@ -20,9 +20,9 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 .mt-wall-clock { margin-left: auto; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mt-wall .mt-seats { margin-top: 0; }
 
-/* Map and tour, closest races, latest calls. */
-.mt-wall-body { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(max-content, 1fr) minmax(260px, 0.5fr); gap: 16px; }
-.mt-wall-tour, .mt-wall-cards, .mt-wall-side { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+/* Map and tour, then race cards. */
+.mt-wall-body { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.5fr); gap: 16px; }
+.mt-wall-tour, .mt-wall-cards { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
 /* The map takes whatever height the race card under it leaves, drawn as big as fits. */
 .mt-wall-map { flex: 1 1 0; min-height: 0; }
 .mt-wall-map .mt-map { height: 100%; padding: 0; border: 0; background: none; }
@@ -38,8 +38,7 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 .mt-wall-upnext:not(:has(.mt-card:not([hidden]))) { display: none; }
 .mt-wall-upnext h3, .mt-wall-later h3 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .mt-wall-upnext .mt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-/* The rest of the tour as rows, only on an ultrawide (below): name, leader and lead (the table beside it has the
-   rest), the name cut short if it must. */
+/* The rest of the tour as rows, only on an ultrawide (below): name, leader and lead, the name cut short if it must. */
 .mt-wall-later { display: none; gap: 6px; }
 .mt-wall-later:not(:has(tbody tr:not([hidden]))) { display: none !important; }
 .mt-wall-later .mt-rows-wrap { max-height: none; overflow: hidden; }
@@ -47,38 +46,25 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 .mt-wall-later .mt-rows :is(th, td):is(:nth-child(2), :nth-child(5)) { display: none; }
 .mt-wall-later .mt-rows th:nth-child(4) { width: 5.5em; }
 .mt-wall-later .mt-rows td:first-child { overflow: hidden; text-overflow: ellipsis; }
-/* Rows and calls that don't fit are hidden whole (Wall.tsx useFit); some of them set their own display. */
+/* Rows and cards that don't fit are hidden whole (Wall.tsx); some of them set their own display. */
 .mt-wall [hidden] { display: none !important; }
-/* The closest races fill their column; rows past the bottom are cut off rather than scrolled to. */
-.mt-wall-cards > .mt-rows-wrap { flex: 0 1 auto; min-height: 0; max-height: none; overflow: hidden; }
-/* The Senate's closest races as cards in place of that table, as many whole rows as fit (Wall.tsx useFit). */
-.mt-wall-grid > .mt-grid { margin: 0; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+/* The cards fill their column, as many whole ones as fit (useRotatingFit): the House's rotate through every toss-up. */
+.mt-wall-cards > .mt-grid { flex: 1 1 0; min-height: 0; margin: 0; overflow: hidden; align-content: start; grid-auto-rows: max-content; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 /* A wall's cards show the two leading candidates and nothing after them but the count's rows: no link to the rest
    and no spare height (Wall.tsx passes limit 2). The column headings go too: party colors and numbers read without them. */
 .mt-wall .mt-card .mt-ct-more, .mt-wall .mt-card .mt-ct-fill, .mt-wall .mt-card .mt-ct thead { display: none; }
 .mt-wall .mt-rows { font-size: 15px; }
 .mt-wall .mt-rows td { padding: 6px 8px; }
-/* Upcoming poll closings (closed ones and each wave's list of places dropped), then the calls filling the rest. */
-.mt-wall-side { gap: 16px; overflow: hidden; }
-.mt-wall-side > .mt-el-sched { flex: none; }
-.mt-wall-side > :last-child { flex: 1 1 0; min-height: 0; overflow: hidden; }
-.mt-wall .mt-el-sched li.closed, .mt-wall .mt-el-sched details > p { display: none; }
-.mt-wall-side .mt-el-calllist { max-height: none; }
-.mt-wall .mt-el-about, .mt-wall .mt-el-calls-meta, .mt-wall .mt-el-calls > .btn { display: none; }
 
-/* A squarer monitor drops the calls column; a portrait one stacks the map over the table. */
-@media (max-aspect-ratio: 3 / 2) {
-  .mt-wall-body { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
-  .mt-wall-side { display: none; }
-}
+/* A portrait monitor stacks the map over the cards. */
 @media (max-aspect-ratio: 1 / 1) {
   .mt-wall-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); }
 }
 
 /* An ultrawide puts the tour's race card beside the map instead of under it, so the map keeps its height, and the
-   table gets more room. */
+   cards get more room. */
 @media (min-aspect-ratio: 2 / 1) {
-  .mt-wall-body { grid-template-columns: minmax(0, 2.7fr) minmax(max-content, 1fr) minmax(300px, 0.6fr); }
+  .mt-wall-body { grid-template-columns: minmax(0, 2.7fr) minmax(0, 1.7fr); }
   .mt-wall-tour { display: grid; grid-template-columns: minmax(0, 2.3fr) minmax(360px, 1fr); grid-template-rows: auto minmax(0, 1fr); column-gap: 16px; align-items: start; }
   .mt-wall-tour > .mt-section-head { grid-column: 1 / -1; }
   .mt-wall-map { height: 100%; }
@@ -88,17 +74,9 @@ body:has(.mt-wall) .mt-callpops { display: none; }
   .mt-wall-later { display: grid; }
 }
 
-/* With no calls column (the Senate wall), the race cards take its room. */
-@media (min-aspect-ratio: 101 / 100) {
-  .mt-wall-body.no-side { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.5fr); }
-}
-@media (min-aspect-ratio: 2 / 1) {
-  .mt-wall-body.no-side { grid-template-columns: minmax(0, 2.7fr) minmax(0, 1.7fr); }
-}
-
-/* A super-ultrawide (32:9) is wider than the map can use at its height: the spare width goes to the table and calls. */
+/* A super-ultrawide (32:9) is wider than the map can use at its height: the spare width goes to the cards. */
 @media (min-aspect-ratio: 3 / 1) {
-  .mt-wall-body { grid-template-columns: minmax(0, 2.4fr) minmax(max-content, 1.1fr) minmax(300px, 0.7fr); }
+  .mt-wall-body { grid-template-columns: minmax(0, 2.4fr) minmax(0, 1.8fr); }
   .mt-wall-tour { grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr); }
 }
 

@@ -18,6 +18,7 @@ import { PollSchedule } from "./PollClose";
 import { RaceCard } from "./RaceCard";
 import { RaceRows, type Star } from "./RaceRows";
 import { ColumnsSkeleton } from "./Skeleton";
+import { useRotatingFit } from "./useRotatingFit";
 import { ZoomMap, type Fill } from "./ZoomMap";
 
 type Column = Exclude<Office, "measure">;
@@ -191,18 +192,23 @@ function ThirdSwitch({ third }: { third: Third }) {
   );
 }
 
-/** Every Senate and House toss-up (governors have their own column), as cards with the top two candidates: closest counts first. */
+/**
+ * Every House toss-up (the Senate's are in its own column), as cards with the top two candidates, closest counts
+ * first: as many whole cards as fit, rotating through the rest when they don't all fit.
+ */
 function TossupColumn({ data, star, handle, toggle }: { data: Overview; star: Star; handle: ReactNode; toggle: ReactNode }) {
-  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && (r.office === "senate" || r.office === "house")).sort(closestFirst), [data]);
+  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && r.office === "house").sort(closestFirst), [data]);
+  const cards = useRef<HTMLUListElement>(null);
+  useRotatingFit(cards);
   return (
     <section className="mt-sbs-col" aria-label="Toss-up races" data-panel="tossups">
       <div className="mt-section-head tight">
-        <h2>Toss-ups</h2>
+        <h2>House toss-ups</h2>
         <span className="muted small mt-sbs-count">{count(races.length)}</span>
         {toggle}
       </div>
       {races.length ? (
-        <ul className="mt-grid mt-sbs-cards">
+        <ul className="mt-grid mt-sbs-cards" ref={cards}>
           {races.map((r) => (
             <RaceCard key={r.id} race={r} starred={star.ids ? star.ids.includes(r.id) : null} onStar={star.toggle} limit={2} />
           ))}

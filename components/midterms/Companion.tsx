@@ -6,8 +6,8 @@ import { adoptMock } from "@/lib/midterms/clock";
 import type { Panel } from "@/lib/midterms/screens";
 import type { Overview } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
-import { CompanionBoard } from "./CompanionBoard";
 import { ControlStrip } from "./ControlStrip";
+import { LiveProjection } from "./LiveProjection";
 import { useLive, useStars } from "./hooks";
 import { MomentPopup } from "./MomentPopup";
 import { PollSchedule } from "./PollClose";
@@ -16,7 +16,7 @@ import { setSolo, useScreens } from "./useScreens";
 const noSubscribe = () => () => {};
 
 /** Mounted only on a companion, so other tabs don't fetch or load stars for it. */
-function Body({ hidden, seen }: { hidden: readonly Panel[]; seen: readonly number[] }) {
+function Body({ hidden }: { hidden: readonly Panel[] }) {
   const data = useLive<Overview>("/api/midterms").data;
   const stars = useStars();
   const shows = (p: Panel) => hidden.includes(p);
@@ -24,21 +24,21 @@ function Body({ hidden, seen }: { hidden: readonly Panel[]; seen: readonly numbe
     <>
       <header className="mt-companion-bar">
         <b>Companion screen</b>
-        <span className="muted small">Showing what your main screen doesn&apos;t.</span>
+        <span className="muted small">The live projection, and what your main screen doesn&apos;t show.</span>
         {data && <MomentPopup data={data} starred={stars.ids} inCompanion />}
         <button type="button" className="mt-el-quiet small" onClick={() => setSolo(true)}>Use this tab normally</button>
       </header>
-      {data ? <Panels data={data} seen={seen} stars={stars} shows={shows} /> : <p className="muted">Loading…</p>}
+      {data ? <Panels data={data} shows={shows} /> : <p className="muted">Loading…</p>}
     </>
   );
 }
 
-function Panels({ data, seen, stars, shows }: { data: Overview; seen: readonly number[]; stars: ReturnType<typeof useStars>; shows: (p: Panel) => boolean }) {
+function Panels({ data, shows }: { data: Overview; shows: (p: Panel) => boolean }) {
   return (
     <>
       {shows("control") && <ControlStrip data={data} />}
       <div className="mt-companion-grid">
-        <CompanionBoard data={data} stars={stars} seen={seen} />
+        <LiveProjection races={data.races} />
         {(shows("calls") || shows("schedule")) && (
           <div className="mt-companion-side">
             {shows("calls") && <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" />}
@@ -51,12 +51,12 @@ function Panels({ data, seen, stars, shows }: { data: Overview; seen: readonly n
 }
 
 /**
- * On a companion screen, what the main screen can't show, over this tab's own page: the closest races it has no card
- * for, latest calls, poll closings or who controls each chamber. Big moments pop up here instead of on the main screen. A companion runs
+ * On a companion screen, over this tab's own page: the live projection of each chamber, and what the main screen can't
+ * show of latest calls, poll closings or who controls each chamber. Big moments pop up here instead of on the main screen. A companion runs
  * the main screen's mock night, if any, so the two show the same night. "Use this tab normally" leaves the setup.
  */
 export function Companion() {
-  const { role, hidden, seen, mainMock } = useScreens();
+  const { role, hidden, mainMock } = useScreens();
   const companion = role === "companion";
   useEffect(() => {
     if (companion) adoptMock(mainMock);
@@ -65,7 +65,7 @@ export function Companion() {
   if (!companion || !body) return null;
   return createPortal(
     <div className="mt mt-companion" role="region" aria-label="Companion screen">
-      <Body hidden={hidden} seen={seen} />
+      <Body hidden={hidden} />
     </div>,
     body,
   );
