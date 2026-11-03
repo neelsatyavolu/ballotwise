@@ -10,6 +10,9 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+# Speed over gating: lint, typecheck and tests do not block the deploy. Whoever pushes to
+# main runs them first (see AGENTS.md); the `checks` job below reruns them alongside the
+# deploy so a broken main still shows up red.
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -19,11 +22,35 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
+      # Restoring node_modules whole beats `npm ci`; it reinstalls only when the lockfile changes.
+      - id: modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.modules.outputs.cache-hit != 'true'
+        run: npm ci --no-audit --no-fund
       - run: npm run deploy
         env:
+          # The checks job runs tsc; don't type-check a second time inside next build.
+          SKIP_BUILD_TYPECHECK: "1"
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.modules.outputs.cache-hit != 'true'
+        run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
