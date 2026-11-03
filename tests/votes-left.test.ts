@@ -83,6 +83,21 @@ describe("votesLeft", () => {
     expect(est.left).toBeLessThan(expected + 25);
   });
 
+  it("splits a mail-first county's remaining vote nearer its 2024 lean than its early count", () => {
+    // Mail first: 70/30 with 2% of precincts in, even in 2024. Done: even then and now, so the state hasn't swung.
+    const est = votesLeft(race([county("Mail first", 420, 180, 2, [500, 500, 1000]), county("Done", 500, 500, 100, [500, 500, 1000])]))!;
+    const dee = est.leader.votes / est.left;
+    // The count alone would hand Dee 70% of what's left; the mail's lean only partly carries over.
+    expect(dee).toBeLessThan(0.66);
+    expect(dee).toBeGreaterThan(0.5);
+    expect(Math.abs(est.leader.votes + est.runnerUp.votes - est.left)).toBeLessThanOrEqual(1);
+  });
+
+  it("keeps a House county's own count shares, since only part of the county is in the district", () => {
+    const est = votesLeft(race([county("Part", 70, 30, 50, [500, 500, 1000]), county("Other", 50, 50, 50)], { office: "house", district: 1 }))!;
+    expect(est.leader.votes / est.left).toBeCloseTo((70 + 50) / 200, 2);
+  });
+
   it("leaves out House counties with nothing counted, since a district covers only parts of them", () => {
     const est = votesLeft(race([county("Counted", 50, 50, 50, [200, 200, 400]), county("Quiet", 0, 0, 0, [600, 200, 800])], { office: "house", district: 1 }))!;
     expect(est.left).toBe(100);

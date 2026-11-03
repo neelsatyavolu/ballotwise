@@ -24,6 +24,14 @@ export function approx(n: number): string {
   return fmt(Math.round(n / step) * step);
 }
 
+/** The same, short for a narrow column: "57K", "1.2M", "4.6K", "820". */
+export function approxShort(n: number): string {
+  if (n >= 999_500) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 9_950) return `${Math.round(n / 1_000)}K`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  return approx(n);
+}
+
 export const VOTES_LEFT_CAVEAT = "A rough estimate: civicAPI's reporting figure counts precincts or ballot batches, not ballots, and late mail can lean differently from the count so far.";
 
 const PLACES = 3;
@@ -95,43 +103,53 @@ function leftIn(c: CountyResult, turnout: number, statewide: boolean): number | 
 }
 
 /**
- * How far the counted counties have moved toward the Democrat since 2024, as a share of the vote (Democratic lead now
- * minus Harris's lead then), or 0 when none can be compared.
+ * How far the counted counties have moved toward the Democrat since 2024, as a share of the vote (each county's
+ * Democratic lead now minus Harris's lead there then), or 0 when none can be compared. A county weighs by its count
+ * times the share of its expected vote that's in (`counted`), so one that has counted only its early mail, which
+ * leans its own way, moves the swing little until the rest of its vote comes in.
  */
-function swingOf(counties: readonly CountyResult[]): number {
-  const base = counties.filter((c) => c.total > 0 && c.pres2024?.total);
-  const counted = sum(base.map((c) => c.total));
-  const pres = sum(base.map((c) => c.pres2024!.total));
-  if (!counted || !pres) return 0;
+function swingOf(counties: readonly { c: CountyResult; counted: number }[]): number {
   const votesOf = (c: CountyResult, side: "D" | "R") => sum(c.candidates.filter((x) => partyOf(x.party) === side).map((x) => x.votes));
-  const now = sum(base.map((c) => votesOf(c, "D") - votesOf(c, "R"))) / counted;
-  const then = sum(base.map((c) => c.pres2024!.harris - c.pres2024!.trump)) / pres;
-  return now - then;
+  const base = counties.flatMap(({ c, counted }) => {
+    const p = c.pres2024;
+    if (!(c.total > 0) || !p?.total) return [];
+    const swing = (votesOf(c, "D") - votesOf(c, "R")) / c.total - (p.harris - p.trump) / p.total;
+    return [{ w: c.total * counted, swing }];
+  });
+  const weight = sum(base.map((b) => b.w));
+  return weight > 0 ? sum(base.map((b) => b.w * b.swing)) / weight : 0;
 }
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
-/**
- * The two leaders' shares of a county's remaining vote: their shares of its count so far, else their parties' shares
- * of its 2024 presidential vote moved by `swing` (see swingOf), else their shares statewide.
- */
-function sharesIn(c: CountyResult, names: readonly [string, string], parties: readonly [string, string], statewide: readonly [number, number], swing: number): [number, number] {
-  if (c.total > 0) {
-    const votes = names.map((n) => c.candidates.find((x) => x.name === n)?.votes ?? 0);
-    return [votes[0] / c.total, votes[1] / c.total];
-  }
+/** The two leaders' shares of a county's 2024 presidential vote, moved by `swing` (see swingOf); null without a D-R pair. */
+function leanIn(c: CountyResult, parties: readonly [string, string], swing: number): [number, number] | null {
   const p = c.pres2024;
   const side = parties.map(partyOf);
-  if (p?.total && side.includes("D") && side.includes("R")) {
-    const of = (s: string) => clamp01(s === "D" ? p.harris / p.total + swing / 2 : s === "R" ? p.trump / p.total - swing / 2 : 0);
-    return [of(side[0]), of(side[1])];
-  }
-  return [...statewide];
+  if (!p?.total || !side.includes("D") || !side.includes("R")) return null;
+  const of = (s: string) => clamp01(s === "D" ? p.harris / p.total + swing / 2 : s === "R" ? p.trump / p.total - swing / 2 : 0);
+  return [of(side[0]), of(side[1])];
+}
+
+/**
+ * The two leaders' shares of a county's remaining vote. Where some is counted: its shares so far, blended toward its
+ * 2024 lean moved by the swing (see leanIn) by how much of its vote is still out (`counted` is the share in). A county
+ * that counts its mail or early vote first shows that vote's lean, and what's left there (mostly election-day vote)
+ * usually leans the other way, so the count so far only takes over as the county nears done. A House district's
+ * counties are only partly in it, so there the count's shares stand alone. With nothing counted, the 2024 lean, else
+ * the leaders' shares statewide.
+ */
+function sharesIn(c: CountyResult, counted: number, names: readonly [string, string], parties: readonly [string, string], statewide: readonly [number, number], swing: number, whole: boolean): [number, number] {
+  if (c.total === 0) return leanIn(c, parties, swing) ?? [...statewide];
+  const [a, b] = names.map((n) => (c.candidates.find((x) => x.name === n)?.votes ?? 0) / c.total);
+  const lean = whole ? leanIn(c, parties, swing) : null;
+  return lean ? [counted * a + (1 - counted) * lean[0], counted * b + (1 - counted) * lean[1]] : [a, b];
 }
 
 /**
  * Roughly how many votes are left in a race still counting and how they might split between the two leaders, from each
- * county's count, reporting figure and 2024 vote (see leftIn), moved by the swing since 2024 where nothing is counted yet.
+ * county's count, reporting figure and 2024 vote (see leftIn), split by the count so far and the 2024 lean moved by the
+ * swing since (see sharesIn).
  * civicAPI's reporting figure counts precincts or ballot batches, not ballots, and late mail can lean differently, so
  * it's an estimate to read loosely. Null before any votes, once called, or with fewer than two candidates.
  */
@@ -145,11 +163,15 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
   // One region, or none, is the race itself.
   const counties: readonly CountyResult[] = race.counties.length > 1 ? race.counties : [{ fips: null, name: race.title, reporting: race.reporting, total: race.total, candidates: race.candidates, ...(race.reportingUnknown && { reportingUnknown: true as const }), baseline2024: null, pres2024: null }];
   const turnout = turnoutOf(counties, turnoutPrior(race));
-  const swing = swingOf(counties);
-  const estimated = counties.map((c) => ({ c, left: leftIn(c, turnout, statewide) }));
-  const rows = estimated.flatMap(({ c, left }) => {
+  // How much of each county's vote is in, by the estimate: its count against its count plus what's left.
+  const estimated = counties.map((c) => {
+    const left = leftIn(c, turnout, statewide);
+    return { c, left, counted: left === null ? 0 : c.total + left > 0 ? c.total / (c.total + left) : 1 };
+  });
+  const swing = swingOf(estimated);
+  const rows = estimated.flatMap(({ c, left, counted }) => {
     if (!left) return [];
-    const [sa, sb] = sharesIn(c, names, parties, overall, swing);
+    const [sa, sb] = sharesIn(c, counted, names, parties, overall, swing, statewide);
     return [{ name: c.name, left, a: left * sa, b: left * sb, edge: sa + sb > 0 ? (sa - sb) * 100 : null }];
   });
   return {
