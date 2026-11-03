@@ -101,7 +101,7 @@ function sides(r: RaceSummary) {
   return { first, second, share, partisan: !yesSide && !!first && !!second };
 }
 
-function simulateRace(r: RaceSummary, at: number): RaceSummary {
+export function simulateRace(r: RaceSummary, at: number): RaceSummary {
   const close = stateCloses(r.state);
   if (close === null || at < close) return r;
   const { reporting, margin } = progress(r, close, at);
@@ -153,9 +153,14 @@ function raceWithEvents(r: RaceSummary, at: number, withdrawn: number | null): {
   return { race: { ...race, candidates, calledFor: name, call: { id: 0, at: RECALL_AT, winner: name, replaced: null, withdrawn: false } }, events: [...events, call({ at: RECALL_AT, winner: name, previous: null })] };
 }
 
+/** The real races the last overview was made up from, for the mock night's made-up DDHQ Pulse (mockPulse.ts). */
+let lastRaces: readonly RaceSummary[] = [];
+export const simulatedFrom = (): readonly RaceSummary[] => lastRaces;
+
 /** The overview as it might look at `at`, with seat counts to match. Call events are numbered in the order they happened. */
 export function simulateOverview(data: Overview, at: number): Overview {
   if (data.simulated) return data;
+  lastRaces = data.races;
   const withdrawn = withdrawnRace(data.races);
   const results = data.races.map((r) => raceWithEvents(r, at, withdrawn));
   const ordered = results.flatMap((x) => x.events).sort((a, b) => a.at - b.at || a.raceId - b.raceId);

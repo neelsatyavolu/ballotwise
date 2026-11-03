@@ -165,6 +165,18 @@ function reportingOf(inCount: unknown, totalCount: unknown): number | undefined 
   return counted !== undefined && total && total > 0 ? Math.min(100, counted / total * 100) : undefined;
 }
 
+/** The most of the expected vote DDHQ shows as counted until a race is done, as its own "% in" does. */
+const MAX_EXPECTED_IN = 99;
+
+/**
+ * DDHQ's "% in": votes counted over its live estimate of the race's final vote (turnout.estimated_votes_mid), as its
+ * own pages show. Many states report no precinct counts to DDHQ, so precincts are only the fallback.
+ */
+function expectedIn(total: number, estimate: unknown): number | undefined {
+  const expected = countOf(estimate);
+  return expected && expected > 0 ? Math.min(MAX_EXPECTED_IN, (total / expected) * 100) : undefined;
+}
+
 function timestampOf(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const at = Date.parse(value);
@@ -187,7 +199,7 @@ export function readForecast(body: unknown): DdhqForecast[] {
 }
 
 export function readResults(body: unknown): DdhqResults {
-  const data = (body as { raceData?: { toplineResults?: unknown; countyResults?: unknown; totalVotes?: unknown; turnout?: { precincts_in?: unknown; precincts_tot?: unknown }; lastUpdated?: unknown } } | null)?.raceData;
+  const data = (body as { raceData?: { toplineResults?: unknown; countyResults?: unknown; totalVotes?: unknown; turnout?: { precincts_in?: unknown; precincts_tot?: unknown; estimated_votes_mid?: unknown }; lastUpdated?: unknown } } | null)?.raceData;
   const lines = data?.toplineResults;
   if (!Array.isArray(lines)) return { candidates: null, counties: [], total: 0 };
   const candidates: DdhqCandidate[] = [];
@@ -236,7 +248,7 @@ export function readResults(body: unknown): DdhqResults {
       });
     }
   }
-  const reporting = reportingOf(data?.turnout?.precincts_in, data?.turnout?.precincts_tot);
+  const reporting = expectedIn(total, data?.turnout?.estimated_votes_mid) ?? reportingOf(data?.turnout?.precincts_in, data?.turnout?.precincts_tot);
   const resultsUpdatedAt = timestampOf(data?.lastUpdated);
   return { candidates, counties, total, ...(reporting !== undefined ? { reporting } : {}), ...(resultsUpdatedAt ? { resultsUpdatedAt } : {}) };
 }

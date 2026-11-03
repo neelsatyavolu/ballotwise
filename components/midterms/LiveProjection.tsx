@@ -5,9 +5,10 @@
 // flip fill the rest of each column.
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import type { Pulse, PulseChamber, PulseRace } from "@/lib/ddhq/pulse";
+import type { Pulse, PulseChamber, PulseChamberName, PulsePoint, PulseRace } from "@/lib/ddhq/pulse";
 import type { Body, Side } from "@/lib/midterms/forecast";
 import type { ChamberProjection, LiveProjection as Projection, RaceOutlook } from "@/lib/midterms/liveProjection";
+import { stampTime } from "@/lib/midterms/polls";
 import { raceKey } from "@/lib/midterms/seats";
 import { raceLabel, type RaceSummary } from "@/lib/midterms/view";
 import { lastName } from "./CandidateTable";
@@ -62,6 +63,38 @@ function PulseControl({ chamber }: { chamber: PulseChamber }) {
     <p className="mt-proj-pulse small" title="DDHQ Pulse: Decision Desk HQ's live model of who controls the chamber">
       DDHQ Pulse <b className="d">D {Math.round(chamber.dem)}%</b> · <b className="r">R {Math.round(chamber.rep)}%</b>
     </p>
+  );
+}
+
+/** The chart's drawing box: a wide, short line, stretched to the column's width. */
+const CHART_W = 300;
+const CHART_H = 40;
+
+/**
+ * The chamber's Pulse over the day: the Democrats' chance of control (blue) and the Republicans' (red), each value
+ * carried forward to the next change and to the latest read, with 50% marked. Nothing until there are two points.
+ */
+function PulseChart({ office, history, at }: { office: PulseChamberName; history: readonly PulsePoint[]; at: number | null }) {
+  const points = history.flatMap((p) => (p[office] === undefined ? [] : [{ at: p.at, dem: p[office] }]));
+  if (points.length < 2) return null;
+  const start = points[0].at;
+  const end = Math.max(at ?? 0, points[points.length - 1].at);
+  const x = (t: number) => ((t - start) / Math.max(1, end - start)) * CHART_W;
+  const y = (pct: number) => CHART_H - (pct / 100) * CHART_H;
+  const line = (value: (dem: number) => number) =>
+    points.map((p, i) => `${i ? `H${x(p.at).toFixed(1)}V` : `M0 `}${y(value(p.dem)).toFixed(1)}`).join("") + `H${CHART_W}`;
+  return (
+    <figure className="mt-proj-chart" aria-label={`DDHQ Pulse since ${stampTime(start)}`}>
+      <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} preserveAspectRatio="none" aria-hidden>
+        <line className="mid" x1="0" x2={CHART_W} y1={CHART_H / 2} y2={CHART_H / 2} />
+        <path className="r" d={line((dem) => 100 - dem)} />
+        <path className="d" d={line((dem) => dem)} />
+      </svg>
+      <figcaption className="muted">
+        <span>{stampTime(start)}</span>
+        <span>now</span>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -123,6 +156,7 @@ function Chamber({ office, view, pulse }: { office: Body; view: ChamberProjectio
       <SeatBar office={office} view={view} />
       <Control office={office} view={view} />
       {chamber && <PulseControl chamber={chamber} />}
+      {pulse && office !== "governor" && <PulseChart office={office} history={pulse.history ?? []} at={pulse.at} />}
       <p className="mt-proj-tally muted small">
         Won {view.won.D} D · {view.won.R} R · {view.counting} counting · {view.waiting} no votes yet
         {office !== "house" && ` · ${view.notUp.D + view.notUp.R + view.notUp.other} not up`}

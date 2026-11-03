@@ -15,10 +15,18 @@ type PulseOffice = (typeof OFFICES)[number];
 export type PulseChamber = { dem: number; rep: number };
 /** The candidate DDHQ's live model favors in one race, and their chance in percent. */
 export type PulseRace = { name: string; side: "D" | "R" | "I"; chance: number };
-/** `races` is keyed by seats.ts raceKey. `at` is when DDHQ's pages were read; null when they never were. */
-export type Pulse = { at: number | null; chambers: Partial<Record<"senate" | "house", PulseChamber>>; races: Record<string, PulseRace> };
+export type PulseChamberName = "senate" | "house";
+/** One moment of each chamber's Pulse: the Democrats' chance of control in percent. A chamber read at another moment is left out. */
+export type PulsePoint = { at: number } & Partial<Record<PulseChamberName, number>>;
+/**
+ * `races` is keyed by seats.ts raceKey. `at` is when DDHQ's pages were read; null when they never were. `history` is
+ * the chambers' Pulse over the day, oldest first: DDHQ's own chart points and every read since.
+ */
+export type Pulse = { at: number | null; chambers: Partial<Record<PulseChamberName, PulseChamber>>; races: Record<string, PulseRace>; history: PulsePoint[] };
 
-export const NO_PULSE: Pulse = { at: null, chambers: {}, races: {} };
+export const NO_PULSE: Pulse = { at: null, chambers: {}, races: {}, history: [] };
+/** The most points kept: twelve hours of one-a-minute reads, the newest kept. */
+const MAX_HISTORY = 720;
 
 /** How long one read serves every visitor before DDHQ is asked again. */
 export const PULSE_FRESH_MS = 60_000;
@@ -81,16 +89,47 @@ function raceRecords(text: string): unknown[] {
   return [...found.values()];
 }
 
-/** The chamber's "Win Probability" chart: DDHQ Pulse's chance of control for each party. */
-function chamberOf(text: string): PulseChamber | undefined {
+const chartPoints = z.array(z.object({ dt: z.number().int().positive(), democrats: chance }));
+
+/** The chamber's "Win Probability" chart: DDHQ Pulse's chance of control for each party now, and its points so far. */
+function chamberOf(text: string): { now: PulseChamber; points: { at: number; dem: number }[] } | undefined {
   const m = /"title":"Win Probability"[^{}]*?"rep":(\d+(?:\.\d+)?),"dem":(\d+(?:\.\d+)?)/.exec(text);
   if (!m) return undefined;
   const parsed = z.object({ rep: chance, dem: chance }).safeParse({ rep: Number(m[1]), dem: Number(m[2]) });
-  return parsed.success ? parsed.data : undefined;
+  if (!parsed.success) return undefined;
+  // The points follow the current numbers in the same chart; they hold no brackets of their own.
+  const rest = /^[^{}]*?"points":(\[[^\]]*\])/.exec(text.slice(m.index + m[0].length));
+  let points: { at: number; dem: number }[] = [];
+  try {
+    const read = rest ? chartPoints.safeParse(JSON.parse(rest[1])) : null;
+    if (read?.success) points = read.data.map((p) => ({ at: p.dt, dem: p.democrats }));
+  } catch {
+    // Points cut short: the current numbers still stand.
+  }
+  return { now: parsed.data, points };
+}
+
+/**
+ * `next` added to `history` in time order. A point that changes no chamber from the one before it is dropped (the
+ * chart carries a value forward to the next change), and only the newest MAX_HISTORY are kept.
+ */
+export function mergeHistory(history: readonly PulsePoint[], next: readonly PulsePoint[]): PulsePoint[] {
+  const byTime = new Map<number, PulsePoint>();
+  for (const p of [...history, ...next]) byTime.set(p.at, { ...byTime.get(p.at), ...p });
+  const last: Partial<Record<PulseChamberName, number>> = {};
+  const kept: PulsePoint[] = [];
+  for (const p of [...byTime.values()].sort((a, b) => a.at - b.at)) {
+    const changed = (["senate", "house"] as const).filter((c) => p[c] !== undefined && p[c] !== last[c]);
+    if (!changed.length) continue;
+    const point: PulsePoint = { at: p.at };
+    for (const c of changed) point[c] = last[c] = p[c];
+    kept.push(point);
+  }
+  return kept.slice(-MAX_HISTORY);
 }
 
 /** What one office's balance-of-power page says of Pulse. */
-export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "chambers" | "races"> {
+export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "chambers" | "races" | "history"> {
   const races: Record<string, PulseRace> = {};
   for (const record of raceRecords(text)) {
     const parsed = raceRecord.safeParse(record);
@@ -100,7 +139,8 @@ export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "c
     races[raceKey(office, stateAbb, seat)] = { name: pulse.lastName, side: sideOf(pulse.party.abbrev), chance: pulse.winProbability };
   }
   const chamber = office === "governor" ? undefined : chamberOf(text);
-  return { chambers: chamber ? { [office]: chamber } : {}, races };
+  if (!chamber || office === "governor") return { chambers: {}, races, history: [] };
+  return { chambers: { [office]: chamber.now }, races, history: chamber.points.map((p) => ({ at: p.at, [office]: p.dem })) };
 }
 
 async function fetchPage(office: PulseOffice, signal: AbortSignal): Promise<string> {
@@ -124,11 +164,10 @@ export async function fetchPulse(signal: AbortSignal): Promise<Pulse | null> {
     return [];
   });
   if (!read.length) return null;
-  return {
-    at: Date.now(),
-    chambers: Object.assign({}, ...read.map((r) => r.chambers)),
-    races: Object.assign({}, ...read.map((r) => r.races)),
-  };
+  const at = Date.now();
+  const chambers: Pulse["chambers"] = Object.assign({}, ...read.map((r) => r.chambers));
+  const now: PulsePoint = { at, ...(chambers.senate && { senate: chambers.senate.dem }), ...(chambers.house && { house: chambers.house.dem }) };
+  return { at, chambers, races: Object.assign({}, ...read.map((r) => r.races)), history: mergeHistory(read.flatMap((r) => r.history), [now]) };
 }
 
 /**
@@ -137,14 +176,17 @@ export async function fetchPulse(signal: AbortSignal): Promise<Pulse | null> {
  */
 export async function loadPulse(db: Db, now: number): Promise<Pulse> {
   const cached = await getCachedShared<Pulse>(db, CACHE_KEY, now).catch(() => null);
-  if (cached?.at && now - cached.at < PULSE_FRESH_MS) return cached;
-  const fresh = await fetchPulse(AbortSignal.timeout(10_000)).catch((err) => {
+  if (cached?.at && now - cached.at < PULSE_FRESH_MS) return { ...cached, history: cached.history ?? [] };
+  const read = await fetchPulse(AbortSignal.timeout(10_000)).catch((err) => {
     console.error("DDHQ Pulse failed:", err instanceof Error ? err.message : err);
     return null;
   });
-  if (fresh) {
+  if (read) {
+    // Every read joins the day's line, so it fills in even if DDHQ's own chart points don't. Entries cached before
+    // the line existed have none.
+    const fresh: Pulse = { ...read, history: mergeHistory(cached?.history ?? [], read.history) };
     await putCached(db, CACHE_KEY, fresh, now).catch((err) => console.error("DDHQ Pulse cache write failed:", err));
     return fresh;
   }
-  return cached?.at && now - cached.at < PULSE_STALE_MS ? cached : NO_PULSE;
+  return cached?.at && now - cached.at < PULSE_STALE_MS ? { ...cached, history: cached.history ?? [] } : NO_PULSE;
 }

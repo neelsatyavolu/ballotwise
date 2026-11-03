@@ -71,6 +71,14 @@ describe("observed Votes result schema", () => {
     expect(readResults({ raceData: { ...topline([0, 0, 0]), totalVotes: 0 } }).total).toBe(0);
   });
 
+  it("reads DDHQ's % in from its expected vote, capped at 99 until done, and falls back to precincts", () => {
+    const counted = topline([300, 290, 10]);
+    expect(readResults({ raceData: { ...counted, turnout: { precincts_in: 0, precincts_tot: 0, estimated_votes_mid: 2400 } } }).reporting).toBe(25);
+    expect(readResults({ raceData: { ...counted, turnout: { precincts_in: 0, precincts_tot: 0, estimated_votes_mid: 590 } } }).reporting).toBe(99);
+    expect(readResults({ raceData: { ...counted, turnout: { precincts_in: 4, precincts_tot: 10, estimated_votes_mid: 0 } } }).reporting).toBe(40);
+    expect(readResults({ raceData: { ...counted, turnout: { precincts_in: 0, precincts_tot: 0 } } }).reporting).toBeUndefined();
+  });
+
   it("reads actual precinct reporting, county totals and PostgreSQL timestamps", () => {
     const body = { raceData: {
       ...topline([500, 497, 3], 0, "2026-11-04 03:00:00.123456Z"),
