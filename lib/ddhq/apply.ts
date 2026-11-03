@@ -99,7 +99,7 @@ function mergeCounty(county: CountyResult, desk: DdhqRace): CountyResult {
   if (!hit) return { ...county, total: 0, reporting: 0, reportingUnknown: true, candidates: [] };
   const candidates = hit.candidates.map((row) => ({ ...row }));
   const total = hit.total ?? candidates.reduce((sum, row) => sum + row.votes, 0);
-  return { ...county, name: hit.name ?? county.name, total, candidates, reporting: hit.reporting ?? 0, reportingUnknown: total > 0 && hit.reporting === undefined ? true : undefined };
+  return { ...county, name: hit.name ?? county.name, total, candidates, reporting: hit.reporting ?? 0, reportingUnknown: total > 0 && hit.reporting === undefined ? true : undefined, expected: hit.expected, done: hit.done };
 }
 
 export function deskKeyFor(race: Pick<RaceSummary, "office" | "state" | "district" | "title">): string {

@@ -91,6 +91,12 @@ export type CountyResult = {
   candidates: Omit<Candidate, "incumbent" | "winner">[];
   /** Set when civicAPI has votes for the county but no reporting figure, so `reporting` (0) isn't a share. */
   reportingUnknown?: true;
+  /**
+   * From a connected DDHQ account only: DDHQ's live estimate of the county's final vote, which it updates through the
+   * night from turnout reports, and `done` once DDHQ says the county has finished counting.
+   */
+  expected?: number;
+  done?: true;
   /** 2024 presidential margin, Harris minus Trump, in points. */
   baseline2024: number | null;
   pres2024: Pres2024 | null;

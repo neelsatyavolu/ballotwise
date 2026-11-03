@@ -75,7 +75,7 @@ function turnoutOf(counties: readonly CountyResult[], prior: number): number {
 }
 
 /**
- * Roughly how many votes a county has left. Two guesses: its count scaled up by its reporting figure, and its 2024
+ * Roughly how many votes a county has left: DDHQ's expected vote less what's counted, when it's there. Else two guesses: its count scaled up by its reporting figure, and its 2024
  * presidential vote at this year's turnout less what's counted. The reporting figure counts precincts, and many
  * counties count early and mail ballots before any precinct, so a county a few precincts in can already have most of
  * its vote; scaled up, that's many times too much. The 2024 guess leads until the count is well along, and the scaled
@@ -83,7 +83,9 @@ function turnoutOf(counties: readonly CountyResult[], prior: number): number {
  * can't stand in and only the scaled count is used. Null when neither is known.
  */
 function leftIn(c: CountyResult, turnout: number, statewide: boolean): number | null {
-  if (c.reporting >= 100) return 0;
+  if (c.reporting >= 100 || c.done) return 0;
+  // DDHQ's own expected vote, where a connected account has it: built from live turnout reports, it beats both guesses.
+  if (c.expected !== undefined) return Math.max(0, c.expected - c.total);
   const scaled = scaledOf(c);
   const prior = statewide && c.pres2024?.total ? Math.max(0, c.pres2024.total * turnout - c.total) : null;
   if (scaled === null) return prior;

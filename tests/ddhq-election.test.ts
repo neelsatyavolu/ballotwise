@@ -90,8 +90,22 @@ describe("observed Votes result schema", () => {
     const result = readResults(body);
     expect(result).toMatchObject({ reporting: 40, resultsUpdatedAt: "2026-11-04T03:00:00.123Z" });
     expect(result.counties[0]).toMatchObject({ name: "Example County", fips: "13049", total: 1000, reporting: 50 });
+    expect(result.counties[0]).not.toHaveProperty("expected");
     expect(result.counties[0].candidates[1].pct).toBe(0.3);
     expect(readCall(body)).toEqual({ name: "Avery Candidate", at: "2026-11-04T03:00:00.123Z" });
+  });
+
+  it("keeps DDHQ's expected vote and finished flag for each county, through to the race shown", () => {
+    const county = (lte: Record<string, unknown>) => ({ county: "Example County", fips: "13049", liveTurnoutEstimate: { totalVotes: 1000, precinctsIn: 0, precinctsTot: 0, ...lte },
+      candidates: [{ first_name: "Avery", last_name: "Candidate", votes: 1000, percent: 100, party: { name: "Democratic" } }] });
+    const counting = readResults({ raceData: { ...topline([500, 497, 3]), countyResults: [county({ estimatedVotesMid: 4000, completedCounty: false })] } });
+    expect(counting.counties[0]).toMatchObject({ expected: 4000 });
+    expect(counting.counties[0]).not.toHaveProperty("done");
+    const finished = readResults({ raceData: { ...topline([500, 497, 3]), countyResults: [county({ estimatedVotesMid: 1000, completedCounty: true })] } });
+    expect(finished.counties[0]).toMatchObject({ expected: 1000, done: true });
+    const detail: RaceDetail = { ...rawRace(), updated: null, pollsClose: null,
+      counties: [{ fips: "13049", name: "Example County", total: 0, reporting: 0, candidates: [], baseline2024: null, pres2024: null }] };
+    expect(applyDesk(detail, { ...parsed(topline([500, 497, 3])), counties: counting.counties }).counties[0]).toMatchObject({ total: 1000, expected: 4000 });
   });
 
   it("does not invent call times or keep stale civic reporting and county data", () => {

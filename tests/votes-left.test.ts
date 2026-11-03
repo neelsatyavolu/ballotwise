@@ -39,6 +39,15 @@ describe("votesLeft", () => {
     expect(est.places[0].edge).toBeCloseTo(-60);
   });
 
+  it("takes DDHQ's expected vote over both guesses where a connected account has it, and nothing from a finished county", () => {
+    // City: DDHQ expects 400 and 100 are counted (its precinct share says half, which would give 100 more). Rural: done.
+    const est = votesLeft(race([{ ...county("City", 80, 20, 50), expected: 400 }, { ...county("Rural", 90, 210, 40), expected: 900, done: true }]))!;
+    expect(est.left).toBe(300);
+    expect(est.places.map((p) => p.name)).toEqual(["City"]);
+    // Counted past DDHQ's estimate: nothing left rather than less than nothing.
+    expect(votesLeft(race([{ ...county("City", 80, 20, 50), expected: 90 }, { ...county("Rural", 90, 210, 40), expected: 300 }]))).toMatchObject({ left: 0 });
+  });
+
   it("starts a quiet county at its 2024 vote times the turnout so far, in its 2024 lean moved by the swing", () => {
     // Counted: 2024 was even, now 60/40 at half its precincts, a 20-point swing to Dee. Quiet: 2024 was 50/25, so 60/15.
     const est = votesLeft(race([county("Counted", 60, 40, 50, [200, 200, 400]), county("Quiet", 0, 0, 0, [400, 200, 800])]))!;

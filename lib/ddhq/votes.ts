@@ -20,7 +20,8 @@ export type DdhqSide = "D" | "R" | "I";
 export type DdhqForecast = { name: string; party: DdhqSide; probability: number };
 export type DdhqCall = { name: string; at: string };
 export type DdhqCandidate = { name: string; party: string; votes: number; pct: number; winner: boolean; incumbent: boolean; photo?: string };
-export type DdhqCounty = { fips: string; name?: string; total?: number; reporting?: number; candidates: { name: string; party: string; votes: number; pct: number }[] };
+/** `expected` is DDHQ's live estimate of the county's final vote; `done` is set once DDHQ says it's finished counting. */
+export type DdhqCounty = { fips: string; name?: string; total?: number; reporting?: number; expected?: number; done?: true; candidates: { name: string; party: string; votes: number; pct: number }[] };
 /** `candidates` is null when Votes didn't send a count, so the civicAPI numbers stay. */
 export type DdhqRace = { forecast: DdhqForecast[]; rating?: Rating | null; updatedAt?: number | null; resultsUpdatedAt?: string; reporting?: number; call: DdhqCall | null; candidates: DdhqCandidate[] | null; counties: DdhqCounty[]; total: number };
 type DdhqResults = Pick<DdhqRace, "candidates" | "counties" | "total" | "reporting" | "resultsUpdatedAt">;
@@ -229,7 +230,7 @@ export function readResults(body: unknown): DdhqResults {
   if (Array.isArray(areas)) {
     for (const area of areas) {
       if (!area || typeof area !== "object") continue;
-      const record = area as { fips?: string; county?: string; liveTurnoutEstimate?: { totalVotes?: unknown; precinctsIn?: unknown; precinctsTot?: unknown }; candidates?: { first_name?: string; last_name?: string; votes?: number; percent?: number; party?: { name?: string; abbrev?: string } }[] };
+      const record = area as { fips?: string; county?: string; liveTurnoutEstimate?: { totalVotes?: unknown; precinctsIn?: unknown; precinctsTot?: unknown; estimatedVotesMid?: unknown; completedCounty?: unknown }; candidates?: { first_name?: string; last_name?: string; votes?: number; percent?: number; party?: { name?: string; abbrev?: string } }[] };
       if (!record.fips || !Array.isArray(record.candidates)) continue;
       const rows = record.candidates.flatMap((candidate) => {
         const name = joinName(candidate.first_name, candidate.last_name);
@@ -239,11 +240,14 @@ export function readResults(body: unknown): DdhqResults {
       });
       const countyTotal = countOf(record.liveTurnoutEstimate?.totalVotes) ?? rows.reduce((sum, row) => sum + row.votes, 0);
       const reporting = reportingOf(record.liveTurnoutEstimate?.precinctsIn, record.liveTurnoutEstimate?.precinctsTot);
+      const expected = countOf(record.liveTurnoutEstimate?.estimatedVotesMid);
       counties.push({
         fips: record.fips,
         ...(typeof record.county === "string" ? { name: record.county } : {}),
         total: countyTotal,
         ...(reporting !== undefined ? { reporting } : {}),
+        ...(expected && expected > 0 ? { expected } : {}),
+        ...(record.liveTurnoutEstimate?.completedCounty === true ? { done: true as const } : {}),
         candidates: rows.map(({ percent, ...row }) => ({ ...row, pct: pctOf(percent, row.votes, countyTotal) })).sort((a, b) => b.votes - a.votes),
       });
     }
