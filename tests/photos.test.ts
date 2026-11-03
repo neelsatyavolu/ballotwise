@@ -53,6 +53,15 @@ describe("candidate photo names", () => {
     expect(photoOf(ca16, "Paul Soulé")).toBeNull();
   });
 
+  it("finds a local race's photo by the race's title and the name exactly as listed", () => {
+    const council = { office: "measure" as const, state: "CA", district: null, title: "City of Palo Alto Council, 3 seats", local: { kind: "candidates" as const, type: "City Council", date: "2026-11-03" } };
+    expect(photoOf(council, "Brian Hamachek")).toBe("/midterms/local-photos/Brian_Hamachek.webp");
+    expect(photoOf(council, 'Yu "Yudy" Deng')).toBe("/midterms/local-photos/Yu_Yudy_Deng.webp");
+    // Another race's candidate with the same name, or a race without its title, gets no face.
+    expect(photoOf({ ...council, title: "City of Mountain View Council, 3 seats" }, "Brian Hamachek")).toBeNull();
+    expect(photoOf({ office: "measure", state: "CA", district: null }, "Brian Hamachek")).toBeNull();
+  });
+
   it("files photos under the same race key the odds use", () => {
     for (const [office, state, district] of [["house", "CA", 22], ["house", "WY", 0], ["senate", "GA", null], ["governor", "TX", null]] as const) {
       expect(buildKey(office, state, district)).toBe(raceKey(office, state, district));

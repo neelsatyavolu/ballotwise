@@ -8,7 +8,7 @@ import { partyColor } from "./party";
  * A candidate's round avatar in a ring of their party's color: Decision Desk HQ's headshot when the signed-in user's
  * DDHQ data carries one, else our photo when we have one we're sure of, otherwise (or if the image fails to load) `children`, usually their initials.
  */
-export function Avatar({ race, candidate, className, children }: { race: Pick<RaceSummary, "office" | "state" | "district">; candidate: { name: string; party: string; photo?: string }; className?: string; children: ReactNode }) {
+export function Avatar({ race, candidate, className, children }: { race: Pick<RaceSummary, "office" | "state" | "district"> & Partial<Pick<RaceSummary, "title" | "local">>; candidate: { name: string; party: string; photo?: string }; className?: string; children: ReactNode }) {
   const url = candidate.photo ?? photoOf(race, candidate.name);
   const [failed, setFailed] = useState(false);
   const photo = url && !failed;
@@ -24,7 +24,7 @@ export function Avatar({ race, candidate, className, children }: { race: Pick<Ra
 export function PhotoCredit() {
   return (
     <>
-      {" "}Candidate photos from <a href="https://commons.wikimedia.org">Wikimedia Commons</a> (each under its own free license), the official congressional portraits collected by <a href="https://github.com/unitedstates/images">unitedstates/images</a>, and campaign headshots via <a href="https://ballotpedia.org">Ballotpedia</a>.
+      {" "}Candidate photos from <a href="https://commons.wikimedia.org">Wikimedia Commons</a> (each under its own free license), the official congressional portraits collected by <a href="https://github.com/unitedstates/images">unitedstates/images</a>, and campaign headshots via <a href="https://ballotpedia.org">Ballotpedia</a>, the <a href="https://www.paloalto.gov/Departments/City-Clerk/Municipal-Elections/City-Council-Elections">City of Palo Alto</a> and candidates&rsquo; own sites.
     </>
   );
 }

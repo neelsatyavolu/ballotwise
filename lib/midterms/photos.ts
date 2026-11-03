@@ -1,11 +1,17 @@
 // Candidate photos found by scripts/build-photos.mjs, only where the person's identity is certain: official
 // congressional portraits (public domain, github.com/unitedstates/images), Wikimedia Commons images, and campaign
-// headshots from Ballotpedia, resized and served from public/midterms/photos/.
+// headshots from Ballotpedia, resized and served from public/midterms/photos/. Local races on a Palo Alto ballot have
+// their own table from scripts/build-local-photos.mjs, served from public/midterms/local-photos/.
+import localPhotos from "./localPhotos.json";
 import photos from "./photos.json";
 import { sameCandidate } from "./picks";
 import type { RaceSummary } from "./view";
 
 const table: Record<string, string> = photos;
+const localTable: Record<string, string> = localPhotos;
+
+/** The race fields a photo lookup reads: a local race is found by its title, the tracked offices by their seat. */
+type PhotoRace = Pick<RaceSummary, "office" | "state" | "district"> & Partial<Pick<RaceSummary, "title" | "local">>;
 
 /** Each race's listed names and photos, keyed by the part of photoKey before the "|". */
 let byRace: Map<string, [string, string][]> | null = null;
@@ -37,7 +43,12 @@ function entryOf(race: Pick<RaceSummary, "office" | "state" | "district">, name:
 export const photoKey = (race: Pick<RaceSummary, "office" | "state" | "district">, name: string) => `${race.office}:${race.state}:${race.office === "house" ? (race.district ?? 0) : ""}|${name}`;
 
 /** A candidate's photo URL, small enough for an avatar, or null when there's none we're sure of. */
-export function photoOf(race: Pick<RaceSummary, "office" | "state" | "district">, name: string): string | null {
+export function photoOf(race: PhotoRace, name: string): string | null {
+  // Local races share office "measure" and no district, so only the race's own title and the exact name will do.
+  if (race.local) {
+    const file = race.title ? localTable[`${race.state}|${race.title}|${name.trim()}`] : undefined;
+    return file ? `/midterms/local-photos/${file}` : null;
+  }
   const entry = entryOf(race, name);
   if (!entry) return null;
   const ref = entry.slice(2);
