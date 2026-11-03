@@ -100,6 +100,12 @@
 .mt-rating.r-lean-d, .mt-rating.r-likely-d { color: var(--dem); }
 .mt-rating.r-lean-r, .mt-rating.r-likely-r { color: var(--rep); }
 .mt-rating.r-lean-i, .mt-rating.r-likely-i { color: var(--oth); }
+/* DDHQ Pulse's live favorite, beside the rating in a card's title row: plain text so it reads apart from the rating pill. */
+.mt-pulse { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mt-pulse b { font-weight: 700; }
+.mt-pulse .p-D { color: var(--dem-ink, var(--dem)); }
+.mt-pulse .p-R { color: var(--rep-ink, var(--rep)); }
+.mt-pulse .p-I { color: var(--oth); }
 .mt-rating.r-likely-d, .mt-rating.r-likely-r, .mt-rating.r-likely-i { border-style: dashed; }
 
 /* Maps */
@@ -1640,6 +1646,9 @@ body:has(> .mt-companion) { overflow: hidden; }
 .mt-proj-control.d b { color: var(--dem-ink, var(--dem)); }
 .mt-proj-control.r b { color: var(--rep-ink, var(--rep)); }
 .mt-proj-tally { margin: 0; }
+.mt-proj-pulse { margin: -4px 0 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mt-proj-pulse .d, .mt-proj-count .d { color: var(--dem-ink, var(--dem)); }
+.mt-proj-pulse .r, .mt-proj-count .r { color: var(--rep-ink, var(--rep)); }
 .mt-proj-races { flex: 1 1 0; min-height: 0; overflow: hidden; list-style: none; margin: 0; padding: 0; }
 .mt-proj-races li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "race chance" "count chance"; column-gap: 10px; padding: 6px 0; border-top: 1px solid var(--rule); font-size: 13px; }
 .mt-proj-races li[hidden] { display: none; }

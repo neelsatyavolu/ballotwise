@@ -5,10 +5,13 @@
 // flip fill the rest of each column.
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import type { Pulse, PulseChamber, PulseRace } from "@/lib/ddhq/pulse";
 import type { Body, Side } from "@/lib/midterms/forecast";
 import type { ChamberProjection, LiveProjection as Projection, RaceOutlook } from "@/lib/midterms/liveProjection";
+import { raceKey } from "@/lib/midterms/seats";
 import { raceLabel, type RaceSummary } from "@/lib/midterms/view";
 import { lastName } from "./CandidateTable";
+import { usePulse } from "./usePulse";
 
 const TITLE: Record<Body, string> = { senate: "Senate", house: "House", governor: "Governors" };
 const SEATS: Record<Body, number> = { senate: 100, house: 435, governor: 50 };
@@ -53,6 +56,15 @@ function Control({ office, view }: { office: Body; view: ChamberProjection }) {
   );
 }
 
+/** DDHQ Pulse's chance of control, Decision Desk HQ's live model, under ours for comparison. */
+function PulseControl({ chamber }: { chamber: PulseChamber }) {
+  return (
+    <p className="mt-proj-pulse small" title="DDHQ Pulse: Decision Desk HQ's live model of who controls the chamber">
+      DDHQ Pulse <b className="d">D {Math.round(chamber.dem)}%</b> · <b className="r">R {Math.round(chamber.rep)}%</b>
+    </p>
+  );
+}
+
 /** Seats held or won (solid), then the rest each side is projected to take (light), from either end of the bar. */
 function SeatBar({ office, view }: { office: Body; view: ChamberProjection }) {
   const total = SEATS[office];
@@ -70,7 +82,7 @@ function SeatBar({ office, view }: { office: Body; view: ChamberProjection }) {
   );
 }
 
-function RaceRow({ race }: { race: RaceOutlook }) {
+function RaceRow({ race, pulse }: { race: RaceOutlook; pulse: PulseRace | null }) {
   const count =
     race.leader && race.margin !== null
       ? `${lastName(race.leader)} +${race.margin.toFixed(1)} · ${race.reportingUnknown ? "counting" : `${Math.round(race.reporting)}% in`}`
@@ -78,7 +90,15 @@ function RaceRow({ race }: { race: RaceOutlook }) {
   return (
     <li>
       <span className="mt-proj-race">{raceLabel(race)}</span>
-      <span className="mt-proj-count">{count}</span>
+      <span className="mt-proj-count">
+        {count}
+        {pulse && (
+          <span title={`DDHQ Pulse, Decision Desk HQ's live model: ${pulse.name} ${Math.round(pulse.chance)}% to win`}>
+            {" · Pulse "}
+            <b className={pulse.side === "R" ? "r" : "d"}>{pulse.side} {Math.round(pulse.chance)}%</b>
+          </span>
+        )}
+      </span>
       <span className={`mt-proj-chance ${race.side === "R" ? "r" : "d"}`}>
         {race.side === "I" ? "IND" : race.side === "D" ? "DEM" : "GOP"} {pct(race.chance)}
       </span>
@@ -86,8 +106,9 @@ function RaceRow({ race }: { race: RaceOutlook }) {
   );
 }
 
-function Chamber({ office, view }: { office: Body; view: ChamberProjection }) {
+function Chamber({ office, view, pulse }: { office: Body; view: ChamberProjection; pulse: Pulse | null }) {
   const list = useFitRows();
+  const chamber = office === "governor" ? undefined : pulse?.chambers[office];
   return (
     <section className="mt-proj-col" aria-label={`${TITLE[office]} projection`}>
       <h3>{TITLE[office]}</h3>
@@ -101,6 +122,7 @@ function Chamber({ office, view }: { office: Body; view: ChamberProjection }) {
       </div>
       <SeatBar office={office} view={view} />
       <Control office={office} view={view} />
+      {chamber && <PulseControl chamber={chamber} />}
       <p className="mt-proj-tally muted small">
         Won {view.won.D} D · {view.won.R} R · {view.counting} counting · {view.waiting} no votes yet
         {office !== "house" && ` · ${view.notUp.D + view.notUp.R + view.notUp.other} not up`}
@@ -108,7 +130,7 @@ function Chamber({ office, view }: { office: Body; view: ChamberProjection }) {
       <h4>Deciding races</h4>
       <ol ref={list} className="mt-proj-races">
         {view.close.map((r) => (
-          <RaceRow key={r.id} race={r} />
+          <RaceRow key={r.id} race={r} pulse={pulse?.races[raceKey(r.office, r.state, r.district)] ?? null} />
         ))}
       </ol>
     </section>
@@ -143,6 +165,7 @@ function useProjection(races: readonly RaceSummary[]): Projection | null {
 /** The companion's live projection of each chamber, filling its window. */
 export function LiveProjection({ races }: { races: readonly RaceSummary[] }) {
   const data = useProjection(races);
+  const pulse = usePulse();
   return (
     <section className="mt-proj" aria-label="Live projection">
       <div className="mt-section-head tight">
@@ -152,7 +175,7 @@ export function LiveProjection({ races }: { races: readonly RaceSummary[] }) {
       {data && (
         <div className="mt-proj-cols">
           {(["senate", "house", "governor"] as const).map((o) => (
-            <Chamber key={o} office={o} view={data.chambers[o]} />
+            <Chamber key={o} office={o} view={data.chambers[o]} pulse={pulse} />
           ))}
         </div>
       )}

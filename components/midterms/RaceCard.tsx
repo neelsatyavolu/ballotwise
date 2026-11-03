@@ -7,6 +7,7 @@ import { CandidateTable } from "./CandidateTable";
 import { useClock } from "./hooks";
 import { useOnScreen, useVotesLeft } from "./useVotesLeft";
 import { partyColor } from "./party";
+import { racePulse, usePulse } from "./usePulse";
 
 export function StarButton({ starred, onToggle, label }: { starred: boolean; onToggle: () => void; label: string }) {
   return (
@@ -25,6 +26,18 @@ export function RatingTag({ rating, signal }: { rating: RaceSummary["rating"]; s
   );
 }
 
+/** DDHQ Pulse's live favorite in the race, small beside its rating; nothing once it's called or where DDHQ has none. */
+export function PulseTag({ race }: { race: RaceSummary }) {
+  const pulse = racePulse(usePulse(), race);
+  if (!pulse) return null;
+  const chance = Math.round(pulse.chance);
+  return (
+    <span className="mt-pulse" title={`DDHQ Pulse, Decision Desk HQ's live model: ${pulse.name} ${chance}% to win`}>
+      Pulse <b className={`p-${pulse.side}`}>{pulse.side} {chance}%</b>
+    </span>
+  );
+}
+
 /** Where a card's count stands, for the footer of its candidates table: called, the lead, or when polls close. */
 function CardStatus({ race }: { race: RaceSummary }) {
   const now = useClock(60_000);
@@ -39,8 +52,10 @@ function CardStatus({ race }: { race: RaceSummary }) {
  * One race at a glance: the top candidates as a results table, a stacked vote bar once votes are in, how much is
  * counted, and the estimated votes still to count.
  */
-export function RaceCard({ race, starred, onStar, limit = 3 }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void; limit?: number }) {
+/** `bare` cuts a Senate or governor title to the state, for screens where every card is the same office (the walls); no state has two of either this year. */
+export function RaceCard({ race, starred, onStar, limit = 3, bare = false }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void; limit?: number; bare?: boolean }) {
   const label = raceLabel(race);
+  const title = bare ? label.replace(/ (?:Senate|Governor)\b.*$/, "") : label;
   // Before votes, the forecast alone; the markets and polls behind it are in the line's hover title.
   const sub = race.total ? null : signalLine(race.signal, race, true);
   const card = useRef<HTMLLIElement>(null);
@@ -48,9 +63,10 @@ export function RaceCard({ race, starred, onStar, limit = 3 }: { race: RaceSumma
   return (
     <li className="mt-card" data-race={race.id} ref={card}>
       <div className="mt-card-top">
-        <Link href={`/midterms/${race.id}`} className="mt-card-title">
-          {label}
+        <Link href={`/midterms/${race.id}`} className="mt-card-title" title={title === label ? undefined : label}>
+          {title}
         </Link>
+        <PulseTag race={race} />
         <RatingTag rating={race.rating} signal={race.signal} />
         {starred !== null && <StarButton starred={starred} label={label} onToggle={() => onStar(race.id)} />}
       </div>

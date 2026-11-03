@@ -5,11 +5,13 @@ const SEARCH_KEYS = new Set(["q", "filterYear", "filterState", "filterOffice"]);
 // DDHQ's early vote by party is public (no login), so it goes without any session: a user's cookie is never sent to it.
 const ABEV = "/api/abev/election";
 const ABEV_KEYS = ["state", "election_date", "is_primary", "is_ballot_prop"];
+// The balance-of-power pages (counts, DDHQ Pulse) are public too, and go without a session the same way.
+const BOP = /^\/balance-of-power\/2026\/(house|senate|governor)$/;
 
 function validPath(url) {
   const keys = [...url.searchParams.keys()];
   if (url.hash || url.pathname.includes("%") || url.href.length > 2048 || new Set(keys).size !== keys.length) return false;
-  if (/^\/forecast\/2026\/(house|senate|governor)$/.test(url.pathname)) return keys.length === 0;
+  if (/^\/forecast\/2026\/(house|senate|governor)$/.test(url.pathname) || BOP.test(url.pathname)) return keys.length === 0;
   if (/^\/api\/(forecast|races)\/[0-9]+$/.test(url.pathname)) return keys.length === 0;
   if (url.pathname === "/api/races/batch/topline") return keys.length === 1 && keys[0] === "ids" && /^[0-9]+(?:,[0-9]+){0,23}$/.test(url.searchParams.get("ids"));
   if (url.pathname === ABEV) {
@@ -30,7 +32,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const cookie = request.headers.get("cookie") ?? "";
-    const open = url.pathname === ABEV;
+    const open = url.pathname === ABEV || BOP.test(url.pathname);
     const badCookie = open ? request.headers.has("cookie") : cookie.length > 8192 || !/^__session=[A-Za-z0-9._-]+$/.test(cookie);
     if (request.method !== "GET" || !validPath(url) || badCookie) {
       return Response.json({ error: "Invalid Votes request" }, { status: 400, headers: PRIVATE });

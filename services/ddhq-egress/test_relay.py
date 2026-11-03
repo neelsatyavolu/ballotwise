@@ -83,6 +83,23 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await relay.relay(client, "GET", path, COOKIE)).status, 400)
         self.assertEqual(client.calls, [])
 
+    async def test_balance_of_power_pages_go_without_a_session(self):
+        for office in ["house", "senate", "governor"]:
+            path = "/balance-of-power/2026/" + office
+            client = Client(body=b'1:{"races":[]}', headers={"content-type": "text/x-component"})
+            self.assertEqual((await relay.relay(client, "GET", path, "")).status, 200)
+            sent = client.calls[0][1]["headers"]
+            self.assertEqual(sent["RSC"], "1")
+            self.assertNotIn("cookie", sent)
+            self.assertNotIn("authorization", sent)
+            client = Client()
+            self.assertEqual((await relay.relay(client, "GET", path, COOKIE)).status, 400)
+            self.assertEqual(client.calls, [])
+        for path in ["/balance-of-power/2024/senate", "/balance-of-power/2026/president", "/balance-of-power/2026/senate?x=1"]:
+            client = Client()
+            self.assertEqual((await relay.relay(client, "GET", path, "")).status, 400)
+            self.assertEqual(client.calls, [])
+
     async def test_public_early_vote_query_is_fixed(self):
         base = "/api/abev/election?"
         for query in [

@@ -335,7 +335,7 @@ export function Wall({ office }: { office: WallOffice }) {
                   {stop && (
                     <div className="mt-wall-spot mt-in" key={stop.id}>
                       <ul className="mt-grid one">
-                        <RaceCard race={stop} starred={null} onStar={noop} limit={2} />
+                        <RaceCard race={stop} starred={null} onStar={noop} limit={2} bare />
                       </ul>
                     </div>
                   )}
@@ -345,7 +345,7 @@ export function Wall({ office }: { office: WallOffice }) {
                       <h3>Up next on the tour</h3>
                       <ul className="mt-grid">
                         {next.slice(0, UP_NEXT).map((r) => (
-                          <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
+                          <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} bare />
                         ))}
                       </ul>
                     </div>
@@ -366,7 +366,7 @@ export function Wall({ office }: { office: WallOffice }) {
                 </div>
                 <ul className="mt-grid" ref={grid} onClickCapture={pin}>
                   {cards.map((r) => (
-                    <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
+                    <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} bare />
                   ))}
                 </ul>
               </section>
