@@ -1011,7 +1011,16 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
   .mt-sbs-side > .mt-el-sched { flex: none; }
   /* Closed waves give their room to the calls, as on the wall screens. */
   .mt-sbs-side .mt-el-sched li.closed, .mt-sbs-side .mt-el-sched:not(:has(li:not(.closed))) { display: none; }
+  /* Tighter rows: no place names under the next wave, no day beside the later ones (they're all tonight), smaller
+     counts and no note, so the calls keep the room. */
+  .mt-sbs-side .mt-el-sched li { padding: 4px 10px; align-items: center; }
+  .mt-sbs-side .mt-el-sched li summary { grid-template-columns: 74px minmax(0, 1fr) auto; white-space: nowrap; }
+  .mt-sbs-side .mt-el-sched details p, .mt-sbs-side .mt-el-sched li:not(.next) .mt-el-sched-status, .mt-sbs-side .mt-el-sched .mt-el-about { display: none; }
+  .mt-sbs-side .mt-el-sched .mt-chip { min-height: 20px; padding: 0 6px; }
 }
+/* Full screen (SideBySide.tsx), the site header tucks above the top edge and slides down while the pointer is on it. */
+html[data-full] body:has(.wrap.mt.mt-sbs-page) .site-header { position: fixed; inset: 0 0 auto; z-index: 60; transform: translateY(calc(-100% + 6px)); opacity: 0; transition: transform 0.2s, opacity 0.2s; }
+html[data-full] body:has(.wrap.mt.mt-sbs-page) .site-header:is(:hover, :focus-within) { transform: none; opacity: 1; }
 
 /* Other races: "find any race" on the overview and in a dialog from election mode's toolbar. */
 .mt-other { display: grid; gap: 8px; padding: 16px 16px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }

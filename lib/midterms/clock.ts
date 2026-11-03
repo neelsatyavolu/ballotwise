@@ -17,17 +17,21 @@ export const MOCK_ELECTION_EMAILS: readonly string[] = ["neel@xanom.co"];
 /**
  * A mock election night that runs, in development or for the accounts in MOCK_ELECTION_EMAILS in production (see
  * MockElection). `start` is the night's time when it began, `at` the real time it began and `speed` how many night
- * seconds pass each real second. Kept for the tab, so it carries across pages. It changes only what this browser shows.
+ * seconds pass each real second. Kept for the browser, so every tab runs the same night (the walls included) and starting
+ * or stopping it in one tab reloads the others. It changes only what this browser shows, and ends by itself after
+ * MOCK_TTL so a forgotten test can't run into the real night.
  */
 export type Mock = { start: number; at: number; speed: number };
 const MOCK_KEY = "mt-mock";
+/** How long a mock night runs, in real time, before it ends by itself. */
+export const MOCK_TTL = 4 * HOUR;
 
 export function readMock(): Mock | null {
   if (typeof window === "undefined") return null;
   try {
-    const m: unknown = JSON.parse(sessionStorage.getItem(MOCK_KEY) ?? "null");
+    const m: unknown = JSON.parse(localStorage.getItem(MOCK_KEY) ?? "null");
     const ok = !!m && typeof m === "object" && ["start", "at", "speed"].every((k) => Number.isFinite((m as Record<string, unknown>)[k]));
-    return ok ? (m as Mock) : null;
+    return ok && Date.now() - (m as Mock).at < MOCK_TTL ? (m as Mock) : null;
   } catch {
     return null;
   }
@@ -36,8 +40,8 @@ export function readMock(): Mock | null {
 /** Run a mock night from `hours` after midnight Eastern on Nov 3 (null stops it), then reload. */
 export function setMock(hours: number | null, speed = 1) {
   try {
-    if (hours === null) sessionStorage.removeItem(MOCK_KEY);
-    else sessionStorage.setItem(MOCK_KEY, JSON.stringify({ start: ELECTION_DAY_START + hours * HOUR, at: Date.now(), speed } satisfies Mock));
+    if (hours === null) localStorage.removeItem(MOCK_KEY);
+    else localStorage.setItem(MOCK_KEY, JSON.stringify({ start: ELECTION_DAY_START + hours * HOUR, at: Date.now(), speed } satisfies Mock));
   } catch {
     // Storage off: nothing to run.
   }
@@ -50,8 +54,8 @@ export function setMock(hours: number | null, speed = 1) {
 export function adoptMock(m: Mock | null) {
   if (JSON.stringify(m) === JSON.stringify(readMock())) return;
   try {
-    if (m) sessionStorage.setItem(MOCK_KEY, JSON.stringify(m));
-    else sessionStorage.removeItem(MOCK_KEY);
+    if (m) localStorage.setItem(MOCK_KEY, JSON.stringify(m));
+    else localStorage.removeItem(MOCK_KEY);
   } catch {
     return;
   }
@@ -63,6 +67,13 @@ export function adoptMock(m: Mock | null) {
 const previewed = fixedPreview();
 const mock = previewed === null ? readMock() : null;
 let offset = previewed === null ? 0 : previewed - Date.now();
+
+// Another tab started, changed or stopped the mock night: reload onto its clock.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === MOCK_KEY) window.location.reload();
+  });
+}
 
 export const clockNow = () => (mock ? mock.start + (Date.now() - mock.at) * mock.speed : Date.now()) + offset;
 

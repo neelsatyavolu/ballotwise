@@ -286,6 +286,37 @@ function useFitWindow(grid: RefObject<HTMLDivElement | null>, ready: boolean) {
   }, [grid, ready]);
 }
 
+/** Whether the browser is full screen: the window filling the screen (F11, or macOS's full screen) or a page's own. */
+function isFullScreen(): boolean {
+  return !!document.fullscreenElement || matchMedia("(display-mode: fullscreen)").matches || (window.innerWidth >= screen.width - 1 && window.innerHeight >= screen.height - 1);
+}
+
+/**
+ * Full screen, the site header tucks away until the pointer reaches the top edge (midterms.css), so the columns get
+ * its height. Marked on <html> while this page shows.
+ */
+function useFullScreenHeader() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const check = () => {
+      const full = isFullScreen();
+      if (full === (root.dataset.full === "1")) return;
+      if (full) root.dataset.full = "1";
+      else delete root.dataset.full;
+      // The columns' height follows where they start (useFitWindow), which just moved.
+      window.dispatchEvent(new Event("resize"));
+    };
+    check();
+    window.addEventListener("resize", check);
+    document.addEventListener("fullscreenchange", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      document.removeEventListener("fullscreenchange", check);
+      delete root.dataset.full;
+    };
+  }, []);
+}
+
 /** Senate, House and Governor dashboards in columns for wide and ultrawide screens, sharing one live feed. */
 export function SideBySide() {
   const { data, error } = useLive<Overview>("/api/midterms");
@@ -296,6 +327,7 @@ export function SideBySide() {
   const widths = useWidths();
   const grid = useRef<HTMLDivElement>(null);
   useFitWindow(grid, Boolean(data));
+  useFullScreenHeader();
   // No title row, so the columns get the height; the live status sits in the first column's heading.
   const status = data && (
     <span className="mt-sbs-status">

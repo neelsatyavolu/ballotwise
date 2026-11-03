@@ -6,7 +6,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
-import { closestFirst, isTossup } from "@/lib/midterms/explore";
+import { readMock } from "@/lib/midterms/clock";
+import { closestFirst } from "@/lib/midterms/explore";
 import { countdown, electionModeDefault, formatTime, nextWave } from "@/lib/midterms/polls";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { votesLeft } from "@/lib/midterms/votesLeft";
@@ -136,7 +137,7 @@ function showAll(box: HTMLElement, selector: string): HTMLElement[] {
 }
 
 const fitList = (selector: string) => (box: HTMLElement) => hidePastBottom(box, showAll(box, selector));
-const fitRows = fitList(".mt-rows tbody tr, .mt-wall-tossups .mt-card");
+const fitRows = fitList(".mt-rows tbody tr, .mt-wall-grid .mt-card");
 const fitCalls = fitList(".mt-el-calllist > li");
 
 /** The tour's next races: whole cards first, then rows for the later races, skipping the ones with a card showing. */
@@ -238,6 +239,17 @@ function NextClose({ now }: { now: number }) {
   );
 }
 
+const noSubscribe = () => () => {};
+
+/**
+ * Marks a mock election night running in this browser. The wall covers the tracker's mock bar, so without this a
+ * test left running would look like the real night.
+ */
+function MockTag() {
+  const mocked = useSyncExternalStore(noSubscribe, () => readMock() !== null, () => false);
+  return mocked ? <span className="mt-wall-mock">Mock night</span> : null;
+}
+
 /** The header's clock and next poll closing, ticking every second on their own so the rest of the wall doesn't redraw. */
 function Clock() {
   const now = useClock(1000);
@@ -259,8 +271,9 @@ export function Wall({ office }: { office: WallOffice }) {
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
   const closest = useMemo(() => [...races].sort(closestFirst).slice(0, MAX_ROWS), [races]);
-  // The Senate wall shows every toss-up as a card in place of the closest-races table.
-  const tossups = useMemo(() => races.filter(isTossup).sort(closestFirst), [races]);
+  // The Senate wall shows its closest races (toss-ups first, then the next closest) as cards filling the screen, in
+  // place of the table and the calls column.
+  const cards = office === "senate";
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
   const stops = useMemo(() => tourStops(tour.map((r) => r.id), TOUR[office].racesPerLeg), [tour, office]);
   const { stop: stopId, upNext } = useTour(stops, TOUR[office]);
@@ -283,6 +296,7 @@ export function Wall({ office }: { office: WallOffice }) {
       <div className="mt-wall-stage">
         <header className="mt-wall-head">
           <h1>{TITLE[office]}</h1>
+          <MockTag />
           {data && (
             <span className="mt-wall-status">
               <LiveDot at={data.fetchedAt} stale={data.stale} /> Checked <CheckedAgo at={data.fetchedAt} />
@@ -296,7 +310,7 @@ export function Wall({ office }: { office: WallOffice }) {
         {data && (
           <>
             <SeatHeader office={office} data={data} forecast={forecast} />
-            <div className="mt-wall-body">
+            <div className={`mt-wall-body${cards ? " no-side" : ""}`}>
               <section className="mt-wall-tour" aria-label="Race tour">
                 <div className="mt-section-head tight">
                   <h2>{stop ? `${STATE_NAMES[stop.state] ?? stop.state}${office === "house" && stop.district !== null ? ` · District ${stop.district || "at large"}` : ""}` : "Every race"}</h2>
@@ -334,21 +348,17 @@ export function Wall({ office }: { office: WallOffice }) {
                   )}
                 </div>
               </section>
-              {office === "senate" ? (
-                <section className="mt-wall-cards mt-wall-tossups" aria-label="Toss-up races" ref={table}>
+              {cards ? (
+                <section className="mt-wall-cards mt-wall-grid" aria-label="Closest races" ref={table}>
                   <div className="mt-section-head tight">
-                    <h2>Toss-ups</h2>
-                    <span className="muted small">{tossups.length} races</span>
+                    <h2>Closest races</h2>
+                    <span className="muted small">Toss-ups first · {races.length} races</span>
                   </div>
-                  {tossups.length > 0 ? (
-                    <ul className="mt-grid">
-                      {tossups.map((r) => (
-                        <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="muted">No Senate race is rated a toss-up.</p>
-                  )}
+                  <ul className="mt-grid">
+                    {closest.map((r) => (
+                      <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
+                    ))}
+                  </ul>
                 </section>
               ) : (
                 <section className="mt-wall-cards" aria-label="Closest races" ref={table}>
@@ -359,10 +369,12 @@ export function Wall({ office }: { office: WallOffice }) {
                   <RaceRows races={closest} star={NO_STARS} selectedId={stopId} />
                 </section>
               )}
-              <aside className="mt-wall-side" aria-label="Latest calls" ref={side}>
-                {closing && office !== "senate" && <PollSchedule races={races} />}
-                <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office={office} />
-              </aside>
+              {!cards && (
+                <aside className="mt-wall-side" aria-label="Latest calls" ref={side}>
+                  {closing && <PollSchedule races={races} />}
+                  <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office={office} />
+                </aside>
+              )}
             </div>
           </>
         )}

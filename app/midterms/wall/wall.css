@@ -15,6 +15,7 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 .mt-wall-head h1 { margin: 0; font-size: 30px; letter-spacing: -0.02em; }
 .mt-wall-status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
 .mt-wall-next { color: var(--muted); font-size: 14px; }
+.mt-wall-mock { padding: 2px 8px; border: 1px solid var(--accent); border-radius: 6px; color: var(--accent); font-size: 14px; font-weight: 700; }
 .mt-wall-next b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .mt-wall-clock { margin-left: auto; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mt-wall .mt-seats { margin-top: 0; }
@@ -50,8 +51,8 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 .mt-wall [hidden] { display: none !important; }
 /* The closest races fill their column; rows past the bottom are cut off rather than scrolled to. */
 .mt-wall-cards > .mt-rows-wrap { flex: 0 1 auto; min-height: 0; max-height: none; overflow: hidden; }
-/* The Senate's toss-ups in place of that table, two across where they fit. */
-.mt-wall-tossups > .mt-grid { margin: 0; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+/* The Senate's closest races as cards in place of that table, as many whole rows as fit (Wall.tsx useFit). */
+.mt-wall-grid > .mt-grid { margin: 0; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 /* A wall's cards show the two leading candidates and nothing after them but the count's rows: no link to the rest
    and no spare height (Wall.tsx passes limit 2). The column headings go too: party colors and numbers read without them. */
 .mt-wall .mt-card .mt-ct-more, .mt-wall .mt-card .mt-ct-fill, .mt-wall .mt-card .mt-ct thead { display: none; }
@@ -85,6 +86,14 @@ body:has(.mt-wall) .mt-callpops { display: none; }
   .mt-wall-spot ~ .mt-wall-upnext, .mt-wall-upnext .mt-card:nth-child(n + 3) { display: grid; }
   .mt-wall-upnext .mt-grid { grid-template-columns: minmax(0, 1fr); }
   .mt-wall-later { display: grid; }
+}
+
+/* With no calls column (the Senate wall), the race cards take its room. */
+@media (min-aspect-ratio: 101 / 100) {
+  .mt-wall-body.no-side { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.5fr); }
+}
+@media (min-aspect-ratio: 2 / 1) {
+  .mt-wall-body.no-side { grid-template-columns: minmax(0, 2.7fr) minmax(0, 1.7fr); }
 }
 
 /* A super-ultrawide (32:9) is wider than the map can use at its height: the spare width goes to the table and calls. */
