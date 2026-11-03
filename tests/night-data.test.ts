@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { withCall } from "../lib/midterms/catalog";
-import { fetchCatalog, resetCivicMemo } from "../lib/midterms/civic";
+import { CRON_REFRESH_BUDGET_MS, fetchCatalog, resetCivicMemo } from "../lib/midterms/civic";
 import { liveJson, matches } from "../lib/midterms/etag";
 import { DEFAULT_FILTERS, explore } from "../lib/midterms/explore";
 import { leadingFlip } from "../lib/midterms/holders";
@@ -250,6 +250,32 @@ describe("catalog refresh", () => {
     const catalog = await fetchCatalog(NOW + 60_000);
     expect(catalog.races.find((r) => r.id === 2)).toMatchObject({ missing: true, lastSeen: NOW, reporting: 40 });
     expect(catalog.races.find((r) => r.id === 1)).not.toHaveProperty("missing");
+  });
+
+  it("gets every race type from a civicAPI as slow as on Nov 3 afternoon: 17s answers and a 503 to ask again", async () => {
+    vi.useFakeTimers({ now: NOW });
+    // AbortSignal.timeout runs on real timers; this one follows the fake clock, so a request can time out here.
+    vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+      const c = new AbortController();
+      setTimeout(() => c.abort(new DOMException("timed out", "TimeoutError")), ms);
+      return c.signal;
+    });
+    const governor = raw({ id: 2, type: "Governor", election_name: "Georgia Governor" });
+    let governorAsked = 0;
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+      const type = new URL(url).searchParams.get("type");
+      const first503 = type === "Governor" && governorAsked++ === 0;
+      return new Promise<Response>((resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+        setTimeout(() => resolve(first503 ? new Response("down", { status: 503 }) : new Response(JSON.stringify({ races: type === "US Senate" ? [raw()] : type === "Governor" ? [governor] : [] }))), 17_000);
+      });
+    });
+    const pending = fetchCatalog(NOW, [], undefined, undefined, false, CRON_REFRESH_BUDGET_MS);
+    await vi.advanceTimersByTimeAsync(CRON_REFRESH_BUDGET_MS);
+    const catalog = await pending;
+    vi.useRealTimers();
+    expect(catalog.partial).toBeUndefined();
+    expect(catalog.races.map((r) => r.id).sort()).toEqual([1, 2]);
   });
 
   it("pages past a mixed page instead of stopping at the first race from another date", async () => {

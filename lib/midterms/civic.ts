@@ -28,18 +28,26 @@ export const SERVE_STALE_MS = 3 * 60_000;
  * catalog marked stale, and the fetch finishes after the response for the next view.
  */
 export const WAIT_MS = 8_000;
-/** One civicAPI request is given up after this long, so a hung connection can't hold a response or a refresh. */
-const REQUEST_TIMEOUT_MS = 15_000;
+/**
+ * One civicAPI request is given up after this long, so a hung connection can't hold a response or a refresh. On the
+ * afternoon of Nov 3 its searches took 12 to 17 seconds to answer, so a shorter limit threw good answers away.
+ */
+const REQUEST_TIMEOUT_MS = 25_000;
 /**
  * A whole catalog refresh (every race type, every page, with retries) gets this long; race types still unanswered
- * then count as failed. Under STUCK_MS, so a refresh ends before another is allowed to start beside it.
+ * then count as failed. A page view's refresh runs after its response, and Workers end that work 30 seconds later.
  */
-const REFRESH_BUDGET_MS = 40_000;
+export const REFRESH_BUDGET_MS = 28_000;
 /**
- * A fetch still unsettled after this long is presumed cut off (Workers end background work 30 seconds after the
- * response), so a new one may start.
+ * The minutely cron (custom-worker.ts) isn't cut off at 30 seconds, so its refresh gets most of the minute: enough
+ * for a 503'd search to be asked again twice. It ends before the next run starts.
  */
-const STUCK_MS = 45_000;
+export const CRON_REFRESH_BUDGET_MS = 55_000;
+/**
+ * A fetch still unsettled this long past its budget is presumed cut off (a page view's background work ends 30
+ * seconds after its response), so a new one may start.
+ */
+const STUCK_GRACE_MS = 5_000;
 
 export class CivicError extends Error {}
 /** civicAPI has no race with that id: not worth retrying. */
@@ -126,7 +134,9 @@ type Stored = Memo<RaceSummary[]> & { fromStore?: true; failed?: string[] };
 // Per-isolate memory of the last served catalog, so a civicAPI outage shows slightly old results instead of none.
 let catalogMemo: Stored | null = null;
 /** The civicAPI fetch under way, so page views and background refreshes arriving together share one. */
-let inFlight: { since: number; work: Promise<Stored> } | null = null;
+let inFlight: { since: number; budget: number; work: Promise<Stored> } | null = null;
+/** Whether the fetch under way, if any, has run so far past its budget that it must have been cut off. */
+const stuck = (now: number) => !inFlight || now - inFlight.since >= inFlight.budget + STUCK_GRACE_MS;
 const raceMemo = new Map<number, Memo<RaceDetail>>();
 
 // D1 keeps each race's latest numbers (midterm_race_snapshots) and every race ever seen (midterm_registry), so an
@@ -312,28 +322,19 @@ function missingByOffice(races: readonly RaceSummary[]): string | null {
  * Every race of each type civicAPI answered for, and the types it didn't. One failed type doesn't discard the
  * others; only when every type fails does this throw.
  */
-async function fetchRaces(now: number): Promise<{ races: RaceSummary[]; failed: string[] }> {
-  const deadline = Date.now() + REFRESH_BUDGET_MS;
-  const tally = { ok: 0, failed: 0 };
-  // Settles once a type has answered or two have failed: whether civicAPI is up is known by then.
-  let decide = () => {};
-  const decided = new Promise<void>((resolve) => (decide = resolve));
-  // Two searches at a time: civicAPI answers 503 more often when hit with all six at once. Once two have failed
-  // with none answered, civicAPI is down, so the rest aren't tried.
-  const pages = await pooled(TYPES, 2, async (type): Promise<{ races: unknown[] } | { err: unknown }> => {
-    if (tally.ok === 0 && tally.failed > 0) await decided;
-    if (tally.ok === 0 && tally.failed >= 2) return { err: new CivicError("civicAPI looks down.") };
-    try {
-      const races = await racesOfType(type, deadline);
-      tally.ok += 1;
-      decide();
-      return { races };
-    } catch (err) {
-      tally.failed += 1;
-      if (tally.failed >= 2) decide();
-      return { err };
-    }
-  });
+async function fetchRaces(now: number, budget: number): Promise<{ races: RaceSummary[]; failed: string[] }> {
+  const deadline = Date.now() + budget;
+  // All six searches at once. On Nov 3 civicAPI took 12 to 17 seconds per search and answered about a third with a
+  // 503 whether asked one at a time or all together, so two at a time left no room in the budget to ask again.
+  const pages = await Promise.all(
+    TYPES.map(async (type): Promise<{ races: unknown[] } | { err: unknown }> => {
+      try {
+        return { races: await racesOfType(type, deadline) };
+      } catch (err) {
+        return { err };
+      }
+    }),
+  );
   const failed = TYPES.filter((_, i) => "err" in pages[i]);
   if (failed.length === TYPES.length) throw (pages[0] as { err: unknown }).err;
   // A race can appear under two type searches; keep the first.
@@ -395,7 +396,8 @@ const served = (memo: Stored, ratings: readonly RatedRace[], stale: boolean) => 
  * When civicAPI doesn't answer at all, the last catalog (from memory, else from `db`) is served marked stale.
  * `background` lets the D1 writes finish after the response. With `serveStale` as well, a catalog under
  * SERVE_STALE_MS old (this isolate's, or D1's on a fresh isolate) is served at once and refreshed after the response,
- * and an older one is served marked stale when civicAPI takes longer than WAIT_MS.
+ * and an older one is served marked stale when civicAPI takes longer than WAIT_MS. `budget` caps a civicAPI refresh
+ * this call starts (CRON_REFRESH_BUDGET_MS for the cron).
  */
 export async function fetchCatalog(
   now: number,
@@ -403,18 +405,19 @@ export async function fetchCatalog(
   db?: Db,
   background?: (work: Promise<unknown>) => void,
   serveStale = false,
+  budget = REFRESH_BUDGET_MS,
 ): Promise<Fetched<{ races: RaceSummary[]; coverage: Coverage }>> {
   // The memo holds races without ratings; each caller's ratings are attached on the way out.
   if (catalogMemo && now - catalogMemo.at < FRESH_MS) return served(catalogMemo, ratings, false);
   const revalidate = serveStale && background ? background : null;
-  if (revalidate && catalogMemo && now - catalogMemo.at < SERVE_STALE_MS) return refreshAfter(catalogMemo, ratings, now, revalidate, db);
+  if (revalidate && catalogMemo && now - catalogMemo.at < SERVE_STALE_MS) return refreshAfter(catalogMemo, ratings, now, revalidate, budget, db);
   // An isolate left idle past SERVE_STALE_MS holds an old catalog, while the cron keeps D1's newer: serve D1's at
   // once, as a fresh isolate does, rather than wait up to WAIT_MS on civicAPI.
   if (revalidate && catalogMemo && db) {
     const stored = fromSnapshots(await readRaceSnapshots(db));
     if (stored && catalogMemo && stored.at > catalogMemo.at && now - stored.at < SERVE_STALE_MS) {
       catalogMemo = stored;
-      return refreshAfter(stored, ratings, now, revalidate, db);
+      return refreshAfter(stored, ratings, now, revalidate, budget, db);
     }
   }
   // A fresh isolate has no memo, so D1 stands in for it; it's read while civicAPI is asked.
@@ -424,10 +427,10 @@ export async function fetchCatalog(
     const stored = fromSnapshots(await snapshots);
     if (stored && now - stored.at < SERVE_STALE_MS) {
       catalogMemo = stored;
-      return refreshAfter(stored, ratings, now, revalidate, db);
+      return refreshAfter(stored, ratings, now, revalidate, budget, db);
     }
   }
-  const outcome = latest(now, db, background, warm, snapshots).then(
+  const outcome = latest(now, budget, db, background, warm, snapshots).then(
     (memo) => ({ memo }),
     (err: unknown) => ({ err }),
   );
@@ -446,19 +449,19 @@ export async function fetchCatalog(
 }
 
 /** The civicAPI fetch under way, or a new one when there's none (or the last one looks cut off). */
-function latest(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Snapshots | null>): Promise<Stored> {
-  if (inFlight && now - inFlight.since < STUCK_MS) return inFlight.work;
-  const work: Promise<Stored> = load(now, db, background, warm, snapshots).finally(() => {
+function latest(now: number, budget: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Snapshots | null>): Promise<Stored> {
+  if (inFlight && !stuck(now)) return inFlight.work;
+  const work: Promise<Stored> = load(now, budget, db, background, warm, snapshots).finally(() => {
     if (inFlight?.work === work) inFlight = null;
   });
-  inFlight = { since: now, work };
+  inFlight = { since: now, budget, work };
   return work;
 }
 
 /** Asks civicAPI for every race, keeps the ones it left out, saves the result to memory and D1. Throws on CivicError. */
-async function load(now: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Snapshots | null>): Promise<Stored> {
+async function load(now: number, budget: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Snapshots | null>): Promise<Stored> {
   const registeredRaces = registry(db, now);
-  const { races: searched, failed } = await fetchRaces(now);
+  const { races: searched, failed } = await fetchRaces(now, budget);
   if (failed.length) console.error(`midterms: civicAPI failed for ${failed.join(", ")}; those races keep their last known numbers`);
   const registered = await registeredRaces;
   // A partial answer leaves out every race of the failed types, so strays are only looked for in a complete one.
@@ -485,9 +488,9 @@ async function load(now: number, db: Db | undefined, background: ((work: Promise
 }
 
 /** Serves `memo` now and starts one refresh from civicAPI after the response, unless one is already running. */
-function refreshAfter(memo: Stored, ratings: readonly RatedRace[], now: number, background: (work: Promise<unknown>) => void, db?: Db) {
-  if (!inFlight || now - inFlight.since >= STUCK_MS) {
-    background(latest(now, db, background, memo, Promise.resolve(null)).catch((err) => console.error("midterms catalog refresh failed:", err)));
+function refreshAfter(memo: Stored, ratings: readonly RatedRace[], now: number, background: (work: Promise<unknown>) => void, budget: number, db?: Db) {
+  if (stuck(now)) {
+    background(latest(now, budget, db, background, memo, Promise.resolve(null)).catch((err) => console.error("midterms catalog refresh failed:", err)));
   }
   return served(memo, ratings, false);
 }

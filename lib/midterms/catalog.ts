@@ -1,6 +1,6 @@
 import type { Db } from "../auth/accounts";
 import { agrees, recordCalls, type Call } from "./calls";
-import { CivicError, fetchCatalog, fetchOtherRace, fetchRace, FRESH_MS } from "./civic";
+import { CivicError, CRON_REFRESH_BUDGET_MS, fetchCatalog, fetchOtherRace, fetchRace, FRESH_MS } from "./civic";
 import { fetchCountyRace, isCountyRace } from "./county";
 import { BASELINE_2024 } from "./data";
 import { raceHistory, recordHistory } from "./history";
@@ -108,7 +108,7 @@ export async function otherRace(id: number, now: number) {
  * views. Returns the catalog's races for the push alerts that follow.
  */
 export async function recordResults(db: Db, now: number): Promise<RaceSummary[]> {
-  const catalog = await fetchCatalog(now, [], db);
+  const catalog = await fetchCatalog(now, [], db, undefined, false, CRON_REFRESH_BUDGET_MS);
   await Promise.all([recordCalls(db, catalog, now), recordHistory(db, catalog, now)]);
   return catalog.races;
 }
