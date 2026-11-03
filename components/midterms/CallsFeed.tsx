@@ -163,7 +163,7 @@ function CallList({ races, events: given, counts, office, children, privateSourc
         </div>
       )}
       {shown.length === 0 ? (
-        <p className="muted small">{privateSource ? "Current calls land here, newest first, as Decision Desk HQ publishes them." : "Calls land here, newest first, as civicAPI's decision desk makes them after polls close."}</p>
+        <p className="mt-el-calls-empty muted small">{privateSource ? "Current calls land here, newest first, as Decision Desk HQ publishes them." : "Calls land here, newest first, as civicAPI's decision desk makes them after polls close."}</p>
       ) : (
         <ol className="mt-el-calllist">
           {list.map((e) => {
@@ -179,12 +179,12 @@ function CallList({ races, events: given, counts, office, children, privateSourc
                 <time className="muted" dateTime={new Date(e.at).toISOString()}>{stampTime(e.at)}</time>
                 <span className="mt-el-call-main">
                   <Link href={`/midterms/${r.id}`}>{shortLabel(r)}</Link>
-                  {scope === "all" && <span className="muted small"> {r.office === "measure" ? "measure" : OFFICE_LABEL[r.office].toLowerCase()}</span>}
+                  {scope === "all" && <span className="mt-el-call-office muted small"> {r.office === "measure" ? "measure" : OFFICE_LABEL[r.office].toLowerCase()}</span>}
                   {e.winner ? (
                     <span className="mt-el-call-who">
                       <span className="swatch" style={{ background: won ? colorOf(won) : "var(--rule-strong)" }} aria-hidden /> {e.winner}
-                      {e.party && partyTag(e.party) && <span className="muted"> ({partyTag(e.party)})</span>}
-                      {margin !== null && <span className="muted"> · {margin >= 0 ? "+" : "−"}{Math.abs(margin).toFixed(1)}{r.reportingUnknown ? "" : `, ${Math.round(r.reporting)}% reporting`}</span>}
+                      {e.party && partyTag(e.party) && <span className="mt-el-call-party muted"> ({partyTag(e.party)})</span>}
+                      {margin !== null && <span className="mt-el-call-margin muted"> · {margin >= 0 ? "+" : "−"}{Math.abs(margin).toFixed(1)}{r.reportingUnknown ? "" : `, ${Math.round(r.reporting)}% reporting`}</span>}
                     </span>
                   ) : (
                     <span className="mt-el-call-who warn">Call for {prior ?? "the leader"} withdrawn</span>
@@ -199,12 +199,12 @@ function CallList({ races, events: given, counts, office, children, privateSourc
         </ol>
       )}
       {shown.length > SHOWN && (
-        <button type="button" className="btn quiet small" onClick={() => setAll((v) => !v)}>
+        <button type="button" className="mt-el-calls-more btn quiet small" onClick={() => setAll((v) => !v)}>
           {all ? "Show the latest only" : `Show all ${shown.length} loaded`}
         </button>
       )}
       {!privateSource && shown.length < total && (all || shown.length <= SHOWN) && (
-        <button type="button" className="btn quiet small" onClick={() => void loadOlder()}>
+        <button type="button" className="mt-el-calls-more btn quiet small" onClick={() => void loadOlder()}>
           Load older calls ({total - shown.length} more)
         </button>
       )}

@@ -8,7 +8,7 @@ import { projection } from "@/lib/midterms/forecastTab";
 import { closestFirst, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
 import { districtMargin2024, margin2024Label, stateMargin2024 } from "@/lib/midterms/past2024";
 import { electionModeDefault } from "@/lib/midterms/polls";
-import { colorOf, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { colorOf, lead, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
 import { useClock, useLive, useStars } from "./hooks";
@@ -98,6 +98,16 @@ function Year2024Toggle({ on, onChange }: { on: boolean; onChange: (on: boolean)
 }
 
 /** How each state looks on this office's national map. */
+/** `fills` with each state's label carrying its race's lead ("+6.4"; the regular race where there are two), once counted. */
+export function withLeads(fills: Map<string, Fill>, races: readonly RaceSummary[]): Map<string, Fill> {
+  return new Map(
+    [...fills].map(([state, fill]) => {
+      const ahead = lead([...races].filter((r) => r.state === state).sort(regularFirst)[0]?.candidates ?? []);
+      return [state, ahead ? { ...fill, lead: `+${ahead.margin.toFixed(1)}` } : fill];
+    }),
+  );
+}
+
 export function stateFills(office: Office, races: RaceSummary[], updatedAt: number | null = null, results = false): Map<string, Fill> {
   const byState = new Map<string, RaceSummary[]>();
   for (const r of races) byState.set(r.state, [...(byState.get(r.state) ?? []), r]);

@@ -30,6 +30,13 @@ describe("wall tour", () => {
     expect(tourRaces([wide, uncounted, close], "senate").map((r: RaceSummary) => r.id)).toEqual([close.id, wide.id]);
   });
 
+  it("goes where votes are being counted before the toss-ups still waiting", () => {
+    const waiting = race({ rating: "tossup" });
+    const countingLean = race({ rating: "lean-r", votes: [48, 52] });
+    const countingSafe = race({ votes: [40, 60] });
+    expect(tourRaces([waiting, countingSafe, countingLean], "senate").map((r: RaceSummary) => r.id)).toEqual([countingLean.id, countingSafe.id, waiting.id]);
+  });
+
   it("caps the tour so a big night still comes back around", () => {
     const many = Array.from({ length: 30 }, () => race({ office: "house", rating: "tossup" }));
     expect(tourRaces(many, "house")).toHaveLength(12);

@@ -53,6 +53,13 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 /* A wall's cards show the two leading candidates and nothing after them but the count's rows: no link to the rest
    and no spare height (Wall.tsx passes limit 2). The column headings go too: party colors and numbers read without them. */
 .mt-wall .mt-card .mt-ct-more, .mt-wall .mt-card .mt-ct-fill, .mt-wall .mt-card .mt-ct thead { display: none; }
+/* Short enough for three rows of cards beside the map: no forecast or summary line (the rating tag stays), and
+   tighter rows. */
+.mt-wall .mt-card :is(.mt-card-sub, .mt-card-about) { display: none; }
+.mt-wall .mt-card .mt-stack { margin: 6px 12px; }
+.mt-wall .mt-card .mt-card-top { min-height: 36px; padding-top: 4px; padding-bottom: 4px; }
+.mt-wall .mt-card .mt-ct td { height: 30px; }
+.mt-wall .mt-card .mt-ct-status td { padding-top: 4px; padding-bottom: 4px; }
 .mt-wall .mt-rows { font-size: 15px; }
 .mt-wall .mt-rows td { padding: 6px 8px; }
 
@@ -80,15 +87,5 @@ body:has(.mt-wall) .mt-callpops { display: none; }
   .mt-wall-tour { grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr); }
 }
 
-/* The toured race's card, and the votes-left estimate while it counts: beside the card under the map, so the map
-   keeps its height; under it beside the map on an ultrawide, which has height to spare. */
+/* The toured race's card. */
 .mt-wall-spot { display: grid; gap: 10px; }
-@media not (min-aspect-ratio: 2 / 1) {
-  .mt-wall-spot:has(.mt-votes-left-card) { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
-}
-/* The estimate beside the card says more than the card's own votes-left row. */
-.mt-wall-spot:has(.mt-votes-left-card) .mt-ct-left { display: none; }
-/* Tighter on a wall, with the count beside its label, so the map above keeps its height. */
-.mt-wall-spot .mt-votes-left-card { grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 12px; row-gap: 4px; padding: 10px 14px; }
-.mt-wall-spot .mt-votes-left-card > * { grid-column: 1 / -1; }
-.mt-wall-spot .mt-votes-left-card > .mt-mk-q, .mt-wall-spot .mt-votes-left-card > .mt-mk-lead { grid-column: auto; }

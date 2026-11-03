@@ -13,7 +13,7 @@ import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { CountyTip, fillFor } from "./county";
 import { useClock, useLive, useStars } from "./hooks";
 import { ModeNav } from "./ModeNav";
-import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills } from "./OfficeView";
+import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills, withLeads } from "./OfficeView";
 import { PollSchedule } from "./PollClose";
 import { RaceCard } from "./RaceCard";
 import { RaceRows, type Star } from "./RaceRows";
@@ -39,7 +39,11 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
   const [picked, setPicked] = useState<number | null>(null);
   const races = useMemo(() => data.races.filter((r) => r.office === office), [data, office]);
   const updatedAt = data.ratings.updatedAt;
-  const fills = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
+  // On the Senate's map each state's label carries its race's lead, as on the Senate wall.
+  const fills = useMemo(() => {
+    const base = stateFills(office, races, updatedAt, results);
+    return office === "senate" ? withLeads(base, races) : base;
+  }, [office, races, updatedAt, results]);
   const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
   const inState = useMemo(() => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || closestFirst(a, b) || (a.district ?? 0) - (b.district ?? 0)), [races, focus]);
   // A statewide office opens the state's regular race when none is picked; the House waits for a district.

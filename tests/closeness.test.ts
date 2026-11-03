@@ -19,14 +19,15 @@ const race = (id: number, lead: number, over: Partial<RaceSummary> = {}): RaceSu
 });
 
 describe("closest races", () => {
-  it("puts uncalled toss-ups first, each group closest first", () => {
+  it("puts counting toss-ups and leans first, then other counting races, each closest first", () => {
     const list = [race(1, 1, { rating: "lean-r" }), race(2, 9, { rating: "tossup" }), race(3, 2), race(4, 4, { rating: "tossup" })].sort(closestFirst);
-    expect(list.map((r) => r.id)).toEqual([4, 2, 1, 3]);
+    expect(list.map((r) => r.id)).toEqual([1, 4, 2, 3]);
   });
 
-  it("keeps a called toss-up pinned above the rest, below the uncalled toss-ups", () => {
+  it("puts called races after the ones still counting, and races with no votes last", () => {
     const open = race(2, 9, { rating: "tossup" });
     const called = { ...open, candidates: open.candidates.map((c, i) => ({ ...c, winner: i === 0 })) };
-    expect([race(1, 1), called, race(3, 12, { rating: "tossup" })].sort(closestFirst).map((r) => r.id)).toEqual([3, 2, 1]);
+    const waiting = { ...race(5, 0, { rating: "tossup" }), total: 0, reporting: 0, candidates: open.candidates.map((c) => ({ ...c, votes: 0, pct: 0 })) };
+    expect([waiting, race(1, 1), called, race(3, 12, { rating: "tossup" })].sort(closestFirst).map((r) => r.id)).toEqual([3, 1, 2, 5]);
   });
 });

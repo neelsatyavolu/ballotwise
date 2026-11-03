@@ -1609,6 +1609,13 @@ body:has(> .mt-companion) { overflow: hidden; }
   .mt-companion-side { min-height: 0; overflow-y: auto; }
 }
 
+/* On the election-night screens (side by side, the companion) the calls feed keeps to one line a call: no notes,
+   source explainer, office, party tag, margin or "new since you looked", and no buttons for more. */
+:is(.mt-sbs-side, .mt-companion) :is(.mt-el-calls-meta, .mt-el-calls-empty, .mt-el-about, .mt-el-calls-more, .mt-el-call-office, .mt-el-call-party, .mt-el-call-margin) { display: none; }
+:is(.mt-sbs-side, .mt-companion) .mt-el-calllist li { align-items: baseline; padding: 4px 10px; font-size: 13px; }
+:is(.mt-sbs-side, .mt-companion) .mt-el-call-main { display: flex; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; }
+:is(.mt-sbs-side, .mt-companion) .mt-el-call-who { display: inline; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
 /* The companion's live projection (LiveProjection.tsx): a column per chamber filling the window, its deciding races
    cut to the rows that fit. */
 .mt-proj { display: flex; flex-direction: column; gap: 8px; min-height: 0; min-width: 0; }

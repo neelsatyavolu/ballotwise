@@ -44,16 +44,26 @@ export const isWatch = (r: RaceSummary) => r.rating === "tossup" && !isCalled(r)
 /** An uncalled race the forecast rated a lean: competitive, and highlighted on election night a step below toss-ups. */
 export const isCompetitive = (r: RaceSummary) => !!r.rating?.startsWith("lean") && !isCalled(r);
 
-/** Toss-ups stay pinned above the rest, the uncalled ones first. */
-const pin = (r: RaceSummary) => (isWatch(r) ? 0 : isTossup(r) ? 1 : 2);
+/** A toss-up or a lean, called or not: the races the forecast thought could go either way. */
+const contested = (r: RaceSummary) => r.rating === "tossup" || !!r.rating?.startsWith("lean");
 
 /**
- * The closest-races order: uncalled toss-ups first, then called toss-ups, then everything else. Within each, the
- * closest counted race first; before any votes, the most competitive by rating.
+ * Where a race sorts among the closest, votes first: toss-ups and leans still counting, then other races still
+ * counting, then called races (called toss-ups first), then toss-ups and leans waiting for votes, then the rest.
+ */
+function tier(r: RaceSummary): number {
+  if (isCalled(r)) return isTossup(r) ? 2 : 3;
+  if (r.total > 0) return contested(r) ? 0 : 1;
+  return contested(r) ? 4 : 5;
+}
+
+/**
+ * The closest-races order (see tier): where votes are being counted first, toss-ups and leans before the rest. Within
+ * each, the closest count first; before any votes, the most competitive by rating.
  */
 export function closestFirst(a: RaceSummary, b: RaceSummary): number {
-  const pinned = pin(a) - pin(b);
-  if (pinned) return pinned;
+  const tiered = tier(a) - tier(b);
+  if (tiered) return tiered;
   const la = lead(a.candidates);
   const lb = lead(b.candidates);
   if (la && lb) return la.margin - lb.margin;

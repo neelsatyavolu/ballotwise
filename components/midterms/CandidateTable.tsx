@@ -5,6 +5,7 @@ import { isEarly } from "@/lib/midterms/explore";
 import { ballotOrder, fmt, partyTag, type RaceSummary } from "@/lib/midterms/view";
 import { pickIn } from "@/lib/midterms/picks";
 import { approx, VOTES_LEFT_CAVEAT } from "@/lib/midterms/votesLeft";
+import type { LeftEstimate } from "./useVotesLeft";
 import { Avatar } from "./Avatar";
 import { partyColor } from "./party";
 import { PickTag, usePicks } from "./picks";
@@ -56,7 +57,7 @@ function Reporting({ race }: { race: RaceSummary }) {
  * `limit` shows only the leaders, with a link to the rest; `short` uses last names for narrow cards; `share` adds a
  * bar beside each percentage; `fill` stretches the table to its card's height, keeping the footer rows at the bottom.
  */
-export function CandidateTable({ race, status, left = null, limit, short = false, share = false, fill = false }: { race: RaceSummary; status: ReactNode; left?: number | null; limit?: number; short?: boolean; share?: boolean; fill?: boolean }) {
+export function CandidateTable({ race, status, left = null, limit, short = false, share = false, fill = false }: { race: RaceSummary; status: ReactNode; left?: LeftEstimate | null; limit?: number; short?: boolean; share?: boolean; fill?: boolean }) {
   // A local race found by search is carried as a "measure", but a contest between candidates still gets their columns.
   const measure = race.office === "measure" && race.local?.kind !== "candidates";
   // Before votes, the contenders lead (see ballotOrder), so a card's top rows aren't civicAPI's listing order.
@@ -131,10 +132,17 @@ export function CandidateTable({ race, status, left = null, limit, short = false
           <td />
         </tr>
         {left !== null && (
-          <tr className="mt-ct-left" title={VOTES_LEFT_CAVEAT}>
-            <td colSpan={cols - 2}>Est. votes left</td>
-            <td className="num">~{approx(left)}</td>
-            <td />
+          <tr className="mt-ct-left" title={`Estimated votes still to count, and who they'd add the most to. ${VOTES_LEFT_CAVEAT}`}>
+            <td colSpan={cols - 2}>~{approx(left.left)} left</td>
+            <td colSpan={2} className="num">
+              {left.favors ? (
+                <b style={{ color: partyColor(left.favors) }}>
+                  {nameOf(left.favors.name)} +{approx(left.net)}
+                </b>
+              ) : (
+                "Even split"
+              )}
+            </td>
           </tr>
         )}
         <tr className="mt-ct-report">

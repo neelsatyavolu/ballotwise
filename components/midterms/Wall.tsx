@@ -10,17 +10,15 @@ import { readMock } from "@/lib/midterms/clock";
 import { closestFirst, isTossup } from "@/lib/midterms/explore";
 import { countdown, electionModeDefault, formatTime, nextWave } from "@/lib/midterms/polls";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { votesLeft } from "@/lib/midterms/votesLeft";
 import { autoScale, nextScale, TOUR, tourRaces, tourStops, type TourPlan } from "@/lib/midterms/wall";
-import { lead, raceLabel, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { raceLabel, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { fillFor } from "./county";
 import { useClock, useLive } from "./hooks";
-import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills } from "./OfficeView";
+import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills, withLeads } from "./OfficeView";
 import { RaceCard } from "./RaceCard";
 import { RaceRows } from "./RaceRows";
 import { ROTATE_MS, useRotatingFit } from "./useRotatingFit";
-import { VotesLeftCard } from "./VotesLeft";
 import { ZoomMap, type Fill } from "./ZoomMap";
 
 export type WallOffice = Extract<Office, "senate" | "house">;
@@ -174,12 +172,6 @@ function useFit(box: RefObject<HTMLElement | null>, fitBox: (box: HTMLElement) =
   }, [box, fitBox, ready]);
 }
 
-/** A race's lead as the map labels it ("+6.4"), or undefined before votes. */
-function leadText(race: RaceSummary | undefined): string | undefined {
-  const ahead = race && lead(race.candidates);
-  return ahead ? `+${ahead.margin.toFixed(1)}` : undefined;
-}
-
 /**
  * The map, zoomed out to the country or into the tour's current race with its counties (or districts) shaded. The
  * House's stays on the country with the race's district marked (TOUR in wall.ts).
@@ -189,11 +181,10 @@ function TourMap({ office, races, updatedAt, results, race: toured, detail }: { 
   const race = zooms ? toured : null;
   const marked = !zooms && toured ? `${toured.state}-${toured.district ?? 0}` : null;
   const focus = race?.state ?? null;
+  // On the Senate's map each state's label carries its race's lead.
   const fills = useMemo(() => {
     const base = stateFills(office, races, updatedAt, results);
-    if (office !== "senate") return base;
-    // The Senate wall has no table of races, so each state's label carries its race's lead.
-    return new Map([...base].map(([state, fill]) => [state, { ...fill, lead: leadText(races.filter((r) => r.state === state).sort(regularFirst)[0]) }]));
+    return office === "senate" ? withLeads(base, races) : base;
   }, [office, races, updatedAt, results]);
   const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
   const districtFills = useMemo(() => {
@@ -266,16 +257,15 @@ export function Wall({ office }: { office: WallOffice }) {
   useWakeLock();
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
-  // The cards beside the map: the Senate's closest races (toss-ups first, then the next closest), as many as fit; the
+  // The cards beside the map: the Senate's closest races (counting toss-ups and leans first), as many as fit; the
   // House's toss-ups, a screenful at a time when they don't all fit.
   const cards = useMemo(() => (office === "senate" ? [...races].sort(closestFirst).slice(0, MAX_CARDS) : races.filter(isTossup).sort(closestFirst)), [races, office]);
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
   const stops = useMemo(() => tourStops(tour.map((r) => r.id), TOUR[office].racesPerLeg), [tour, office]);
   const { stop: stopId, upNext } = useTour(stops, TOUR[office]);
   const stop = races.find((r) => r.id === stopId) ?? null;
-  // The toured race with its counties, for the map's shading and the votes-left estimate under its card.
+  // The toured race with its counties, for the map's shading.
   const stopDetail = useLive<{ race: RaceDetail }>(stop ? `/api/midterms/race/${stop.id}` : null).data?.race ?? null;
-  const left = stop && stop.total > 0 && stopDetail?.id === stop.id && votesLeft(stopDetail) ? stopDetail : null;
   const next = upNext.map((id) => races.find((r) => r.id === id)).filter((r): r is RaceSummary => !!r);
   const grid = useRef<HTMLUListElement>(null);
   const detail = useRef<HTMLDivElement>(null);
@@ -317,7 +307,6 @@ export function Wall({ office }: { office: WallOffice }) {
                       <ul className="mt-grid one">
                         <RaceCard race={stop} starred={null} onStar={noop} limit={2} />
                       </ul>
-                      {left && <VotesLeftCard race={left} brief />}
                     </div>
                   )}
                   {next.length > 0 && (
@@ -342,7 +331,7 @@ export function Wall({ office }: { office: WallOffice }) {
               <section className="mt-wall-cards" aria-label={office === "senate" ? "Closest races" : "Toss-up races"}>
                 <div className="mt-section-head tight">
                   <h2>{office === "senate" ? "Closest races" : "Toss-ups"}</h2>
-                  <span className="muted small">{office === "senate" ? `Toss-ups first · ${races.length} races` : `${cards.length} races`}</span>
+                  <span className="muted small">{office === "senate" ? `Counting toss-ups and leans first · ${races.length} races` : `${cards.length} races`}</span>
                 </div>
                 <ul className="mt-grid" ref={grid}>
                   {cards.map((r) => (
