@@ -53,9 +53,10 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 /* A wall's cards show the two leading candidates and nothing after them but the count's rows: no link to the rest
    and no spare height (Wall.tsx passes limit 2). The column headings go too: party colors and numbers read without them. */
 .mt-wall .mt-card .mt-ct-more, .mt-wall .mt-card .mt-ct-fill, .mt-wall .mt-card .mt-ct thead { display: none; }
-/* Short enough for three rows of cards beside the map: no forecast or summary line (the rating tag stays), and
-   tighter rows. */
-.mt-wall .mt-card :is(.mt-card-sub, .mt-card-about) { display: none; }
+/* Short enough for three rows of cards beside the map: the forecast on one line (RaceCard keeps it to "Forecast:
+   name N%"), no summary, and tighter rows. */
+.mt-wall .mt-card .mt-card-about { display: none; }
+.mt-wall .mt-card .mt-card-sub { margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mt-wall .mt-card .mt-stack { margin: 6px 12px; }
 .mt-wall .mt-card .mt-card-top { min-height: 36px; padding-top: 4px; padding-bottom: 4px; }
 .mt-wall .mt-card .mt-ct td { height: 30px; }

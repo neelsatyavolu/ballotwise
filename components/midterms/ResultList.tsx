@@ -126,7 +126,9 @@ type TileProps = { race: RaceSummary; starred: boolean; onStar: (id: number) => 
 const RaceTile = memo(
   function RaceTile({ race, starred, onStar, now, changed }: TileProps) {
   const leader = leaderOf(race);
-  const sub = race.about?.text ?? (race.total ? null : signalLine(race.signal, race));
+  // Before votes, the forecast alone; the markets and polls behind it are in the line's hover title.
+  const sub = race.about?.text ?? (race.total ? null : signalLine(race.signal, race, true));
+  const subTitle = race.about?.text ?? (race.total ? null : signalLine(race.signal, race));
   const tile = useRef<HTMLElement>(null);
   const left = useVotesLeft(race, useOnScreen(tile));
   return (
@@ -139,7 +141,7 @@ const RaceTile = memo(
       <header className="mt-tile-head">
         <div className="mt-tile-title">
           <Link href={`/midterms/${race.id}`}>{shortLabel(race)}</Link>
-          {sub && <span className="mt-tile-sub" title={sub}>{sub}</span>}
+          {sub && <span className="mt-tile-sub" title={subTitle ?? sub}>{sub}</span>}
         </div>
         <RcvFlag race={race} />
         {changed && <span className="mt-flag lead-change" title="Someone else leads than when you last looked">New leader</span>}

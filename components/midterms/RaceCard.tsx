@@ -41,7 +41,8 @@ function CardStatus({ race }: { race: RaceSummary }) {
  */
 export function RaceCard({ race, starred, onStar, limit = 3 }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void; limit?: number }) {
   const label = raceLabel(race);
-  const sub = race.total ? null : signalLine(race.signal, race);
+  // Before votes, the forecast alone; the markets and polls behind it are in the line's hover title.
+  const sub = race.total ? null : signalLine(race.signal, race, true);
   const card = useRef<HTMLLIElement>(null);
   const left = useVotesLeft(race, useOnScreen(card));
   return (
@@ -54,7 +55,7 @@ export function RaceCard({ race, starred, onStar, limit = 3 }: { race: RaceSumma
         {starred !== null && <StarButton starred={starred} label={label} onToggle={() => onStar(race.id)} />}
       </div>
       {race.about && <p className="mt-card-about" title={race.about.text}>{race.about.text}</p>}
-      {sub && <p className="mt-card-sub">{sub}</p>}
+      {sub && <p className="mt-card-sub" title={signalLine(race.signal, race) ?? undefined}>{sub}</p>}
       {race.total > 0 && (
         <div className="mt-stack" aria-hidden>
           {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c) }} />)}

@@ -251,9 +251,9 @@ export function forecastLeader(race: Pick<RaceSummary, "signal" | "candidates">)
 
 /**
  * "Forecast: Talarico 64% · Markets: Rep 62% · Polls: D+2.1 (5)", the evidence behind a race's rating, or null when
- * there is none. Pass the race to lead with the forecast.
+ * there is none. Pass the race to lead with the forecast; `brief` keeps only the first part ("Forecast: Talarico 64%").
  */
-export function signalLine(signal: Signal | null | undefined, race?: Pick<RaceSummary, "candidates">): string | null {
+export function signalLine(signal: Signal | null | undefined, race?: Pick<RaceSummary, "candidates">, brief = false): string | null {
   if (!signal) return null;
   const parts: string[] = [];
   const leader = race ? forecastLeader({ signal, candidates: race.candidates }) : null;
@@ -263,5 +263,5 @@ export function signalLine(signal: Signal | null | undefined, race?: Pick<RaceSu
     if (side) parts.push(`Markets: ${SIDE_NAME[side]} ${Math.round(p * 100)}%`);
   }
   if (signal.polls) parts.push(`Polls: ${marginLabel(signal.polls.margin)} (${signal.polls.count})`);
-  return parts.length ? parts.join(" · ") : null;
+  return parts.length ? (brief ? parts[0] : parts.join(" · ")) : null;
 }
