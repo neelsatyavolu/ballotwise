@@ -131,7 +131,7 @@ export function ElectionMode({ data, stars }: { data: Overview; stars: ReturnTyp
         </div>
         <div className="mt-el-callbox" ref={setCallbox}>
           <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office={f.office}>
-            <MomentPopup data={data} starred={stars.ids} />
+            <MomentPopup data={data} />
           </CallsFeed>
         </div>
         <div className="mt-el-schedbox" ref={setSchedbox}>

@@ -9,7 +9,7 @@ import { CallsFeed } from "./CallsFeed";
 import { CompanionNearYou } from "./CompanionNearYou";
 import { ControlStrip } from "./ControlStrip";
 import { LiveProjection } from "./LiveProjection";
-import { useLive, useStars } from "./hooks";
+import { useLive } from "./hooks";
 import { MomentPopup } from "./MomentPopup";
 import { PollSchedule } from "./PollClose";
 import { setSolo, useScreens } from "./useScreens";
@@ -43,10 +43,9 @@ function useView(): [View, (v: View) => void] {
   return [view, choose];
 }
 
-/** Mounted only on a companion, so other tabs don't fetch or load stars for it. */
+/** Mounted only on a companion, so other tabs don't fetch for it. */
 function Body({ hidden }: { hidden: readonly Panel[] }) {
   const data = useLive<Overview>("/api/midterms").data;
-  const stars = useStars();
   const shows = (p: Panel) => hidden.includes(p);
   const [view, setView] = useView();
   return (
@@ -61,7 +60,7 @@ function Body({ hidden }: { hidden: readonly Panel[] }) {
             Near you
           </button>
         </div>
-        {data && <MomentPopup data={data} starred={stars.ids} inCompanion />}
+        {data && <MomentPopup data={data} inCompanion />}
         <button type="button" className="mt-el-quiet small" onClick={() => setSolo(true)}>Use this tab normally</button>
       </header>
       {data ? <Panels data={data} shows={shows} view={view} /> : <p className="muted">Loading…</p>}

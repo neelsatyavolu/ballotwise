@@ -93,4 +93,6 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 
 /* The toured race's card, and its card in the grid beside the map, outlined (Wall.tsx). */
 .mt-wall .mt-card.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+/* A card in the grid pins the map to its race when clicked (Wall.tsx). */
+.mt-wall-cards .mt-card { cursor: pointer; }
 .mt-wall-spot { display: grid; gap: 10px; }

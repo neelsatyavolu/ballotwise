@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { MOCK_ELECTION_EMAILS, readMock, setMock, type Mock } from "@/lib/midterms/clock";
+import { MOCK_ELECTION_EMAILS, MOCK_UNTIL, readMock, setMock, type Mock } from "@/lib/midterms/clock";
 import { ELECTION_DAY_START, stampTime, zoneAbbr } from "@/lib/midterms/polls";
 import { useAccount } from "@/components/AccountProvider";
 import { useClock } from "./hooks";
@@ -46,7 +46,8 @@ export function MockElection() {
       </div>
     );
   }
-  if (!allowed) return null;
+  // From 5 p.m. Pacific on the real night there's no mock to start (clock.ts MOCK_UNTIL); outside a mock, `now` is real.
+  if (!allowed || now >= MOCK_UNTIL) return null;
   if (!open) {
     return (
       <button type="button" className="mt-mock" onClick={() => setOpen(true)} title="Run a made-up election night, in this browser only">

@@ -7,7 +7,7 @@ import type { RaceDetail } from "@/lib/midterms/races";
 import { projection } from "@/lib/midterms/forecastTab";
 import { closestFirst, flipTo, isCompetitive, isTossup, raceFill, statusOf } from "@/lib/midterms/explore";
 import { districtMargin2024, margin2024Label, stateMargin2024 } from "@/lib/midterms/past2024";
-import { electionModeDefault } from "@/lib/midterms/polls";
+import { showsResults } from "@/lib/midterms/polls";
 import { colorOf, lead, leading, measureCount, pct, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "./Balance";
 import { CountyTip, fillFor } from "./county";
@@ -192,7 +192,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
   const updatedAt = data?.ratings.updatedAt ?? null;
   // From election day on, maps drop the forecast and fill in only as results arrive.
-  const results = electionModeDefault(useClock(60_000));
+  const results = showsResults(useClock(60_000));
   const fillsNow = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
   const fills = useMemo(() => (past ? states2024(fillsNow) : fillsNow), [past, fillsNow]);
   const nationDistrictsNow = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);

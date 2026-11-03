@@ -25,13 +25,15 @@ export type Mock = { start: number; at: number; speed: number };
 const MOCK_KEY = "mt-mock";
 /** How long a mock night runs, in real time, before it ends by itself. */
 export const MOCK_TTL = 4 * HOUR;
+/** No mock night runs from 8 p.m. Eastern (5 p.m. Pacific) on the real election night: the screens show the count. */
+export const MOCK_UNTIL = ELECTION_DAY_START + 20 * HOUR;
 
 export function readMock(): Mock | null {
   if (typeof window === "undefined") return null;
   try {
     const m: unknown = JSON.parse(localStorage.getItem(MOCK_KEY) ?? "null");
     const ok = !!m && typeof m === "object" && ["start", "at", "speed"].every((k) => Number.isFinite((m as Record<string, unknown>)[k]));
-    return ok && Date.now() - (m as Mock).at < MOCK_TTL ? (m as Mock) : null;
+    return ok && Date.now() - (m as Mock).at < MOCK_TTL && Date.now() < MOCK_UNTIL ? (m as Mock) : null;
   } catch {
     return null;
   }
@@ -68,11 +70,13 @@ const previewed = fixedPreview();
 const mock = previewed === null ? readMock() : null;
 let offset = previewed === null ? 0 : previewed - Date.now();
 
-// Another tab started, changed or stopped the mock night: reload onto its clock.
+// Another tab started, changed or stopped the mock night: reload onto its clock. A mock still running at MOCK_UNTIL
+// reloads onto the real night.
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
     if (e.key === MOCK_KEY) window.location.reload();
   });
+  if (mock && Date.now() < MOCK_UNTIL) setTimeout(() => window.location.reload(), MOCK_UNTIL - Date.now());
 }
 
 export const clockNow = () => (mock ? mock.start + (Date.now() - mock.at) * mock.speed : Date.now()) + offset;

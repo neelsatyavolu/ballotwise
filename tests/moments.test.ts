@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { moments, RANK } from "../lib/midterms/moments";
-import type { CallEvent, Overview, RaceSummary, Tally } from "../lib/midterms/view";
+import { moments } from "../lib/midterms/moments";
+import type { CallEvent, RaceSummary } from "../lib/midterms/view";
 
 // Georgia's Senate seat is held by a Democrat, North Carolina's by a Republican (holders.json).
 const race = (id: number, state: string, over: Partial<RaceSummary> = {}): RaceSummary => ({
@@ -16,61 +16,37 @@ const race = (id: number, state: string, over: Partial<RaceSummary> = {}): RaceS
   ...over,
 });
 const event = (id: number, raceId: number, over: Partial<CallEvent> = {}): CallEvent => ({ id, raceId, office: "senate", kind: "call", winner: "Pat Lee", party: "Democratic", previous: null, at: 1000 + id, ...over });
-const tally = (D: number, R: number, majority: number): Tally => ({ D, R, other: 0, total: D + R, majority, uncalled: 0 });
-const quiet = { senate: tally(40, 40, 51), house: tally(100, 100, 218), governor: tally(10, 10, 26) };
 
-function data(races: RaceSummary[], callEvents: CallEvent[], balance: Overview["balance"] = quiet) {
-  return { races, callEvents, balance, fetchedAt: 9999 };
+function data(races: RaceSummary[], callEvents: CallEvent[]) {
+  return { races, callEvents };
 }
 
 describe("election-night moments", () => {
-  it("skips a routine call that holds a seat in an unstarred, uncontested race", () => {
-    expect(moments(data([race(1, "GA")], [event(1, 1)]), new Set())).toEqual([]);
-  });
-
-  it("flags a seat changing party", () => {
-    const [m] = moments(data([race(1, "NC")], [event(1, 1, { winner: "Roy Cooper" })]), new Set());
-    expect(m).toMatchObject({ key: "call:1", rank: RANK.flip, kicker: "D gain", side: "D", href: "/midterms/1" });
+  it("flags a toss-up or lean seat changing party", () => {
+    const [m] = moments(data([race(1, "NC", { rating: "tossup" })], [event(1, 1, { winner: "Roy Cooper" })]));
+    expect(m).toMatchObject({ key: "call:1", kicker: "D gain", side: "D", href: "/midterms/1" });
     expect(m.body).toBe("Roy Cooper (D) wins, taking the seat from Republicans.");
+    expect(moments(data([race(1, "NC", { rating: "lean-r" })], [event(1, 1, { winner: "Roy Cooper" })]))).toHaveLength(1);
   });
 
-  it("flags changed and withdrawn calls", () => {
+  it("skips holds, safer seats, changed and withdrawn calls", () => {
     const list = moments(
-      data([race(1, "GA"), race(2, "NC")], [
-        event(1, 1, { kind: "change", winner: "Mike Collins", party: "Republican", previous: "Jon Ossoff" }),
-        event(2, 2, { kind: "withdrawal", winner: null, party: null, previous: "Roy Cooper" }),
+      data([race(1, "GA", { rating: "tossup" }), race(2, "NC", { rating: "likely-r" }), race(3, "NC", { rating: "tossup" })], [
+        event(1, 1),
+        event(2, 2, { winner: "Roy Cooper" }),
+        event(3, 3, { kind: "change", winner: "Roy Cooper" }),
+        event(4, 3, { kind: "withdrawal", winner: null, party: null, previous: "Roy Cooper" }),
       ]),
-      new Set(),
     );
-    expect(list.map((m) => m.kicker)).toEqual(["Call withdrawn", "Call changed"]);
-    expect(list[1].body).toBe("Now called for Mike Collins (R), not Jon Ossoff.");
+    expect(list).toEqual([]);
   });
 
-  it("flags calls in starred races and toss-ups", () => {
-    const list = moments(data([race(1, "GA"), race(2, "GA", { rating: "tossup" })], [event(1, 1), event(2, 2)]), new Set([1]));
-    expect(list.map((m) => [m.key, m.kicker])).toEqual([
-      ["call:1", "Your race is called"],
-      ["call:2", "Toss-up called"],
-    ]);
-    expect(list[1].body).toBe("Pat Lee (D) wins, a D hold.");
-  });
-
-  it("flags a called lean the forecast's favorite was under 70% to win, not a safer one", () => {
-    const signal = (D: number) => ({ market: null, polls: null, rating: null, forecast: { odds: { D, R: 1 - D } } }) as unknown as RaceSummary["signal"];
-    const close = race(1, "GA", { rating: "lean-d", signal: signal(0.64) });
-    const safer = race(2, "GA", { rating: "lean-d", signal: signal(0.78) });
-    const list = moments(data([close, safer], [event(1, 1), event(2, 2)]), new Set());
-    expect(list.map((m) => [m.key, m.kicker, m.rank])).toEqual([["call:1", "Close race called", RANK.lean]]);
-  });
-
-  it("announces chamber control once a side reaches the line, ahead of every call", () => {
-    const balance = { ...quiet, senate: tally(49, 50, 51), house: tally(218, 190, 218) };
-    const list = moments(data([race(1, "NC")], [event(1, 1)], balance), new Set());
-    expect(list.map((m) => m.key)).toEqual(["control:senate:R", "control:house:D", "call:1"]);
-    expect(list[0].title).toBe("Republicans win the Senate");
+  it("lists several flips newest first", () => {
+    const list = moments(data([race(1, "NC", { rating: "tossup" }), race(2, "GA", { rating: "lean-d" })], [event(1, 1, { winner: "A" }), event(2, 2, { winner: "B", party: "Republican" })]));
+    expect(list.map((m) => m.key)).toEqual(["call:2", "call:1"]);
   });
 
   it("ignores events for races the overview doesn't carry", () => {
-    expect(moments(data([], [event(1, 7, { kind: "change" })]), new Set())).toEqual([]);
+    expect(moments(data([], [event(1, 7)]))).toEqual([]);
   });
 });

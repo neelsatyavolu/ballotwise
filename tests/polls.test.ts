@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { closeWaves, countdown, ELECTION_DAY_START, electionModeDefault, formatTime, nextWave, POLL_CLOSE, setTimeZone, stampTime, stateCloses, stateFinal } from "../lib/midterms/polls";
+import { closeWaves, countdown, ELECTION_DAY_START, electionModeDefault, formatTime, nextWave, POLL_CLOSE, setTimeZone, showsResults, stampTime, stateCloses, stateFinal } from "../lib/midterms/polls";
 
 const at = (iso: string) => Date.parse(iso);
 
@@ -40,6 +40,15 @@ describe("electionModeDefault", () => {
     expect(electionModeDefault(ELECTION_DAY_START - 1)).toBe(false);
     expect(electionModeDefault(ELECTION_DAY_START)).toBe(true);
     expect(electionModeDefault(at("2026-11-06T12:00:00Z"))).toBe(true);
+  });
+});
+
+describe("showsResults", () => {
+  it("keeps the forecast's colors on election day until the first polls close", () => {
+    const first = closeWaves()[0].at;
+    expect(showsResults(ELECTION_DAY_START + 3_600_000)).toBe(false);
+    expect(showsResults(first - 1)).toBe(false);
+    expect(showsResults(first)).toBe(true);
   });
 });
 

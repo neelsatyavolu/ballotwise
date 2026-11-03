@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { EARLY_REPORTING, favoredSide, isCompetitive, isEarly, isTossup, statusOf, tierOf } from "@/lib/midterms/explore";
 import { holderOf, outcomeOf } from "@/lib/midterms/holders";
 import { clockNow } from "@/lib/midterms/clock";
-import { electionModeDefault } from "@/lib/midterms/polls";
+import { showsResults } from "@/lib/midterms/polls";
 import { colorOf, lead, partyOf, partyTag, raceLabel, safeFill, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 
 /** Results shows the count (uncounted seats grey on election night); Ratings shows only the pre-election rating. */
@@ -51,7 +51,7 @@ export function seatFill(r: RaceSummary, mode: FillMode = "results", counting = 
   const ahead = lead(r.candidates);
   if (ahead && ahead.margin > 0) return `color-mix(in srgb, ${colorOf(ahead.leader)} ${isEarly(r) ? 25 : 50}%, var(--sheet))`;
   if (ahead) return "var(--sheet)";
-  if (!counting && !electionModeDefault(clockNow())) return ratingColor(r);
+  if (!counting && !showsResults(clockNow())) return ratingColor(r);
   return flat ? NO_VOTES_FILL : `color-mix(in srgb, var(--rule-strong) 70%, var(--sheet))`;
 }
 
@@ -71,7 +71,7 @@ export function seatSummary(r: RaceSummary): string {
 export function FillLegend({ counted, mode, gains = false, flat = false }: { counted: boolean; mode: FillMode; gains?: boolean; flat?: boolean }) {
   const mix = (v: string, n: number) => `color-mix(in srgb, ${v} ${n}%, var(--sheet))`;
   // Election night shows the results key even before the first votes, since the map is already grey then.
-  if ((!counted && !electionModeDefault(clockNow())) || mode === "ratings") {
+  if ((!counted && !showsResults(clockNow())) || mode === "ratings") {
     return (
       <p className="muted small mt-legend">
         <span><i style={{ background: "var(--tossup)" }} />Toss-up</span>

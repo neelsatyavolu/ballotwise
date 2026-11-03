@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { callAlert, popsUp, type CallAlert } from "@/lib/midterms/callAlert";
+import { callAlert, isFlip, popsUp, type CallAlert } from "@/lib/midterms/callAlert";
 import { clockNow, simAt } from "@/lib/midterms/clock";
 import { ELECTION_DAY_START } from "@/lib/midterms/polls";
 import type { Overview } from "@/lib/midterms/view";
@@ -15,7 +15,7 @@ const PATH = "/api/midterms/calls/latest";
 /** Pop-ups on screen at once; more arriving together are counted under them. */
 const MAX = 3;
 /** How long a pop-up stays, unless the pointer is on the stack. */
-const SHOW_MS = 12_000;
+const SHOW_MS = 5_000;
 /** Most system notifications sent for one batch of calls arriving together. */
 const NOTIFY_MAX = 5;
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -23,8 +23,9 @@ const REQUEST_TIMEOUT_MS = 15_000;
 type Shown = CallAlert & { until: number };
 
 /**
- * Every tracker page, whichever tab it's on, pops up a note in the corner when a lean or toss-up Senate or House race (see
- * popsUp) is called, its call changes or the call is withdrawn. Calls already made when the page opens don't pop. In a
+ * Every tracker page, whichever tab it's on, pops up a note in the corner for SHOW_MS when a lean or toss-up Senate or
+ * House seat is called for the party that doesn't hold it (see popsUp, isFlip). Calls already made when the page opens
+ * don't pop. Screens with the big pop-up in the middle (MomentPopup) hide these, so a flip pops once. In a
  * hidden browser tab it keeps checking only when browser alerts are on (the bell in Latest calls, or the button here),
  * and sends a system notification instead.
  */
@@ -81,7 +82,7 @@ export function CallPopups() {
     // call the night has made so far pop up at once when the simulated one arrives.
     if (!simulated?.simulated) return;
     const byId = new Map(simulated.races.map((r) => [r.id, r]));
-    take((simulated.callEvents ?? []).filter((e) => popsUp(e.office, byId.get(e.raceId)?.rating)).map((e) => callAlert(e, byId.get(e.raceId))));
+    take((simulated.callEvents ?? []).filter((e) => popsUp(e.office, byId.get(e.raceId)?.rating) && isFlip(e, byId.get(e.raceId))).map((e) => callAlert(e, byId.get(e.raceId))));
   }, [simulated, take]);
 
   useEffect(() => {

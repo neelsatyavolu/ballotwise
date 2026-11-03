@@ -4,11 +4,11 @@
 // and the type grows with the screen (+ and - adjust it). It never joins the two-screen setup, so a wall on a monitor
 // plugged into the same computer can't take over as the main screen or become a companion.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { readMock } from "@/lib/midterms/clock";
-import { closestFirst, isTossup } from "@/lib/midterms/explore";
-import { countdown, electionModeDefault, formatTime, nextWave } from "@/lib/midterms/polls";
+import { closestFirst, isTossup, isWatch } from "@/lib/midterms/explore";
+import { countdown, formatTime, nextWave, showsResults } from "@/lib/midterms/polls";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { autoScale, nextScale, TOUR, tourRaces, tourStops, type TourPlan } from "@/lib/midterms/wall";
 import { raceLabel, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
@@ -34,8 +34,6 @@ const MAX_CARDS = 60;
 const UP_NEXT = 3;
 /** How far a card starts below its place as it fades in (.mt-in in midterms.css), plus a pixel of rounding. */
 const SLIDE_PX = 5;
-/** How long a big moment's pop-up stays on a wall, where nobody is there to close it. */
-const POPUP_MS = 30_000;
 /** No star column on a wall: nothing on it is clicked. */
 const NO_STARS = { ids: null, toggle: () => {} };
 const noop = () => {};
@@ -260,7 +258,7 @@ function Clock() {
 export function Wall({ office }: { office: WallOffice }) {
   const { data, error } = useLive<Overview>("/api/midterms", { office });
   const forecast = useLive<ForecastOverview>("/api/midterms/forecast").data;
-  const results = electionModeDefault(useClock(60_000));
+  const results = showsResults(useClock(60_000));
   const scale = useWallScale(office);
   useWakeLock();
 
@@ -269,7 +267,15 @@ export function Wall({ office }: { office: WallOffice }) {
   // House's toss-ups, a screenful at a time when they don't all fit.
   const cards = useMemo(() => (office === "senate" ? [...races].sort(closestFirst).slice(0, MAX_CARDS) : races.filter(isTossup).sort(closestFirst)), [races, office]);
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
-  const stops = useMemo(() => tourStops(tour.map((r) => r.id), TOUR[office].racesPerLeg), [tour, office]);
+  // A card clicked pins the map to its race until it's clicked again. Otherwise, with one toss-up left counting, the
+  // map stays on it; with more, it tours.
+  const [pinned, setPinned] = useState<number | null>(null);
+  const lone = useMemo(() => {
+    const active = races.filter((r) => isWatch(r) && r.total > 0);
+    return active.length === 1 ? active[0].id : null;
+  }, [races]);
+  const focusOn = pinned !== null && races.some((r) => r.id === pinned) ? pinned : lone;
+  const stops = useMemo(() => (focusOn !== null ? [focusOn] : tourStops(tour.map((r) => r.id), TOUR[office].racesPerLeg)), [focusOn, tour, office]);
   const { stop: stopId, upNext } = useTour(stops, TOUR[office]);
   const stop = races.find((r) => r.id === stopId) ?? null;
   // The toured race with its counties, for the map's shading.
@@ -279,17 +285,18 @@ export function Wall({ office }: { office: WallOffice }) {
   const detail = useRef<HTMLDivElement>(null);
   useRotatingFit(grid, office === "house" ? ROTATE_MS : null, !!data);
   useFit(detail, fitTour, !!data);
-  // The toured race's card in the grid is outlined. On the Senate wall, whose grid holds its closest races, the card
-  // under the map shows only for a toured race the grid has no room for.
+  // The toured race's card in the grid is outlined (its own card shows under the map too, with its count).
   useLayoutEffect(() => {
-    let inGrid = false;
-    for (const card of [...(grid.current?.children ?? [])] as HTMLElement[]) {
-      const on = stopId !== null && Number(card.dataset.race) === stopId && !card.hidden;
-      card.classList.toggle("on", on);
-      inGrid ||= on;
-    }
-    if (detail.current && office === "senate") detail.current.hidden = inGrid;
+    for (const card of [...(grid.current?.children ?? [])] as HTMLElement[]) card.classList.toggle("on", stopId !== null && Number(card.dataset.race) === stopId);
   });
+  // A click on a card pins the map to it (or unpins it) instead of leaving the wall for the race page.
+  const pin = (e: ReactMouseEvent<HTMLUListElement>) => {
+    const card = (e.target as HTMLElement).closest<HTMLElement>("[data-race]");
+    if (!card) return;
+    e.preventDefault();
+    const id = Number(card.dataset.race);
+    setPinned((p) => (p === id ? null : id));
+  };
 
   return (
     <div className="mt mt-wall" style={{ "--wall-scale": scale } as CSSProperties}>
@@ -297,7 +304,7 @@ export function Wall({ office }: { office: WallOffice }) {
         <header className="mt-wall-head">
           <h1>{TITLE[office]}</h1>
           <MockTag />
-          {data && <MomentPopup data={data} starred={null} closeAfterMs={POPUP_MS} />}
+          {data && <MomentPopup data={data} />}
           {data && (
             <span className="mt-wall-status">
               <LiveDot at={data.fetchedAt} stale={data.stale} /> Checked <CheckedAgo at={data.fetchedAt} />
@@ -314,7 +321,10 @@ export function Wall({ office }: { office: WallOffice }) {
             <div className="mt-wall-body">
               <section className="mt-wall-tour" aria-label="Race tour">
                 <div className="mt-section-head tight">
-                  <h2>{stop ? `${STATE_NAMES[stop.state] ?? stop.state}${office === "house" && stop.district !== null ? ` · District ${stop.district || "at large"}` : ""}` : "Every race"}</h2>
+                  <h2>
+                    {stop ? `${STATE_NAMES[stop.state] ?? stop.state}${office === "house" && stop.district !== null ? ` · District ${stop.district || "at large"}` : ""}` : "Every race"}
+                    {stop && stop.id === pinned ? " · pinned" : stop && stop.id === lone ? " · the last toss-up counting" : ""}
+                  </h2>
                   {tour.length > 0 && <span className="muted small">Touring the {tour.length} closest</span>}
                 </div>
                 <div className="mt-wall-map">
@@ -354,7 +364,7 @@ export function Wall({ office }: { office: WallOffice }) {
                   <h2>{office === "senate" ? "Closest races" : "Toss-ups"}</h2>
                   <span className="muted small">{office === "senate" ? `Counting toss-ups, then leans, first · ${races.length} races` : `${cards.length} races`}</span>
                 </div>
-                <ul className="mt-grid" ref={grid}>
+                <ul className="mt-grid" ref={grid} onClickCapture={pin}>
                   {cards.map((r) => (
                     <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
                   ))}

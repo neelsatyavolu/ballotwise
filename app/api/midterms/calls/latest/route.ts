@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/env";
 import { listCallEvents } from "@/lib/midterms/calls";
 import { bareRaces } from "@/lib/midterms/catalog";
-import { callAlert, popsUp, type CallAlert } from "@/lib/midterms/callAlert";
+import { callAlert, isFlip, popsUp, type CallAlert } from "@/lib/midterms/callAlert";
 import { raceKey, readOdds } from "@/lib/midterms/odds";
 
 export type { CallAlert };
@@ -14,7 +14,7 @@ const LATEST = 20;
 const SCAN = 400;
 
 /**
- * The newest race calls, changed calls and withdrawals in lean and toss-up Senate and House races (see popsUp), each with
+ * The newest calls taking a lean or toss-up Senate or House seat from the party holding it (see popsUp, isFlip), each with
  * the words the phone alerts use, for the pop-up every tracker page shows when one is called. Small, so a page can ask every few seconds, even in a hidden tab.
  */
 export async function GET() {
@@ -24,7 +24,7 @@ export async function GET() {
     const byId = new Map(races.map((r) => [r.id, r]));
     const shown = events.filter((e) => {
       const race = byId.get(e.raceId);
-      return !!race && popsUp(e.office, odds?.signals[raceKey(race.office, race.state, race.district)]?.rating);
+      return !!race && popsUp(e.office, odds?.signals[raceKey(race.office, race.state, race.district)]?.rating) && isFlip(e, race);
     });
     return NextResponse.json({ alerts: shown.slice(0, LATEST).map((e) => callAlert(e, byId.get(e.raceId))) }, { headers: { "cache-control": "public, max-age=10" } });
   } catch (err) {

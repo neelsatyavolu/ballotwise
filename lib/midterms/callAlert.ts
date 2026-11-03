@@ -1,6 +1,7 @@
 import { callMessage } from "../push/alerts";
 import type { CallEvent } from "./calls";
 import type { Office, Rating, RaceSummary } from "./races";
+import { holderOf } from "./holders";
 import { partyOf } from "./view";
 
 /**
@@ -10,6 +11,15 @@ import { partyOf } from "./view";
  */
 export function popsUp(office: Office, rating: Rating | null | undefined): boolean {
   return (office === "senate" || office === "house") && (rating === "tossup" || !!rating?.startsWith("lean-"));
+}
+
+/** Whether a call takes the seat from the party holding it: only those pop up (with popsUp). An independent who wins counts as one side. */
+export function isFlip(event: CallEvent, race: RaceSummary | undefined): boolean {
+  if (event.kind !== "call" || !event.party || !race) return false;
+  const party = partyOf(event.party);
+  const side = party === "other" ? "I" : party;
+  const holder = holderOf(race);
+  return holder !== null && side !== holder;
 }
 
 /** One call as the pop-up shows it: "Flip" over "Georgia Senate", then "Jon Ossoff (D) wins, taking the seat…". */

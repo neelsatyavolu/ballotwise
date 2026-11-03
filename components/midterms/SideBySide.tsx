@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { parseWeights, resize } from "@/lib/midterms/columns";
 import { closestFirst } from "@/lib/midterms/explore";
-import { electionModeDefault } from "@/lib/midterms/polls";
+import { showsResults } from "@/lib/midterms/polls";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { STATE_NAMES, type Office, type Overview } from "@/lib/midterms/view";
@@ -330,7 +330,7 @@ export function SideBySide() {
   const { data, error } = useLive<Overview>("/api/midterms");
   const forecast = useLive<ForecastOverview>("/api/midterms/forecast").data;
   const favorites = useStars();
-  const results = electionModeDefault(useClock(60_000));
+  const results = showsResults(useClock(60_000));
   const star: Star = { ids: favorites.ids, toggle: favorites.toggle };
   const widths = useWidths();
   const grid = useRef<HTMLDivElement>(null);
@@ -341,7 +341,7 @@ export function SideBySide() {
     <span className="mt-sbs-status">
       <LiveDot at={data.fetchedAt} stale={data.stale} /> Checked <CheckedAgo at={data.fetchedAt} />
       {data.stale && " · source is slow"}
-      <MomentPopup data={data} starred={favorites.ids} />
+      <MomentPopup data={data} />
     </span>
   );
   const third = useThird();

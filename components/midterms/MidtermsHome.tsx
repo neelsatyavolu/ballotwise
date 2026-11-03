@@ -15,7 +15,7 @@ import { type ChatHandle } from "./ChatDock";
 import { ElectionToggle, useElectionMode } from "./electionModeState";
 import { useClock, useDashboards, useLive, useStars } from "./hooks";
 import { ForecastTip, WatchNote } from "./ForecastTip";
-import { closeWaves, electionModeDefault, formatTime } from "@/lib/midterms/polls";
+import { closeWaves, formatTime, showsResults } from "@/lib/midterms/polls";
 import { NationMap, type NationFill } from "./maps";
 import { ModeNav } from "./ModeNav";
 import { RaceCard } from "./RaceCard";
@@ -112,7 +112,7 @@ function RaceMap({ races, updatedAt, source }: { races: RaceSummary[]; updatedAt
   const router = useRouter();
   const [office, setOffice] = useState<(typeof MAP_OFFICES)[number]>("senate");
   // From election day on, the map drops the forecast and fills in only as results arrive.
-  const results = electionModeDefault(useClock(60_000));
+  const results = showsResults(useClock(60_000));
   const fills = useMemo(() => {
     const out = new Map<string, NationFill>();
     // Ohio and Florida hold Senate specials; a state's regular race, if any, sets its color.

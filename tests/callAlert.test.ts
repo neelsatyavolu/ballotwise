@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { callAlert, popsUp } from "../lib/midterms/callAlert";
+import { callAlert, isFlip, popsUp } from "../lib/midterms/callAlert";
 import type { CallEvent } from "../lib/midterms/calls";
 import type { RaceSummary } from "../lib/midterms/races";
 
@@ -25,6 +25,17 @@ describe("callAlert", () => {
 
   it("still says something when the race isn't in the catalog", () => {
     expect(callAlert(event({}), undefined)).toMatchObject({ kicker: "Called", label: "A race" });
+  });
+});
+
+describe("isFlip", () => {
+  it("is true only for a call taking the seat from the party holding it", () => {
+    // Georgia's seat is held by a Democrat (holders.json).
+    expect(isFlip(event({ winner: "Mike Collins", party: "Republican" }), georgia)).toBe(true);
+    expect(isFlip(event({}), georgia)).toBe(false);
+    expect(isFlip(event({ kind: "change", winner: "Mike Collins", party: "Republican" }), georgia)).toBe(false);
+    expect(isFlip(event({ kind: "withdrawal", winner: null, party: null }), georgia)).toBe(false);
+    expect(isFlip(event({ winner: "Mike Collins", party: "Republican" }), undefined)).toBe(false);
   });
 });
 

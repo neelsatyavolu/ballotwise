@@ -35,6 +35,15 @@ describe("mock election night", () => {
     expect(readMock()).not.toBeNull();
   });
 
+  it("never runs from 5 p.m. Pacific on the real night", async () => {
+    const store = browser();
+    const { readMock, MOCK_UNTIL } = await import("../lib/midterms/clock");
+    vi.useFakeTimers({ now: MOCK_UNTIL + 1 });
+    store.set("mt-mock", JSON.stringify({ start: 1, at: Date.now() - 1000, speed: 1 }));
+    expect(readMock()).toBeNull();
+    vi.useRealTimers();
+  });
+
   it("reloads a tab when another tab starts or stops it", async () => {
     browser();
     await import("../lib/midterms/clock");

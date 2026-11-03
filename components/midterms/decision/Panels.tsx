@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { clockNow } from "@/lib/midterms/clock";
 import type { ChamberOffice, Panel } from "@/lib/midterms/decisionView";
 import { projection } from "@/lib/midterms/forecastTab";
-import { formatTime, stampTime, stateFinal, electionModeDefault, zoneAbbr } from "@/lib/midterms/polls";
+import { formatTime, showsResults, stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import { fmt, lead, leading, raceLabel, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "../Balance";
 import { CallsFeed } from "../CallsFeed";
@@ -189,7 +189,7 @@ function BalanceMap({ office }: { office?: ChamberOffice }) {
   const { overview } = useDashboardData();
   const router = useRouter();
   const [focus, setFocus] = useState<string | null>(null);
-  const results = electionModeDefault(clockNow());
+  const results = showsResults(clockNow());
   const races = useMemo(() => (overview?.races ?? []).filter((r) => r.office === office), [overview, office]);
   const updatedAt = overview?.ratings.updatedAt ?? null;
   const fills = useMemo(() => (office ? stateFills(office, races, updatedAt, results) : new Map()), [office, races, updatedAt, results]);
