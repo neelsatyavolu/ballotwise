@@ -110,10 +110,7 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
           {inState.length > 1 && <RaceRows races={inState} star={star} onPick={(r) => setPicked(r.id)} selectedId={shownId} />}
         </div>
       ) : (
-        <>
-          <RaceRows races={closest} star={star} onPick={(r) => zoomTo(r.state, r.id)} />
-          <p className="muted small">{office === "house" ? "Tap a state to see its districts, or a race to open it here." : "Tap a state or a race to open it here."}</p>
-        </>
+        <RaceRows races={closest} star={star} onPick={(r) => zoomTo(r.state, r.id)} />
       )}
       {handle}
     </section>
