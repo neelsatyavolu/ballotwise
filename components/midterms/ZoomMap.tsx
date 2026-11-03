@@ -12,9 +12,12 @@ const MARK_RING = 16;
 type Districts = { districts: { district: number; d: string }[] };
 /** `flip` stripes a state or district projected to change party; `called` marks a state's label with a check. */
 /** `watch` outlines a toss-up in yellow on election night, `lean` an uncalled lean in a thinner dashed yellow. */
-export type Fill = { fill: string; tip: ReactNode; flip?: boolean; called?: boolean; watch?: boolean; lean?: boolean };
+/** `lead` is a short margin ("+6.4") drawn under the state's label. */
+export type Fill = { fill: string; tip: ReactNode; flip?: boolean; called?: boolean; watch?: boolean; lean?: boolean; lead?: string };
 
 const FULL: Box = [0, 0, 975, 610];
+/** How far a state's label and its lead sit above and below the label's spot, in map units. */
+const LEAD_GAP = 6.5;
 
 /**
  * Where to zoom for a race inside a state. A district that covers only part of a big state gets its own closer
@@ -87,7 +90,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   const labels = useMemo(
     () => (nation && nation !== "error" ? nation.states.filter((s) => fills.has(s.state)).flatMap((s) => {
       const at = labelSpot(s.state, s.d);
-      return at ? [{ state: s.state, at, called: !!fills.get(s.state)?.called }] : [];
+      return at ? [{ state: s.state, at, called: !!fills.get(s.state)?.called, lead: fills.get(s.state)?.lead }] : [];
     }) : []),
     [nation, fills],
   );
@@ -214,10 +217,17 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
     () =>
       !focus &&
       labels.map((l) => (
-        <text key={l.state} x={l.at[0]} y={l.at[1]} className="mt-state-label" textAnchor="middle" dominantBaseline="central" aria-hidden>
-          {l.state}
-          {l.called && <tspan className="mt-state-check"> ✓</tspan>}
-        </text>
+        <g key={l.state} aria-hidden>
+          <text x={l.at[0]} y={l.lead ? l.at[1] - LEAD_GAP : l.at[1]} className="mt-state-label" textAnchor="middle" dominantBaseline="central">
+            {l.state}
+            {l.called && <tspan className="mt-state-check"> ✓</tspan>}
+          </text>
+          {l.lead && (
+            <text x={l.at[0]} y={l.at[1] + LEAD_GAP} className="mt-state-label mt-state-lead" textAnchor="middle" dominantBaseline="central">
+              {l.lead}
+            </text>
+          )}
+        </g>
       )),
     [focus, labels],
   );

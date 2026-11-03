@@ -6,12 +6,12 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
-import { closestFirst } from "@/lib/midterms/explore";
+import { closestFirst, isTossup } from "@/lib/midterms/explore";
 import { countdown, electionModeDefault, formatTime, nextWave } from "@/lib/midterms/polls";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { votesLeft } from "@/lib/midterms/votesLeft";
 import { autoScale, nextScale, TOUR, tourRaces, tourStops, type TourPlan } from "@/lib/midterms/wall";
-import { raceLabel, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
+import { lead, raceLabel, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { fillFor } from "./county";
@@ -136,7 +136,7 @@ function showAll(box: HTMLElement, selector: string): HTMLElement[] {
 }
 
 const fitList = (selector: string) => (box: HTMLElement) => hidePastBottom(box, showAll(box, selector));
-const fitRows = fitList(".mt-rows tbody tr");
+const fitRows = fitList(".mt-rows tbody tr, .mt-wall-tossups .mt-card");
 const fitCalls = fitList(".mt-el-calllist > li");
 
 /** The tour's next races: whole cards first, then rows for the later races, skipping the ones with a card showing. */
@@ -177,6 +177,12 @@ function useFit(box: RefObject<HTMLElement | null>, fitBox: (box: HTMLElement) =
   }, [box, fitBox, ready]);
 }
 
+/** A race's lead as the map labels it ("+6.4"), or undefined before votes. */
+function leadText(race: RaceSummary | undefined): string | undefined {
+  const ahead = race && lead(race.candidates);
+  return ahead ? `+${ahead.margin.toFixed(1)}` : undefined;
+}
+
 /**
  * The map, zoomed out to the country or into the tour's current race with its counties (or districts) shaded. The
  * House's stays on the country with the race's district marked (TOUR in wall.ts).
@@ -186,7 +192,12 @@ function TourMap({ office, races, updatedAt, results, race: toured, detail }: { 
   const race = zooms ? toured : null;
   const marked = !zooms && toured ? `${toured.state}-${toured.district ?? 0}` : null;
   const focus = race?.state ?? null;
-  const fills = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
+  const fills = useMemo(() => {
+    const base = stateFills(office, races, updatedAt, results);
+    if (office !== "senate") return base;
+    // The Senate wall has no table of races, so each state's label carries its race's lead.
+    return new Map([...base].map(([state, fill]) => [state, { ...fill, lead: leadText(races.filter((r) => r.state === state).sort(regularFirst)[0]) }]));
+  }, [office, races, updatedAt, results]);
   const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
   const districtFills = useMemo(() => {
     if (office !== "house" || !focus) return undefined;
@@ -248,6 +259,8 @@ export function Wall({ office }: { office: WallOffice }) {
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
   const closest = useMemo(() => [...races].sort(closestFirst).slice(0, MAX_ROWS), [races]);
+  // The Senate wall shows every toss-up as a card in place of the closest-races table.
+  const tossups = useMemo(() => races.filter(isTossup).sort(closestFirst), [races]);
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
   const stops = useMemo(() => tourStops(tour.map((r) => r.id), TOUR[office].racesPerLeg), [tour, office]);
   const { stop: stopId, upNext } = useTour(stops, TOUR[office]);
@@ -296,9 +309,8 @@ export function Wall({ office }: { office: WallOffice }) {
                 <div className="mt-wall-detail" ref={detail}>
                   {stop && (
                     <div className="mt-wall-spot mt-in" key={stop.id}>
-                      {/* While the estimate shows, the card keeps to the top two so the map keeps its room. */}
                       <ul className="mt-grid one">
-                        <RaceCard race={stop} starred={null} onStar={noop} limit={left ? 2 : undefined} />
+                        <RaceCard race={stop} starred={null} onStar={noop} limit={2} />
                       </ul>
                       {left && <VotesLeftCard race={left} brief />}
                     </div>
@@ -322,15 +334,33 @@ export function Wall({ office }: { office: WallOffice }) {
                   )}
                 </div>
               </section>
-              <section className="mt-wall-cards" aria-label="Closest races" ref={table}>
-                <div className="mt-section-head tight">
-                  <h2>Closest races</h2>
-                  <span className="muted small">{races.length} races</span>
-                </div>
-                <RaceRows races={closest} star={NO_STARS} selectedId={stopId} />
-              </section>
+              {office === "senate" ? (
+                <section className="mt-wall-cards mt-wall-tossups" aria-label="Toss-up races" ref={table}>
+                  <div className="mt-section-head tight">
+                    <h2>Toss-ups</h2>
+                    <span className="muted small">{tossups.length} races</span>
+                  </div>
+                  {tossups.length > 0 ? (
+                    <ul className="mt-grid">
+                      {tossups.map((r) => (
+                        <RaceCard key={r.id} race={r} starred={null} onStar={noop} limit={2} />
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted">No Senate race is rated a toss-up.</p>
+                  )}
+                </section>
+              ) : (
+                <section className="mt-wall-cards" aria-label="Closest races" ref={table}>
+                  <div className="mt-section-head tight">
+                    <h2>Closest races</h2>
+                    <span className="muted small">{races.length} races</span>
+                  </div>
+                  <RaceRows races={closest} star={NO_STARS} selectedId={stopId} />
+                </section>
+              )}
               <aside className="mt-wall-side" aria-label="Latest calls" ref={side}>
-                {closing && <PollSchedule races={races} />}
+                {closing && office !== "senate" && <PollSchedule races={races} />}
                 <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office={office} />
               </aside>
             </div>

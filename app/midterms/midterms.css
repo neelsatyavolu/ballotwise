@@ -841,6 +841,9 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-el .mt-tile-foot:empty { display: none; }
 /* A tile's table takes the tile's spare height in one empty row above the footer, as DDHQ's cards do. */
 .mt-ct.fill { flex: 1 1 auto; height: 100%; }
+/* In a race card the table sits under the card's header, so 100% of the card would push its footer past the bottom
+   edge; the flex growth alone stretches it. */
+.mt .mt-card > .mt-ct.fill { height: auto; }
 .mt-ct-fill { height: 100%; }
 .mt-ct-fill td { height: auto; padding: 0; border-bottom: 1px solid var(--rule); }
 
@@ -897,6 +900,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt .mt-line.hover { stroke: #fff; stroke-width: 1.8; }
 .mt-state-label { fill: #fff; font-family: var(--font-sans), system-ui, sans-serif; font-size: 12px; font-weight: 800; letter-spacing: 0.02em; stroke: #0c0c0c; stroke-width: 3px; stroke-linejoin: round; paint-order: stroke; pointer-events: none; }
 .mt-state-check { font-size: 10.5px; }
+.mt-state-lead { font-size: 10.5px; font-weight: 700; }
 
 /* The map fills its column edge to edge, without a card around it, as DDHQ's forecast maps do. */
 .mt .mt-office > .mt-zoom { padding: 0; border: 0; background: none; }

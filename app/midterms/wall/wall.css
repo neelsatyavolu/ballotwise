@@ -50,6 +50,11 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 .mt-wall [hidden] { display: none !important; }
 /* The closest races fill their column; rows past the bottom are cut off rather than scrolled to. */
 .mt-wall-cards > .mt-rows-wrap { flex: 0 1 auto; min-height: 0; max-height: none; overflow: hidden; }
+/* The Senate's toss-ups in place of that table, two across where they fit. */
+.mt-wall-tossups > .mt-grid { margin: 0; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+/* A wall's cards show the two leading candidates and nothing after them but the count's rows: no link to the rest
+   and no spare height (Wall.tsx passes limit 2). The column headings go too: party colors and numbers read without them. */
+.mt-wall .mt-card .mt-ct-more, .mt-wall .mt-card .mt-ct-fill, .mt-wall .mt-card .mt-ct thead { display: none; }
 .mt-wall .mt-rows { font-size: 15px; }
 .mt-wall .mt-rows td { padding: 6px 8px; }
 /* Upcoming poll closings (closed ones and each wave's list of places dropped), then the calls filling the rest. */
