@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { DEFAULT_FILTERS, explore, flipTo, isCompetitive, isTossup, raceFill } from "@/lib/midterms/explore";
+import { DEFAULT_FILTERS, explore, flipTo, isCalled, isCompetitive, isTossup, raceFill } from "@/lib/midterms/explore";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { useDeskData } from "./desk";
 import { projection } from "@/lib/midterms/forecastTab";
@@ -104,7 +104,7 @@ function RaceMap({ races, updatedAt, source }: { races: RaceSummary[]; updatedAt
     // Ohio and Florida hold Senate specials; a state's regular race, if any, sets its color.
     for (const r of races.filter((x) => x.office === office).sort((a, b) => Number(/special/i.test(a.title)) - Number(/special/i.test(b.title)))) {
       if (out.has(mapKey(r))) continue;
-      out.set(mapKey(r), { fill: raceFill(r, results), tip: r.total ? mapTip(r) : <ForecastTip race={r} updatedAt={updatedAt} />, flip: !!flipTo(r) && (!results || r.total > 0), watch: results && isTossup(r), lean: results && isCompetitive(r) });
+      out.set(mapKey(r), { fill: raceFill(r, results), tip: r.total || isCalled(r) ? mapTip(r) : <ForecastTip race={r} updatedAt={updatedAt} />, flip: !!flipTo(r) && (!results || r.total > 0 || isCalled(r)), watch: results && isTossup(r), lean: results && isCompetitive(r) });
     }
     return out;
   }, [races, office, results, updatedAt]);

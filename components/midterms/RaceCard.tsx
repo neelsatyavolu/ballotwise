@@ -42,7 +42,8 @@ export function PulseTag({ race }: { race: RaceSummary }) {
 export function CardStatus({ race }: { race: RaceSummary }) {
   const now = useClock(60_000);
   const ahead = lead(race.candidates);
-  if (race.candidates.some((c) => c.winner)) return <span className="called">Called</span>;
+  // When the call was made, as DDHQ's "#DecisionMade" line shows it: a race can be called before any votes are in.
+  if (race.candidates.some((c) => c.winner)) return <span className="called">Called{race.call && !race.call.withdrawn ? ` ${stampTime(race.call.at)} ${zoneAbbr(race.call.at)}` : ""}</span>;
   if (ahead) return <span>Lead {ahead.margin.toFixed(1)} pts</span>;
   const final = stateFinal(race.state);
   return <span>{final && final > now ? `Polls close ${stampTime(final)} ${zoneAbbr(final)}` : "No results yet"}</span>;
@@ -56,8 +57,8 @@ export function CardStatus({ race }: { race: RaceSummary }) {
 export function RaceCard({ race, starred, onStar, limit = 3, bare = false }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void; limit?: number; bare?: boolean }) {
   const label = raceLabel(race);
   const title = bare ? label.replace(/ (?:Senate|Governor)\b.*$/, "") : label;
-  // Before votes, the forecast alone; the markets and polls behind it are in the line's hover title.
-  const sub = race.total ? null : signalLine(race.signal, race, true);
+  // Before votes or a call, the forecast alone; the markets and polls behind it are in the line's hover title.
+  const sub = race.total || race.candidates.some((c) => c.winner) ? null : signalLine(race.signal, race, true);
   const card = useRef<HTMLLIElement>(null);
   const left = useVotesLeft(race, useOnScreen(card));
   return (
