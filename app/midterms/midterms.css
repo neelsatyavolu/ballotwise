@@ -781,7 +781,9 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-ct td { height: 34px; padding: 0 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 .mt-ct th:first-child, .mt-ct td:first-child { padding-left: 16px; }
 .mt-ct th:last-child, .mt-ct td:last-child { padding-right: 12px; }
-.mt-ct tbody tr:not(.mt-ct-more, .mt-ct-fill) td:first-child { box-shadow: inset 4px 0 0 var(--p, var(--muted)); }
+/* The party bar is a background, not an inset shadow: with the headings row hidden, Chrome drew the shadow's edge as a
+   stray line along the top of the first row. */
+.mt-ct tbody tr:not(.mt-ct-more, .mt-ct-fill) td:first-child { background-image: linear-gradient(var(--p, var(--muted)), var(--p, var(--muted))); background-size: 4px 100%; background-repeat: no-repeat; }
 .mt-ct-cand { width: 100%; max-width: 0; }
 .mt-ct-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mt-ct-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink); font-weight: 500; }
@@ -801,7 +803,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-pick-on .mt-pick-mark { position: absolute; right: -4px; bottom: -2px; width: 10px; height: 7px; box-shadow: 0 0 0 2px var(--sheet); }
 .mt-ct .mt-avatar { width: 24px; height: 24px; margin: 0; font-size: 9px; }
 .mt-ct-party { color: var(--ink); font-weight: 500; }
-.mt-ct tbody tr.won td { background: color-mix(in srgb, var(--p) 22%, transparent); font-weight: 600; }
+.mt-ct tbody tr.won td { background-color: color-mix(in srgb, var(--p) 22%, transparent); font-weight: 600; }
 .mt-ct .mt-check { color: var(--el-reported); }
 .mt-ct-more td { height: 28px; }
 .mt-ct-more a { color: var(--muted); text-decoration: none; }
@@ -1594,7 +1596,7 @@ button.mt-mock:hover { color: var(--ink); }
 .mt-companion-grid { display: grid; gap: 20px; align-items: start; }
 .mt-companion-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
 @media (min-width: 1100px) {
-  .mt-companion-grid:has(> .mt-proj):has(> .mt-companion-side) { grid-template-columns: minmax(0, 1fr) minmax(300px, 0.45fr); }
+  .mt-companion-grid:has(> :is(.mt-proj, .mt-cny)):has(> .mt-companion-side) { grid-template-columns: minmax(0, 1fr) minmax(300px, 0.45fr); }
 }
 .mt-companion .mt-el-calllist { max-height: none; }
 /* The companion fits its window: the projection and the calls keep inside their own columns, not the page. */
@@ -1640,6 +1642,13 @@ body:has(> .mt-companion) { overflow: hidden; }
 @media (max-width: 900px) {
   .mt-proj-cols { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* The companion's Near you view (CompanionNearYou.tsx): the ballot's races as compact cards, a screenful at a time. */
+.mt-cny { display: flex; flex-direction: column; gap: 8px; min-height: 0; min-width: 0; }
+.mt-cny-cards { flex: 1 1 0; min-height: 0; margin: 0; overflow: hidden; align-content: start; grid-auto-rows: max-content; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.mt-cny-cards > .mt-card[hidden] { display: none; }
+.mt-cny-cards .mt-card :is(.mt-ct-more, .mt-ct-fill, .mt-ct thead) { display: none; }
+.mt-cny-note { margin: 0; }
 
 /* On the main screen, while the pop-up opens on the companion: a short note in the corner. */
 .mt-moment-note { position: fixed; right: 20px; top: 80px; z-index: 46; max-width: min(360px, calc(100vw - 40px)); margin: 0; padding: 10px 16px; background: var(--sheet); border: 1px solid var(--el-line); border-left: 3px solid var(--accent); border-radius: 8px; animation: mt-moment-in 0.18s ease-out; }

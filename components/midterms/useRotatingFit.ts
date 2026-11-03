@@ -1,6 +1,7 @@
 "use client";
 // Shows a list's items a screenful at a time: only the whole items that fit in its box, and, when they don't all fit,
-// the next screenful every ROTATE_MS, back to the first after the last. For card grids on screens nobody scrolls.
+// the next screenful every ROTATE_MS. The list wraps around, so the screenful after the last items is topped up from
+// the first and every screen is full. For card grids on screens nobody scrolls.
 
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
@@ -19,14 +20,20 @@ export function useRotatingFit(box: RefObject<HTMLElement | null>, ms: number | 
     const el = box.current;
     if (!el) return;
     const items = [...el.children] as HTMLElement[];
-    const from = start < items.length ? start : 0;
-    items.forEach((x, i) => (x.hidden = i < from));
+    const n = items.length;
+    const from = start < n ? start : 0;
+    // The list from `from` on, then from the top: laid out in that order with CSS order, so the DOM stays React's.
+    const ordered = [...items.slice(from), ...items.slice(0, from)];
+    ordered.forEach((x, i) => {
+      x.hidden = false;
+      x.style.order = String(i);
+    });
     const bottom = el.getBoundingClientRect().bottom;
-    const past = items.findIndex((x, i) => i >= from && x.getBoundingClientRect().bottom > bottom + 1);
+    const past = ordered.findIndex((x) => x.getBoundingClientRect().bottom > bottom + 1);
     // At least one item shows, even in a box too short for it.
-    const end = past < 0 ? items.length : Math.max(past, from + 1);
-    items.slice(end).forEach((x) => (x.hidden = true));
-    shown.current = { from, count: end - from, total: items.length };
+    const count = past < 0 ? n : Math.max(past, 1);
+    ordered.slice(count).forEach((x) => (x.hidden = true));
+    shown.current = { from, count, total: n };
   };
   // After every render (results change cards' heights) and whenever the box changes size.
   useLayoutEffect(fit);
@@ -43,8 +50,7 @@ export function useRotatingFit(box: RefObject<HTMLElement | null>, ms: number | 
     if (ms === null) return;
     const t = setInterval(() => {
       const { from, count, total } = shown.current;
-      if (count >= total) setStart(0);
-      else setStart(from + count >= total ? 0 : from + count);
+      setStart(count >= total ? 0 : (from + count) % total);
     }, ms);
     return () => clearInterval(t);
   }, [ms]);

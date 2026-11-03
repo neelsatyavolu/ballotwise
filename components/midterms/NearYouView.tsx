@@ -24,6 +24,22 @@ const COLOR = { ticket: "var(--accent)", legislature: "#a855f7", local: "#14b8a6
 const SHOWN = 8;
 
 type Part = { key: keyof typeof COLOR; title: string; note?: string; races: RaceSummary[]; empty?: string };
+type Local = NonNullable<LocalAnswer["local"]>;
+
+/** The tracked races at the voter's address: governor, Senate and House first, as on a ballot, then statewide measures. */
+export function trackedAt(local: Local, races: readonly RaceSummary[]): { ticket: RaceSummary[]; measures: RaceSummary[] } {
+  const mine = races.filter((r) => r.state === local.state && (r.office !== "house" || r.district === local.house));
+  return {
+    ticket: mine.filter((r) => r.office !== "measure").sort((a, b) => TICKET.indexOf(a.office) - TICKET.indexOf(b.office)),
+    measures: mine.filter((r) => r.office === "measure"),
+  };
+}
+
+/** Every race on the voter's ballot in ballot order: the top of the ticket, legislature, city and school, the rest nearby, measures. */
+export function ballotRaces(local: Local, races: readonly RaceSummary[]): RaceSummary[] {
+  const { ticket, measures } = trackedAt(local, races);
+  return [...ticket, ...local.legislature, ...local.yours, ...local.nearby, ...measures];
+}
 
 function Ask({ title, text, href, action }: { title: string; text: string; href: string; action: string }) {
   return (
@@ -151,8 +167,7 @@ export function NearYouView() {
   if (!local) return <Shell><AddressForm onSaved={saved} /></Shell>;
 
   const county = local.source === "county";
-  const mine = (overview.data?.races ?? []).filter((r) => r.state === local.state && (r.office !== "house" || r.district === local.house));
-  const ticket = mine.filter((r) => r.office !== "measure").sort((a, b) => TICKET.indexOf(a.office) - TICKET.indexOf(b.office));
+  const { ticket, measures } = trackedAt(local, overview.data?.races ?? []);
   const parts: Part[] = [
     { key: "ticket", title: "Top of the ticket", races: ticket, empty: overview.data ? "No governor, Senate or House race found for your address." : "Loading…" },
     { key: "legislature", title: "State legislature", races: local.legislature, empty: "No state legislative race found for your districts this year." },
@@ -170,7 +185,7 @@ export function NearYouView() {
         ? "Each of these is for one council district or trustee area. The Census doesn't say which one your address is in; your sample ballot does."
         : "Races civicAPI lists for your city and county. Some are for a district or ward you may not live in; your sample ballot says which are yours.",
     },
-    { key: "measures", title: "Statewide measures", races: mine.filter((r) => r.office === "measure") },
+    { key: "measures", title: "Statewide measures", races: measures },
   ];
   // Sections with nothing to show drop out, except the ones whose absence says something.
   const shown = parts.filter((p) => p.races.length || p.key === "ticket" || p.key === "local");
