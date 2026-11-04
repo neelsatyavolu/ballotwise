@@ -662,7 +662,8 @@ export async function fetchOtherRace(id: number, now: number, baseline: Readonly
 }
 
 /** One search result: enough to list a race and link to its page. */
-export type FoundRace = { id: number; title: string; state: string; type: string; date: string; kind: "local" | "statewide" | "other" };
+/** `url` is set on a race our race page doesn't know (Decision Desk HQ's local races), which opens there instead. */
+export type FoundRace = { id: number; title: string; state: string; type: string; date: string; kind: "local" | "statewide" | "other"; url?: string };
 
 const searchAnswer = z.object({
   races: z

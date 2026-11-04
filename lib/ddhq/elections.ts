@@ -28,13 +28,15 @@ const record = z.object({
   office: z.string().min(1),
   district: z.string().nullish(),
   electionType: z.string().nullish(),
+  /** "City", "Universal" (other local), "Statewide", "State/District", "State Referendum", "Federal", "Federal/District". */
+  level: z.string().nullish(),
   id: z.number().int().positive(),
   slug: z.string().nullish(),
   turnout: z.object({ estimated_votes_mid: count, precincts_in: count, precincts_tot: count }).partial().nullish(),
   toplineResults: z.array(z.object({ firstName: z.string().nullish(), lastName: z.string().nullish(), votes: count, percent: count.nullish(), winner: z.boolean().nullish(), color: z.string().nullish(), party: z.object({ name: z.string().nullish() }).nullish() })),
   totalVotes: count,
 });
-type DdhqRecord = z.output<typeof record>;
+export type DdhqRecord = z.output<typeof record>;
 
 /** Every race record in a page: the JSON objects opening with "race_date", each read whole. */
 export function raceRecords(text: string): DdhqRecord[] {
@@ -106,6 +108,23 @@ export const countySlug = (county: string) =>
   county.replace(/\s+(County|Parish|Borough|Census Area|Municipality|City and Borough)$/i, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const stateSlug = (code: string) => (STATE_NAMES[code] ?? code).toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
+/** "/elections/2026-11-03/california" (a state's page) or ".../california/los-angeles" (a county's) on DDHQ. */
+export const electionPath = (state: string, county?: string) => `/elections/${ELECTION_DATE}/${stateSlug(state)}${county ? `/${countySlug(county)}` : ""}`;
+
+/** The race records on one of DDHQ's election pages, read through the egress in Workers; throws when it can't be read. */
+export async function pageRecords(path: string, wait = WAIT_MS): Promise<DdhqRecord[]> {
+  let egress: Fetcher | undefined;
+  try {
+    egress = appEnv().DDHQ_EGRESS;
+  } catch {
+    // Outside Workers (tests, scripts): DDHQ is asked directly.
+  }
+  const signal = AbortSignal.timeout(wait);
+  const res = egress ? await egress.fetch(new Request(VOTES + path, { redirect: "manual", signal })) : await fetch(VOTES + path, { headers: HEADERS, redirect: "manual", signal });
+  if (!res.ok || !res.headers.get("content-type")?.startsWith("text/x-component")) throw new Error(`HTTP ${res.status}`);
+  return raceRecords(await res.text());
+}
+
 const memo = new Map<string, { at: number; races: RaceSummary[] }>();
 
 /**
@@ -113,20 +132,11 @@ const memo = new Map<string, { at: number; races: RaceSummary[] }>();
  * such page or it can't be read at all.
  */
 export async function countyRaces(state: string, county: string, now: number): Promise<{ races: RaceSummary[]; at: number; stale: boolean } | null> {
-  const path = `/elections/${ELECTION_DATE}/${stateSlug(state)}/${countySlug(county)}`;
+  const path = electionPath(state, county);
   const held = memo.get(path);
   if (held && now - held.at < FRESH_MS) return { ...held, stale: false };
   try {
-    let egress: Fetcher | undefined;
-    try {
-      egress = appEnv().DDHQ_EGRESS;
-    } catch {
-      // Outside Workers (tests, scripts): DDHQ is asked directly.
-    }
-    const signal = AbortSignal.timeout(WAIT_MS);
-    const res = egress ? await egress.fetch(new Request(VOTES + path, { redirect: "manual", signal })) : await fetch(VOTES + path, { headers: HEADERS, redirect: "manual", signal });
-    if (!res.ok || !res.headers.get("content-type")?.startsWith("text/x-component")) throw new Error(`HTTP ${res.status}`);
-    const races = raceRecords(await res.text()).map(ddhqRace);
+    const races = (await pageRecords(path)).map(ddhqRace);
     if (!races.length) throw new Error("no races");
     memo.set(path, { at: now, races });
     return { at: now, races, stale: false };

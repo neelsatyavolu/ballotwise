@@ -67,7 +67,7 @@ export function RaceSearch({ autoFocus = false }: { autoFocus?: boolean }) {
           <ul className="mt-find-list">
             {current.races.map((r) => (
               <li key={r.id}>
-                <Link href={`/midterms/${r.id}`}>
+                <Link href={r.url ?? `/midterms/${r.id}`}>
                   <span className="mt-find-title">{r.title}</span>
                   <span className="mt-find-meta">
                     {[STATE_NAMES[r.state] ?? r.state, r.type, r.date === "2026-11-03" ? null : DAY.format(new Date(`${r.date}T00:00:00Z`))].filter(Boolean).join(" · ")}
@@ -107,7 +107,7 @@ export function RaceSearchButton() {
           </button>
         </div>
         {open && <RaceSearch autoFocus />}
-        <p className="muted small">Results from <a href="https://civicapi.org">civicAPI</a> and <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a>.</p>
+        <p className="muted small">Results from <a href="https://votes.decisiondeskhq.com">Decision Desk HQ</a>, <a href="https://civicapi.org">civicAPI</a> and <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a>.</p>
       </dialog>
     </>
   );
