@@ -57,8 +57,12 @@ describe("votesLeft", () => {
     const counted = 0.125 * 100 + 0.875 * (400 * turnout - 100);
     const quiet = 800 * turnout;
     expect(est.left).toBe(Math.round(quiet + counted));
-    expect(est.leader).toMatchObject({ name: "Dee", votes: Math.round(quiet * 0.6 + counted * 0.6) });
-    expect(est.runnerUp).toMatchObject({ name: "Arr", votes: Math.round(quiet * 0.15 + counted * 0.4) });
+    // The swing moves Quiet past its 2024 split (50/25) toward the full 20 points (60/15), weighed by how much of the
+    // vote is in where it was read, so only partway.
+    const q = est.places.find((p) => p.name === "Quiet")!;
+    expect(q.edge!).toBeGreaterThan(25);
+    expect(q.edge!).toBeLessThan(45);
+    expect(est.leader.name).toBe("Dee");
     expect(est.unknown).toBe(0);
   });
 
@@ -133,6 +137,26 @@ describe("votesLeft", () => {
     expect(bare).toMatchObject({ left: 300, leader: { votes: 180 }, runnerUp: { votes: 120 } });
     // Counted past DDHQ's estimate: nothing left.
     expect(votesLeft(race([county("City", 80, 20, 50)], { expected: 50 }))!.left).toBe(0);
+  });
+
+  it("leans on the race's forecast in a House race barely counted, not on its first batch", () => {
+    // MI-4 on Nov 3: 1% in, the first batch 70/30, while the forecast had it near even (R+4).
+    const forecast = { market: null, polls: null, rating: null, forecast: { odds: { D: 0.35, R: 0.65 }, left: "D", margin: -4 } } as unknown as RaceDetail["signal"];
+    const est = votesLeft(race([county("Part", 70, 30, 1), county("Other", 0, 0, 0)], { office: "house", district: 4, signal: forecast }))!;
+    const dee = (est.leader.name === "Dee" ? est.leader.votes : est.runnerUp.votes) / est.left;
+    expect(dee).toBeGreaterThan(0.45);
+    expect(dee).toBeLessThan(0.52);
+    // Without a forecast, the count's own shares as before.
+    const bare = votesLeft(race([county("Part", 70, 30, 1)], { office: "house", district: 4 }))!;
+    expect((bare.leader.name === "Dee" ? bare.leader.votes : bare.runnerUp.votes) / bare.left).toBeCloseTo(0.7, 2);
+  });
+
+  it("barely moves uncounted counties by a swing read off a sliver of early mail", () => {
+    // South Carolina on Nov 3: a county's first 2% came in 80/20 where 2024 was even, a 60-point swing on paper.
+    const est = votesLeft(race([county("Mail", 800, 200, 2, [5000, 5000, 10_000]), county("Quiet", 0, 0, 0, [50_000, 50_000, 100_000])]))!;
+    const quiet = est.places.find((p) => p.name === "Quiet")!;
+    // The quiet county was even in 2024; a full swing would put it near 80/20.
+    expect(Math.abs(quiet.edge!)).toBeLessThan(10);
   });
 
   it("treats a race with no county breakdown as one region", () => {
