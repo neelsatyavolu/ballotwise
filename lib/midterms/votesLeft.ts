@@ -129,25 +129,32 @@ const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
  * rest of its vote didn't share, and applied whole it handed every uncounted county to them.
  */
 const SWING_EVIDENCE = 0.15;
-/** The most the swing since 2024 can move a county's lean, as a share of the vote (15 points of margin). */
+/** The most the count can move counties' leans from where the forecast puts them, as a share of the vote (15 points of margin). */
 const MAX_SWING = 0.15;
+/** The most the forecast can move counties' 2024 leans, as a share of the vote (30 points of margin). */
+const MAX_SHIFT = 0.3;
 /** A race forecast's spread in points, for turning its odds into a margin when it gives none (as liveProjection.ts does). */
 const FORECAST_SIGMA = 8;
 
 /**
- * Where the race's forecast puts the two leaders, as their shares of the two-party vote, for votes the count can't
- * speak for yet; null without a forecast or without a Democrat and a Republican leading. The forecast's margin when
- * it gives one for the Democrat, else the margin its odds imply.
+ * The race forecast's Democratic lead over the Republican, as a share of the vote; null without a forecast or without
+ * a Democrat and a Republican leading. The forecast's margin when it gives one for the Democrat, else the margin its
+ * odds imply.
  */
-function forecastShares(race: RaceDetail, parties: readonly [string, string]): [number, number] | null {
+function forecastMargin(race: RaceDetail, parties: readonly [string, string]): number | null {
   const side = parties.map(partyOf);
   if (!side.includes("D") || !side.includes("R")) return null;
   const f = race.signal?.forecast;
   const pD = f?.odds?.D !== undefined && f.odds.R !== undefined && f.odds.D + f.odds.R > 0 ? f.odds.D / (f.odds.D + f.odds.R) : null;
   const margin = typeof f?.margin === "number" && f.left === "D" ? f.margin : pD !== null ? FORECAST_SIGMA * phiInverse(Math.min(0.999, Math.max(0.001, pD))) : null;
+  return margin === null ? null : margin / 100;
+}
+
+/** The forecast as the two leaders' two-party shares, for a county with no 2024 vote to lean on; null without one. */
+function forecastShares(margin: number | null, parties: readonly [string, string]): [number, number] | null {
   if (margin === null) return null;
-  const d = clamp01(0.5 + margin / 200);
-  return side[0] === "D" ? [d, 1 - d] : [1 - d, d];
+  const d = clamp01(0.5 + margin / 2);
+  return partyOf(parties[0]) === "D" ? [d, 1 - d] : [1 - d, d];
 }
 
 /** The two leaders' shares of a county's 2024 presidential vote, moved by `swing` (see swingOf); null without a D-R pair. */
@@ -176,13 +183,13 @@ function votesIn(c: CountyResult, name: string, party: string): number {
  * 2024 lean moved by the swing (see leanIn) by how much of its vote is still out (`counted` is the share in). A county
  * that counts its mail or early vote first shows that vote's lean, and what's left there (mostly election-day vote)
  * usually leans the other way, so the count so far only takes over as the county nears done. A House district's
- * counties are only partly in it, so there the count's shares stand alone. With nothing counted, the 2024 lean, else
- * the leaders' shares statewide. Where there's no 2024 lean to lean on (a House district), the race's forecast takes
- * its place (`prior`, see forecastShares), so a district 1% counted isn't split by its first batch alone.
+ * counties are only partly in it, but a county's lean still says how its part leans (a city's vote leans its way), so
+ * it counts there too. With nothing counted, the lean, else the race's forecast (`prior`), else the leaders' shares
+ * statewide; a county with no 2024 vote leans on the forecast, so a district 1% counted isn't split by its first batch.
  */
-function sharesIn(c: CountyResult, counted: number, names: readonly [string, string], parties: readonly [string, string], statewide: readonly [number, number], swing: number, whole: boolean, prior: readonly [number, number] | null): [number, number] {
-  const lean = whole ? leanIn(c, parties, swing) : null;
-  if (c.total === 0) return lean ?? (prior ? [...prior] : leanIn(c, parties, swing) ?? [...statewide]);
+function sharesIn(c: CountyResult, counted: number, names: readonly [string, string], parties: readonly [string, string], statewide: readonly [number, number], swing: number, prior: readonly [number, number] | null): [number, number] {
+  const lean = leanIn(c, parties, swing);
+  if (c.total === 0) return lean ?? (prior ? [...prior] : [...statewide]);
   const [a, b] = names.map((n, i) => votesIn(c, n, parties[i]) / c.total);
   const base = lean ?? prior;
   return base ? [counted * a + (1 - counted) * base[0], counted * b + (1 - counted) * base[1]] : [a, b];
@@ -223,14 +230,23 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
     const left = leftIn(c, turnout, statewide);
     return { c, left, counted: left === null ? 0 : c.total + left > 0 ? c.total / (c.total + left) : 1 };
   });
-  // The swing read off the counted counties, weighed by how much of the expected vote is in where it was read
-  // (SWING_EVIDENCE), and capped (MAX_SWING).
-  const evidence = sum(estimated.map(({ c, counted }) => (c.pres2024?.total && c.total > 0 ? c.total * counted : 0))) / Math.max(1, sum(estimated.map(({ c, left }) => c.total + (left ?? 0))));
-  const swing = Math.max(-MAX_SWING, Math.min(MAX_SWING, swingOf(estimated) * (evidence / (evidence + SWING_EVIDENCE))));
-  const prior = forecastShares(race, parties);
+  // Counties start from their 2024 leans moved together to where this year's forecast puts the race (`shift`): a city
+  // still leans its way, but in a year the forecast reads 10 points better for Democrats, every county does too.
+  const margin = forecastMargin(race, parties);
+  const leaned = estimated.filter(({ c }) => c.pres2024?.total);
+  const leanWeight = sum(leaned.map(({ c, left }) => c.total + (left ?? 0)));
+  const lean2024 = leanWeight > 0 ? sum(leaned.map(({ c, left }) => ((c.pres2024!.harris - c.pres2024!.trump) / c.pres2024!.total) * (c.total + (left ?? 0)))) / leanWeight : null;
+  const shift = margin !== null && lean2024 !== null ? Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, margin - lean2024)) : 0;
+  // Then the swing the counted counties show takes over from the forecast's, weighed by how much of the expected vote
+  // is in where it was read (SWING_EVIDENCE) and capped (MAX_SWING). A House district's counted part of a county can't
+  // be held against the whole county's 2024 vote, so there the forecast's stands.
+  const evidence = statewide ? sum(estimated.map(({ c, counted }) => (c.pres2024?.total && c.total > 0 ? c.total * counted : 0))) / Math.max(1, sum(estimated.map(({ c, left }) => c.total + (left ?? 0)))) : 0;
+  const read = evidence > 0 ? swingOf(estimated) : shift;
+  const swing = shift + Math.max(-MAX_SWING, Math.min(MAX_SWING, read - shift)) * (evidence / (evidence + SWING_EVIDENCE));
+  const prior = forecastShares(margin, parties);
   const byCounty = estimated.flatMap(({ c, left, counted }) => {
     if (!left) return [];
-    const [sa, sb] = sharesIn(c, counted, names, parties, overall, swing, statewide, prior);
+    const [sa, sb] = sharesIn(c, counted, names, parties, overall, swing, prior);
     return [{ name: c.name, left, a: left * sa, b: left * sb, edge: sa + sb > 0 ? (sa - sb) * 100 : null }];
   });
   const rows = race.expected === undefined ? byCounty : toExpected(byCounty, Math.max(0, race.expected - race.total), race.title, overall);

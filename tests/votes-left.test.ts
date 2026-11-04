@@ -97,9 +97,30 @@ describe("votesLeft", () => {
     expect(Math.abs(est.leader.votes + est.runnerUp.votes - est.left)).toBeLessThanOrEqual(1);
   });
 
-  it("keeps a House county's own count shares, since only part of the county is in the district", () => {
+  it("splits a House county's remaining vote toward its 2024 lean too, as only its shares (not its size) carry over", () => {
+    // Part: 70/30 so far at half its precincts, even in 2024; Other: 50/50 with no 2024 vote to go on.
     const est = votesLeft(race([county("Part", 70, 30, 50, [500, 500, 1000]), county("Other", 50, 50, 50)], { office: "house", district: 1 }))!;
-    expect(est.leader.votes / est.left).toBeCloseTo((70 + 50) / 200, 2);
+    // Part's 100 left: half the count's 70%, half its 2024 50%, so 60 to Dee; Other's 100 split 50/50.
+    expect(est.leader.votes / est.left).toBeCloseTo((60 + 50) / 200, 2);
+    // Only the counties' counts size what's left: a House district holds just part of each.
+    expect(est.left).toBe(200);
+  });
+
+  it("starts each county from its own 2024 lean shifted to this year's forecast, so a city's vote still out leans its way", () => {
+    // A city (2024 D+40) and a countryside (2024 R+40), the same size, both barely counted; the forecast has the race even.
+    const forecast = { market: null, polls: null, rating: null, forecast: { odds: { D: 0.5, R: 0.5 }, left: "D", margin: 0 } } as unknown as RaceDetail["signal"];
+    const est = votesLeft(race([county("City", 5, 5, 1, [7000, 3000, 10_000]), county("Country", 5, 5, 1, [3000, 7000, 10_000])], { signal: forecast }))!;
+    // A place's edge is toward the race's leader; read it toward the Democrat.
+    const dEdge = (name: string) => est.places.find((p) => p.name === name)!.edge! * (est.leader.name === "Dee" ? 1 : -1);
+    expect(dEdge("City")).toBeGreaterThan(30);
+    expect(dEdge("Country")).toBeLessThan(-30);
+    // Shifted to the even forecast, the two cancel out.
+    expect(Math.abs(est.leader.votes - est.runnerUp.votes) / est.left).toBeLessThan(0.05);
+    // A forecast 10 points to the Democrat moves both counties that way.
+    const leanD = { ...forecast, forecast: { ...forecast!.forecast!, odds: { D: 0.9, R: 0.1 }, margin: 10 } } as unknown as RaceDetail["signal"];
+    const d10 = votesLeft(race([county("City", 5, 5, 1, [7000, 3000, 10_000]), county("Country", 5, 5, 1, [3000, 7000, 10_000])], { signal: leanD }))!;
+    const deeShare = (d10.leader.name === "Dee" ? d10.leader.votes : d10.runnerUp.votes) / d10.left;
+    expect(deeShare).toBeGreaterThan(0.53);
   });
 
   it("leaves out House counties with nothing counted, since a district covers only parts of them", () => {
