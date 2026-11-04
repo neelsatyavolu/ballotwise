@@ -6,6 +6,7 @@ import { adoptMock } from "@/lib/midterms/clock";
 import type { Panel } from "@/lib/midterms/screens";
 import type { Overview } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
+import { CompanionGovernors } from "./CompanionGovernors";
 import { CompanionNearYou } from "./CompanionNearYou";
 import { ControlStrip } from "./ControlStrip";
 import { LiveProjection } from "./LiveProjection";
@@ -16,13 +17,18 @@ import { setSolo, useScreens } from "./useScreens";
 
 const noSubscribe = () => () => {};
 
-/** What the companion's main area shows: the live projection or the races on the voter's ballot. Kept in this browser. */
-type View = "projection" | "near";
+/**
+ * What the companion's main area shows: the live projection, the races on the voter's ballot, or the governors laid
+ * out like a wall. Kept in this browser.
+ */
+type View = "projection" | "near" | "governors";
 const VIEW_KEY = "mt-companion-view";
+const VIEWS: readonly View[] = ["projection", "near", "governors"];
 
 function readView(): View {
   try {
-    return localStorage.getItem(VIEW_KEY) === "near" ? "near" : "projection";
+    const saved = localStorage.getItem(VIEW_KEY);
+    return VIEWS.find((v) => v === saved) ?? "projection";
   } catch {
     return "projection";
   }
@@ -59,6 +65,9 @@ function Body({ hidden }: { hidden: readonly Panel[] }) {
           <button type="button" aria-pressed={view === "near"} onClick={() => setView("near")}>
             Near you
           </button>
+          <button type="button" aria-pressed={view === "governors"} onClick={() => setView("governors")}>
+            Governors
+          </button>
         </div>
         {data && <MomentPopup data={data} inCompanion />}
         <button type="button" className="mt-el-quiet small" onClick={() => setSolo(true)}>Use this tab normally</button>
@@ -73,7 +82,7 @@ function Panels({ data, shows, view }: { data: Overview; shows: (p: Panel) => bo
     <>
       {shows("control") && <ControlStrip data={data} />}
       <div className="mt-companion-grid">
-        {view === "near" ? <CompanionNearYou races={data.races} /> : <LiveProjection races={data.races} />}
+        {view === "near" ? <CompanionNearYou races={data.races} /> : view === "governors" ? <CompanionGovernors data={data} /> : <LiveProjection races={data.races} />}
         {(shows("calls") || shows("schedule")) && (
           <div className="mt-companion-side">
             {shows("calls") && <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" fill />}

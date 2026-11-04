@@ -43,7 +43,7 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
   // On the Senate's map each state's label carries its race's lead, as on the Senate wall.
   const fills = useMemo(() => {
     const base = stateFills(office, races, updatedAt, results);
-    return office === "senate" ? withLeads(base, races) : base;
+    return office === "senate" || office === "governor" ? withLeads(base, races) : base;
   }, [office, races, updatedAt, results]);
   const nationDistricts = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
   const inState = useMemo(() => races.filter((r) => r.state === focus).sort((a, b) => regularFirst(a, b) || closestFirst(a, b) || (a.district ?? 0) - (b.district ?? 0)), [races, focus]);
