@@ -52,12 +52,12 @@ function Reporting({ race }: { race: RaceSummary }) {
 
 /**
  * A race's candidates as a results-desk table: a party bar, photo or initials, name, party, votes and share on each
- * row, then `status` (when polls close, or how the count stands) with the total votes, the estimated votes still to
+ * row, then `status` (when polls close, or how the count stands; null leaves the row out) with the total votes, the estimated votes still to
  * count when `left` is given, then how much is reported.
  * `limit` shows only the leaders, with a link to the rest; `short` uses last names for narrow cards; `share` adds a
  * bar beside each percentage; `fill` stretches the table to its card's height, keeping the footer rows at the bottom.
  */
-export function CandidateTable({ race, status, left = null, limit, short = false, share = false, fill = false }: { race: RaceSummary; status: ReactNode; left?: LeftEstimate | null; limit?: number; short?: boolean; share?: boolean; fill?: boolean }) {
+export function CandidateTable({ race, status, left = null, limit, short = false, share = false, fill = false }: { race: RaceSummary; status: ReactNode | null; left?: LeftEstimate | null; limit?: number; short?: boolean; share?: boolean; fill?: boolean }) {
   // A local race found by search is carried as a "measure", but a contest between candidates still gets their columns.
   const measure = race.office === "measure" && race.local?.kind !== "candidates";
   // Before votes, the contenders lead (see ballotOrder), so a card's top rows aren't civicAPI's listing order.
@@ -126,11 +126,13 @@ export function CandidateTable({ race, status, left = null, limit, short = false
         )}
       </tbody>
       <tfoot>
-        <tr className="mt-ct-status">
-          <td colSpan={cols - 2}>{status}</td>
-          <td className="num">{race.total > 0 && fmt(race.total)}</td>
-          <td />
-        </tr>
+        {status !== null && (
+          <tr className="mt-ct-status">
+            <td colSpan={cols - 2}>{status}</td>
+            <td className="num">{race.total > 0 && fmt(race.total)}</td>
+            <td />
+          </tr>
+        )}
         {left !== null && (
           <tr className="mt-ct-left" title={`Estimated votes still to count, and who they'd add the most to. ${VOTES_LEFT_CAVEAT}`}>
             <td colSpan={cols - 2}>~{approx(left.left)} left</td>

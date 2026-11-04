@@ -851,6 +851,8 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-ct-status td:first-child { white-space: normal; }
 .mt-ct-status .mt-res-status { min-height: 18px; }
 .mt-ct-status .called { color: var(--el-reported); font-weight: 600; }
+.mt-card-called { flex: none; white-space: nowrap; font-size: 12px; }
+.mt-card-called .called { color: var(--el-reported); font-weight: 600; }
 .mt-ct-report td { border-bottom: 0; }
 /* The estimated votes still to count, under the counted total. */
 .mt-ct-left .num { color: var(--ink); }

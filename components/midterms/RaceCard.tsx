@@ -39,11 +39,12 @@ export function PulseTag({ race }: { race: RaceSummary }) {
 }
 
 /** Where a card's count stands, for the footer of its candidates table: called, the lead, or when polls close. */
-export function CardStatus({ race }: { race: RaceSummary }) {
+/** `zone` adds the time zone to a call's time ("PT"); a card's header leaves it out for room. */
+export function CardStatus({ race, zone = true }: { race: RaceSummary; zone?: boolean }) {
   const now = useClock(60_000);
   const ahead = lead(race.candidates);
   // When the call was made, as DDHQ's "#DecisionMade" line shows it: a race can be called before any votes are in.
-  if (race.candidates.some((c) => c.winner)) return <span className="called">Called{race.call && !race.call.withdrawn ? ` ${stampTime(race.call.at)} ${zoneAbbr(race.call.at)}` : ""}</span>;
+  if (race.candidates.some((c) => c.winner)) return <span className="called">Called{race.call && !race.call.withdrawn ? ` ${stampTime(race.call.at)}${zone ? ` ${zoneAbbr(race.call.at)}` : ""}` : ""}</span>;
   // A connected screen showing civicAPI's count until DDHQ posts its first votes says so.
   if (ahead) return <span title={race.countFrom === "civic" ? "civicAPI's count, which is ahead of Decision Desk HQ's" : undefined}>Lead {ahead.margin.toFixed(1)} pts{race.countFrom === "civic" ? " · civicAPI" : ""}</span>;
   const final = stateFinal(race.state);
@@ -62,14 +63,19 @@ export function RaceCard({ race, starred, onStar, limit = 3, bare = false }: { r
   const sub = race.total || race.candidates.some((c) => c.winner) ? null : signalLine(race.signal, race, true);
   const card = useRef<HTMLLIElement>(null);
   const left = useVotesLeft(race, useOnScreen(card));
+  // A called race's call time goes up by its name in place of its rating, and the status row (the call and the vote
+  // total) is left out.
+  const called = race.candidates.some((c) => c.winner);
   return (
     <li className="mt-card" data-race={race.id} ref={card}>
       <div className="mt-card-top">
         <Link href={`/midterms/${race.id}`} className="mt-card-title" title={title === label ? undefined : label}>
           {title}
         </Link>
+        {called && <span className="mt-card-called"><CardStatus race={race} zone={false} /></span>}
         <PulseTag race={race} />
-        <RatingTag rating={race.rating} signal={race.signal} />
+        {/* Once called, the pre-election rating gives way to the call's time. */}
+        {!called && <RatingTag rating={race.rating} signal={race.signal} />}
         {starred !== null && <StarButton starred={starred} label={label} onToggle={() => onStar(race.id)} />}
       </div>
       {race.about && <p className="mt-card-about" title={race.about.text}>{race.about.text}</p>}
@@ -79,7 +85,7 @@ export function RaceCard({ race, starred, onStar, limit = 3, bare = false }: { r
           {race.candidates.map((c) => <span key={c.name} style={{ width: `${c.pct}%`, background: partyColor(c) }} />)}
         </div>
       )}
-      <CandidateTable race={race} limit={limit} short fill status={<CardStatus race={race} />} left={left} />
+      <CandidateTable race={race} limit={limit} short fill status={called ? null : <CardStatus race={race} />} left={left} />
     </li>
   );
 }
