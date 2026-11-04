@@ -87,8 +87,9 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 
 /* A super-ultrawide (32:9) is wider than the map can use at its height: the spare width goes to the cards. */
 @media (min-aspect-ratio: 3 / 1) {
-  .mt-wall-body { grid-template-columns: minmax(0, 2.4fr) minmax(0, 1.8fr); }
-  .mt-wall-tour { grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr); }
+  /* The toured race and what's next are a normal card's width (like the grid's), and the rest goes to the grid. */
+  .mt-wall-body { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.6fr); }
+  .mt-wall-tour { grid-template-columns: minmax(0, 1fr) 270px; }
 }
 
 /* The toured race's card, and its card in the grid beside the map, outlined (Wall.tsx). */

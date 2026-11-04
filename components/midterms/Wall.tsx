@@ -7,7 +7,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { readMock } from "@/lib/midterms/clock";
-import { isTossup, isWatch, watchFirst } from "@/lib/midterms/explore";
+import { isCalled, isTossup, isWatch, watchFirst } from "@/lib/midterms/explore";
 import { countdown, formatTime, nextWave, showsResults } from "@/lib/midterms/polls";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { autoScale, nextScale, TOUR, tourRaces, tourStops, type TourPlan } from "@/lib/midterms/wall";
@@ -32,6 +32,12 @@ const MAX_CARDS = 60;
  * third); an ultrawide stacks them beside the map, as many as fit, then lists the rest of the tour as rows.
  */
 const UP_NEXT = 3;
+/**
+ * The House's grid follows its toss-ups with this many leans, those nearest a toss-up (counting ones by their lead,
+ * the rest by their forecast). Kept short: where the grid rotates (it doesn't all fit), each lean adds to the time
+ * before the toss-ups come around again.
+ */
+const CLOSE_LEANS = 8;
 /** How far a card starts below its place as it fades in (.mt-in in midterms.css), plus a pixel of rounding. */
 const SLIDE_PX = 5;
 /** No star column on a wall: nothing on it is clicked. */
@@ -264,9 +270,15 @@ export function Wall({ office }: { office: WallOffice }) {
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
   // The cards beside the map: the Senate's closest races (counting toss-ups and leans first), as many as fit; the
-  // House's toss-ups, a screenful at a time when they don't all fit.
+  // House's toss-ups and then its closest leans (CLOSE_LEANS), a screenful at a time when they don't all fit.
   // Toss-ups that look set to flip come first (watchFirst).
-  const cards = useMemo(() => (office === "senate" ? [...races].sort(watchFirst).slice(0, MAX_CARDS) : races.filter(isTossup).sort(watchFirst)), [races, office]);
+  const cards = useMemo(
+    () =>
+      office === "senate"
+        ? [...races].sort(watchFirst).slice(0, MAX_CARDS)
+        : [...races.filter(isTossup).sort(watchFirst), ...races.filter((r) => r.rating?.startsWith("lean") && !isCalled(r)).sort(watchFirst).slice(0, CLOSE_LEANS)],
+    [races, office],
+  );
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
   // A card clicked pins the map to its race until it's clicked again. Otherwise, with one toss-up left counting, the
   // map stays on it; with more, it tours.
@@ -360,9 +372,9 @@ export function Wall({ office }: { office: WallOffice }) {
                   )}
                 </div>
               </section>
-              <section className="mt-wall-cards" aria-label={office === "senate" ? "Closest races" : "Toss-up races"}>
+              <section className="mt-wall-cards" aria-label={office === "senate" ? "Closest races" : "Toss-ups and closest leans"}>
                 <div className="mt-section-head tight">
-                  <h2>{office === "senate" ? "Closest races" : "Toss-ups"}</h2>
+                  <h2>{office === "senate" ? "Closest races" : "Toss-ups and closest leans"}</h2>
                   <span className="muted small">{office === "senate" ? `Counting toss-ups, then leans, first · ${races.length} races` : `${cards.length} races`}</span>
                 </div>
                 <ul className="mt-grid" ref={grid} onClickCapture={pin}>
