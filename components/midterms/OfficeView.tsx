@@ -82,7 +82,6 @@ function Year2024Toggle({ on, onChange }: { on: boolean; onChange: (on: boolean)
   );
 }
 
-/** How each state looks on this office's national map. */
 /** `fills` with each state's label carrying its race's lead ("+6.4"; the regular race where there are two), once counted. */
 export function withLeads(fills: Map<string, Fill>, races: readonly RaceSummary[]): Map<string, Fill> {
   return new Map(
@@ -93,6 +92,7 @@ export function withLeads(fills: Map<string, Fill>, races: readonly RaceSummary[
   );
 }
 
+/** How each state looks on this office's national map. */
 export function stateFills(office: Office, races: RaceSummary[], updatedAt: number | null = null, results = false): Map<string, Fill> {
   const byState = new Map<string, RaceSummary[]>();
   for (const r of races) byState.set(r.state, [...(byState.get(r.state) ?? []), r]);
@@ -178,7 +178,11 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const updatedAt = data?.ratings.updatedAt ?? null;
   // From election day on, maps drop the forecast and fill in only as results arrive.
   const results = showsResults(useClock(60_000));
-  const fillsNow = useMemo(() => stateFills(office, races, updatedAt, results), [office, races, updatedAt, results]);
+  // A statewide office's states also carry their race's lead under the name ("+6.4"), as on the walls.
+  const fillsNow = useMemo(() => {
+    const base = stateFills(office, races, updatedAt, results);
+    return office === "senate" || office === "governor" ? withLeads(base, races) : base;
+  }, [office, races, updatedAt, results]);
   const fills = useMemo(() => (past ? states2024(fillsNow) : fillsNow), [past, fillsNow]);
   const nationDistrictsNow = useMemo(() => (office === "house" ? nationDistrictFills(races, updatedAt, results) : undefined), [office, races, updatedAt, results]);
   const nationDistricts = useMemo(() => (past && nationDistrictsNow ? nationDistricts2024(nationDistrictsNow) : nationDistrictsNow), [past, nationDistrictsNow]);

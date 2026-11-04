@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchOtherRace, resetCivicMemo, searchRaces, searchResults } from "../lib/midterms/civic";
+import { fetchOtherRace, fetchRace, resetCivicMemo, searchRaces, searchResults } from "../lib/midterms/civic";
 import { LAST_CLOSE, summarizeOther } from "../lib/midterms/races";
 import { stateCloses } from "../lib/midterms/polls";
 
@@ -106,5 +106,26 @@ describe("fetchOtherRace", () => {
     const found = (await fetchOtherRace(161607, AFTER_POLLS + 60_000, BASELINE))!;
     expect(found.stale).toBe(true);
     expect(found.race.total).toBe(200);
+  });
+});
+
+describe("fetchRace", () => {
+  it("serves the last good copy from the shared edge cache when civicAPI fails and this server has none", async () => {
+    const store = new Map<string, Response>();
+    const keyOf = (k: Request | string) => (typeof k === "string" ? k : k.url);
+    vi.stubGlobal("caches", { default: { match: async (k: Request | string) => store.get(keyOf(k))?.clone(), put: async (k: Request | string, r: Response) => void store.set(keyOf(k), r.clone()) } });
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(mayor)));
+    const summary = summarizeOther(mayor)!;
+    const first = await fetchRace(summary, AFTER_POLLS, BASELINE);
+    // Another server, with no copy of its own, while civicAPI is overloaded.
+    resetCivicMemo();
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ code: "CIVICAPI_OVERLOADED" }, { status: 503 })));
+    const second = await fetchRace(summary, AFTER_POLLS + 60_000, BASELINE);
+    expect(second).toMatchObject({ stale: true, fetchedAt: AFTER_POLLS });
+    expect(second.race.counties).toEqual(first.race.counties);
+    // Nothing cached anywhere: the failure stands.
+    resetCivicMemo();
+    store.clear();
+    await expect(fetchRace(summary, AFTER_POLLS + 120_000, BASELINE)).rejects.toThrow();
   });
 });

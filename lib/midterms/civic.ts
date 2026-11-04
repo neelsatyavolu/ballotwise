@@ -496,17 +496,50 @@ function refreshAfter(memo: Stored, ratings: readonly RatedRace[], now: number, 
 }
 
 /** One tracked race (from the catalog) with county results. */
+/**
+ * How long a race page waits on civicAPI for one race (retries included) before it falls back to the last copy. On
+ * election night civicAPI answered a race in about 1.5 seconds while its searches were overloaded; without a limit a
+ * page waited up to 50 seconds for a 503.
+ */
+const RACE_WAIT_MS = 12_000;
+/** How long the last good copy of a race is kept in the data center's shared cache, to stand in when civicAPI fails. */
+const RACE_KEEP_S = 15 * 60;
+const keptUrl = (id: number) => `https://ballotwise.internal/civic-race/${id}`;
+/** The Workers cache shared by every isolate in the data center; absent outside Workers (tests, scripts). */
+const edgeCache = (): Cache | null => (typeof caches === "undefined" ? null : (caches as unknown as { default?: Cache }).default ?? null);
+
+async function keepRace(id: number, at: number, race: RaceDetail): Promise<void> {
+  try {
+    await edgeCache()?.put(keptUrl(id), Response.json({ at, race }, { headers: { "cache-control": `max-age=${RACE_KEEP_S}` } }));
+  } catch {
+    // A cache that won't take it only loses the fallback.
+  }
+}
+
+async function keptRace(id: number): Promise<Memo<RaceDetail> | null> {
+  try {
+    const hit = await edgeCache()?.match(keptUrl(id));
+    const kept = hit ? ((await hit.json()) as { at?: unknown; race?: unknown }) : null;
+    return kept && typeof kept.at === "number" && kept.race && typeof kept.race === "object" ? { at: kept.at, value: kept.race as RaceDetail } : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchRace(summary: RaceSummary, now: number, baseline: Readonly<Record<string, readonly [number, number, number]>>): Promise<Fetched<{ race: RaceDetail }>> {
   const memo = raceMemo.get(summary.id);
   if (memo && now - memo.at < FRESH_MS) return { race: memo.value, fetchedAt: memo.at, stale: false };
   try {
-    const input = await civic(`race/${summary.id}`);
+    const input = await civic(`race/${summary.id}`, Date.now() + RACE_WAIT_MS);
     const detail = raceDetail(summary, input, baseline, now);
     const race = resultsHidden(summary.state, now, isTestData(input)) ? blankDetail(detail) : detail;
     raceMemo.set(summary.id, { at: now, value: race });
+    await keepRace(summary.id, now, race);
     return { race, fetchedAt: now, stale: false };
   } catch (err) {
-    if (memo) return { race: memo.value, fetchedAt: memo.at, stale: true };
+    // This server's own copy, else the newest any server here kept: a page shows slightly old counties, not an error.
+    const kept = memo ?? (await keptRace(summary.id));
+    if (kept) return { race: kept.value, fetchedAt: kept.at, stale: true };
     throw err;
   }
 }
