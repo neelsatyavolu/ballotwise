@@ -1,4 +1,5 @@
 import type { Districts } from "../ballot/census";
+import { countyRaces } from "../ddhq/elections";
 import { searchLive } from "./civic";
 import { countyRacesFor, normal } from "./county";
 import countyNames from "./countyNames.json";
@@ -20,13 +21,15 @@ export type LocalRaces = {
   legislature: RaceSummary[];
   yours: RaceSummary[];
   nearby: RaceSummary[];
-  source: "county" | "civicAPI";
+  /** The state's ballot measures from DDHQ's county page, statewide counts, to stand in where civicAPI's lag. */
+  measures?: RaceSummary[];
+  source: "ddhq" | "county" | "civicAPI";
   fetchedAt: number;
   stale: boolean;
 };
 /** What /api/midterms/local answers: `local` is null until the voter saves an address. */
 export type LocalAnswer = { fetchedAt: number; stale?: boolean; local: Omit<LocalRaces, "fetchedAt" | "stale"> | null };
-type CityAndCounty = Pick<LocalRaces, "yours" | "nearby" | "source" | "fetchedAt" | "stale">;
+type CityAndCounty = Pick<LocalRaces, "yours" | "nearby" | "source" | "fetchedAt" | "stale" | "measures">;
 
 /** "Palo Alto city" → "Palo Alto": the Census adds the kind of place to its names. */
 const placeName = (place: string | null) => place?.replace(/\s+(city|town|village|borough|CDP|zona urbana)$/i, "") ?? null;
@@ -83,7 +86,50 @@ async function legislature(districts: Districts, state: string, now: number): Pr
   return { races, stale: answers.some((a) => a.status === "rejected" || a.value.stale) };
 }
 
+/** Words that name a school district's kind rather than the district: "Palo Alto Unified School District" → "palo alto". */
+const SCHOOL_KIND = /\b(school|district|elementary|high|joint|union|unified|board|of|education|trustees?|sd|hsd|esd|usd)\b/g;
+const schoolCore = (name: string) => normal(name).replace(SCHOOL_KIND, " ").replace(/\s+/g, " ").trim();
+/** A contest for part of a city or district (a council district, a trustee area), which the Census can't place an address in. */
+const SUB_AREA = /,\s*District\s+\S+$|\b(Trustee Area|Ward|District)\s+\d+[A-Z]?\b/i;
+/** A statewide measure on a county page, named by its number ("Proposition 1 - …"), not by a place ("Palo Alto Measure J"). */
+const STATEWIDE_MEASURE = /^(Proposition|Question|Amendment|Constitutional Amendment|Issue|Measure|Initiative|Referendum)\s+\d/i;
+
+/**
+ * The address's races among a DDHQ county page's: its city's, its school districts' and its county's, `yours` unless
+ * for part of one (a council district, a trustee area), which go to `nearby`; and the state's measures.
+ */
+export function pickDdhq(races: readonly RaceSummary[], districts: Districts, state: string, place: string | null): Pick<CityAndCounty, "yours" | "nearby" | "measures"> {
+  const county = (districts.county ?? "").replace(/\s+(County|Parish|Borough)$/i, "");
+  const schools = [districts.schoolDistrict, districts.highSchoolDistrict].filter((s): s is string => !!s).map(schoolCore).filter(Boolean);
+  const mine = races.filter((r) => {
+    const title = r.title;
+    if (STATEWIDE_MEASURE.test(title)) return false;
+    if (place && names(title.split(/\s+(Measure|City Council|Mayor|Council)\b/)[0], place)) return true;
+    if (/school|education|trustees/i.test(title) && schools.includes(schoolCore(title.split(/\s+(school board|Measure|Board of)\b/i)[0]))) return true;
+    return !!county && new RegExp(`^${escapeRe(county)} County\\b`, "i").test(title);
+  });
+  return {
+    yours: mine.filter((r) => !SUB_AREA.test(r.title)),
+    nearby: mine.filter((r) => SUB_AREA.test(r.title)),
+    measures: races.filter((r) => STATEWIDE_MEASURE.test(r.title) && r.state === state),
+  };
+}
+
+/** The address's races from DDHQ's county page (see pickDdhq); null when DDHQ has no page for the county or none match. */
+async function fromDdhq(districts: Districts, state: string, place: string | null, now: number): Promise<CityAndCounty | null> {
+  if (!districts.county) return null;
+  const page = await countyRaces(state, districts.county, now);
+  if (!page) return null;
+  const picked = pickDdhq(page.races, districts, state, place);
+  if (!picked.yours.length && !picked.nearby.length) return null;
+  return { source: "ddhq", ...picked, fetchedAt: page.at, stale: page.stale };
+}
+
 async function cityAndCounty(districts: Districts, state: string | null, place: string | null, now: number): Promise<CityAndCounty> {
+  // DDHQ's county page first, where it has one: every local contest with its count and expected vote.
+  const ddhq = state ? await fromDdhq(districts, state, place, now).catch(() => null) : null;
+  if (ddhq) return ddhq;
+
   // Santa Clara County publishes every local contest; its city and school districts say which are on this ballot.
   if (districts.state === "California" && districts.county === "Santa Clara County") {
     const schools = [districts.schoolDistrict, districts.highSchoolDistrict].filter((s): s is string => !!s);

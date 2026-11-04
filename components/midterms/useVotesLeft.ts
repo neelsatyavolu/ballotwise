@@ -49,7 +49,11 @@ const estimable = (race: RaceSummary) => race.total > 0 && race.candidates.lengt
 export function useVotesLeft(race: RaceSummary, onScreen: boolean): LeftEstimate | null {
   const [seen, setSeen] = useState(false);
   if (onScreen && !seen) setSeen(true);
-  const wanted = (onScreen || seen) && estimable(race);
+  // A local race from DDHQ carries its expected vote: what's left is that less the count, split as counted so far,
+  // with no county breakdown to fetch (our race page doesn't know these races).
+  const own = race.local && race.expected !== undefined;
+  const wanted = (onScreen || seen) && estimable(race) && !own;
   const detail = useLive<{ race: RaceDetail }>(wanted ? `/api/midterms/race/${race.id}` : null).data?.race;
+  if (own) return estimable(race) ? leftOf({ ...race, pollsClose: null, updated: null, counties: [] }) : null;
   return wanted && detail?.id === race.id ? leftOf(detail) : null;
 }

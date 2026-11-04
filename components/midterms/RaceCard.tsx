@@ -69,7 +69,8 @@ export function RaceCard({ race, starred, onStar, limit = 3, bare = false }: { r
   return (
     <li className="mt-card" data-race={race.id} ref={card}>
       <div className="mt-card-top">
-        <Link href={`/midterms/${race.id}`} className="mt-card-title" title={title === label ? undefined : label}>
+        {/* A local race from Decision Desk HQ's county pages opens there: our race page doesn't know it. */}
+        <Link href={race.local && race.source?.name === "Decision Desk HQ" ? race.source.url : `/midterms/${race.id}`} className="mt-card-title" title={title === label ? undefined : label}>
           {title}
         </Link>
         {called && <span className="mt-card-called"><CardStatus race={race} zone={false} /></span>}

@@ -26,12 +26,32 @@ const SHOWN = 8;
 type Part = { key: keyof typeof COLOR; title: string; note?: string; races: RaceSummary[]; empty?: string };
 type Local = NonNullable<LocalAnswer["local"]>;
 
+/** A statewide measure's number ("proposition 1"), to match the same measure across sources. */
+const measureKey = (title: string) => title.match(/\b(Proposition|Question|Amendment|Measure|Issue|Initiative|Referendum)\s+(\d+[A-Z]?)\b/i)?.slice(1, 3).join(" ").toLowerCase() ?? null;
+
+/**
+ * The state's measures with DDHQ's statewide counts (`local.measures`, from its county page) wherever DDHQ has counted
+ * more than civicAPI, keeping the tracked race's title and summary; a measure only DDHQ lists is added.
+ */
+function withDdhqMeasures(measures: readonly RaceSummary[], ddhq: readonly RaceSummary[] = []): RaceSummary[] {
+  const byKey = new Map(ddhq.flatMap((r) => (measureKey(r.title) ? [[measureKey(r.title)!, r] as const] : [])));
+  const used = new Set<string>();
+  const merged = measures.map((m) => {
+    const key = measureKey(m.title);
+    const d = key ? byKey.get(key) : undefined;
+    if (!d) return m;
+    used.add(key!);
+    return d.total > m.total ? { ...m, total: d.total, reporting: d.reporting, reportingUnknown: d.reportingUnknown, expected: d.expected, candidates: d.candidates } : m;
+  });
+  return [...merged, ...[...byKey].filter(([key]) => !used.has(key)).map(([, r]) => r)];
+}
+
 /** The tracked races at the voter's address: governor, Senate and House first, as on a ballot, then statewide measures. */
 export function trackedAt(local: Local, races: readonly RaceSummary[]): { ticket: RaceSummary[]; measures: RaceSummary[] } {
   const mine = races.filter((r) => r.state === local.state && (r.office !== "house" || r.district === local.house));
   return {
     ticket: mine.filter((r) => r.office !== "measure").sort((a, b) => TICKET.indexOf(a.office) - TICKET.indexOf(b.office)),
-    measures: mine.filter((r) => r.office === "measure"),
+    measures: withDdhqMeasures(mine.filter((r) => r.office === "measure"), local.measures),
   };
 }
 
@@ -167,21 +187,22 @@ export function NearYouView() {
   if (!local) return <Shell><AddressForm onSaved={saved} /></Shell>;
 
   const county = local.source === "county";
+  const ddhq = local.source === "ddhq";
   const { ticket, measures } = trackedAt(local, overview.data?.races ?? []);
   const parts: Part[] = [
     { key: "ticket", title: "Top of the ticket", races: ticket, empty: overview.data ? "No governor, Senate or House race found for your address." : "Loading…" },
     { key: "legislature", title: "State legislature", races: local.legislature, empty: "No state legislative race found for your districts this year." },
     {
       key: "local",
-      title: county ? "City and school" : "Local",
+      title: county || ddhq ? "City and school" : "Local",
       races: local.yours,
-      empty: county ? "Santa Clara County lists no city or school race for your address this year." : `Local races for your address come from civicAPI by district; the ones in your area are below.`,
+      empty: county ? "Santa Clara County lists no city or school race for your address this year." : ddhq ? "Decision Desk HQ lists no city, school or county race for your address this year." : `Local races for your address come from civicAPI by district; the ones in your area are below.`,
     },
     {
       key: "nearby",
-      title: county ? "Depends on your district" : "In your area",
+      title: county || ddhq ? "Depends on your district" : "In your area",
       races: local.nearby,
-      note: county
+      note: county || ddhq
         ? "Each of these is for one council district or trustee area. The Census doesn't say which one your address is in; your sample ballot does."
         : "Races civicAPI lists for your city and county. Some are for a district or ward you may not live in; your sample ballot says which are yours.",
     },
@@ -218,7 +239,7 @@ export function NearYouView() {
       <div className="ny-flow">{shown.filter((p) => p !== beside).map(section)}</div>
       <p className="muted small mt-source">
         Matched from your saved address, which your <Link href="/ballot">ballot page</Link> uses too. Local results from{" "}
-        {county ? <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a> : <a href="https://civicapi.org">civicAPI</a>}; the rest from civicAPI. <Link href="/midterms/credits">Sources and credits</Link>
+        {ddhq ? <a href="https://votes.decisiondeskhq.com">Decision Desk HQ</a> : county ? <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a> : <a href="https://civicapi.org">civicAPI</a>}; the rest from civicAPI{ddhq ? ", with Decision Desk HQ's counts for statewide measures where it has more" : ""}. <Link href="/midterms/credits">Sources and credits</Link>
       </p>
     </Shell>
   );
