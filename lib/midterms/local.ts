@@ -4,7 +4,7 @@ import type { Db } from "../auth/accounts";
 import { fetchCatalog, fetchRace, searchLive } from "./civic";
 import { BASELINE_2024 } from "./data";
 import { MIDTERM_TURNOUT } from "./votesLeft";
-import { countyRacesFor, normal } from "./county";
+import { countyBallots, countyRacesFor, normal } from "./county";
 import countyNames from "./countyNames.json";
 import type { RaceSummary } from "./races";
 import { STATE_NAMES } from "./view";
@@ -129,14 +129,18 @@ async function fromDdhq(districts: Districts, state: string, place: string | nul
 }
 
 async function cityAndCounty(districts: Districts, state: string | null, place: string | null, now: number): Promise<CityAndCounty> {
-  // DDHQ's county page first, where it has one: every local contest with its count and expected vote.
-  const ddhq = state ? await fromDdhq(districts, state, place, now).catch(() => null) : null;
+  // Santa Clara's own feed first (below): official, complete, and ahead of DDHQ's copy of its local races on Nov 3.
+  // Elsewhere DDHQ's county page, where it has one: every local contest with its count and expected vote.
+  const santaClara = districts.state === "California" && districts.county === "Santa Clara County";
+  const ddhq = state && !santaClara ? await fromDdhq(districts, state, place, now).catch(() => null) : null;
   if (ddhq) return ddhq;
 
   // Santa Clara County publishes every local contest; its city and school districts say which are on this ballot.
   if (districts.state === "California" && districts.county === "Santa Clara County") {
     const schools = [districts.schoolDistrict, districts.highSchoolDistrict].filter((s): s is string => !!s);
-    return { source: "county", ...(await countyRacesFor({ city: districts.place, schools }, now)) };
+    // DDHQ's county page still gives the statewide measures their statewide counts.
+    const [county, page] = await Promise.all([countyRacesFor({ city: districts.place, schools }, now), state ? countyRaces(state, districts.county, now).catch(() => null) : null]);
+    return { source: "county", ...county, ...(page && state && { measures: pickDdhq(page.races, districts, state, place).measures }) };
   }
 
   // Elsewhere civicAPI is searched by the city's and county's names, keeping Nov 3 races in this state that name either.
@@ -162,6 +166,12 @@ async function cityAndCounty(districts: Districts, state: string | null, place: 
 async function countyShare(state: string, fips: string | null, now: number, db?: Db): Promise<number | null> {
   const base = fips ? BASELINE_2024[fips] : undefined;
   if (!fips || !base?.[2]) return null;
+  const expected = base[2] * MIDTERM_TURNOUT;
+  // Santa Clara's own feed carries its governor count, so it needn't wait on civicAPI.
+  if (fips === "06085") {
+    const ballots = await countyBallots(now);
+    return ballots ? Math.min(0.99, ballots / expected) : null;
+  }
   try {
     // The served catalog, never a wait on civicAPI's searches; the race itself has a short limit and a fallback.
     const { races } = await fetchCatalog(now, [], db, (work) => void work.catch(() => {}), true);
@@ -169,7 +179,7 @@ async function countyShare(state: string, fips: string | null, now: number, db?:
     if (!summary) return null;
     const { race } = await fetchRace(summary, now, BASELINE_2024);
     const county = race.counties.find((c) => c.fips === fips);
-    return county && county.total > 0 ? Math.min(0.99, county.total / (base[2] * MIDTERM_TURNOUT)) : null;
+    return county && county.total > 0 ? Math.min(0.99, county.total / expected) : null;
   } catch {
     return null;
   }

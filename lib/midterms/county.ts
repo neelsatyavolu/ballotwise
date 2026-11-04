@@ -34,7 +34,8 @@ const contestSchema = z.object({
   V: z.array(z.number()),
 });
 type Contest = z.output<typeof contestSchema>;
-type Feed = { at: number; contests: Contest[]; updated: string | null };
+/** `ballots` is the county's count for governor: every ballot carries it, so it says how much of the county is in. */
+type Feed = { at: number; contests: Contest[]; updated: string | null; ballots: number | null };
 
 /** Clarity's abbreviations, spelled out for titles and search: "Fremont Union HSD, TA 4" → "Fremont Union High School District, Trustee Area 4". */
 const SPELLED: [RegExp, string][] = [
@@ -136,11 +137,13 @@ async function load(now: number): Promise<Feed> {
   if (!/^\d+$/.test(version)) throw new CountyError("Santa Clara County's results gave no version.");
   const [summary, settings] = await Promise.all([get(`${version}/json/en/summary.json`).then((r) => r.json()), get(`${version}/json/en/electionsettings.json`).then((r) => r.json())]);
   if (!Array.isArray(summary)) throw new CountyError("Santa Clara County's results didn't parse.");
-  const contests = summary.flatMap((c) => {
+  const all = summary.flatMap((c) => {
     const parsed = contestSchema.safeParse(c);
-    return parsed.success && CATEGORIES.has(parsed.data.CAT ?? "") ? [parsed.data] : [];
+    return parsed.success ? [parsed.data] : [];
   });
-  return { at: now, contests, updated: updatedAt((settings as { websiteupdatedat?: unknown } | null)?.websiteupdatedat) };
+  const contests = all.filter((c) => CATEGORIES.has(c.CAT ?? ""));
+  const governor = all.find((c) => /^governor$/i.test(c.C.trim()));
+  return { at: now, contests, ballots: governor ? governor.V.reduce((a, b) => a + b, 0) : null, updated: updatedAt((settings as { websiteupdatedat?: unknown } | null)?.websiteupdatedat) };
 }
 
 let memo: Feed | null = null;
@@ -165,6 +168,15 @@ async function feed(now: number): Promise<Feed & { stale: boolean }> {
     console.error("Santa Clara County feed failed:", err instanceof Error ? err.message : err);
     if (memo) return { ...memo, stale: true };
     throw err;
+  }
+}
+
+/** How many ballots Santa Clara County has counted (its governor count), or null when the feed can't say. */
+export async function countyBallots(now: number): Promise<number | null> {
+  try {
+    return (await feed(now)).ballots;
+  } catch {
+    return null;
   }
 }
 
