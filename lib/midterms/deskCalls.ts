@@ -1,6 +1,7 @@
 // Decision Desk HQ's calls, read off its public balance-of-power pages (lib/ddhq/pulse.ts), for races our own sources
 // haven't called: civicAPI calls later than DDHQ, and a connected screen's DDHQ feed misses races it couldn't match.
-import type { PulseWinner } from "../ddhq/pulse";
+import type { PulseSeats, PulseWinner } from "../ddhq/pulse";
+import type { Tally } from "./races";
 import { raceKey } from "./seats";
 import { partyOf, type RaceSummary } from "./view";
 
@@ -34,4 +35,20 @@ export function withDeskCalls<T extends RaceSummary>(races: readonly T[], winner
       call: { id: r.id, at: won.at, winner: pick.name, replaced: null, withdrawn: false as const },
     };
   });
+}
+
+type Balance = { senate: Tally; house: Tally; governor: Tally };
+
+/**
+ * `b` with the House's and Senate's seats as DDHQ counts them (its balance-of-power pages), so the seat bars match
+ * DDHQ's own tally even where a race it has called isn't called here yet; `kept` carries chambers already set that
+ * way (a connected screen recounts after its DDHQ overlay). Governors keep the tracker's own count.
+ */
+export function withDeskSeats(b: Balance, seats: Partial<Record<"senate" | "house", PulseSeats>> | undefined, kept?: Balance): Balance {
+  const one = (office: "senate" | "house"): Tally => {
+    const desk = seats?.[office];
+    if (desk) return { ...b[office], ...desk, uncalled: b[office].uncalled, source: "ddhq" };
+    return kept?.[office].source === "ddhq" ? kept[office] : b[office];
+  };
+  return { ...b, senate: one("senate"), house: one("house") };
 }

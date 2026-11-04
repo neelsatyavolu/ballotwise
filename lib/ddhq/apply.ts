@@ -2,6 +2,7 @@ import { balance, type Candidate, type CountyResult, type RaceDetail, type RaceS
 import type { Forecast } from "../midterms/forecast";
 import type { CallEvent, Overview } from "../midterms/view";
 import type { DdhqCandidate, DdhqRace } from "./votes";
+import { withDeskSeats } from "../midterms/deskCalls";
 import { expectedIn, seatKey } from "./votes";
 import type { DdhqForecastBundle } from "./forecast-types";
 
@@ -225,7 +226,8 @@ export function overlayLive<T>(path: string | null, data: T, desk: ReadonlyMap<s
     return {
       ...overview,
       races,
-      ...(countsChanged ? { balance: balance(races), callEvents: eventsFor(races), callEventCounts: undefined } : {}),
+      // DDHQ's own seat count, where the overview carries it, outlasts the recount (see withDeskSeats).
+      ...(countsChanged ? { balance: withDeskSeats(balance(races), undefined, overview.balance), callEvents: eventsFor(races), callEventCounts: undefined } : {}),
       ...(forecast ? { forecastSource: "ddhq" as const, ratings: { updatedAt: forecast.updatedAt } } : {}),
     } as T;
   }

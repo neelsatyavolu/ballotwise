@@ -90,7 +90,12 @@ function PickupCount({ side, n }: { side: "D" | "R"; n: Pickups["D"] }) {
  */
 export function SeatBar({ tally, ahead: leading, office, projected = null, pickups = null, deskCall = null }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE; projected?: Projected; pickups?: Pickups | null; deskCall?: PulseCall | null }) {
   const share = (n: number) => `${(n / tally.total) * 100}%`;
-  const ahead = projected?.ahead ?? leading;
+  // With DDHQ's own seat count (tally.source), some of our leads are races it has already called and counted: the
+  // leads are scaled down to the seats it hasn't, so the bar never adds up to more than the chamber.
+  const raw = projected?.ahead ?? leading;
+  const room = Math.max(0, tally.total - tally.D - tally.R - tally.other);
+  const over = raw.D + raw.R + raw.other;
+  const ahead = !projected && over > room ? { D: Math.floor((raw.D * room) / over), R: Math.floor((raw.R * room) / over), other: Math.floor((raw.other * room) / over) } : raw;
   const word = projected ? "projected" : "leading";
   const open = tally.total - tally.D - tally.R - tally.other - ahead.D - ahead.R - ahead.other;
   // Once a party has won enough seats, the chamber's call leads the middle line in its color.

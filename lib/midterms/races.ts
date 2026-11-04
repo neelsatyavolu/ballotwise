@@ -406,7 +406,8 @@ export type Party = "D" | "R" | "other";
 /** Seats not up this year: 65 senators and 14 governors. */
 export const HOLDOVER = { senate: { D: 34, R: 31, other: 0 }, governor: { D: 6, R: 8, other: 0 } } as const;
 
-export type Tally = { D: number; R: number; other: number; total: number; majority: number; uncalled: number };
+/** `source` "ddhq" marks a chamber whose counts are DDHQ's own seat count (see lib/midterms/deskCalls.ts withDeskSeats). */
+export type Tally = { D: number; R: number; other: number; total: number; majority: number; uncalled: number; source?: "ddhq" };
 
 /** Seats each party holds once called races are added to the seats not up this year. */
 export function balance(races: readonly RaceSummary[]) {

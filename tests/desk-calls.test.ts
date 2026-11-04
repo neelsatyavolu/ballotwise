@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withDeskCalls } from "../lib/midterms/deskCalls";
+import { withDeskCalls, withDeskSeats } from "../lib/midterms/deskCalls";
 import type { RaceSummary } from "../lib/midterms/view";
 
 const race = (over: Partial<RaceSummary>): RaceSummary => ({
@@ -36,5 +36,20 @@ describe("withDeskCalls", () => {
   it("matches by party when the names differ", () => {
     const [r] = withDeskCalls([race({ candidates: [{ name: "Terri Sewall-Jones", party: "Democratic", votes: 70, pct: 70, winner: false, incumbent: true }, { name: "Ammie Akin", party: "Republican", votes: 30, pct: 30, winner: false, incumbent: false }] })], winners);
     expect(r.calledFor).toBe("Terri Sewall-Jones");
+  });
+});
+
+describe("withDeskSeats", () => {
+  const tally = (D: number, R: number) => ({ D, R, other: 0, total: 435, majority: 218, uncalled: 435 - D - R });
+  const b = { house: tally(205, 116), senate: { ...tally(51, 40), total: 100, majority: 51 }, governor: { ...tally(20, 20), total: 50, majority: 26 } };
+
+  it("takes DDHQ's own House and Senate counts, and keeps them through a later recount", () => {
+    const desk = withDeskSeats(b, { house: { D: 211, R: 117, other: 0 } });
+    expect(desk.house).toMatchObject({ D: 211, R: 117, total: 435, source: "ddhq" });
+    expect(desk.senate).toEqual(b.senate);
+    expect(desk.governor).toEqual(b.governor);
+    // A connected screen recounts from its own races; DDHQ's count carries over.
+    expect(withDeskSeats(b, undefined, desk).house).toMatchObject({ D: 211, R: 117 });
+    expect(withDeskSeats(b, undefined, b).house).toEqual(b.house);
   });
 });

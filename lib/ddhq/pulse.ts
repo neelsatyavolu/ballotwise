@@ -31,9 +31,11 @@ export type PulseWinner = { name: string; side: "D" | "R" | "I"; at: number };
  * `ids` maps each seat on the pages to DDHQ's race id, keyed as votes.ts seatKey keys seats ("house:AL:7:g"), so a
  * connected screen's DDHQ feed finds every race without searching for it.
  */
-export type Pulse = { at: number | null; chambers: Partial<Record<PulseChamberName, PulseChamber>>; races: Record<string, PulseRace>; calls?: Partial<Record<PulseChamberName, PulseCall>>; winners?: Record<string, PulseWinner>; ids?: Record<string, number>; history: PulsePoint[] };
+/** DDHQ's seat count in a chamber: seats held (won tonight plus not up), by the party each caucuses with. */
+export type PulseSeats = { D: number; R: number; other: number };
+export type Pulse = { at: number | null; chambers: Partial<Record<PulseChamberName, PulseChamber>>; races: Record<string, PulseRace>; calls?: Partial<Record<PulseChamberName, PulseCall>>; winners?: Record<string, PulseWinner>; ids?: Record<string, number>; seats?: Partial<Record<PulseChamberName, PulseSeats>>; history: PulsePoint[] };
 
-export const NO_PULSE: Pulse = { at: null, chambers: {}, races: {}, calls: {}, winners: {}, ids: {}, history: [] };
+export const NO_PULSE: Pulse = { at: null, chambers: {}, races: {}, calls: {}, winners: {}, ids: {}, seats: {}, history: [] };
 /** The most points kept: twelve hours of one-a-minute reads, the newest kept. */
 const MAX_HISTORY = 720;
 
@@ -201,8 +203,52 @@ function seatsOf(text: string, office: PulseOffice): { winners: Record<string, P
   return { winners: out, ids };
 }
 
+/** The JSON array that opens at `start` (a `[`), or null when the text ends first. */
+function arrayAt(text: string, start: number): string | null {
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === '"') quoted = false;
+    } else if (c === '"') quoted = true;
+    else if (c === "[") depth++;
+    else if (c === "]" && --depth === 0) return text.slice(start, i + 1);
+  }
+  return null;
+}
+
+const seatCount = z.array(z.object({ totalSeats: z.number().int().nonnegative(), alignedWithParty: z.object({ abbrev: z.string() }).nullish(), party: z.object({ abbrev: z.string() }).nullish() }));
+
+/**
+ * DDHQ's own seat count from the page's balance block (`"seatCounts":[{…"alignedWithParty":{"abbrev":"DEM"},
+ * "totalSeats":211}…]`), each party counted with the one it caucuses with: Senate independents who sit with Democrats
+ * count as D, as the tracker counts them.
+ */
+function seatsOfPage(text: string): PulseSeats | undefined {
+  const i = text.indexOf('"seatCounts":[');
+  const json = i >= 0 ? arrayAt(text, i + '"seatCounts":'.length) : null;
+  if (!json) return undefined;
+  let parsed;
+  try {
+    parsed = seatCount.safeParse(JSON.parse(json));
+  } catch {
+    return undefined;
+  }
+  if (!parsed.success) return undefined;
+  const out: PulseSeats = { D: 0, R: 0, other: 0 };
+  for (const row of parsed.data) {
+    const side = sideOf((row.alignedWithParty ?? row.party)?.abbrev ?? "");
+    out[side === "I" ? "other" : side] += row.totalSeats;
+  }
+  return out;
+}
+
 /** What one office's balance-of-power page says of Pulse. */
-export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "chambers" | "races" | "history"> & { calls: NonNullable<Pulse["calls"]>; winners: NonNullable<Pulse["winners"]>; ids: NonNullable<Pulse["ids"]> } {
+export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "chambers" | "races" | "history"> & { calls: NonNullable<Pulse["calls"]>; winners: NonNullable<Pulse["winners"]>; ids: NonNullable<Pulse["ids"]>; seats: NonNullable<Pulse["seats"]> } {
   const races: Record<string, PulseRace> = {};
   for (const record of raceRecords(text)) {
     const parsed = raceRecord.safeParse(record);
@@ -215,8 +261,10 @@ export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "c
   const call = office === "governor" ? undefined : callOf(text);
   const calls = call && office !== "governor" ? { [office]: call } : {};
   const { winners, ids } = seatsOf(text, office);
-  if (!chamber || office === "governor") return { chambers: {}, races, calls, winners, ids, history: [] };
-  return { chambers: { [office]: chamber.now }, races, calls, winners, ids, history: chamber.points.map((p) => ({ at: p.at, [office]: p.dem })) };
+  const count = office === "governor" ? undefined : seatsOfPage(text);
+  const seats = count && office !== "governor" ? { [office]: count } : {};
+  if (!chamber || office === "governor") return { chambers: {}, races, calls, winners, ids, seats, history: [] };
+  return { chambers: { [office]: chamber.now }, races, calls, winners, ids, seats, history: chamber.points.map((p) => ({ at: p.at, [office]: p.dem })) };
 }
 
 async function fetchPage(office: PulseOffice, signal: AbortSignal): Promise<string> {
@@ -243,7 +291,7 @@ export async function fetchPulse(signal: AbortSignal): Promise<Pulse | null> {
   const at = Date.now();
   const chambers: Pulse["chambers"] = Object.assign({}, ...read.map((r) => r.chambers));
   const now: PulsePoint = { at, ...(chambers.senate && { senate: chambers.senate.dem }), ...(chambers.house && { house: chambers.house.dem }) };
-  return { at, chambers, races: Object.assign({}, ...read.map((r) => r.races)), calls: Object.assign({}, ...read.map((r) => r.calls)), winners: Object.assign({}, ...read.map((r) => r.winners)), ids: Object.assign({}, ...read.map((r) => r.ids)), history: mergeHistory(read.flatMap((r) => r.history), [now]) };
+  return { at, chambers, races: Object.assign({}, ...read.map((r) => r.races)), calls: Object.assign({}, ...read.map((r) => r.calls)), winners: Object.assign({}, ...read.map((r) => r.winners)), ids: Object.assign({}, ...read.map((r) => r.ids)), seats: Object.assign({}, ...read.map((r) => r.seats)), history: mergeHistory(read.flatMap((r) => r.history), [now]) };
 }
 
 /** The last Pulse read while it's under PULSE_STALE_MS old, without asking DDHQ: for pages that mustn't wait on it. */
@@ -267,7 +315,7 @@ export async function loadPulse(db: Db, now: number): Promise<Pulse> {
     // Every read joins the day's line, so it fills in even if DDHQ's own chart points don't. Entries cached before
     // the line existed have none.
     // A chamber's call stands once made, so a page that failed this time keeps the call it had.
-    const fresh: Pulse = { ...read, calls: { ...cached?.calls, ...read.calls }, winners: { ...cached?.winners, ...read.winners }, ids: { ...cached?.ids, ...read.ids }, history: mergeHistory(cached?.history ?? [], read.history) };
+    const fresh: Pulse = { ...read, calls: { ...cached?.calls, ...read.calls }, winners: { ...cached?.winners, ...read.winners }, ids: { ...cached?.ids, ...read.ids }, seats: { ...cached?.seats, ...read.seats }, history: mergeHistory(cached?.history ?? [], read.history) };
     await putCached(db, CACHE_KEY, fresh, now).catch((err) => console.error("DDHQ Pulse cache write failed:", err));
     return fresh;
   }

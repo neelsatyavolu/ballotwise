@@ -39,8 +39,15 @@ describe("DDHQ Pulse", () => {
     expect(readPulsePage(special, "senate").ids).toEqual({ "senate:OH::s": 5 });
   });
 
+  it("reads DDHQ's own seat count, each party with the one it caucuses with", () => {
+    // As the Senate page carried it on Nov 3 2026: King and Sanders (IND) sit with Democrats.
+    const page = '5:{"winnerParty":null,"calledAt":null,"totalSeats":100,"majorityNeeded":51,"seatCounts":[{"id":125,"party":{"abbrev":"DEM"},"alignedWithParty":{"abbrev":"DEM"},"existingSeats":32,"seats":17,"totalSeats":49},{"id":126,"party":{"abbrev":"GOP"},"alignedWithParty":{"abbrev":"GOP"},"existingSeats":31,"seats":9,"totalSeats":40},{"id":166,"party":{"abbrev":"IND"},"alignedWithParty":{"abbrev":"DEM"},"existingSeats":2,"seats":0,"totalSeats":2},{"id":127,"party":{"abbrev":"IND"},"alignedWithParty":{"abbrev":"IND"},"totalSeats":0}]}\n';
+    expect(readPulsePage(page, "senate").seats).toEqual({ senate: { D: 51, R: 40, other: 0 } });
+    expect(readPulsePage(page, "governor").seats).toEqual({});
+  });
+
   it("finds nothing in a page of another shape", () => {
-    expect(readPulsePage('0:{"P":null}\n', "senate")).toEqual({ chambers: {}, races: {}, calls: {}, winners: {}, ids: {}, history: [] });
+    expect(readPulsePage('0:{"P":null}\n', "senate")).toEqual({ chambers: {}, races: {}, calls: {}, winners: {}, ids: {}, seats: {}, history: [] });
     expect(readPulsePage(pages.senate, "governor").chambers).toEqual({});
   });
 

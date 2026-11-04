@@ -1,6 +1,6 @@
 import type { Db } from "../auth/accounts";
 import { cachedPulse } from "../ddhq/pulse";
-import { withDeskCalls } from "./deskCalls";
+import { withDeskCalls, withDeskSeats } from "./deskCalls";
 import { agrees, recordCalls, type Call } from "./calls";
 import { CivicError, CRON_REFRESH_BUDGET_MS, fetchCatalog, fetchOtherRace, fetchRace, FRESH_MS } from "./civic";
 import { fetchCountyRace, isCountyRace } from "./county";
@@ -46,7 +46,8 @@ export async function overview(db: Db, now: number, background: (work: Promise<u
   return {
     races: withSignals,
     // Counted after calls are applied, so a race whose answer left out its winner still counts for the called side.
-    balance: balance(withSignals),
+    // DDHQ's own seat count for the House and Senate where it's in hand, so the bars match DDHQ's tally.
+    balance: withDeskSeats(balance(withSignals), pulse?.seats),
     fetchedAt,
     stale: isStale(catalog, now),
     ...(partial && { partial }),
