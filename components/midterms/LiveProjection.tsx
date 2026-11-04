@@ -1,11 +1,11 @@
 "use client";
 // The companion screen's main area: each chamber's projected final seats and chance of control, worked out in the
 // browser from the results this screen shows (a mock night's, or Decision Desk HQ's when connected) with every fetch:
-// the forecast plus the night's calls and counts (lib/midterms/liveProjection.ts). The undecided races nearest a coin
-// flip fill the rest of each column.
+// the forecast plus the night's calls and counts (lib/midterms/liveProjection.ts), combined with DDHQ Pulse where it's
+// up. The undecided races nearest a coin flip fill the rest of each column.
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import type { Pulse, PulseChamber, PulseChamberName, PulsePoint, PulseRace } from "@/lib/ddhq/pulse";
+import type { Pulse, PulseChamberName, PulsePoint, PulseRace } from "@/lib/ddhq/pulse";
 import type { Body, Side } from "@/lib/midterms/forecast";
 import type { ChamberProjection, LiveProjection as Projection, RaceOutlook } from "@/lib/midterms/liveProjection";
 import { stampTime } from "@/lib/midterms/polls";
@@ -57,11 +57,12 @@ function Control({ office, view }: { office: Body; view: ChamberProjection }) {
   );
 }
 
-/** DDHQ Pulse's chance of control, Decision Desk HQ's live model, under ours for comparison. */
-function PulseControl({ chamber }: { chamber: PulseChamber }) {
+/** The two chances the control line combines: ours, and DDHQ Pulse's (Decision Desk HQ's live model). */
+function PulseControl({ view }: { view: ChamberProjection }) {
+  const side = (d: number) => (d >= 0.5 ? <b className="d">D {pct(d)}</b> : <b className="r">R {pct(1 - d)}</b>);
   return (
-    <p className="mt-proj-pulse small" title="DDHQ Pulse: Decision Desk HQ's live model of who controls the chamber">
-      DDHQ Pulse <b className="d">D {Math.round(chamber.dem)}%</b> · <b className="r">R {Math.round(chamber.rep)}%</b>
+    <p className="mt-proj-pulse small" title="The chance above combines ours and DDHQ Pulse's equally (on the probit scale). Pulse is Decision Desk HQ's live model of who controls the chamber.">
+      Ours {side(view.ours)} · DDHQ Pulse {view.pulse !== null && side(view.pulse)}
     </p>
   );
 }
@@ -141,7 +142,6 @@ function RaceRow({ race, pulse }: { race: RaceOutlook; pulse: PulseRace | null }
 
 function Chamber({ office, view, pulse }: { office: Body; view: ChamberProjection; pulse: Pulse | null }) {
   const list = useFitRows();
-  const chamber = office === "governor" ? undefined : pulse?.chambers[office];
   return (
     <section className="mt-proj-col" aria-label={`${TITLE[office]} projection`}>
       <h3>{TITLE[office]}</h3>
@@ -155,7 +155,7 @@ function Chamber({ office, view, pulse }: { office: Body; view: ChamberProjectio
       </div>
       <SeatBar office={office} view={view} />
       <Control office={office} view={view} />
-      {chamber && <PulseControl chamber={chamber} />}
+      {view.pulse !== null && <PulseControl view={view} />}
       {pulse && office !== "governor" && <PulseChart office={office} history={pulse.history ?? []} at={pulse.at} />}
       <p className="mt-proj-tally muted small">
         Won {view.won.D} D · {view.won.R} R · {view.counting} counting · {view.waiting} no votes yet
@@ -182,29 +182,30 @@ function swingText(swing: number): string | null {
  * Each chamber's projection for `races`, redone whenever they change. The model (and the simulation's fitted
  * parameters) loads only here, so other pages never download it.
  */
-function useProjection(races: readonly RaceSummary[]): Projection | null {
+function useProjection(races: readonly RaceSummary[], pulse: Pulse | null): Projection | null {
   const [projection, setProjection] = useState<Projection | null>(null);
   useEffect(() => {
     let live = true;
     import("@/lib/midterms/liveProjection").then(({ projectChambers }) => {
-      if (live) setProjection(projectChambers(races));
+      // DDHQ Pulse, where it's up, is combined with ours race by race and for each chamber's control.
+      if (live) setProjection(projectChambers(races, undefined, pulse?.at ? pulse : undefined));
     });
     return () => {
       live = false;
     };
-  }, [races]);
+  }, [races, pulse]);
   return projection;
 }
 
 /** The companion's live projection of each chamber, filling its window. */
 export function LiveProjection({ races }: { races: readonly RaceSummary[] }) {
-  const data = useProjection(races);
   const pulse = usePulse();
+  const data = useProjection(races, pulse);
   return (
     <section className="mt-proj" aria-label="Live projection">
       <div className="mt-section-head tight">
         <h2>Live projection</h2>
-        <span className="muted small">{data ? swingText(data.swing) : "Working it out…"} · forecast, adjusted for calls and counts</span>
+        <span className="muted small">{data ? swingText(data.swing) : "Working it out…"} · forecast, adjusted for calls and counts{pulse?.at ? ", combined with DDHQ Pulse" : ""}</span>
       </div>
       {data && (
         <div className="mt-proj-cols">

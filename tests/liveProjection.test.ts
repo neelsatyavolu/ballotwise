@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { chamberViews, type Forecast } from "../lib/midterms/forecast";
-import { countChance, liveOdds, nationalSwing, projectChambers } from "../lib/midterms/liveProjection";
+import { blendChance, countChance, liveOdds, nationalSwing, projectChambers } from "../lib/midterms/liveProjection";
+import { phi, phiInverse } from "../lib/midterms/forecast";
 import { chamberEntries } from "../lib/midterms/seats";
 import type { RaceSummary } from "../lib/midterms/view";
 
@@ -79,5 +80,31 @@ describe("live projection", () => {
     expect(senate.waiting).toBe(2);
     expect(senate.close[0].id).toBe(races[1].id);
     expect(senate.close.at(-1)!.id).toBe(races[2].id);
+  });
+
+  it("blends a chance with DDHQ Pulse's halfway on the probit scale, and leaves it alone without one", () => {
+    expect(blendChance(0.7, null)).toBe(0.7);
+    expect(blendChance(0.7, 0.7)).toBeCloseTo(0.7);
+    expect(blendChance(0.8, 0.4)).toBeCloseTo(phi((phiInverse(0.8) + phiInverse(0.4)) / 2));
+    // A settled side stays settled.
+    expect(blendChance(1, 0.4)).toBe(1);
+  });
+
+  it("combines each race and each chamber with DDHQ Pulse where it models them", () => {
+    const races = [race("senate", 0.5), { ...race("senate", 0.6), state: "OH" }, race("house", 0.5)];
+    const key = (r: RaceSummary) => `${r.office}:${r.state}:${r.office === "house" ? r.district : ""}`;
+    const ours = projectChambers(races, 2000);
+    const pulse = { chambers: { house: { dem: 20, rep: 80 } }, races: { [key(races[0])]: { name: "Dana Dem", side: "D" as const, chance: 90 } } };
+    const both = projectChambers(races, 2000, pulse);
+    // The race Pulse models moves toward its 90%; the one it doesn't keeps ours.
+    const first = both.chambers.senate.close.find((r) => r.id === races[0].id)!;
+    expect(first).toMatchObject({ side: "D" });
+    expect(first.chance).toBeCloseTo(blendChance(0.5, 0.9), 2);
+    expect(both.chambers.senate.close.find((r) => r.id === races[1].id)!.chance).toBeCloseTo(0.6, 2);
+    // The House's control blends ours with Pulse's chamber chance, and keeps ours alongside for the screen.
+    expect(both.chambers.house.dControl).toBeCloseTo(blendChance(ours.chambers.house.dControl, 0.2), 2);
+    expect(both.chambers.house.ours).toBeCloseTo(ours.chambers.house.dControl, 2);
+    expect(both.chambers.house.pulse).toBe(0.2);
+    expect(ours.chambers.house.pulse).toBeNull();
   });
 });

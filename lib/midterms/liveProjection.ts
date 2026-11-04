@@ -2,9 +2,10 @@
 // the forecast's own chamber simulation (chamberViews, with its shared national, regional and lean-bucket errors) on
 // chances updated by the night so far. A called race is settled. A counting race blends its forecast with its count,
 // trusting the count more as more of it is reported. A race with no votes keeps its forecast, moved by how far the
-// well-counted races have run ahead of or behind theirs. Before any votes it is the published forecast.
+// well-counted races have run ahead of or behind theirs. Before any votes it is the published forecast. Where DDHQ
+// Pulse (Decision Desk HQ's live model) is in hand, each race it models and each chamber's control is combined with it.
 import { chamberViews, phi, phiInverse, type Body, type ChamberView, type Side } from "./forecast";
-import { chamberEntries, sideOf } from "./seats";
+import { chamberEntries, raceKey, sideOf } from "./seats";
 import type { RaceSummary } from "./races";
 
 type Odds = Partial<Record<Side, number>>;
@@ -32,6 +33,12 @@ const SWING_CAP = 2;
 const RUNS = 10_000;
 /** How many of each chamber's undecided races the projection lists. */
 const CLOSE_RACES = 12;
+/**
+ * DDHQ Pulse's share of a combined chance. Pulse reads DDHQ's own precinct returns and expected vote, which we don't
+ * have; ours carries the published forecast and the night's swing. Neither has a record tonight to favor it, so they
+ * count equally.
+ */
+const PULSE_WEIGHT = 0.5;
 
 const clampP = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const sigmaOf = (race: RaceSummary) => race.signal?.forecast?.sigma ?? DEFAULT_SIGMA;
@@ -90,6 +97,30 @@ export function nationalSwing(races: readonly RaceSummary[]): number {
   return sum / (weight + SWING_PRIOR);
 }
 
+/**
+ * Our chance and DDHQ Pulse's for the same outcome, combined on the probit scale by PULSE_WEIGHT; ours alone without
+ * Pulse's, and a settled one (0 or 1) left settled.
+ */
+export function blendChance(ours: number, pulse: number | null): number {
+  if (pulse === null || ours <= 0 || ours >= 1) return ours;
+  return phi((1 - PULSE_WEIGHT) * phiInverse(clampP(ours)) + PULSE_WEIGHT * phiInverse(clampP(pulse)));
+}
+
+/** What the projection takes from DDHQ Pulse: each chamber's Democratic chance and each modeled race's favorite, in percent. */
+export type PulseInput = {
+  chambers: Partial<Record<"senate" | "house", { dem: number }>>;
+  races: Readonly<Record<string, { side: Side; chance: number }>>;
+};
+
+/** `odds` with the Democrat-versus-Republican chance combined with Pulse's for the race, when Pulse models it. */
+function withPulse(race: RaceSummary, odds: Odds | null, pulse: PulseInput | undefined): Odds | null {
+  const p = pulse?.races[raceKey(race.office, race.state, race.district)];
+  if (!p || p.side === "I" || !odds || odds.D === undefined || odds.R === undefined || race.candidates.some((c) => c.winner)) return odds;
+  const both = odds.D + odds.R;
+  const d = blendChance(pairChance(odds, "D", "R"), p.side === "D" ? p.chance / 100 : 1 - p.chance / 100);
+  return { ...odds, D: d * both, R: (1 - d) * both };
+}
+
 /** A race's chances given the night so far (see the top of this file); null when it has no forecast and no count. */
 export function liveOdds(race: RaceSummary, swing: number): Odds | null {
   const winner = race.candidates.find((c) => c.winner);
@@ -125,6 +156,9 @@ export type RaceOutlook = {
 };
 
 export type ChamberProjection = Pick<ChamberView, "dControl" | "dSeats" | "rSeats" | "majority" | "notUp"> & {
+  /** `dControl` is the combined chance when DDHQ Pulse has one: `ours` before combining, and `pulse` its own (0 to 1). */
+  ours: number;
+  pulse: number | null;
   /** Seats won tonight (an independent with the Democrats, as in the seat totals). */
   won: { D: number; R: number };
   counting: number;
@@ -158,10 +192,10 @@ function outlook(race: RaceSummary & { office: Body }, odds: Odds): RaceOutlook 
 const BODIES: Body[] = ["senate", "house", "governor"];
 const isBody = (r: RaceSummary): r is RaceSummary & { office: Body } => (BODIES as string[]).includes(r.office);
 
-/** Each chamber's live projection from the overview's races. */
-export function projectChambers(races: readonly RaceSummary[], runs = RUNS): LiveProjection {
+/** Each chamber's live projection from the overview's races, combined with DDHQ Pulse where `pulse` has it. */
+export function projectChambers(races: readonly RaceSummary[], runs = RUNS, pulse?: PulseInput): LiveProjection {
   const swing = nationalSwing(races);
-  const live = new Map(races.map((r) => [r, liveOdds(r, swing)]));
+  const live = new Map(races.map((r) => [r, withPulse(r, liveOdds(r, swing), pulse)]));
   const views = chamberViews(chamberEntries(races, (r) => {
     const odds = live.get(r);
     return odds ? { odds } : null;
@@ -187,7 +221,9 @@ export function projectChambers(races: readonly RaceSummary[], runs = RUNS): Liv
       if (row) close.push(row);
     }
     const { dControl, dSeats, rSeats, majority, notUp } = views[office];
-    return { dControl, dSeats, rSeats, majority, notUp, won, counting, waiting, close: close.sort((a, b) => a.chance - b.chance).slice(0, CLOSE_RACES) };
+    const theirs = office === "governor" ? undefined : pulse?.chambers[office];
+    const pulseD = theirs ? theirs.dem / 100 : null;
+    return { dControl: blendChance(dControl, pulseD), ours: dControl, pulse: pulseD, dSeats, rSeats, majority, notUp, won, counting, waiting, close: close.sort((a, b) => a.chance - b.chance).slice(0, CLOSE_RACES) };
   };
   return { swing, chambers: { senate: chamber("senate"), house: chamber("house"), governor: chamber("governor") } };
 }
