@@ -138,6 +138,18 @@ describe("fetchCatalog with races civicAPI leaves out", () => {
     expect(errors).toHaveBeenCalledWith(expect.stringContaining("house 2, governor 2"));
   });
 
+  // As with PA-1 and PA-8 on election night: every few minutes civicAPI answered with every candidate at 0 votes, so
+  // each blank answer withdrew the call and the next full one called the race again, popping a "Flip" each time.
+  it("keeps a counted race's last numbers, flagged missing, when civicAPI answers it with no votes", async () => {
+    const first = await at(0, FULL);
+    const blank = { ...FULL, "House of Representatives": house.map((r) => (r.id === 107 ? { ...r, percent_reporting: 0, candidates: r.candidates.map((c) => ({ ...c, votes: 0, winner: false })) } : r)) };
+    const glitch = await at(2, blank);
+    expect(glitch.races.find((r) => r.id === 107)).toEqual({ ...first.races.find((r) => r.id === 107), missing: true, lastSeen: NOW });
+    const back = await at(4, FULL);
+    expect(back.races.find((r) => r.id === 107)).toMatchObject({ total: 1000 });
+    expect(back.races.find((r) => r.id === 107)?.missing).toBeUndefined();
+  });
+
   it("keeps a race missing across a fresh isolate and fresh again once civicAPI lists it", async () => {
     const db = testDb();
     await at(0, FULL, db);

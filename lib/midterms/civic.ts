@@ -315,12 +315,16 @@ function placeholder(r: Registered): RaceSummary {
   return { id: r.race_id, office: r.office, state: r.state, district: r.district, title: titles[r.office], reporting: 0, total: 0, candidates: [], rating: null, missing: true, lastSeen: r.first_seen };
 }
 
-/** Every known race: fresh from `fetched` when listed there, else its last numbers marked missing. */
+/**
+ * Every known race: fresh from `fetched` when listed there, else its last numbers marked missing. A counted race
+ * civicAPI answers with no votes at all is treated as left out: on election night it sent PA-1 and PA-8 blank every
+ * few minutes, and each blank answer withdrew their calls.
+ */
 function assemble(fetched: readonly RaceSummary[], known: Known, registered: ReadonlyMap<number, Registered> | null): RaceSummary[] {
   const out = new Map<number, RaceSummary>();
   for (const [id, { race, seen }] of known) out.set(id, { ...race, missing: true, lastSeen: seen });
   for (const r of registered?.values() ?? []) if (!out.has(r.race_id)) out.set(r.race_id, placeholder(r));
-  for (const race of fetched) out.set(race.id, race);
+  for (const race of fetched) if (race.total > 0 || !(known.get(race.id)?.race.total)) out.set(race.id, race);
   return [...out.values()].filter((r) => !RETIRED_RACE_IDS.has(r.id));
 }
 
