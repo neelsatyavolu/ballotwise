@@ -162,7 +162,8 @@ describe("pickups", () => {
       // Holds don't count.
       race({ state: "NC", title: "North Carolina US Senate", votes: [400, 600], winner: 1 }),
     ];
-    expect(pickups(races, "senate")).toEqual({ D: { won: 0, leading: 1 }, R: { won: 1, leading: 1 } });
+    // Michigan's count is too early to call a lead, as in the seat bar's leading count.
+    expect(pickups(races, "senate")).toEqual({ D: { won: 0, leading: 1 }, R: { won: 1, leading: 0 } });
   });
 });
 

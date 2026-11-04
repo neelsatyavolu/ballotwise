@@ -93,7 +93,10 @@ export function watchFirst(a: RaceSummary, b: RaceSummary): number {
   return tier(a) - tier(b) || Number(likelyFlip(b)) - Number(likelyFlip(a)) || closestFirst(a, b);
 }
 
-/** Each party's pickups in one office: seats it has won from the other party, and uncalled ones it leads (see flipTo). */
+/**
+ * Each party's pickups in one office: seats it has won from the other party, and uncalled ones it leads past an early
+ * count (as the seat bar counts leads; the maps stripe early leads too, see flipTo).
+ */
 export type Pickups = Record<"D" | "R", { won: number; leading: number }>;
 
 export function pickups(races: readonly RaceSummary[], office: Office): Pickups {
@@ -102,7 +105,7 @@ export function pickups(races: readonly RaceSummary[], office: Office): Pickups 
   for (const r of races) {
     if (r.office !== office) continue;
     const outcome = outcomeOf(r);
-    const side = outcome ? (outcome.gain ? outcome.side : null) : lead(r.candidates) ? leadingFlip(r, true) : null;
+    const side = outcome ? (outcome.gain ? outcome.side : null) : lead(r.candidates) ? leadingFlip(r) : null;
     if (side !== "D" && side !== "R") continue;
     if (outcome) won[side] += 1;
     else leading[side] += 1;

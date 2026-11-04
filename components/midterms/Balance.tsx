@@ -80,7 +80,7 @@ function PickupCount({ side, n }: { side: "D" | "R"; n: Pickups["D"] }) {
  * The office screens' seat count, from each end toward the majority line. On election night: seats won (solid) and
  * races led but not called (light). Before votes, `projected` takes the leaders' place: the big numbers are the
  * forecast's projected totals, the light segments its expected seats, and the middle gives the chance of control.
- * `pickups` adds each party's seats taken from the other (won, then led) to the middle on election night.
+ * `pickups` adds each party's seats taken from the other (won, then led) to the note line on election night.
  */
 export function SeatBar({ tally, ahead: leading, office, projected = null, pickups = null }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE; projected?: Projected; pickups?: Pickups | null }) {
   const share = (n: number) => `${(n / tally.total) * 100}%`;
@@ -98,14 +98,6 @@ export function SeatBar({ tally, ahead: leading, office, projected = null, picku
           {CONTROL[office]}
           {tally.other + ahead.other > 0 && ` · Other ${tally.other}${ahead.other ? ` +${ahead.other}` : ""}`}
           {projected ? (controlOdds(projected.dControl) ? ` · ${controlOdds(projected.dControl)}` : "") : ` · ${open} uncounted`}
-          {!projected && pickups && (pickups.D.won + pickups.D.leading + pickups.R.won + pickups.R.leading > 0) && (
-            <span className="mt-seats-pickups" title="Seats taken from the other party: won, then leading but not called">
-              {" · Pickups "}
-              <PickupCount side="D" n={pickups.D} />
-              {(pickups.D.won || pickups.D.leading) && (pickups.R.won || pickups.R.leading) ? " · " : ""}
-              <PickupCount side="R" n={pickups.R} />
-            </span>
-          )}
         </span>
         <span className="r">
           {!projected && ahead.R > 0 && <em>{ahead.R} {word} + </em>}Rep <b>{projected ? tally.R + ahead.R : tally.R}</b>
@@ -121,6 +113,16 @@ export function SeatBar({ tally, ahead: leading, office, projected = null, picku
         {tick(office, tally)}
       </div>
       <p className="muted small">
+        {/* First on the note line, which has room to wrap, so the counts above stay on one line. */}
+        {!projected && pickups && pickups.D.won + pickups.D.leading + pickups.R.won + pickups.R.leading > 0 && (
+          <span className="mt-seats-pickups" title="Seats taken from the other party: won, then leading but not called">
+            {"Pickups: "}
+            <PickupCount side="D" n={pickups.D} />
+            {(pickups.D.won || pickups.D.leading) && (pickups.R.won || pickups.R.leading) ? " · " : ""}
+            <PickupCount side="R" n={pickups.R} />
+            {". "}
+          </span>
+        )}
         {NOTE[office]}
         {projected && ` ${PROJECTED_NOTE}`}
       </p>
