@@ -94,12 +94,13 @@
 .mt-star { position: relative; z-index: 1; border: 0; background: none; padding: 0 2px; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; }
 .mt-star:hover { color: var(--tossup); }
 .mt-star.on { color: var(--tossup); }
-/* The race card's switch for the map's Remaining view, just left of the star. */
-.mt-remaining { position: relative; z-index: 1; flex: none; font: inherit; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule); background: none; color: var(--muted); cursor: pointer; white-space: nowrap; }
-.mt-remaining:hover { color: var(--ink); }
-.mt-remaining.on { color: var(--accent); border-color: var(--accent); }
-/* Remaining-view circles: nearly solid on grey counties, with a light edge so overlapping ones stay apart. */
+/* Remaining and Margin circles: nearly solid on grey counties, with a light edge so overlapping ones stay apart. */
 .mt-bubbles circle { fill-opacity: 0.85; stroke: var(--ink); stroke-width: 1; stroke-opacity: 0.75; }
+/* Swing arrows, in the color of the side each county moved toward. */
+.mt-arrows line { stroke: currentColor; stroke-linecap: round; }
+.mt-arrows polygon { fill: currentColor; }
+.mt-map-modes { display: grid; gap: 6px; margin: 8px 0 12px; }
+.mt-map-modes p { margin: 0; }
 
 .mt-rating { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
 .mt-rating.r-tossup { color: var(--tossup); }

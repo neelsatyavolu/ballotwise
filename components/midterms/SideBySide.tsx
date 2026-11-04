@@ -12,7 +12,7 @@ import { STATE_NAMES, type Office, type Overview } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { CountyTip, fillFor } from "./county";
-import { RemainingButton, useRemaining } from "./remaining";
+import { MapModeSwitch, useMapModes, type MapMode } from "./mapModes";
 import { useClock, useLive, useStars } from "./hooks";
 import { ModeNav } from "./ModeNav";
 import { MomentPopup } from "./MomentPopup";
@@ -62,10 +62,11 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
     for (const c of shownDetail.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: <CountyTip county={c} /> });
     return out;
   }, [shownDetail]);
-  // The Remaining view, switched on from the race card: circles sized by each county's votes left.
-  const [showLeft, setShowLeft] = useState(false);
-  const remaining = useRemaining(shownDetail);
-  const leftOn = showLeft && !!remaining;
+  // The county map's view, switched under the race card: who leads, lead in votes, swing from 2024, or votes left.
+  const [mapMode, setMapMode] = useState<MapMode>("results");
+  const mapModes = useMapModes(shownDetail);
+  const mode = mapModes.modes.includes(mapMode) ? mapMode : "results";
+  const view = mode === "results" ? null : mapModes.views[mode];
   const districtFills = useMemo(() => {
     if (office !== "house") return undefined;
     const out = new Map<number, Fill>();
@@ -95,8 +96,9 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
         fills={fills}
         focus={focus}
         onFocus={(state) => zoomTo(state)}
-        countyFills={focus && shownId ? (shownDetail ? (leftOn ? remaining!.fills : countyFills) : undefined) : null}
-        bubbles={leftOn ? remaining!.bubbles : null}
+        countyFills={focus && shownId ? (shownDetail ? (view?.fills ?? countyFills) : undefined) : null}
+        bubbles={view?.bubbles ?? null}
+        arrows={view?.arrows ?? null}
         raceId={shownId}
         districtFills={districtFills}
         nationDistricts={nationDistricts}
@@ -115,8 +117,9 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
           {shown && (
             <>
               <ul className="mt-grid one">
-                <RaceCard race={shown} starred={star.ids ? star.ids.includes(shown.id) : null} onStar={star.toggle} tool={remaining && <RemainingButton on={showLeft} onChange={setShowLeft} />} />
+                <RaceCard race={shown} starred={star.ids ? star.ids.includes(shown.id) : null} onStar={star.toggle} />
               </ul>
+              <MapModeSwitch modes={mapModes.modes} mode={mode} onChange={setMapMode} note={view?.note} />
               <p className="small">
                 <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>
               </p>

@@ -20,7 +20,7 @@ import { RaceCard } from "./RaceCard";
 import { RaceRows } from "./RaceRows";
 import { OfficeSkeleton } from "./Skeleton";
 import { ZoomMap, type Fill } from "./ZoomMap";
-import { RemainingButton, useRemaining } from "./remaining";
+import { MapModeSwitch, useMapModes, type MapMode } from "./mapModes";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { ForecastTip } from "./ForecastTip";
 import { useDeskDetail } from "./useDeskDetail";
@@ -177,8 +177,8 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   // The Senate and House maps can show the 2024 presidential result in place of this year's races.
   const offers2024 = office === "senate" || office === "house";
   const [show2024, setShow2024] = useState(false);
-  // The Remaining view: the shown race's counties as circles sized by the votes they have left, as on DDHQ's map.
-  const [showLeft, setShowLeft] = useState(false);
+  // The county map's view, as on DDHQ's map: who leads, lead in votes, swing from 2024, or votes left.
+  const [mapMode, setMapMode] = useState<MapMode>("results");
   const past = offers2024 && show2024;
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
@@ -226,8 +226,9 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
     for (const c of shownDetail.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} mode={mode} /> });
     return out;
   }, [shownDetail, past]);
-  const remaining = useRemaining(past ? null : shownDetail);
-  const leftOn = showLeft && !!remaining;
+  const mapModes = useMapModes(past ? null : shownDetail);
+  const mode = mapModes.modes.includes(mapMode) ? mapMode : "results";
+  const view = mode === "results" ? null : mapModes.views[mode];
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
     return races.filter((r) => !q || `${raceLabel(r)} ${r.title} ${STATE_NAMES[r.state] ?? ""} ${r.candidates.map((c) => c.name).join(" ")}`.toLowerCase().includes(q)).sort(closestFirst);
@@ -259,7 +260,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
         <>
           <SeatHeader office={office} data={data} forecast={forecast} />
           <div className="mt-office mt-in">
-            <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (shownDetail ? (leftOn ? remaining!.fills : countyFills) : undefined) : null} bubbles={leftOn ? remaining!.bubbles : null} raceId={shownId} districtFills={districtFills} nationDistricts={nationDistricts} onPickNationDistrict={(key) => {
+            <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (shownDetail ? (view?.fills ?? countyFills) : undefined) : null} bubbles={view?.bubbles ?? null} arrows={view?.arrows ?? null} raceId={shownId} districtFills={districtFills} nationDistricts={nationDistricts} onPickNationDistrict={(key) => {
                 const r = races.find((x) => `${x.state}-${x.district ?? 0}` === key);
                 if (r) zoomTo(r.state, r.id);
               }} district={shown?.district ?? null} onPickDistrict={(d) => setPicked(shown?.district === d ? null : (inState.find((r) => r.district === d)?.id ?? null))} label={past ? `Map of the 2024 presidential result where 2026 ${TITLE[office].toLowerCase()} races are${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}` : `Map of 2026 ${TITLE[office].toLowerCase()} races${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}`} corner={offers2024 && <Year2024Toggle on={show2024} onChange={setShow2024} />} />
@@ -285,8 +286,9 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                   {shown && (
                     <>
                       <ul className="mt-grid one">
-                        <RaceCard race={shown} starred={favorites.ids ? favorites.ids.includes(shown.id) : null} onStar={favorites.toggle} tool={remaining && <RemainingButton on={showLeft} onChange={setShowLeft} />} />
+                        <RaceCard race={shown} starred={favorites.ids ? favorites.ids.includes(shown.id) : null} onStar={favorites.toggle} />
                       </ul>
+                      <MapModeSwitch modes={mapModes.modes} mode={mode} onChange={setMapMode} note={view?.note} />
                       <p className="small">
                         <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>
                       </p>

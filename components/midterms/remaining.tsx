@@ -10,7 +10,7 @@ import type { Bubble, Fill } from "./ZoomMap";
 /** Whoever a county's remaining votes favor can't be told: the circle goes grey. */
 const UNSURE = "var(--muted)";
 /** The counties under the circles: one plain grey, so the circles' colors are the only ones on the map. */
-const QUIET = "color-mix(in srgb, var(--in-race) 55%, var(--sheet))";
+export const QUIET = "color-mix(in srgb, var(--in-race) 55%, var(--sheet))";
 
 /**
  * Each county's circle for the Remaining view, from the votes-left estimate (DDHQ's own expected vote per county on a
@@ -56,15 +56,6 @@ export function useRemaining(race: RaceDetail | null | undefined): { bubbles: Bu
         ),
       });
     }
-    return { bubbles: est.counties.map((c) => ({ key: c.fips, left: c.left, color: colorOf(c.party) })), fills };
+    return { bubbles: est.counties.map((c) => ({ key: c.fips, size: c.left, color: colorOf(c.party) })), fills };
   }, [race, est]);
-}
-
-/** The race card's switch for the Remaining view, beside its star. */
-export function RemainingButton({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
-  return (
-    <button type="button" className={`mt-remaining${on ? " on" : ""}`} aria-pressed={on} onClick={() => onChange(!on)} title="Remaining: a circle on each county sized by the votes it has left, colored for whoever they favor">
-      Remaining
-    </button>
-  );
 }
