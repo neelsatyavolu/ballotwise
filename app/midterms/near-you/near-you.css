@@ -1,29 +1,25 @@
-/* The Near you screen. Each part of the ballot carries its color in --ny, set where the part is drawn. */
+/* The Near you screen. */
 
-.ny-tally { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 20px; }
-.ny-tally a { display: inline-flex; align-items: baseline; gap: 8px; padding: 8px 12px; background: var(--sheet); border: 1px solid var(--rule); border-left: 3px solid var(--ny); border-radius: var(--radius); color: var(--ink); text-decoration: none; font-size: 12px; transition: border-color 0.15s; }
-.ny-tally a:hover { border-color: var(--ny); }
-.ny-tally a b { color: var(--ny); font-size: 20px; font-variant-numeric: tabular-nums; }
-
-.ny-top { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+/* The map and the voter's county, each under a label row of the same height so their boxes start level. */
+.ny-top { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: 16px; align-items: start; margin-top: 20px; }
 @media (max-width: 860px) { .ny-top { grid-template-columns: 1fr; } }
+.ny-top .mt-section-head { min-height: 32px; }
 
-.ny-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
-.ny-side > .ny-section { margin-top: 0; }
-.ny-panel { display: grid; gap: 12px; align-content: start; padding: 16px; background: var(--sheet); border: 1px solid var(--rule); border-top: 3px solid var(--accent); border-radius: var(--radius); }
-.ny-panel h2 { margin: 2px 0 0; font-size: 24px; }
-.ny-panel .mt-ev-stats { margin: 0; }
+.ny-side { display: grid; align-content: start; min-width: 0; }
+.ny-panel { display: grid; gap: 16px; align-content: start; padding: 16px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); }
+.ny-panel h3 { margin: 0; font-size: 24px; line-height: 1.15; }
 .ny-county-race { display: grid; gap: 4px; padding: 10px 12px; background: var(--paper); border-radius: var(--radius); }
 .ny-county-race b { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .ny-county-race i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.ny-early { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--rule); }
+/* Ballots cast on a row of its own, the rest in even columns, so no figure is left alone on a line. */
+.ny-early .mt-ev-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 12px 16px; }
+.ny-early .mt-ev-stats .lead { grid-column: 1 / -1; }
 
-.ny-section { margin-top: 28px; }
-/* Sections with a few cards share a row; one with more cards than fit takes a row of its own. */
-.ny-flow { display: flex; flex-wrap: wrap; gap: 28px 16px; margin-top: 28px; }
-/* Cards at least 290px, so a candidate's name isn't cut to a few letters beside the votes and share. */
-.ny-flow > .ny-section { margin-top: 0; flex: var(--n) 1 calc(var(--n) * 300px - 10px); min-width: 0; max-width: calc(var(--n) * 440px); }
-.ny-flow .mt-grid { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
-.ny-section > h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 20px; }
-.ny-section > h2 i { width: 10px; height: 10px; border-radius: 2px; background: var(--ny); }
+/* Every section shares one card grid, so cards are the same width and line up from section to section. */
+.ny-flow { display: grid; gap: 32px; margin-top: 32px; }
+.ny-section > h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: 20px; }
 .ny-section > h2 .ny-count { color: var(--muted); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.ny-section .mt-card { border-top: 2px solid var(--ny); }
+.ny-section > p.muted { margin: -4px 0 12px; max-width: 680px; }
+.ny-section .mt-grid { margin: 0; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.ny-section .mt-grid + .btn.quiet { margin-top: 12px; }

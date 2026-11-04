@@ -3,7 +3,7 @@
 // The Near you screen: every race on the ballot at the voter's saved address, live, with a map of their state framed
 // on their county. The address is the one the ballot page keeps, and can be added or changed here.
 import Link from "next/link";
-import { useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { useAccount } from "@/components/AccountProvider";
 import { AddressInput } from "@/components/AddressInput";
 import { api, ApiError } from "@/lib/client";
@@ -18,12 +18,10 @@ import { OfficeSkeleton } from "./Skeleton";
 
 /** Top of the ticket first, as on a ballot. */
 const TICKET: Office[] = ["governor", "senate", "house"];
-/** Each part of the ballot keeps one color, on its tally chip and its cards. */
-const COLOR = { ticket: "var(--accent)", legislature: "#a855f7", local: "#14b8a6", nearby: "var(--muted)", measures: "var(--yes)" } as const;
 /** Cards a long section shows before "Show more". */
 const SHOWN = 8;
 
-type Part = { key: keyof typeof COLOR; title: string; note?: string; races: RaceSummary[]; empty?: string };
+type Part = { key: "ticket" | "legislature" | "local" | "nearby" | "measures"; title: string; note?: string; races: RaceSummary[]; empty?: string };
 type Local = NonNullable<LocalAnswer["local"]>;
 
 /** A statewide measure's number ("proposition 1"), to match the same measure across sources. */
@@ -112,16 +110,13 @@ function AddressForm({ onSaved, onCancel }: { onSaved: () => void; onCancel?: ()
   );
 }
 
-const tint = (key: Part["key"]) => ({ "--ny": COLOR[key] }) as CSSProperties;
-
 function Section({ part, stars, onStar }: { part: Part; stars: number[] | null; onStar: (id: number) => void }) {
   const [all, setAll] = useState(false);
   const shown = all ? part.races : part.races.slice(0, SHOWN);
   return (
-    // --n lets short sections share a row, each as wide as its cards.
-    <section id={`ny-${part.key}`} className="ny-section" style={{ ...tint(part.key), "--n": Math.max(1, shown.length) } as CSSProperties}>
+    <section id={`ny-${part.key}`} className="ny-section">
       <h2>
-        <i aria-hidden /> {part.title} <span className="ny-count">{part.races.length}</span>
+        {part.title} <span className="ny-count">{part.races.length}</span>
       </h2>
       {part.note && <p className="muted small">{part.note}</p>}
       {part.races.length ? (
@@ -138,18 +133,6 @@ function Section({ part, stars, onStar }: { part: Part; stars: number[] | null; 
         </button>
       )}
     </section>
-  );
-}
-
-function Tally({ parts }: { parts: Part[] }) {
-  return (
-    <nav className="ny-tally" aria-label="On your ballot">
-      {parts.map((p) => (
-        <a key={p.key} href={`#ny-${p.key}`} style={tint(p.key)}>
-          <b>{p.races.length}</b> {p.title.toLowerCase()}
-        </a>
-      ))}
-    </nav>
   );
 }
 
@@ -211,9 +194,6 @@ export function NearYouView() {
   // Sections with nothing to show drop out, except the ones whose absence says something.
   const shown = parts.filter((p) => p.races.length || p.key === "ticket" || p.key === "local");
   const counting = shown.some((p) => p.races.some((r) => r.total > 0));
-  const section = (p: Part) => <Section key={p.key} part={p} stars={favorites.ids} onStar={favorites.toggle} />;
-  // With a map, the top of the ticket goes beside it, under the county panel.
-  const beside = local.state ? shown.find((p) => p.key === "ticket") : undefined;
 
   return (
     <Shell
@@ -234,9 +214,10 @@ export function NearYouView() {
     >
       {live.error && <p className="error small">{live.error} Showing the last results we got.</p>}
       {editing && <AddressForm onSaved={saved} onCancel={() => setEditing(false)} />}
-      <Tally parts={shown.filter((p) => p.races.length)} />
-      {local.state && <NearYouMap state={local.state} fips={local.countyFips} raceId={ticket[0]?.id ?? null} side={beside && section(beside)} />}
-      <div className="ny-flow">{shown.filter((p) => p !== beside).map(section)}</div>
+      {local.state && <NearYouMap state={local.state} fips={local.countyFips} raceId={ticket[0]?.id ?? null} />}
+      <div className="ny-flow">
+        {shown.map((p) => <Section key={p.key} part={p} stars={favorites.ids} onStar={favorites.toggle} />)}
+      </div>
       <p className="muted small mt-source">
         Matched from your saved address, which your <Link href="/ballot">ballot page</Link> uses too. Local results from{" "}
         {ddhq ? <a href="https://votes.decisiondeskhq.com">Decision Desk HQ</a> : county ? <a href={SANTA_CLARA_RESULTS}>Santa Clara County</a> : <a href="https://civicapi.org">civicAPI</a>}; the rest from civicAPI{ddhq ? ", with Decision Desk HQ's counts for statewide measures where it has more" : ""}. <Link href="/midterms/credits">Sources and credits</Link>
