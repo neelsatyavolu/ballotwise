@@ -53,7 +53,7 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
   const shown = inState.find((r) => r.id === shownId) ?? null;
   const detail = useLive<{ race: RaceDetail }>(shownId ? `/api/midterms/race/${shownId}` : null);
   // On a connected screen, DDHQ's own counties for the shown race, as on the office pages.
-  const shownDetail = useDeskDetail(detail.data?.race, detail.data as { fetchedAt?: number } | null);
+  const shownDetail = useDeskDetail(detail.data?.race, detail.data as { fetchedAt?: number } | null, shown);
   const countyFills = useMemo(() => {
     if (!shownDetail) return null;
     const out = new Map<string, Fill>();
@@ -90,7 +90,7 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
         fills={fills}
         focus={focus}
         onFocus={(state) => zoomTo(state)}
-        countyFills={focus && shownId ? (detail.data ? countyFills : undefined) : null}
+        countyFills={focus && shownId ? (shownDetail ? countyFills : undefined) : null}
         raceId={shownId}
         districtFills={districtFills}
         nationDistricts={nationDistricts}

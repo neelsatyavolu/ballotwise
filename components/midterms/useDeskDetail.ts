@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/components/AccountProvider";
 import { applyDesk, civicSeen } from "@/lib/ddhq/apply";
 import type { DdhqRace } from "@/lib/ddhq/votes";
-import type { RaceDetail } from "@/lib/midterms/races";
+import type { RaceDetail, RaceSummary } from "@/lib/midterms/races";
 import { pollInterval } from "./hooks";
 import { useDeskData } from "./desk";
 
@@ -16,13 +16,16 @@ const MAX_WAIT_MS = 20_000;
 /**
  * `race` with DDHQ's own count and counties laid over it, once they're in; the race as given until then, if DDHQ
  * fails, and on screens without a connected account. `from` is the public payload the race came in (its fetch time),
- * which says whether civicAPI's count is recent enough to stand in where it's ahead.
+ * which says whether civicAPI's count is recent enough to stand in where it's ahead. `summary` is the overview's copy
+ * of the race: DDHQ is asked at once, without waiting on the public race (which waits on civicAPI, slow on election
+ * night), and its counties go on that copy until the public race arrives.
  */
-export function useDeskDetail(race: RaceDetail | null | undefined, from?: { stale?: boolean; fetchedAt?: number } | null): RaceDetail | null {
+export function useDeskDetail(race: RaceDetail | null | undefined, from?: { stale?: boolean; fetchedAt?: number } | null, summary?: RaceSummary | null): RaceDetail | null {
   const desk = useDeskData();
   const { refresh } = useAccount();
-  const seat = race && desk.enabled && race.office !== "measure" && !race.local
-    ? { office: race.office, state: race.state, district: race.district, special: /special/i.test(race.title) }
+  const which = race ?? summary;
+  const seat = which && desk.enabled && which.office !== "measure" && !which.local
+    ? { office: which.office, state: which.state, district: which.district, special: /special/i.test(which.title) }
     : null;
   const key = seat ? `${seat.office}:${seat.state}:${seat.district ?? ""}:${seat.special ? "s" : "g"}:${desk.owner ?? ""}` : "";
   const [reply, setReply] = useState<{ key: string; race: DdhqRace } | null>(null);
@@ -61,5 +64,8 @@ export function useDeskDetail(race: RaceDetail | null | undefined, from?: { stal
 
   const own = reply?.key === key ? reply.race : null;
   const seen = civicSeen(from);
-  return useMemo(() => (race && own ? applyDesk(race, own, seen) : race ?? null), [race, own, seen]);
+  return useMemo(() => {
+    const base = race ?? (own && summary ? { ...summary, pollsClose: null, updated: null, counties: [] } : null);
+    return base && own ? applyDesk(base, own, race ? seen : null) : base;
+  }, [race, own, seen, summary]);
 }

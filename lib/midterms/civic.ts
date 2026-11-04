@@ -555,7 +555,7 @@ function refreshAfter(memo: Stored, ratings: readonly RatedRace[], now: number, 
  * election night civicAPI answered a race in about 1.5 seconds while its searches were overloaded; without a limit a
  * page waited up to 50 seconds for a 503.
  */
-const RACE_WAIT_MS = 12_000;
+const RACE_WAIT_MS = 6_000;
 /** How long the last good copy of a race is kept in the data center's shared cache, to stand in when civicAPI fails. */
 const RACE_KEEP_S = 15 * 60;
 const keptUrl = (id: number) => `https://ballotwise.internal/civic-race/${id}`;

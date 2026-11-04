@@ -299,11 +299,7 @@ export function Wall({ office }: { office: WallOffice }) {
   // With DDHQ's own counties on a connected screen, as on the office pages: civicAPI's county breakdown can lag its
   // count or fail outright, which left counties grey. If the public race doesn't load, DDHQ's counties go on the
   // overview's copy of it.
-  const stopBase = useMemo<RaceDetail | null>(
-    () => stopLive?.race ?? (stop ? { ...stop, pollsClose: null, updated: null, counties: [] } : null),
-    [stopLive, stop],
-  );
-  const stopDetail = useDeskDetail(stopBase, stopLive ?? null);
+  const stopDetail = useDeskDetail(stopLive?.race, stopLive ?? null, stop);
   const next = upNext.map((id) => races.find((r) => r.id === id)).filter((r): r is RaceSummary => !!r);
   const grid = useRef<HTMLUListElement>(null);
   const detail = useRef<HTMLDivElement>(null);

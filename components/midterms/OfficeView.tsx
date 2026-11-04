@@ -204,7 +204,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const counting = !!shown && shown.total > 0;
   const detail = useLive<{ race: RaceDetail }>(shownId ? `/api/midterms/race/${shownId}` : null);
   // On a connected screen, DDHQ's own counties for the shown race: the board's counts carry none.
-  const shownDetail = useDeskDetail(detail.data?.race, detail.data as { stale?: boolean; fetchedAt?: number } | null);
+  const shownDetail = useDeskDetail(detail.data?.race, detail.data as { stale?: boolean; fetchedAt?: number } | null, shown);
   const districtFills = useMemo(() => {
     if (office !== "house") return undefined;
     const out = new Map<number, Fill>();
@@ -254,7 +254,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
         <>
           <SeatHeader office={office} data={data} forecast={forecast} />
           <div className="mt-office mt-in">
-            <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (detail.data ? countyFills : undefined) : null} raceId={shownId} districtFills={districtFills} nationDistricts={nationDistricts} onPickNationDistrict={(key) => {
+            <ZoomMap fills={fills} focus={focus} onFocus={(s) => zoomTo(s)} countyFills={focus && shownId ? (shownDetail ? countyFills : undefined) : null} raceId={shownId} districtFills={districtFills} nationDistricts={nationDistricts} onPickNationDistrict={(key) => {
                 const r = races.find((x) => `${x.state}-${x.district ?? 0}` === key);
                 if (r) zoomTo(r.state, r.id);
               }} district={shown?.district ?? null} onPickDistrict={(d) => setPicked(shown?.district === d ? null : (inState.find((r) => r.district === d)?.id ?? null))} label={past ? `Map of the 2024 presidential result where 2026 ${TITLE[office].toLowerCase()} races are${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}` : `Map of 2026 ${TITLE[office].toLowerCase()} races${focus ? `, zoomed to ${STATE_NAMES[focus]}` : ""}`} corner={offers2024 && <Year2024Toggle on={show2024} onChange={setShow2024} />} />
