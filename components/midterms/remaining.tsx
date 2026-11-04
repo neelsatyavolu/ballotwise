@@ -3,16 +3,18 @@ import { useMemo } from "react";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { approx, votesLeft } from "@/lib/midterms/votesLeft";
 import { lastName } from "./CandidateTable";
-import { CountyTip, fillFor } from "./county";
+import { CountyTip } from "./county";
 import { partyColor } from "./party";
 import type { Bubble, Fill } from "./ZoomMap";
 
 /** Whoever a county's remaining votes favor can't be told: the circle goes grey. */
 const UNSURE = "var(--muted)";
+/** The counties under the circles: one plain grey, so the circles' colors are the only ones on the map. */
+const QUIET = "color-mix(in srgb, var(--in-race) 55%, var(--sheet))";
 
 /**
  * Each county's circle for the Remaining view, from the votes-left estimate (DDHQ's own expected vote per county on a
- * connected screen), and the county fills beneath them: plain, so the circles read, with the votes left in the tip.
+ * connected screen), and the county fills beneath them: plain grey, so the circles read, with the votes left in the tip.
  * Null when the race has nothing left to show (no count yet, or every county counted).
  */
 export function useRemaining(race: RaceDetail | null | undefined): { bubbles: Bubble[]; fills: Map<string, Fill> } | null {
@@ -31,7 +33,7 @@ export function useRemaining(race: RaceDetail | null | undefined): { bubbles: Bu
       const l = left.get(c.fips);
       const leans = l?.party && race.candidates.find((x) => x.party === l.party);
       fills.set(c.fips, {
-        fill: `color-mix(in srgb, ${fillFor(c, "results")} 35%, var(--sheet))`,
+        fill: QUIET,
         tip: (
           <>
             <CountyTip county={c} />

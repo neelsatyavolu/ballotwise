@@ -98,8 +98,8 @@
 .mt-remaining { position: relative; z-index: 1; flex: none; font: inherit; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule); background: none; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .mt-remaining:hover { color: var(--ink); }
 .mt-remaining.on { color: var(--accent); border-color: var(--accent); }
-/* Remaining-view circles: see-through, so the counties under them and each other still show. */
-.mt-bubbles circle { fill-opacity: 0.55; stroke-width: 1; stroke-opacity: 0.9; }
+/* Remaining-view circles: nearly solid on grey counties, with a light edge so overlapping ones stay apart. */
+.mt-bubbles circle { fill-opacity: 0.85; stroke: var(--ink); stroke-width: 1; stroke-opacity: 0.75; }
 
 .mt-rating { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
 .mt-rating.r-tossup { color: var(--tossup); }

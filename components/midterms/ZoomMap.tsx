@@ -274,7 +274,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
     // Biggest first, so a small county's circle sits on top of a big neighbor's.
     return (
       <g className="mt-bubbles" pointerEvents="none">
-        {placed.sort((a, b) => b.r - a.r).map((b) => <circle key={b.key} cx={b.x} cy={b.y} r={b.r} style={{ fill: b.color, stroke: b.color }} vectorEffect="non-scaling-stroke" />)}
+        {placed.sort((a, b) => b.r - a.r).map((b) => <circle key={b.key} cx={b.x} cy={b.y} r={b.r} style={{ fill: b.color }} vectorEffect="non-scaling-stroke" />)}
       </g>
     );
   }, [bubbles, counties, focused]);
