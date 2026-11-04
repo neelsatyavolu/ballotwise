@@ -1,8 +1,10 @@
 // A wall screen: one office's results for a TV or spare monitor across the room. It sizes its type to the screen and
 // its map tours the closest races on its own. Kept free of the browser so the rules can be tested on their own.
 import { isCalled, isCompetitive, isWatch, watchFirst } from "./explore";
-import type { Office, RaceSummary } from "./view";
+import { lead, type Office, type RaceSummary } from "./view";
 
+/** A Senate race within this many points is toured whatever its rating. */
+const CLOSE_LEAD = 10;
 /** The most races one trip around the tour visits, so it comes back to the start within a few minutes. */
 const MAX_TOUR = 12;
 
@@ -20,7 +22,8 @@ export const TOUR: Record<"senate" | "house", TourPlan> = {
 };
 
 /**
- * The races the map zooms into, only ones with votes to show: this office's uncalled toss-ups and leans that are
+ * The races the map zooms into, only ones with votes to show: this office's uncalled toss-ups and leans (for the
+ * Senate, its likely races and any within CLOSE_LEAD points too) that are
  * counting, then (the House only) its other uncalled races that are counting, each in watchFirst order (toss-ups that
  * look set to flip first, then closest). Once every one of those is called, the closest of the office's races with
  * votes counted (the Senate's toss-ups and leans only). Before any votes, none: the map stays on the whole country.
@@ -29,10 +32,12 @@ export function tourRaces(races: readonly RaceSummary[], office: Office): RaceSu
   const mine = races.filter((r) => r.office === office);
   const open = (r: RaceSummary) => isWatch(r) || isCompetitive(r);
   const counting = mine.filter((r) => r.total > 0 && !isCalled(r));
-  // The Senate's few seats: only its toss-ups and leans, never a safer state.
+  // The Senate's few seats: its toss-ups, leans and likely races, and any other within CLOSE_LEAD points (Mississippi,
+  // unrated, was within 3 on Nov 3), never a lopsided one.
   const focused = office === "senate";
   const contested = (r: RaceSummary) => r.rating === "tossup" || !!r.rating?.startsWith("lean");
-  const tour = [...counting.filter(open).sort(watchFirst), ...(focused ? [] : counting.filter((r) => !open(r)).sort(watchFirst))];
+  const watched = (r: RaceSummary) => open(r) || !!r.rating?.startsWith("likely") || (lead(r.candidates)?.margin ?? Infinity) < CLOSE_LEAD;
+  const tour = focused ? counting.filter(watched).sort(watchFirst) : [...counting.filter(open).sort(watchFirst), ...counting.filter((r) => !open(r)).sort(watchFirst)];
   const done = mine.filter((r) => r.total > 0 && (!focused || contested(r)));
   return (tour.length ? tour : done.sort(watchFirst)).slice(0, MAX_TOUR);
 }

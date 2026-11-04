@@ -67,6 +67,16 @@ describe("wall tour", () => {
     expect(tourRaces([waiting, race({ rating: "lean-d" })], "senate")).toEqual([]);
   });
 
+  it("tours the Senate's likely races and any close one too, not its lopsided ones", () => {
+    const likely = race({ rating: "likely-r", votes: [40, 60] });
+    // Mississippi on Nov 3: no rating, but within about 3 points.
+    const close = race({ votes: [48, 51] });
+    const lopsided = race({ votes: [30, 70] });
+    const tossup = race({ rating: "tossup", votes: [50, 49] });
+    // Toss-ups first, then the rest in watchFirst order: the close race ahead of the wider likely one.
+    expect(tourRaces([lopsided, close, likely, tossup], "senate").map((r: RaceSummary) => r.id)).toEqual([tossup.id, close.id, likely.id]);
+  });
+
   it("caps the tour so a big night still comes back around", () => {
     const many = Array.from({ length: 30 }, () => race({ office: "house", rating: "tossup", votes: [50, 49] }));
     expect(tourRaces(many, "house")).toHaveLength(12);
