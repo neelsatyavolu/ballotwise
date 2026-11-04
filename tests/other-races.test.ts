@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchOtherRace, fetchRace, resetCivicMemo, searchRaces, searchResults } from "../lib/midterms/civic";
+import { fetchOtherRace, fetchRace, resetCivicMemo, searchLive, searchRaces, searchResults } from "../lib/midterms/civic";
 import { LAST_CLOSE, summarizeOther } from "../lib/midterms/races";
 import { stateCloses } from "../lib/midterms/polls";
 
@@ -127,5 +127,23 @@ describe("fetchRace", () => {
     resetCivicMemo();
     store.clear();
     await expect(fetchRace(summary, AFTER_POLLS + 120_000, BASELINE)).rejects.toThrow();
+  });
+});
+
+describe("searchLive", () => {
+  it("serves the last good answer from the shared edge cache, marked stale, when civicAPI fails", async () => {
+    const store = new Map<string, Response>();
+    const keyOf = (k: Request | string) => (typeof k === "string" ? k : k.url);
+    vi.stubGlobal("caches", { default: { match: async (k: Request | string) => store.get(keyOf(k))?.clone(), put: async (k: Request | string, r: Response) => void store.set(keyOf(k), r.clone()) } });
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ races: [mayor] })));
+    const first = await searchLive("Elm Springs", AFTER_POLLS);
+    expect(first).toMatchObject({ stale: false });
+    expect(first.races.map((r) => r.id)).toEqual([161607]);
+    // Another server, with no copy of its own, while civicAPI is down.
+    resetCivicMemo();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 500 })));
+    const second = await searchLive("Elm Springs", AFTER_POLLS + 60_000);
+    expect(second).toMatchObject({ stale: true });
+    expect(second.races.map((r) => r.id)).toEqual([161607]);
   });
 });

@@ -558,23 +558,25 @@ function refreshAfter(memo: Stored, ratings: readonly RatedRace[], now: number, 
 const RACE_WAIT_MS = 6_000;
 /** How long the last good copy of a race is kept in the data center's shared cache, to stand in when civicAPI fails. */
 const RACE_KEEP_S = 15 * 60;
-const keptUrl = (id: number) => `https://ballotwise.internal/civic-race/${id}`;
+const keptUrl = (key: string) => `https://ballotwise.internal/civic/${encodeURIComponent(key)}`;
 /** The Workers cache shared by every isolate in the data center; absent outside Workers (tests, scripts). */
 const edgeCache = (): Cache | null => (typeof caches === "undefined" ? null : (caches as unknown as { default?: Cache }).default ?? null);
 
-async function keepRace(id: number, at: number, race: RaceDetail): Promise<void> {
+/** Keeps a good civicAPI answer (`key` names it) in the data center's shared cache, to stand in when civicAPI fails. */
+async function keep(key: string, at: number, value: unknown): Promise<void> {
   try {
-    await edgeCache()?.put(keptUrl(id), Response.json({ at, race }, { headers: { "cache-control": `max-age=${RACE_KEEP_S}` } }));
+    await edgeCache()?.put(keptUrl(key), Response.json({ at, value }, { headers: { "cache-control": `max-age=${RACE_KEEP_S}` } }));
   } catch {
     // A cache that won't take it only loses the fallback.
   }
 }
 
-async function keptRace(id: number): Promise<Memo<RaceDetail> | null> {
+/** The newest answer any server here kept under `key` (see keep), or null. */
+async function kept<T>(key: string): Promise<Memo<T> | null> {
   try {
-    const hit = await edgeCache()?.match(keptUrl(id));
-    const kept = hit ? ((await hit.json()) as { at?: unknown; race?: unknown }) : null;
-    return kept && typeof kept.at === "number" && kept.race && typeof kept.race === "object" ? { at: kept.at, value: kept.race as RaceDetail } : null;
+    const hit = await edgeCache()?.match(keptUrl(key));
+    const found = hit ? ((await hit.json()) as { at?: unknown; value?: unknown }) : null;
+    return found && typeof found.at === "number" && found.value && typeof found.value === "object" ? { at: found.at, value: found.value as T } : null;
   } catch {
     return null;
   }
@@ -588,12 +590,12 @@ export async function fetchRace(summary: RaceSummary, now: number, baseline: Rea
     const detail = raceDetail(summary, input, baseline, now);
     const race = resultsHidden(summary.state, now, isTestData(input)) ? blankDetail(detail) : detail;
     raceMemo.set(summary.id, { at: now, value: race });
-    await keepRace(summary.id, now, race);
+    await keep(`race/${summary.id}`, now, race);
     return { race, fetchedAt: now, stale: false };
   } catch (err) {
     // This server's own copy, else the newest any server here kept: a page shows slightly old counties, not an error.
-    const kept = memo ?? (await keptRace(summary.id));
-    if (kept) return { race: kept.value, fetchedAt: kept.at, stale: true };
+    const last = memo ?? (await kept<RaceDetail>(`race/${summary.id}`));
+    if (last) return { race: last.value, fetchedAt: last.at, stale: true };
     throw err;
   }
 }
@@ -700,6 +702,9 @@ export async function searchRaces(query: string, now: number): Promise<FoundRace
  * civicAPI's Nov 3 races matching `query`, with their numbers, for the races near an address. Fresh for FRESH_MS; on a
  * civicAPI failure the last answer is used, marked stale. Like race pages, no numbers show before the state's polls close.
  */
+/** How long one place search waits on civicAPI, retries included, before falling back to the last good answer. */
+const SEARCH_WAIT_MS = 8_000;
+
 export async function searchLive(query: string, now: number): Promise<{ races: RaceSummary[]; stale: boolean }> {
   const key = query.toLowerCase();
   const memo = areaMemo.get(key);
@@ -707,10 +712,15 @@ export async function searchLive(query: string, now: number): Promise<{ races: R
   let stale = false;
   if (!memo || now - memo.at >= FRESH_MS) {
     try {
-      answer = await civic(`race/search?query=${encodeURIComponent(query)}&country=US&limit=100`);
+      // A page waits on several of these at once (Near you), so each gets SEARCH_WAIT_MS, not civicAPI's whole timeout.
+      answer = await civic(`race/search?query=${encodeURIComponent(query)}&country=US&limit=100`, Date.now() + SEARCH_WAIT_MS);
       remember(areaMemo, key, { at: now, value: answer });
+      await keep(`search/${key}`, now, answer);
     } catch (err) {
-      if (!memo) throw err;
+      // This server's own copy, else the newest any server here kept, marked stale.
+      const last = memo ?? (await kept<unknown>(`search/${key}`));
+      if (!last) throw err;
+      answer = last.value;
       stale = true;
     }
   }
