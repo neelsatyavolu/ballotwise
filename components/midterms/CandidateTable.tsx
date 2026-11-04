@@ -2,7 +2,7 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { isEarly } from "@/lib/midterms/explore";
-import { ballotOrder, fmt, partyTag, type RaceSummary } from "@/lib/midterms/view";
+import { ballotOrder, fmt, partyTag, seatGap, type RaceSummary } from "@/lib/midterms/view";
 import { pickIn } from "@/lib/midterms/picks";
 import { approx, approxShort, VOTES_LEFT_CAVEAT } from "@/lib/midterms/votesLeft";
 import type { LeftEstimate } from "./useVotesLeft";
@@ -137,7 +137,8 @@ export function CandidateTable({ race, status, left = null, limit, short = false
           <tr className="mt-ct-left" title={`Estimated votes still to count, and who they'd add the most to. ${VOTES_LEFT_CAVEAT}`}>
             <td colSpan={cols - 2}>~{(short ? approxShort : approx)(left.left)} left</td>
             <td colSpan={2} className="num">
-              {left.favors ? (
+              {/* Who gains is worked out between the top two, which doesn't decide a race for several seats. */}
+              {seatGap(race) ? null : left.favors ? (
                 <b style={{ color: partyColor(left.favors) }}>
                   {nameOf(left.favors.name)} +{(short ? approxShort : approx)(left.net)}
                 </b>

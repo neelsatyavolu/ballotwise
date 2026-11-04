@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useMemo, useRef } from "react";
 import { useAccount } from "@/components/AccountProvider";
 import type { LocalAnswer } from "@/lib/midterms/local";
+import { ballotRaces } from "@/lib/midterms/nearYou";
 import type { RaceSummary } from "@/lib/midterms/view";
 import { useLive } from "./hooks";
-import { ballotRaces } from "./NearYouView";
 import { RaceCard } from "./RaceCard";
 import { useRotatingFit } from "./useRotatingFit";
 

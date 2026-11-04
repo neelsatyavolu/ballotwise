@@ -99,6 +99,20 @@ export function lead(candidates: readonly { name: string; party: string; votes: 
   return { leader: first, margin: ((first.votes - (second?.votes ?? 0)) / total) * 100 };
 }
 
+/**
+ * A multi-seat race's deciding gap: the candidate holding the last seat against the first one out, in points. The
+ * seats come from the title (", 3 seats", as county races are named); null for a race with one seat.
+ */
+export function seatGap<C extends { name: string; party: string; votes: number; pct: number }>(race: { title: string; candidates: readonly C[] }) {
+  const seats = Number(race.title.match(/, (\d+) seats$/)?.[1] ?? 1);
+  if (seats < 2) return null;
+  const ranked = [...race.candidates].sort((a, b) => b.votes - a.votes);
+  const holder = ranked[seats - 1];
+  if (!holder || holder.votes === 0) return null;
+  const total = ranked.reduce((sum, c) => sum + c.votes, 0);
+  return { seats, holder, margin: ((holder.votes - (ranked[seats]?.votes ?? 0)) / total) * 100 };
+}
+
 export function raceLabel(r: Pick<RaceSummary, "office" | "state" | "district" | "title">): string {
   const state = STATE_NAMES[r.state] ?? r.state;
   if (r.office === "senate") return `${state} Senate${/special/i.test(r.title) ? " (special)" : ""}`;

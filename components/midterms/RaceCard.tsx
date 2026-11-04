@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRef, type ReactNode } from "react";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
-import { lead, raceLabel, RATING_LABEL, signalLine, type RaceSummary } from "@/lib/midterms/view";
+import { lead, raceLabel, RATING_LABEL, seatGap, signalLine, type RaceSummary } from "@/lib/midterms/view";
 import { CandidateTable } from "./CandidateTable";
 import { useClock } from "./hooks";
 import { useOnScreen, useVotesLeft } from "./useVotesLeft";
@@ -38,14 +38,19 @@ export function PulseTag({ race }: { race: RaceSummary }) {
   );
 }
 
+const ordinal = (n: number) => `${n}${n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"}`;
+
 /** Where a card's count stands, for the footer of its candidates table: called, the lead, or when polls close. */
 /** `zone` adds the time zone to a call's time ("PT"); a card's header leaves it out for room. */
 export function CardStatus({ race, zone = true }: { race: RaceSummary; zone?: boolean }) {
   const now = useClock(60_000);
   const ahead = lead(race.candidates);
+  // A race for several seats is decided at its last seat, not by who's first.
+  const gap = seatGap(race);
   // When the call was made, as DDHQ's "#DecisionMade" line shows it: a race can be called before any votes are in.
   if (race.candidates.some((c) => c.winner)) return <span className="called">Called{race.call && !race.call.withdrawn ? ` ${stampTime(race.call.at)}${zone ? ` ${zoneAbbr(race.call.at)}` : ""}` : ""}</span>;
   // A connected screen showing civicAPI's count until DDHQ posts its first votes says so.
+  if (gap) return <span title={`${gap.holder.name} holds seat ${gap.seats} over the next candidate`}>{ordinal(gap.seats)} seat by {gap.margin.toFixed(1)} pts</span>;
   if (ahead) return <span title={race.countFrom === "civic" ? "civicAPI's count, which is ahead of Decision Desk HQ's" : undefined}>Lead {ahead.margin.toFixed(1)} pts</span>;
   const final = stateFinal(race.state);
   return <span>{final && final > now ? `Polls close ${stampTime(final)} ${zoneAbbr(final)}` : "No results yet"}</span>;
