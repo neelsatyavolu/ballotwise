@@ -5,6 +5,7 @@ import SwiftUI
 struct ForecastView: View {
     @Environment(ForecastStore.self) private var store
     @Environment(LiveStore.self) private var live
+    @Environment(PulseStore.self) private var pulse
     @State private var office: Office = .senate
 
     var body: some View {
@@ -15,6 +16,7 @@ struct ForecastView: View {
                 }
                 .pickerStyle(.segmented)
 
+                if let d = pulse.control(office) { PulseCard(office: office, dControl: d) }
                 if let chamber = store.chamber(office) {
                     ControlCard(office: office, chamber: chamber)
                     DistributionChart(chamber: chamber)
@@ -90,7 +92,7 @@ private struct DistributionChart: View {
                 BarMark(x: .value("Seats", pt.seats), y: .value("Chance", pt.p))
                     .foregroundStyle(pt.seats >= chamber.majority ? Color.dem : Color.rep)
             }
-            .chartXScale(domain: (points.first?.seats ?? 0)...(points.last?.seats ?? 1))
+            .chartXScale(domain: (points.map(\.seats).min() ?? 0)...max(points.map(\.seats).max() ?? 1, (points.map(\.seats).min() ?? 0) + 1))
             .chartYAxis(.hidden)
             .frame(height: 150)
             Text("Blue bars are outcomes where Democrats reach \(chamber.majority).").font(.caption2).foregroundStyle(.secondary)
@@ -144,6 +146,46 @@ private struct ControlHistory: View {
             .chartYScale(domain: 0...1)
             .chartYAxis { AxisMarks(values: [0, 0.5, 1]) { v in AxisGridLine(); AxisValueLabel { Text("\(Int((v.as(Double.self) ?? 0) * 100))%") } } }
             .frame(height: 150)
+        }
+        .panel()
+    }
+}
+
+/// DDHQ Pulse, Decision Desk HQ's live model: its chance of control, projected seats and how the night moved it.
+private struct PulseCard: View {
+    @Environment(PulseStore.self) private var pulse
+    let office: Office
+    let dControl: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("DDHQ Pulse").font(.serif(.headline))
+                Spacer()
+                Text("Live").font(.caption2.weight(.bold)).foregroundStyle(Color.flagRed)
+            }
+            HStack(alignment: .lastTextBaseline) {
+                Text("Dem \(Format.chance(dControl))").font(.title2.monospacedDigit().weight(.bold)).foregroundStyle(Color.dem)
+                Spacer()
+                Text("Rep \(Format.chance(1 - dControl))").font(.title2.monospacedDigit().weight(.bold)).foregroundStyle(Color.rep)
+            }
+            if let seats = pulse.projected(office) {
+                Text("Projected seats: \(seats.d) D, \(seats.r) R").font(.caption).foregroundStyle(.secondary)
+            }
+            if let call = pulse.call(office) {
+                Text("✓ DDHQ projects \(call.side == "D" ? "Democrats" : "Republicans") win the \(office.label), \(Format.eastern(Date(timeIntervalSince1970: call.at / 1000), withDay: true))")
+                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.sideColor(call.side))
+            }
+            let points = pulse.history(office)
+            if points.count > 1 {
+                Chart(points) { pt in
+                    LineMark(x: .value("Time", pt.date), y: .value("Chance", (pt.value(office) ?? 50) / 100)).foregroundStyle(Color.dem)
+                }
+                .chartYScale(domain: 0...1)
+                .chartYAxis { AxisMarks(values: [0, 0.5, 1]) { v in AxisGridLine(); AxisValueLabel { Text("\(Int((v.as(Double.self) ?? 0) * 100))%") } } }
+                .frame(height: 120)
+            }
+            Text("Decision Desk HQ's live model of who controls the \(office.label), updated through the night.").font(.caption2).foregroundStyle(.secondary)
         }
         .panel()
     }

@@ -3,6 +3,7 @@ import SwiftUI
 struct MoreView: View {
     @Environment(AccountStore.self) private var account
     @State private var signingIn = false
+    @State private var connectingVotes = false
 
     var body: some View {
         List {
@@ -22,6 +23,21 @@ struct MoreView: View {
                     Text("Your starred races and dashboards follow your account to ballotwise.xanom.co.").font(.caption).foregroundStyle(.secondary)
                 }
             }
+            Section {
+                if account.user == nil {
+                    Text("Sign in, then connect a Votes Pro account to see Decision Desk HQ's counts, calls and county results here.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else if account.ddhqConnected {
+                    LabeledContent("Votes Pro", value: "Connected")
+                    Button("Disconnect", role: .destructive) { Task { await account.disconnectDdhq() } }
+                } else {
+                    Button("Connect a Votes Pro account") { connectingVotes = true }
+                }
+            } header: {
+                Text("Decision Desk HQ")
+            } footer: {
+                Text("DDHQ's race calls, seat counts and Pulse show for everyone. A connected Votes Pro account adds DDHQ's own vote counts, as on the website.")
+            }
             Section("Voter guide") {
                 Link(destination: API.base) { Label("Your ballot and candidate comparisons", systemImage: "checklist") }
                 Text("The voter guide opens on the website for now: look up your ballot, compare every candidate's sourced positions and track what you've voted on.")
@@ -32,11 +48,12 @@ struct MoreView: View {
                 Link("Data sources and credits", destination: API.base.appendingPathComponent("midterms/credits"))
                 Link("Privacy Policy", destination: API.base.appendingPathComponent("privacy"))
                 Link("Terms of Service", destination: API.base.appendingPathComponent("terms"))
-                Text("Results from civicAPI. Ratings from Kalshi and Polymarket prices, VoteHub polls and expert ratings.").font(.caption).foregroundStyle(.secondary)
+                Text("Results from civicAPI and Decision Desk HQ. Ratings from Kalshi and Polymarket prices, VoteHub polls and expert ratings.").font(.caption).foregroundStyle(.secondary)
             }
         }
         .navigationTitle("More")
         .sheet(isPresented: $signingIn) { SignInView() }
+        .sheet(isPresented: $connectingVotes) { VotesConnectView() }
     }
 }
 

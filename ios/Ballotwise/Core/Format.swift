@@ -123,7 +123,7 @@ nonisolated enum Format {
         guard let f = r.signal?.forecast else { return nil }
         let ranked = f.odds.ranked
         guard let top = ranked.first, ranked.count < 2 || ranked[1].p != top.p else { return nil }
-        let who = nominee(r.candidates, side: top.side, forecast: f).map { lastName($0.name) } ?? ["D": "Dem", "R": "Rep", "I": "Ind"][top.side]!
+        let who = nominee(r.candidates, side: top.side, forecast: f).map { lastName($0.name) } ?? ["D": "Dem", "R": "Rep", "I": "Ind"][top.side] ?? top.side
         return "\(who) \(chance(top.p))"
     }
 

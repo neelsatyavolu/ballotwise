@@ -29,8 +29,9 @@ struct RootView: View {
         }
         // The wall is always dark; the tab bar above it has to match.
         .preferredColorScheme(tab == .map ? .dark : nil)
-        .onChange(of: push.openRaceId) { _, id in
-            guard let id else { return }
+        // A task rather than onChange, so an alert tapped on a cold launch (set before this view appears) opens too.
+        .task(id: push.openRaceId) {
+            guard let id = push.openRaceId else { return }
             alertRace = RaceLink(id: id)
             push.openRaceId = nil
         }

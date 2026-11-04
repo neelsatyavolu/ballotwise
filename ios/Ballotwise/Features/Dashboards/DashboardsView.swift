@@ -62,8 +62,9 @@ struct DashboardsView: View {
     }
 
     private func delete(_ idx: IndexSet) async {
-        for i in idx {
-            if let reply = try? await API.shared.send("DELETE", "/api/midterms/dashboards/\(dashboards[i].id)", body: Empty(), as: DashboardList.self) {
+        // Ids first: each reply replaces the list, so later offsets would point past its end.
+        for id in idx.compactMap({ dashboards.indices.contains($0) ? dashboards[$0].id : nil }) {
+            if let reply = try? await API.shared.send("DELETE", "/api/midterms/dashboards/\(id)", body: Empty(), as: DashboardList.self) {
                 dashboards = reply.dashboards
             }
         }
@@ -81,17 +82,18 @@ struct DashboardDetail: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if let sections = dashboard.layout.sections {
-                    ForEach(sections, id: \.title) { section in
+                    ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                         SectionTitle(section.title)
                         if let note = section.note, !note.isEmpty { Text(note).font(.caption).foregroundStyle(.secondary) }
-                        ForEach(section.raceIds.compactMap { live.byId[$0] }) { race in
+                        // Grok may list a race twice; a lazy stack needs each id once.
+                        ForEach(Array(NSOrderedSet(array: section.raceIds)).compactMap { ($0 as? Int).flatMap { live.byId[$0] } }) { race in
                             NavigationLink(value: RaceLink(id: race.id)) { RaceCard(race: race) }.buttonStyle(.plain)
                         }
                     }
                 }
                 if let panels = dashboard.layout.panels {
                     // Reading order: top to bottom, then left to right.
-                    ForEach(panels.sorted { ($0.y, $0.x) < ($1.y, $1.x) }) { panel in
+                    ForEach(Array(panels.sorted { ($0.y, $0.x) < ($1.y, $1.x) }.enumerated()), id: \.offset) { _, panel in
                         PanelView(panel: panel)
                     }
                 }
@@ -112,7 +114,6 @@ struct DashboardDetail: View {
 private struct PanelView: View {
     let panel: DashboardPanel
     @Environment(LiveStore.self) private var live
-    @Environment(ForecastStore.self) private var forecast
 
     var body: some View {
         switch panel.type {
@@ -126,7 +127,7 @@ private struct PanelView: View {
         case "chamberControl", "balanceTopline", "balanceMap", "winChart", "seatsChart":
             if let office = panel.office, let tally = live.overview?.balance.tally(office) {
                 NavigationLink(value: office) {
-                    SeatBar(title: office == .governor ? "Governors" : office.label, tally: tally, projected: forecast.projected(office)).panel()
+                    ChamberBar(office: office, tally: tally).panel()
                 }
                 .buttonStyle(.plain)
             }

@@ -116,10 +116,12 @@ struct WallMap: View {
                          focusState: state, selected: office == .house ? selected : nil, zoom: zoom, pan: pan)
                     .opacity(showCounties ? 0 : 1)
                 // The House stays on districts, so the counties aren't drawn at all there.
-                if let counties, office != .house {
+                // Hidden counties aren't drawn at all: redrawing a state's counties under the map on every frame of a
+                // pan or zoom is wasted work.
+                if let counties, office != .house, showCounties {
                     MapLayer(focus: counties.viewBox, shapes: counties.shapes, lines: counties.lines, fills: countyFills,
                              selected: selected, zoom: zoom, pan: pan)
-                        .opacity(showCounties ? 1 : 0)
+                        .transition(.opacity)
                         .allowsHitTesting(false)
                 }
             }

@@ -5,6 +5,7 @@ struct RaceDetailView: View {
     let id: Int
     @Environment(LiveStore.self) private var live
     @Environment(AccountStore.self) private var account
+    @Environment(PulseStore.self) private var pulse
     @State private var detail: RaceResponse?
     @State private var odds: RaceForecastResponse?
     @State private var markets: MarketsResponse?
@@ -68,6 +69,13 @@ struct RaceDetailView: View {
     }
 
     private func load() async {
+        // A connected Decision Desk HQ account sees DDHQ's count and call; when DDHQ doesn't answer, the public page.
+        if account.ddhqConnected, live.byId[id]?.office != .measure,
+           let desk = try? await API.shared.get("/api/ddhq/live?race=\(id)", as: RaceResponse.self) {
+            detail = desk
+            error = nil
+            return
+        }
         do {
             detail = try await API.shared.get("/api/midterms/race/\(id)", as: RaceResponse.self)
             error = nil
@@ -93,6 +101,12 @@ struct RaceDetailView: View {
             }
             Text(race.title).font(.subheadline).foregroundStyle(.secondary)
             StatusLine(race: race)
+            if let p = pulse.race(race) {
+                Text(PulseStore.line(p)).font(.caption.weight(.semibold)).foregroundStyle(Theme.sideColor(p.side))
+            }
+            if detail?.desk ?? false {
+                Text("Count and call from Decision Desk HQ").font(.caption2).foregroundStyle(.secondary)
+            }
             if race.total == 0, let close = Polls.final(race.state), close > .now {
                 Text("Polls close at \(Format.eastern(close, withDay: true))").font(.caption).foregroundStyle(.secondary)
             }
@@ -104,7 +118,7 @@ struct RaceDetailView: View {
 
     private func candidates(_ race: Race) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            ForEach(Format.ballotOrder(race), id: \.name) { c in
+            ForEach(Array(Format.ballotOrder(race).enumerated()), id: \.offset) { _, c in
                 CandidateRow(race: race, candidate: c, chance: chance(race, c))
             }
             if race.total > 0 {

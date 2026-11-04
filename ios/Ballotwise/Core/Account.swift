@@ -12,6 +12,8 @@ final class AccountStore {
 
     var user: User? { me?.user }
     var grokConnected: Bool { me?.grok == "connected" }
+    /// A Decision Desk HQ Votes Pro account is connected, so results come from DDHQ (see LiveStore).
+    var ddhqConnected: Bool { me?.ddhq == "connected" }
 
     private enum Keys { static let starred = "starredRaceIds" }
     static let maxStars = 200
@@ -36,6 +38,27 @@ final class AccountStore {
         _ = try? await API.shared.send("POST", "/api/account/signout", body: Empty(), as: OK.self)
         API.shared.signOutLocally()
         me = nil
+    }
+
+    // MARK: Decision Desk HQ (the website's /api/auth/ddhq: email, then the code Votes emails)
+
+    /// Asks Votes to email a sign-in code.
+    func sendDdhqCode(email: String) async throws {
+        nonisolated struct Body: Encodable, Sendable { let email: String }
+        nonisolated struct Reply: Decodable, Sendable { var step: String? }
+        _ = try await API.shared.send("POST", "/api/auth/ddhq", body: Body(email: email), as: Reply.self)
+    }
+
+    /// Finishes connecting with the emailed code. Only a Votes Pro account connects.
+    func confirmDdhqCode(_ code: String) async throws {
+        nonisolated struct Body: Encodable, Sendable { let code: String }
+        _ = try await API.shared.send("POST", "/api/auth/ddhq", body: Body(code: code), as: OK.self)
+        await load()
+    }
+
+    func disconnectDdhq() async {
+        _ = try? await API.shared.send("DELETE", "/api/auth/ddhq", body: Empty(), as: OK.self)
+        await load()
     }
 
     func toggleStar(_ id: Int) {

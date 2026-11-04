@@ -113,6 +113,7 @@ struct CandidateRow: View {
 /// A race in a list: name, rating, status and the top candidates.
 struct RaceCard: View {
     @Environment(AccountStore.self) private var account
+    @Environment(PulseStore.self) private var pulse
     let race: Race
     var showCandidates = 2
 
@@ -135,7 +136,7 @@ struct RaceCard: View {
                 Text(about.text).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
             let ordered = Format.ballotOrder(race)
-            ForEach(Array(ordered.prefix(showCandidates)), id: \.name) { c in
+            ForEach(Array(ordered.prefix(showCandidates).enumerated()), id: \.offset) { _, c in
                 CandidateRow(race: race, candidate: c, chance: chance(for: c), compact: true)
             }
             HStack {
@@ -144,6 +145,9 @@ struct RaceCard: View {
                 if race.total == 0, let leader = Format.forecastLeader(race) {
                     Text("Forecast: \(leader)").font(.caption).foregroundStyle(.secondary)
                 }
+            }
+            if let p = pulse.race(race) {
+                Text(PulseStore.line(p)).font(.caption.weight(.semibold)).foregroundStyle(Theme.sideColor(p.side))
             }
             if let trend = race.trend, trend.votesAdded > 0 {
                 Text("+\(Format.votes(trend.votesAdded)) votes since \(Format.ago(trend.since))").font(.caption2).foregroundStyle(Color.flagBlue)
@@ -159,12 +163,33 @@ struct RaceCard: View {
     }
 }
 
+/// A chamber's seat bar with its projection and call: DDHQ Pulse's projected seats for the Senate and House once it
+/// has them (as the website's companion screen does), the forecast's otherwise, and DDHQ's call of control.
+struct ChamberBar: View {
+    @Environment(ForecastStore.self) private var forecast
+    @Environment(PulseStore.self) private var pulse
+    let office: Office
+    let tally: Tally
+
+    var body: some View {
+        let desk = pulse.projected(office)
+        SeatBar(title: office == .governor ? "Governors" : office.label, tally: tally,
+                projected: desk ?? forecast.projected(office),
+                projectedBy: desk == nil ? "Forecast" : "DDHQ Pulse projects",
+                call: ChamberCall.of(office, tally: tally, desk: pulse.call(office)))
+    }
+}
+
 /// Seats won by each side against the majority line, with uncalled seats in the middle.
 struct SeatBar: View {
     let title: String
     let tally: Tally
-    /// The forecast's projected seats, shown before any votes are counted.
+    /// Projected final seats, drawn as lighter shades: the forecast's, or DDHQ Pulse's on election night.
     var projected: (d: Int, r: Int)?
+    /// Whose projection `projected` is, for its caption.
+    var projectedBy = "Forecast"
+    /// Who has won control: a majority of seats, or Decision Desk HQ's projection.
+    var call: ChamberCall?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -204,8 +229,15 @@ struct SeatBar: View {
             }
             .frame(height: 16)
             .clipShape(RoundedRectangle(cornerRadius: 3))
-            if let projected, tally.uncalled == tally.total {
-                Text("Forecast: \(projected.d) D, \(projected.r) R").font(.caption).foregroundStyle(.secondary)
+            if let call {
+                Text("✓ \(call.text)\(call.ddhqAt.map { " (DDHQ, \(Format.eastern(Date(timeIntervalSince1970: $0 / 1000))))" } ?? "")")
+                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.sideColor(call.side))
+            }
+            if let projected, tally.uncalled == tally.total || projectedBy != "Forecast" {
+                Text("\(projectedBy): \(projected.d) D, \(projected.r) R").font(.caption).foregroundStyle(.secondary)
+            }
+            if tally.source == "ddhq" {
+                Text("Seats won from Decision Desk HQ's count").font(.caption2).foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)

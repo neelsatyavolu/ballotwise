@@ -4,7 +4,6 @@ import SwiftUI
 /// latest calls. Picking a race flies the map to it.
 struct NationRail: View {
     @Environment(LiveStore.self) private var live
-    @Environment(ForecastStore.self) private var forecast
     let office: Office
     let pick: (Race) -> Void
 
@@ -12,7 +11,7 @@ struct NationRail: View {
         VStack(alignment: .leading, spacing: 14) {
             ClockCard()
             if let tally = live.overview?.balance.tally(office) {
-                SeatBar(title: office == .governor ? "Governors" : office.label, tally: tally, projected: forecast.projected(office)).panel()
+                ChamberBar(office: office, tally: tally).panel()
             }
             let watch = WallLogic.watchList(live.races, office: office)
             if !watch.isEmpty {

@@ -7,6 +7,7 @@ struct BallotwiseApp: App {
     @State private var live = LiveStore()
     @State private var account = AccountStore()
     @State private var forecast = ForecastStore()
+    @State private var pulse = PulseStore()
     @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
@@ -15,6 +16,7 @@ struct BallotwiseApp: App {
                 .environment(live)
                 .environment(account)
                 .environment(forecast)
+                .environment(pulse)
                 .environment(delegate.push)
                 .tint(.flagBlue)
                 .task {
@@ -24,10 +26,16 @@ struct BallotwiseApp: App {
                     await account.load()
                     await push.refreshAuthorization()
                 }
+                .onChange(of: account.ddhqConnected) { _, connected in
+                    live.deskEnabled = connected
+                    Task { await live.refresh() }
+                }
                 .task(id: phase) {
                     // Results poll only while the app is on screen; alerts cover the rest.
                     guard phase == .active else { return }
+                    async let pulsing: Void = pulse.poll()
                     await live.poll()
+                    await pulsing
                 }
         }
     }

@@ -2,12 +2,17 @@ import SwiftUI
 
 // Colors from DESIGN.md (paper, ink, flag blue and red) and the tracker's party palette (app/midterms/midterms.css).
 extension Color {
-    init(hex: UInt32) {
+    nonisolated init(hex: UInt32) {
         self.init(.sRGB, red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
     }
 
-    static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
-        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(Color(hex: dark)) : UIColor(Color(hex: light)) })
+    /// A color for light and dark mode. UIKit may resolve it on any thread (Canvas drawing does), so the provider is
+    /// nonisolated and Sendable: under the project's main-actor default it would otherwise trap off the main thread.
+    nonisolated static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
+        Color(UIColor { @Sendable traits in
+            let hex = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+        })
     }
 
     static let paper = adaptive(0xF6F7F9, 0x0D1526)

@@ -140,7 +140,9 @@ nonisolated struct Tally: Codable, Sendable, Hashable {
     let total: Int
     let majority: Int
     let uncalled: Int
-    enum CodingKeys: String, CodingKey { case d = "D", r = "R", other, total, majority, uncalled }
+    /// "ddhq" when the seats won are Decision Desk HQ's own count, from its balance-of-power pages.
+    var source: String?
+    enum CodingKeys: String, CodingKey { case d = "D", r = "R", other, total, majority, uncalled, source }
 }
 
 nonisolated struct Balance: Codable, Sendable, Hashable {
@@ -174,6 +176,8 @@ nonisolated struct Overview: Codable, Sendable {
     let fetchedAt: Double
     let stale: Bool
     var callEvents: [CallEvent]?
+    /// Set by /api/ddhq/live: the counts are this user's Decision Desk HQ results.
+    var desk: Bool?
 }
 
 nonisolated struct RaceResponse: Codable, Sendable {
@@ -182,6 +186,7 @@ nonisolated struct RaceResponse: Codable, Sendable {
     let stale: Bool
     var callPending: Bool?
     var history: [VoteObservation]?
+    var desk: Bool?
 }
 
 nonisolated struct VoteObservation: Codable, Sendable, Hashable {
@@ -332,6 +337,8 @@ nonisolated struct Me: Codable, Sendable {
     var user: User?
     let grok: String
     var provider: String?
+    /// "connected" when the account has a Decision Desk HQ Votes Pro session.
+    var ddhq: String?
 }
 
 nonisolated struct DashboardSection: Codable, Sendable, Hashable {

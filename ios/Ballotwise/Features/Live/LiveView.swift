@@ -14,15 +14,15 @@ struct LiveView: View {
             LazyVStack(alignment: .leading, spacing: 16) {
                 ClockCard()
                 if let error = live.error { ErrorBanner(message: error) }
+                if let error = live.deskError { ErrorBanner(message: "Decision Desk HQ: \(error) Showing public results.") }
                 if push.authorization == .notDetermined { AlertsPrompt() }
 
                 if let balance = live.overview?.balance {
                     VStack(spacing: 16) {
                         ForEach([Office.senate, .house, .governor]) { office in
-                            NavigationLink(value: office) {
-                                SeatBar(title: office == .governor ? "Governors" : office.label, tally: balance.tally(office)!, projected: forecast.projected(office))
+                            if let tally = balance.tally(office) {
+                                NavigationLink(value: office) { ChamberBar(office: office, tally: tally) }.buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                     .panel()
@@ -133,7 +133,7 @@ struct UpdatedFooter: View {
                     Image(systemName: "exclamationmark.circle").foregroundStyle(Color.flagRed)
                     Text("Results may be behind; civicAPI is slow.")
                 } else if let fetched = live.overview?.fetchedAt {
-                    Text("Results from civicAPI, \(Format.ago(fetched, now: context.date))")
+                    Text("Results from \(live.fromDesk ? "Decision Desk HQ" : "civicAPI"), \(Format.ago(fetched, now: context.date))")
                 }
             }
             .font(.caption)

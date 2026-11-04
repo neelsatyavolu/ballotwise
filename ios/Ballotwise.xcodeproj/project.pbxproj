@@ -13,11 +13,13 @@
 		0C7AE213862C74F2CEC39B16 /* ForecastStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18583531CB108EB188705427 /* ForecastStore.swift */; };
 		0D7AC6F522E8A22951D8F72D /* BallotwiseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2308A4A583886F61B34FE29A /* BallotwiseTests.swift */; };
 		0FF34FBDFE46DEAEB51C3827 /* WallUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC43C67EF1A5DB98B735928C /* WallUITests.swift */; };
+		1DE20A5AE8093CC5BA34125C /* Pulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54CC9BE360CB767B2F0C4015 /* Pulse.swift */; };
 		290EB7DB2DAE4459282D7717 /* Polls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7022C0A8D91C4DB254C60DF5 /* Polls.swift */; };
 		2C7C8F73208A26DDBDEEE2D6 /* RaceComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4160D267BE701047C07DEFD /* RaceComponents.swift */; };
 		3AB59B4ED950A0B1E8453D5D /* BallotwiseApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AFDCDE799DE7D12A8E93F9 /* BallotwiseApp.swift */; };
 		3C4784C7FF12261356B9D04A /* Maps.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8B90B49FF7B294C7DA8F5ED /* Maps.swift */; };
 		405742D23DEF955B0996F192 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69144ECF5853F6BBEACBD363 /* MoreView.swift */; };
+		41A85A498BDF19996DD9DE94 /* VotesConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 421E46C657E629ABAFB9ED9C /* VotesConnectView.swift */; };
 		47664D6FF34F245937553006 /* RaceCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1139578970FF6C05DDF9769 /* RaceCharts.swift */; };
 		59344125BF6A28BA2B527338 /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83451627E8AF972B336F6E54 /* PushManager.swift */; };
 		5D3201375DE11F42865B45BF /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0437B97061BF860166905A /* Theme.swift */; };
@@ -75,11 +77,13 @@
 		30B05E8481FA68931AB2B20A /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
 		3FEFC7B3C8C980511C3DF0ED /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4190A93AD7DA5F851513FAC4 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
+		421E46C657E629ABAFB9ED9C /* VotesConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VotesConnectView.swift; sourceTree = "<group>"; };
 		45681D5CD77CC054233D3EC2 /* ResultsTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsTable.swift; sourceTree = "<group>"; };
 		49DA84805D2884B78D7A2DF2 /* Ballotwise.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Ballotwise.entitlements; sourceTree = "<group>"; };
 		4A72C83B67C8E06B7C90BAC2 /* WallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallView.swift; sourceTree = "<group>"; };
 		4D5C7588EFCB8B61896FCD81 /* Telestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Telestrator.swift; sourceTree = "<group>"; };
 		523FC1D914EC3778299EFB82 /* WallLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallLogic.swift; sourceTree = "<group>"; };
+		54CC9BE360CB767B2F0C4015 /* Pulse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pulse.swift; sourceTree = "<group>"; };
 		69144ECF5853F6BBEACBD363 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		7022C0A8D91C4DB254C60DF5 /* Polls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Polls.swift; sourceTree = "<group>"; };
 		751F8E2003C202EBF5CD3460 /* RaceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceDetailView.swift; sourceTree = "<group>"; };
@@ -244,6 +248,7 @@
 				B8B90B49FF7B294C7DA8F5ED /* Maps.swift */,
 				12761D3993DBEDF846D83FCB /* Models.swift */,
 				7022C0A8D91C4DB254C60DF5 /* Polls.swift */,
+				54CC9BE360CB767B2F0C4015 /* Pulse.swift */,
 				83451627E8AF972B336F6E54 /* PushManager.swift */,
 				DD0437B97061BF860166905A /* Theme.swift */,
 			);
@@ -254,6 +259,7 @@
 			isa = PBXGroup;
 			children = (
 				69144ECF5853F6BBEACBD363 /* MoreView.swift */,
+				421E46C657E629ABAFB9ED9C /* VotesConnectView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -411,6 +417,7 @@
 				A1DC2B3B36ACEC57C3D16CFD /* Models.swift in Sources */,
 				405742D23DEF955B0996F192 /* MoreView.swift in Sources */,
 				290EB7DB2DAE4459282D7717 /* Polls.swift in Sources */,
+				1DE20A5AE8093CC5BA34125C /* Pulse.swift in Sources */,
 				59344125BF6A28BA2B527338 /* PushManager.swift in Sources */,
 				47664D6FF34F245937553006 /* RaceCharts.swift in Sources */,
 				2C7C8F73208A26DDBDEEE2D6 /* RaceComponents.swift in Sources */,
@@ -421,6 +428,7 @@
 				A603BE34FC63F0321D239A83 /* SearchView.swift in Sources */,
 				747B9B587A8696756186C3C0 /* Telestrator.swift in Sources */,
 				5D3201375DE11F42865B45BF /* Theme.swift in Sources */,
+				41A85A498BDF19996DD9DE94 /* VotesConnectView.swift in Sources */,
 				F9F4AD84C098065EE1423CC4 /* WallLogic.swift in Sources */,
 				979C560E7913791E7FF5909E /* WallMap.swift in Sources */,
 				02B939392128728E3DFD4472 /* WallRail.swift in Sources */,
