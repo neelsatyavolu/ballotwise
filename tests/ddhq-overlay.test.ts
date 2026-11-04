@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ForecastOverview } from "../app/api/midterms/forecast/route";
-import { applyDesk, deskFor, overlayLive, isDesk } from "../lib/ddhq/apply";
+import { applyDesk, civicFresh, deskFor, overlayLive, isDesk } from "../lib/ddhq/apply";
 import type { DdhqForecastBundle } from "../lib/ddhq/forecast-types";
 import type { DdhqRace } from "../lib/ddhq/votes";
 import { safeSide, tierOf } from "../lib/midterms/explore";
@@ -146,27 +146,50 @@ describe("private DDHQ forecast overlay", () => {
     expect(raw.total).toBe(100);
   });
 
-  it("shows civicAPI's count under DDHQ's names while DDHQ has no votes yet, keeping DDHQ's call", () => {
+  it("shows civicAPI's count under DDHQ's names while it's well ahead of DDHQ's, keeping DDHQ's call and expected vote", () => {
     const zeros = [
       { name: "Dana Nominee", party: "Democratic", votes: 0, pct: 0, winner: false, incumbent: false },
       { name: "Riley Opponent", party: "Republican", votes: 0, pct: 0, winner: false, incumbent: false },
     ];
-    const raw = { ...civic(), candidates: civic().candidates.map((c) => ({ ...c, winner: c.party === "Democratic" })) };
-    const next = applyDesk(raw, desk({ candidates: zeros, total: 0, reporting: 0, expected: 5000 }));
-    expect(next).toMatchObject({ total: 100, reporting: 10, countFrom: "civic", calledFor: null });
-    expect(next.expected).toBeUndefined();
-    expect(next.candidates.map((c) => [c.name, c.votes, c.winner])).toEqual([["Dana Nominee", 60, false], ["Riley Opponent", 40, false]]);
-    expect(isDesk(next)).toBe(true);
-    // DDHQ's call stands, on the civicAPI count.
-    const called = applyDesk(raw, desk({ candidates: zeros.map((c, i) => ({ ...c, winner: i === 1 })), total: 0, call: { name: "Riley Opponent", at: "2026-11-04T03:00:00Z" } }));
+    const counted = (d: number, r: number) => zeros.map((c, i) => ({ ...c, votes: i ? r : d }));
+    // civicAPI: 6,000 to 4,000, 10% of precincts; any civicAPI winner flag is ignored.
+    // The public payload is current: civicAPI's count may stand in.
+    const apply = (r: RaceSummary, d: DdhqRace) => applyDesk(r, d, true);
+    const raw = { ...civic(), total: 10_000, candidates: civic().candidates.map((c) => ({ ...c, votes: c.party === "Democratic" ? 6000 : 4000, winner: c.party === "Democratic" })) };
+    // DDHQ has nothing in yet: civicAPI's count, its % in against DDHQ's expected vote.
+    const first = apply(raw, desk({ candidates: zeros, total: 0, reporting: 0, expected: 50_000 }));
+    expect(first).toMatchObject({ total: 10_000, reporting: 20, expected: 50_000, countFrom: "civic", calledFor: null });
+    expect(first.reportingUnknown).toBeUndefined();
+    expect(first.candidates.map((c) => [c.name, c.votes, c.winner])).toEqual([["Dana Nominee", 6000, false], ["Riley Opponent", 4000, false]]);
+    expect(isDesk(first)).toBe(true);
+    // Without DDHQ's expected vote, civicAPI's own % in.
+    expect(apply(raw, desk({ candidates: zeros, total: 0 }))).toMatchObject({ reporting: 10, countFrom: "civic" });
+    // DDHQ behind by more than 2% and 500 votes: still civicAPI's.
+    expect(apply(raw, desk({ candidates: counted(5000, 4000), total: 9000, expected: 50_000 }))).toMatchObject({ total: 10_000, countFrom: "civic" });
+    // Within either margin, or ahead: DDHQ's own.
+    const close = apply(raw, desk({ candidates: counted(5700, 3900), total: 9600, reporting: 19, expected: 50_000 }));
+    expect(close).toMatchObject({ total: 9600, reporting: 19 });
+    expect(close.countFrom).toBeUndefined();
+    expect(apply({ ...raw, total: 1000 }, desk({ candidates: counted(500, 300), total: 800 })).total).toBe(800);
+    expect(apply(raw, desk({ candidates: counted(7000, 5000), total: 12_000 })).total).toBe(12_000);
+    // DDHQ's call stands, on civicAPI's count.
+    const called = apply(raw, desk({ candidates: zeros.map((c, i) => ({ ...c, winner: i === 1 })), total: 0, call: { name: "Riley Opponent", at: "2026-11-04T03:00:00Z" } }));
     expect(called.calledFor).toBe("Riley Opponent");
-    expect(called.candidates.find((c) => c.winner)?.votes).toBe(40);
-    // Once DDHQ has any votes, its count shows, even behind civicAPI's.
-    expect(applyDesk(raw, desk({ candidates: zeros.map((c) => ({ ...c, votes: 5 })), total: 10 }))).toMatchObject({ total: 10 });
-    expect(applyDesk(raw, desk({ candidates: zeros.map((c) => ({ ...c, votes: 5 })), total: 10 })).countFrom).toBeUndefined();
+    expect(called.candidates.find((c) => c.winner)?.votes).toBe(4000);
     // Not from a race civicAPI left out, nor when the parties don't line up.
-    expect(applyDesk({ ...raw, missing: true }, desk({ candidates: zeros, total: 0 })).total).toBe(0);
-    expect(applyDesk(raw, desk({ candidates: [zeros[0], { ...zeros[1], party: "Democratic" }], total: 0 })).total).toBe(0);
+    expect(apply({ ...raw, missing: true }, desk({ candidates: zeros, total: 0 })).total).toBe(0);
+    expect(apply(raw, desk({ candidates: [zeros[0], { ...zeros[1], party: "Democratic" }], total: 0 })).total).toBe(0);
+    // When civicAPI is failing (a stale or old public payload), DDHQ's count shows, whatever civicAPI last said.
+    expect(applyDesk(raw, desk({ candidates: counted(5000, 4000), total: 9000 }))).toMatchObject({ total: 9000 });
+    const now = Date.now();
+    expect(civicFresh({ stale: false, fetchedAt: now - 30_000 }, now)).toBe(true);
+    expect(civicFresh({ stale: true, fetchedAt: now - 30_000 }, now)).toBe(false);
+    expect(civicFresh({ stale: false, fetchedAt: now - 3 * 60_000 }, now)).toBe(false);
+    const key = "senate:GA::g";
+    const board = new Map([[key, desk({ forecast: [], candidates: counted(5000, 4000), total: 9000 })]]);
+    const shown = (o: Overview) => overlayLive("/api/midterms", o, board).races[0].total;
+    expect(shown({ ...overview(raw), fetchedAt: now - 10_000 })).toBe(10_000);
+    expect(shown({ ...overview(raw), fetchedAt: now - 10_000, stale: true })).toBe(9000);
   });
 
   it("applies both sources and clears a stale public call when DDHQ has not called it", () => {

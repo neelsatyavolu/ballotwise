@@ -174,7 +174,7 @@ const MAX_EXPECTED_IN = 99;
  * DDHQ's "% in": votes counted over its live estimate of the race's final vote (turnout.estimated_votes_mid), as its
  * own pages show. Many states report no precinct counts to DDHQ, so precincts are only the fallback.
  */
-function expectedIn(total: number, estimate: unknown): number | undefined {
+export function expectedIn(total: number, estimate: unknown): number | undefined {
   const expected = countOf(estimate);
   return expected && expected > 0 ? Math.min(MAX_EXPECTED_IN, (total / expected) * 100) : undefined;
 }

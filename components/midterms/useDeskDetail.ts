@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "@/components/AccountProvider";
-import { applyDesk } from "@/lib/ddhq/apply";
+import { applyDesk, civicFresh } from "@/lib/ddhq/apply";
 import type { DdhqRace } from "@/lib/ddhq/votes";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { pollInterval } from "./hooks";
@@ -15,9 +15,10 @@ const MAX_WAIT_MS = 20_000;
 
 /**
  * `race` with DDHQ's own count and counties laid over it, once they're in; the race as given until then, if DDHQ
- * fails, and on screens without a connected account.
+ * fails, and on screens without a connected account. `from` is the public payload the race came in (its fetch time
+ * and staleness), which says whether civicAPI's count may stand in where it's ahead.
  */
-export function useDeskDetail(race: RaceDetail | null | undefined): RaceDetail | null {
+export function useDeskDetail(race: RaceDetail | null | undefined, from?: { stale?: boolean; fetchedAt?: number } | null): RaceDetail | null {
   const desk = useDeskData();
   const { refresh } = useAccount();
   const seat = race && desk.enabled && race.office !== "measure" && !race.local
@@ -59,5 +60,6 @@ export function useDeskDetail(race: RaceDetail | null | undefined): RaceDetail |
   }, [key, refresh]);
 
   const own = reply?.key === key ? reply.race : null;
-  return useMemo(() => (race && own ? applyDesk(race, own) : race ?? null), [race, own]);
+  const fresh = civicFresh(from);
+  return useMemo(() => (race && own ? applyDesk(race, own, fresh) : race ?? null), [race, own, fresh]);
 }

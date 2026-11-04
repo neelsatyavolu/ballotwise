@@ -200,7 +200,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   const counting = !!shown && shown.total > 0;
   const detail = useLive<{ race: RaceDetail }>(shownId ? `/api/midterms/race/${shownId}` : null);
   // On a connected screen, DDHQ's own counties for the shown race: the board's counts carry none.
-  const shownDetail = useDeskDetail(detail.data?.race);
+  const shownDetail = useDeskDetail(detail.data?.race, detail.data as { stale?: boolean; fetchedAt?: number } | null);
   const districtFills = useMemo(() => {
     if (office !== "house") return undefined;
     const out = new Map<number, Fill>();
