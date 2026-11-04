@@ -18,6 +18,8 @@ ABEV = "/api/abev/election"
 ABEV_KEYS = {"state", "election_date", "is_primary", "is_ballot_prop"}
 # The balance-of-power pages (counts, DDHQ Pulse) are public too, and go without a session the same way.
 BOP = r"/balance-of-power/2026/(house|senate|governor)"
+# A state's or county's election page (every race on its ballots, local ones too), public the same way.
+ELECTIONS = r"/elections/2026-11-03/[a-z-]{2,30}(/[a-z0-9-]{1,60})?"
 
 
 @dataclass
@@ -44,7 +46,7 @@ def valid_path(path):
     query = dict(pairs)
     if len(query) != len(pairs):
         return False
-    if re.fullmatch(r"/forecast/2026/(house|senate|governor)", parsed.path) or re.fullmatch(BOP, parsed.path):
+    if re.fullmatch(r"/forecast/2026/(house|senate|governor)", parsed.path) or re.fullmatch(BOP, parsed.path) or re.fullmatch(ELECTIONS, parsed.path):
         return not query
     if re.fullmatch(r"/api/(forecast|races)/[0-9]+", parsed.path):
         return not query
@@ -65,7 +67,7 @@ def valid_path(path):
 
 def is_public(path):
     route = urlsplit(path).path
-    return route == ABEV or bool(re.fullmatch(BOP, route))
+    return route == ABEV or bool(re.fullmatch(BOP, route)) or bool(re.fullmatch(ELECTIONS, route))
 
 
 async def relay(client, method, path, cookie):
@@ -78,7 +80,7 @@ async def relay(client, method, path, cookie):
         return error(400)
     session = {} if public else {"cookie": cookie, "authorization": "Bearer " + cookie.removeprefix("__session=")}
     body = bytearray()
-    page = path.startswith(("/forecast/2026/", "/balance-of-power/2026/"))
+    page = path.startswith(("/forecast/2026/", "/balance-of-power/2026/", "/elections/2026-11-03/"))
     content_type = "text/x-component" if page else "application/json"
 
     def receive(chunk):

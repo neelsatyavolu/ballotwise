@@ -100,6 +100,22 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await relay.relay(client, "GET", path, "")).status, 400)
             self.assertEqual(client.calls, [])
 
+    async def test_election_pages_go_without_a_session(self):
+        for path in ["/elections/2026-11-03/california", "/elections/2026-11-03/california/santa-clara", "/elections/2026-11-03/new-york/st-lawrence"]:
+            client = Client(body=b'1:{"races":[]}', headers={"content-type": "text/x-component"})
+            self.assertEqual((await relay.relay(client, "GET", path, "")).status, 200)
+            sent = client.calls[0][1]["headers"]
+            self.assertEqual(sent["RSC"], "1")
+            self.assertNotIn("cookie", sent)
+            self.assertNotIn("authorization", sent)
+            client = Client()
+            self.assertEqual((await relay.relay(client, "GET", path, COOKIE)).status, 400)
+            self.assertEqual(client.calls, [])
+        for path in ["/elections/2024-11-05/california", "/elections/2026-11-03/California", "/elections/2026-11-03/california/santa-clara?x=1", "/elections/2026-11-03/california/santa-clara/more"]:
+            client = Client()
+            self.assertEqual((await relay.relay(client, "GET", path, "")).status, 400)
+            self.assertEqual(client.calls, [])
+
     async def test_public_early_vote_query_is_fixed(self):
         base = "/api/abev/election?"
         for query in [
