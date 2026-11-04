@@ -13,6 +13,8 @@ const paloAlto: Districts = { ...base, state: "California", county: "Santa Clara
 const greenville: Districts = { ...base, state: "South Carolina", county: "Greenville County", place: "Greenville city" };
 
 const clarity = [
+  // Every ballot carries the governor: 144,458 is a quarter of Santa Clara's 2024 vote (750,433) at midterm turnout.
+  { CAT: "State and Federal", C: "Governor", K: "1", VF: 1, TP: 708, PR: 612, CH: ["Xavier Becerra", "Steve Hilton"], P: ["", ""], V: [100_000, 44_458] },
   { CAT: "School", C: "Palo Alto Unified SD", K: "42", VF: 2, TP: 22, PR: 11, CH: ["Avery Wang", "John Craig"], P: ["", ""], V: [5, 3] },
   { CAT: "Local", C: "City of San José Council, District 5", K: "86", VF: 1, TP: 22, PR: 0, CH: ["A", "B"], P: ["", ""], V: [0, 0] },
 ];
@@ -55,6 +57,9 @@ describe("localRaces", () => {
     const local = await localRaces(paloAlto, AFTER_POLLS);
     expect(local).toMatchObject({ area: "Palo Alto, Santa Clara County, California", source: "county", stale: false, nearby: [] });
     expect(local.yours.map((r) => [r.id - COUNTY_ID_BASE, r.total])).toEqual([[42, 8]]);
+    // How much is counted is the county's (its governor count against its expected vote), not its precincts in (11 of 22).
+    expect(local.yours[0].reporting).toBeCloseTo(25, 1);
+    expect(local.yours[0].expected).toBe(32);
     // Its local races aren't searched for on civicAPI (the county's share counted comes from the governor race).
     expect(fetch.mock.calls.some(([url]) => String(url).includes("civicapi.org") && String(url).includes("query="))).toBe(false);
   });

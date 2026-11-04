@@ -121,11 +121,12 @@ describe("mergeFound", () => {
 });
 
 describe("fetchCountyRace", () => {
-  it("shows a contest's votes, precincts in, update time and source, dropping an empty write-in line", async () => {
+  it("shows a contest's votes, update time and source, dropping an empty write-in line", async () => {
     vi.stubGlobal("fetch", feed());
     const { race, stale } = (await fetchCountyRace(COUNTY_ID_BASE + 42, AFTER_POLLS))!;
     expect(stale).toBe(false);
-    expect(race).toMatchObject({ id: COUNTY_ID_BASE + 42, office: "measure", state: "CA", title: "Palo Alto Unified School District, 2 seats", reporting: 50, total: 1000, counties: [], local: { kind: "candidates", type: "School Board", date: "2026-11-03" } });
+    // Precincts in (11 of 22) aren't how much is counted: a California precinct is in once any of its ballots are.
+    expect(race).toMatchObject({ id: COUNTY_ID_BASE + 42, office: "measure", state: "CA", title: "Palo Alto Unified School District, 2 seats", reporting: 0, reportingUnknown: true, total: 1000, counties: [], local: { kind: "candidates", type: "School Board", date: "2026-11-03" } });
     expect(race.source).toEqual({ name: "Santa Clara County", url: expect.stringContaining("clarityelections.com/CA/Santa_Clara/127570") });
     expect(race.candidates.map((c) => [c.name, c.votes, c.winner])).toEqual([["Avery Wang", 500, false], ["Linda Henigin", 300, false], ["John Craig", 200, false]]);
     expect(Date.parse(race.updated!)).toBe(Date.parse("2026-11-04T05:15:02Z"));

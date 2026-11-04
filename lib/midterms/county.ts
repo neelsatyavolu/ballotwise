@@ -26,9 +26,6 @@ const contestSchema = z.object({
   K: z.string().regex(/^\d+$/),
   /** How many candidates each voter picks: the seats up. */
   VF: z.number().nullish(),
-  /** Precincts in all, and reporting. */
-  TP: z.number().nullish(),
-  PR: z.number().nullish(),
   CH: z.array(z.string()),
   P: z.array(z.string()).nullish(),
   V: z.array(z.number()),
@@ -112,7 +109,9 @@ function asCivic(c: Contest, updated: string | null) {
     election_name: titleOf(c),
     election_type: "Local",
     election_date: `${ELECTION_DATE}T08:00:00.000Z`,
-    percent_reporting: c.TP ? ((c.PR ?? 0) / c.TP) * 100 : null,
+    // Not the county's precincts in (PR of TP): a California precinct counts as in once any of its ballots are, so it
+    // read 91% for Palo Alto's council with half the county's vote counted. Unknown, so Near you uses the county's share.
+    percent_reporting: null,
     // The county lists a write-in line in every contest; it's kept only once it has votes.
     candidates: c.CH.map((name, i) => ({ name: candidateName(name), party: c.P?.[i] || "Nonpartisan", votes: c.V[i] ?? 0, color: COLORS[i % COLORS.length] })).filter((x) => x.votes > 0 || !/^write-in$/i.test(x.name)),
     last_updated: updated,
