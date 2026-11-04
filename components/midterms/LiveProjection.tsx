@@ -69,8 +69,16 @@ function Control({ office, view, pulse }: { office: Body; view: ChamberProjectio
 }
 
 /** The two chances the control line combines: ours, and DDHQ Pulse's (Decision Desk HQ's live model). */
-function PulseControl({ view }: { view: ChamberProjection }) {
+function PulseControl({ view, own }: { view: ChamberProjection; own: { dSeats: number; rSeats: number } | null }) {
   const side = (d: number) => (d >= 0.5 ? <b className="d">D {pct(d)}</b> : <b className="r">R {pct(1 - d)}</b>);
+  // With DDHQ Pulse's projected seats in hand, the column is Pulse's projection and ours is set beside it.
+  if (own) {
+    return (
+      <p className="mt-proj-pulse small" title="Seats and chance of control from DDHQ Pulse, Decision Desk HQ's live model; ours is beside it for comparison.">
+        DDHQ Pulse projection · ours {own.dSeats}–{own.rSeats}, {side(view.ours)}
+      </p>
+    );
+  }
   return (
     <p className="mt-proj-pulse small" title="The chance above combines ours and DDHQ Pulse's equally (on the probit scale). Pulse is Decision Desk HQ's live model of who controls the chamber.">
       Ours {side(view.ours)} · DDHQ Pulse {view.pulse !== null && side(view.pulse)}
@@ -151,8 +159,12 @@ function RaceRow({ race, pulse }: { race: RaceOutlook; pulse: PulseRace | null }
   );
 }
 
-function Chamber({ office, view, pulse }: { office: Body; view: ChamberProjection; pulse: Pulse | null }) {
+function Chamber({ office, view: ours, pulse }: { office: Body; view: ChamberProjection; pulse: Pulse | null }) {
   const list = useFitRows();
+  // DDHQ Pulse's projection, where it's up, is the chamber's projection: its projected seats and its chance of control.
+  const projected = office === "governor" ? undefined : pulse?.projected?.[office];
+  const chance = office === "governor" ? undefined : pulse?.chambers[office];
+  const view = projected ? { ...ours, dSeats: projected.dem, rSeats: projected.rep, dControl: chance ? chance.dem / 100 : ours.dControl } : ours;
   return (
     <section className="mt-proj-col" aria-label={`${TITLE[office]} projection`}>
       <h3>{TITLE[office]}</h3>
@@ -166,7 +178,7 @@ function Chamber({ office, view, pulse }: { office: Body; view: ChamberProjectio
       </div>
       <SeatBar office={office} view={view} />
       <Control office={office} view={view} pulse={pulse} />
-      {view.pulse !== null && <PulseControl view={view} />}
+      {view.pulse !== null && <PulseControl view={view} own={projected ? { dSeats: ours.dSeats, rSeats: ours.rSeats } : null} />}
       {pulse && office !== "governor" && <PulseChart office={office} history={pulse.history ?? []} at={pulse.at} />}
       <p className="mt-proj-tally muted small">
         Won {view.won.D} D · {view.won.R} R · {view.counting} counting · {view.waiting} no votes yet
@@ -216,7 +228,7 @@ export function LiveProjection({ races }: { races: readonly RaceSummary[] }) {
     <section className="mt-proj" aria-label="Live projection">
       <div className="mt-section-head tight">
         <h2>Live projection</h2>
-        <span className="muted small">{data ? swingText(data.swing) : "Working it out…"} · forecast, adjusted for calls and counts{pulse?.at ? ", combined with DDHQ Pulse" : ""}</span>
+        <span className="muted small">{data ? swingText(data.swing) : "Working it out…"} · {pulse?.projected?.house || pulse?.projected?.senate ? "Senate and House from DDHQ Pulse's projection; governors from ours" : `forecast, adjusted for calls and counts${pulse?.at ? ", combined with DDHQ Pulse" : ""}`}</span>
       </div>
       {data && (
         <div className="mt-proj-cols">

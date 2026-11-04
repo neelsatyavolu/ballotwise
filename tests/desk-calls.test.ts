@@ -24,13 +24,22 @@ describe("withDeskCalls", () => {
   it("leaves called, pending and unmatched races, and seats shared by two races, as they are", () => {
     const called = race({ calledFor: "Ammie Akin" });
     expect(withDeskCalls([called], winners)[0]).toBe(called);
-    const pending = race({ callPending: true });
-    expect(withDeskCalls([pending], winners)[0]).toBe(pending);
+    // A race our call log holds takes DDHQ's call.
+    expect(withDeskCalls([race({ callPending: true })], winners)[0]).toMatchObject({ calledFor: "Terri A. Sewall", callPending: undefined });
     const unknown = race({ candidates: [{ name: "X Y", party: "Independent", votes: 1, pct: 50, winner: false, incumbent: false }, { name: "Z W", party: "Independent", votes: 1, pct: 50, winner: false, incumbent: false }] });
     expect(withDeskCalls([unknown], winners)[0]).toBe(unknown);
     const twins = [race({ id: 1 }), race({ id: 2 })];
     expect(withDeskCalls(twins, winners).every((r) => !r.calledFor)).toBe(true);
     expect(withDeskCalls([race({})], undefined)[0].calledFor).toBeUndefined();
+  });
+
+  it("matches names across accents and hyphens, even with two candidates of the winner's party", () => {
+    const two = race({ district: 37, candidates: [{ name: "Sydney Kamlager-Dove", party: "Democratic", votes: 70, pct: 70, winner: false, incumbent: true }, { name: "Samantha Mota", party: "Democratic", votes: 30, pct: 30, winner: false, incumbent: false }] });
+    expect(withDeskCalls([two], { "house:AL:37": { name: "Sydney Kamlager Dove", side: "D", at: 5 } })[0].calledFor).toBe("Sydney Kamlager-Dove");
+    const md = race({ district: 6, candidates: [{ name: "April McClain Delaney", party: "Democratic", votes: 70, pct: 70, winner: false, incumbent: true }, { name: "Robin Ficker", party: "Republican", votes: 30, pct: 30, winner: false, incumbent: false }] });
+    expect(withDeskCalls([md], { "house:AL:6": { name: "April McClain-Delaney", side: "D", at: 5 } })[0].calledFor).toBe("April McClain Delaney");
+    const nm = race({ office: "senate", district: null, candidates: [{ name: "Ben Ray Luján", party: "Democratic", votes: 1, pct: 50, winner: false, incumbent: true }, { name: "Nella Domenici", party: "Republican", votes: 1, pct: 50, winner: false, incumbent: false }] });
+    expect(withDeskCalls([nm], { "senate:AL:": { name: "Ben Ray Lujan", side: "D", at: 5 } })[0].calledFor).toBe("Ben Ray Luján");
   });
 
   it("matches by party when the names differ", () => {

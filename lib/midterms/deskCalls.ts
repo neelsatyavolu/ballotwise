@@ -5,12 +5,24 @@ import type { Tally } from "./races";
 import { raceKey } from "./seats";
 import { partyOf, type RaceSummary } from "./view";
 
-const surname = (name: string) => name.trim().replace(/,? (Jr|Sr|II|III|IV)\.?$/i, "").split(/\s+/).at(-1)?.toLowerCase() ?? "";
+/** A name's words, ignoring accents, case, hyphens and periods: "Kamlager-Dove" and "Kamlager Dove" read the same. */
+const words = (name: string) =>
+  name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/,? (jr|sr|ii|iii|iv)\.?$/, "").replace(/[-.']/g, " ").split(/\s+/).filter(Boolean);
+/** Whether two spellings name the same candidate: the same last word, or one's last name held whole in the other's. */
+function sameName(a: string, b: string): boolean {
+  const x = words(a);
+  const y = words(b);
+  if (!x.length || !y.length) return false;
+  if (x.at(-1) === y.at(-1)) return true;
+  const tail = (w: string[]) => w.slice(1).join(" ");
+  return (y.length > 1 && x.join(" ").endsWith(tail(y))) || (x.length > 1 && y.join(" ").endsWith(tail(x)));
+}
 
 /**
- * `races` with DDHQ's call on each race not already called: the candidate named (by last name, else the only one of
- * the winner's party) marked the winner, with the call's time. A race whose winner can't be matched is left as it is,
- * and so is one sharing its seat key with another (two races for one state's Senate seats).
+ * `races` with DDHQ's call on each race not already called: the candidate named (by name, ignoring accents and
+ * hyphens, else the only one of the winner's party) marked the winner, with the call's time. A race our call log holds
+ * (callPending: the count and the recorded call disagree) takes DDHQ's call too. A race whose winner can't be matched
+ * is left as it is, and so is one sharing its seat key with another (two races for one state's Senate seats).
  */
 export function withDeskCalls<T extends RaceSummary>(races: readonly T[], winners: Readonly<Record<string, PulseWinner>> | undefined): T[] {
   if (!winners) return [...races];
@@ -23,8 +35,8 @@ export function withDeskCalls<T extends RaceSummary>(races: readonly T[], winner
   return races.map((r) => {
     const key = keyOf(r);
     const won = key && counts.get(key) === 1 ? winners[key] : undefined;
-    if (!won || r.calledFor || r.callPending || r.candidates.some((c) => c.winner)) return r;
-    const named = r.candidates.filter((c) => surname(c.name) === surname(won.name));
+    if (!won || r.calledFor || r.candidates.some((c) => c.winner)) return r;
+    const named = r.candidates.filter((c) => sameName(c.name, won.name));
     const sided = r.candidates.filter((c) => { const p = partyOf(c.party); return (p === "other" ? "I" : p) === won.side; });
     const pick = named.length === 1 ? named[0] : sided.length === 1 ? sided[0] : null;
     if (!pick) return r;
@@ -32,6 +44,7 @@ export function withDeskCalls<T extends RaceSummary>(races: readonly T[], winner
       ...r,
       candidates: r.candidates.map((c) => (c === pick ? { ...c, winner: true } : c)),
       calledFor: pick.name,
+      callPending: undefined,
       call: { id: r.id, at: won.at, winner: pick.name, replaced: null, withdrawn: false as const },
     };
   });

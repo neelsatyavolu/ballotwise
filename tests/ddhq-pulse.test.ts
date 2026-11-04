@@ -46,8 +46,13 @@ describe("DDHQ Pulse", () => {
     expect(readPulsePage(page, "governor").seats).toEqual({});
   });
 
+  it("reads DDHQ Pulse's projected seat count", () => {
+    const page = '85:["$","$L85",null,{"title":"Projected Seat Count","noun":"Seats","percent":false,"rep":181,"dem":254,"points":[]}]\n';
+    expect(readPulsePage(page, "house").projected).toEqual({ house: { rep: 181, dem: 254 } });
+  });
+
   it("finds nothing in a page of another shape", () => {
-    expect(readPulsePage('0:{"P":null}\n', "senate")).toEqual({ chambers: {}, races: {}, calls: {}, winners: {}, ids: {}, seats: {}, history: [] });
+    expect(readPulsePage('0:{"P":null}\n', "senate")).toEqual({ chambers: {}, races: {}, calls: {}, winners: {}, ids: {}, seats: {}, projected: {}, history: [] });
     expect(readPulsePage(pages.senate, "governor").chambers).toEqual({});
   });
 
