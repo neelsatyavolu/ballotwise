@@ -46,12 +46,6 @@ function forecastOf(desk: DdhqRace): Forecast {
 
 /** Replace each available DDHQ field independently; missing counts do not suppress a valid forecast. */
 /**
- * civicAPI's count stands in for DDHQ's when it's ahead by both of these: enough that the two sources don't trade
- * places on every refresh. Counts only go up, so the bigger one is the newer one, but a small gap is noise.
- */
-const AHEAD_SHARE = 0.02;
-const AHEAD_VOTES = 500;
-/**
  * How long after civicAPI last reported a race its count may still stand in for DDHQ's. Counts only go up, so a count
  * a few minutes old that's well ahead is still the newer one (on Nov 3 civicAPI went down holding South Carolina at
  * 345,809 votes while DDHQ had 53,084); past this, with civicAPI down, DDHQ's own count shows.
@@ -63,29 +57,36 @@ export const civicSeen = (data: { fetchedAt?: number } | null | undefined): numb
 
 const sideOfParty = (party: string) => (/^Democrat/i.test(party) ? "D" : /^Republican/i.test(party) ? "R" : null);
 
+const surname = (name: string) => name.trim().replace(/,? (Jr|Sr|II|III|IV)\.?$/i, "").split(/\s+/).at(-1)?.toLowerCase() ?? "";
+
+/** The one public candidate a DDHQ candidate is: same name, else same last name, else the only one of its party. */
+function matchOf<C extends { name: string; party: string }>(row: DdhqCandidate, list: readonly C[]): C | null {
+  const only = (match: (c: C) => boolean) => {
+    const hit = list.filter(match);
+    return hit.length === 1 ? hit[0] : null;
+  };
+  const side = sideOfParty(row.party);
+  return only((c) => c.name === row.name) ?? only((c) => surname(c.name) === surname(row.name)) ?? (side ? only((c) => sideOfParty(c.party) === side) : null);
+}
+
 /**
- * DDHQ's candidates carrying civicAPI's count, for a race where civicAPI has counted well more than DDHQ (on Nov 3
- * civicAPI had Indiana House votes before DDHQ posted any): any votes while DDHQ has none, else more by AHEAD_SHARE
- * and AHEAD_VOTES. Each takes the votes of the one public candidate of its party, so DDHQ's names stay ("Cynthia
- * Wirth" where civicAPI says "Cinde Wirth") and nothing jumps when DDHQ's count catches up. Null when civicAPI isn't
- * that far ahead, last reported the race more than CIVIC_KEEP_MS ago (`seenAt` is the payload's time, or the race's
- * own last sighting when civicAPI left it out), or the two don't have exactly one Democrat and one Republican each.
+ * DDHQ's candidates carrying civicAPI's count, for a race where civicAPI has counted more votes than DDHQ (on Nov 3
+ * civicAPI had Indiana House votes before DDHQ posted any). Each takes the votes of the public candidate it matches (matchOf), so DDHQ's names stay ("Cynthia
+ * Wirth" where civicAPI says "Cinde Wirth") and nothing jumps when DDHQ's count catches up; races without a Democrat
+ * (Nebraska's independent) match by name. Null when civicAPI isn't that far ahead, last reported the race more than
+ * CIVIC_KEEP_MS ago (`seenAt` is the payload's time, or the race's own last sighting when civicAPI left it out), or
+ * civicAPI's two leaders don't each match exactly one DDHQ candidate.
  */
 function publicCount(race: RaceSummary, rows: readonly DdhqCandidate[], deskTotal: number, seenAt: number | null): DdhqCandidate[] | null {
   const seen = race.missing ? (race.lastSeen ?? null) : seenAt;
   if (race.total <= 0 || seen === null || Date.now() - seen > CIVIC_KEEP_MS) return null;
-  if (deskTotal > 0 && (race.total < deskTotal * (1 + AHEAD_SHARE) || race.total - deskTotal < AHEAD_VOTES)) return null;
-  const only = <C extends { party: string }>(list: readonly C[], match: (c: C) => boolean) => {
-    const hit = list.filter(match);
-    return hit.length === 1 ? hit[0] : null;
-  };
-  const twoParty = (["D", "R"] as const).every((side) => only(rows, (c) => sideOfParty(c.party) === side) && only(race.candidates, (c) => sideOfParty(c.party) === side));
-  if (!twoParty) return null;
-  return rows.map((row) => {
-    const side = sideOfParty(row.party);
-    const mine = only(race.candidates, (c) => (side ? sideOfParty(c.party) === side : c.party === row.party));
-    return { ...row, votes: mine?.votes ?? 0, pct: mine?.pct ?? 0 };
-  });
+  // Counts only go up, so whichever has more votes is the newer count.
+  if (race.total <= deskTotal) return null;
+  const matched = rows.map((row) => matchOf(row, race.candidates));
+  const leaders = [...race.candidates].sort((a, b) => b.votes - a.votes).slice(0, 2);
+  const once = (c: (typeof race.candidates)[number]) => matched.filter((m) => m === c).length === 1;
+  if (leaders.length < 2 || !leaders.every(once) || matched.some((m) => m && !once(m))) return null;
+  return rows.map((row, i) => ({ ...row, votes: matched[i]?.votes ?? 0, pct: matched[i]?.pct ?? 0 }));
 }
 
 /**
@@ -104,7 +105,7 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicA
   if (desk.candidates) {
     const winner = desk.call?.name ?? desk.candidates.find((row) => row.winner)?.name ?? null;
     const calledAt = desk.call ? Date.parse(desk.call.at) : NaN;
-    // Where civicAPI's count is recent and well ahead, its count stands in under DDHQ's names; DDHQ's call and forecast rule.
+    // Where civicAPI's count is recent and has more votes, its count stands in under DDHQ's names; DDHQ's call and forecast rule.
     const stand = civicAt !== null ? publicCount(race, desk.candidates, desk.total, civicAt) : null;
     // DDHQ's expected vote estimates the race's final total whichever count shows, so % in and votes left stay on
     // DDHQ's scale; without it, civicAPI's count keeps its own % in.

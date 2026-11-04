@@ -146,7 +146,7 @@ describe("private DDHQ forecast overlay", () => {
     expect(raw.total).toBe(100);
   });
 
-  it("shows civicAPI's count under DDHQ's names while it's well ahead of DDHQ's, keeping DDHQ's call and expected vote", () => {
+  it("shows civicAPI's count under DDHQ's names whenever it has more votes than DDHQ's, keeping DDHQ's call and expected vote", () => {
     const zeros = [
       { name: "Dana Nominee", party: "Democratic", votes: 0, pct: 0, winner: false, incumbent: false },
       { name: "Riley Opponent", party: "Republican", votes: 0, pct: 0, winner: false, incumbent: false },
@@ -164,18 +164,32 @@ describe("private DDHQ forecast overlay", () => {
     expect(isDesk(first)).toBe(true);
     // Without DDHQ's expected vote, civicAPI's own % in.
     expect(apply(raw, desk({ candidates: zeros, total: 0 }))).toMatchObject({ reporting: 10, countFrom: "civic" });
-    // DDHQ behind by more than 2% and 500 votes: still civicAPI's.
+    // DDHQ behind by any amount: civicAPI's.
     expect(apply(raw, desk({ candidates: counted(5000, 4000), total: 9000, expected: 50_000 }))).toMatchObject({ total: 10_000, countFrom: "civic" });
-    // Within either margin, or ahead: DDHQ's own.
-    const close = apply(raw, desk({ candidates: counted(5700, 3900), total: 9600, reporting: 19, expected: 50_000 }));
-    expect(close).toMatchObject({ total: 9600, reporting: 19 });
-    expect(close.countFrom).toBeUndefined();
-    expect(apply({ ...raw, total: 1000 }, desk({ candidates: counted(500, 300), total: 800 })).total).toBe(800);
+    expect(apply(raw, desk({ candidates: counted(5900, 4000), total: 9900, expected: 50_000 }))).toMatchObject({ total: 10_000, countFrom: "civic" });
+    // Level or ahead: DDHQ's own.
+    const level = apply(raw, desk({ candidates: counted(6000, 4000), total: 10_000, reporting: 19, expected: 50_000 }));
+    expect(level).toMatchObject({ total: 10_000, reporting: 19 });
+    expect(level.countFrom).toBeUndefined();
     expect(apply(raw, desk({ candidates: counted(7000, 5000), total: 12_000 })).total).toBe(12_000);
     // DDHQ's call stands, on civicAPI's count.
     const called = apply(raw, desk({ candidates: zeros.map((c, i) => ({ ...c, winner: i === 1 })), total: 0, call: { name: "Riley Opponent", at: "2026-11-04T03:00:00Z" } }));
     expect(called.calledFor).toBe("Riley Opponent");
     expect(called.candidates.find((c) => c.winner)?.votes).toBe(4000);
+    // A race without a Democrat (Nebraska's: an independent against a Republican), matched by name.
+    const nebraska = { ...civic(), state: "NE", total: 10_000, candidates: [
+      { name: "Dan Osborn", party: "Independent", votes: 6000, pct: 60, winner: false, incumbent: false },
+      { name: "Pete Ricketts", party: "Republican", votes: 4000, pct: 40, winner: false, incumbent: true },
+    ] };
+    const neDesk = desk({ forecast: [], candidates: [
+      { name: "Pete Ricketts", party: "Republican", votes: 3000, pct: 50, winner: false, incumbent: true },
+      { name: "Dan Osborn", party: "Independent", votes: 3000, pct: 50, winner: false, incumbent: false },
+    ], total: 6000 });
+    expect(apply(nebraska, neDesk).candidates.map((c) => [c.name, c.votes])).toEqual([["Dan Osborn", 6000], ["Pete Ricketts", 4000]]);
+    // A spelling DDHQ and civicAPI disagree on still matches by last name.
+    const wirth = { ...nebraska, candidates: [{ ...nebraska.candidates[0], name: "Cinde Wirth", party: "Democratic" }, nebraska.candidates[1]] };
+    const wirthDesk = desk({ candidates: [{ ...neDesk.candidates![1], name: "Cynthia Wirth", party: "Democratic" }, neDesk.candidates![0]], total: 6000 });
+    expect(apply(wirth, wirthDesk).candidates.find((c) => c.name === "Cynthia Wirth")?.votes).toBe(6000);
     // Not from a race civicAPI left out, nor when the parties don't line up.
     expect(apply({ ...raw, missing: true }, desk({ candidates: zeros, total: 0 })).total).toBe(0);
     expect(apply(raw, desk({ candidates: [zeros[0], { ...zeros[1], party: "Democratic" }], total: 0 })).total).toBe(0);
