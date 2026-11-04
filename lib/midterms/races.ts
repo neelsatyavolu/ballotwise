@@ -104,8 +104,6 @@ export type CountyResult = {
    */
   expected?: number;
   done?: true;
-  /** A county rolled up from its towns (New England, see countyRollup.ts): how many of them have votes in. */
-  towns?: { in: number; of: number };
   /** 2024 presidential margin, Harris minus Trump, in points. */
   baseline2024: number | null;
   pres2024: Pres2024 | null;

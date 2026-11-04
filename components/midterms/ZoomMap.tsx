@@ -1,6 +1,7 @@
 // Rendered inside OfficeView.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { labelSpot } from "@/lib/midterms/labelSpot";
+import { isTownCode } from "@/lib/midterms/view";
 import { CityLabels, FlipStripes, loadMap, useDistrictShapes, usePatternId, type City } from "./maps";
 import { HoverCard, keyOf, useMapHover } from "./mapHover";
 import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zoom";
@@ -16,6 +17,8 @@ type Districts = { districts: { district: number; d: string }[] };
 export type Fill = { fill: string; tip: ReactNode; flip?: boolean; called?: boolean; watch?: boolean; lean?: boolean; lead?: string };
 
 const FULL: Box = [0, 0, 975, 610];
+/** The states with town layers (scripts/build-towns.mjs writes albers/towns/XX.json). */
+const TOWN_STATES = new Set(["CT", "ME", "MA", "NH", "RI", "VT"]);
 /** How far a state's label and its lead sit above and below the label's spot, in map units. */
 const LEAD_GAP = 6.5;
 
@@ -62,7 +65,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   corner?: ReactNode;
 }) {
   const [nation, setNation] = useState<Nation | null | "error">(null);
-  const [layer, setLayer] = useState<{ state: string; data: Layer } | null>(null);
+  const [layer, setLayer] = useState<{ state: string; towns: boolean; data: Layer } | null>(null);
   const [lines, setLines] = useState<{ state: string; data: Districts } | null>(null);
   const patternId = usePatternId();
   const wrap = useRef<HTMLDivElement>(null);
@@ -73,17 +76,19 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   useEffect(() => {
     loadMap<Nation>("US").then(setNation, () => setNation("error"));
   }, []);
+  // New England reports by town: when the results are keyed by town, the state is drawn by town, as DDHQ draws it.
+  const towns = !!countyFills && TOWN_STATES.has(focus ?? "") && [...countyFills.keys()].some(isTownCode);
   useEffect(() => {
     if (!focus) return;
     let live = true;
-    loadMap<Layer>(`albers/${focus}`).then(
-      (data) => live && setLayer({ state: focus, data }),
+    loadMap<Layer>(towns ? `albers/towns/${focus}` : `albers/${focus}`).then(
+      (data) => live && setLayer({ state: focus, towns, data }),
       () => {},
     );
     return () => {
       live = false;
     };
-  }, [focus]);
+  }, [focus, towns]);
   const wantsDistricts = !!districtFills;
   const nationStates = useMemo(() => (nationDistricts ? [...new Set([...nationDistricts.keys()].map((k) => k.split("-")[0]))].sort() : null), [nationDistricts]);
   const allDistricts = useDistrictShapes(nationStates);
@@ -106,7 +111,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
     };
   }, [focus, wantsDistricts]);
 
-  const counties = focus && layer?.state === focus ? layer.data.counties : null;
+  const counties = focus && layer?.state === focus && layer.towns === towns ? layer.data.counties : null;
   const districts = districtFills && focus && lines?.state === focus ? lines.data.districts : null;
   // County results take over once a district's counties come in; until then, and in states that report by town, districts show.
   const showDistricts = districts && !countyFills?.size ? districts : null;

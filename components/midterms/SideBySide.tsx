@@ -1,6 +1,5 @@
 "use client";
 
-import { countiesForMap } from "@/lib/midterms/countyRollup";
 import { useDeskDetail } from "./useDeskDetail";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
@@ -58,8 +57,8 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
   const countyFills = useMemo(() => {
     if (!shownDetail) return null;
     const out = new Map<string, Fill>();
-    // Towns (New England) roll up into the counties the map draws.
-    for (const c of countiesForMap(shownDetail.state, shownDetail.counties)) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: <CountyTip county={c} /> });
+    // New England's towns are drawn as towns (ZoomMap loads its town layer for town-keyed fills).
+    for (const c of shownDetail.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: <CountyTip county={c} /> });
     return out;
   }, [shownDetail]);
   const districtFills = useMemo(() => {
