@@ -42,10 +42,14 @@ const estimable = (race: RaceSummary) => race.total > 0 && race.candidates.lengt
 
 /**
  * The race's estimated votes still to count, or null. The estimate needs the race's counties, so a card loads them
- * only while it's on screen and the race is counting and uncalled.
+ * once it has been on screen, while the race is counting and uncalled. It keeps them after it's hidden: a card in a
+ * grid that hides what doesn't fit (useRotatingFit) would otherwise lose its votes-left row when hidden, fit again,
+ * come back, regain the row and be hidden again, flickering.
  */
 export function useVotesLeft(race: RaceSummary, onScreen: boolean): LeftEstimate | null {
-  const wanted = onScreen && estimable(race);
+  const [seen, setSeen] = useState(false);
+  if (onScreen && !seen) setSeen(true);
+  const wanted = (onScreen || seen) && estimable(race);
   const detail = useLive<{ race: RaceDetail }>(wanted ? `/api/midterms/race/${race.id}` : null).data?.race;
   return wanted && detail?.id === race.id ? leftOf(detail) : null;
 }
