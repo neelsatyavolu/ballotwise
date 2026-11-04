@@ -162,6 +162,7 @@ async function feed(now: number): Promise<Feed & { stale: boolean }> {
     memo = await inFlight;
     return { ...memo, stale: false };
   } catch (err) {
+    console.error("Santa Clara County feed failed:", err instanceof Error ? err.message : err);
     if (memo) return { ...memo, stale: true };
     throw err;
   }
