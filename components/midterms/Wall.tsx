@@ -247,6 +247,68 @@ const noSubscribe = () => () => {};
  * Marks a mock election night running in this browser. The wall covers the tracker's mock bar, so without this a
  * test left running would look like the real night.
  */
+/** How long each half of the Senate wall's focus mode lasts: the two races, then the usual wall. */
+const FOCUS_MS = 45_000;
+const FOCUS_KEY = "mt-wall-focus2";
+
+/** Whether the window is an ultrawide (2:1 or wider), where two races fit side by side with their maps. */
+function useUltrawide(): boolean {
+  return useSyncExternalStore(
+    (on) => {
+      const q = matchMedia("(min-aspect-ratio: 2 / 1)");
+      q.addEventListener("change", on);
+      return () => q.removeEventListener("change", on);
+    },
+    () => matchMedia("(min-aspect-ratio: 2 / 1)").matches,
+    () => false,
+  );
+}
+
+/** The Senate wall's focus switch, kept in this browser. */
+function useFocusTwo(): [boolean, () => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(FOCUS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () =>
+    setOn((was) => {
+      try {
+        if (was) localStorage.removeItem(FOCUS_KEY);
+        else localStorage.setItem(FOCUS_KEY, "1");
+      } catch {
+        // Storage off: the switch lasts until the tab closes.
+      }
+      return !was;
+    });
+  return [on, toggle];
+}
+
+/** True for the focus half of each cycle while `active`, flipping every FOCUS_MS by the clock; false otherwise. */
+function useFocusPhase(active: boolean): boolean {
+  const now = useClock(1000);
+  return active && Math.floor(now / FOCUS_MS) % 2 === 0;
+}
+
+/** One of the two focused races: its state zoomed to the counties (DDHQ's on a connected screen), beside its full card. */
+function FocusPanel({ race, races, updatedAt, results }: { race: RaceSummary; races: RaceSummary[]; updatedAt: number | null; results: boolean }) {
+  const live = useLive<{ race: RaceDetail; fetchedAt?: number }>(`/api/midterms/race/${race.id}`).data;
+  const detail = useDeskDetail(live?.race, live ?? null, race);
+  return (
+    <section className="mt-wall-focus mt-in" aria-label={raceLabel(race)}>
+      <h2>{STATE_NAMES[race.state] ?? race.state}</h2>
+      <div className="mt-wall-map">
+        <TourMap office="senate" races={races} updatedAt={updatedAt} results={results} race={race} detail={detail} />
+      </div>
+      <ul className="mt-grid one">
+        <RaceCard race={race} starred={null} onStar={noop} limit={3} bare />
+      </ul>
+    </section>
+  );
+}
+
 function MockTag() {
   const mocked = useSyncExternalStore(noSubscribe, () => readMock() !== null, () => false);
   return mocked ? <span className="mt-wall-mock">Mock night</span> : null;
@@ -294,6 +356,16 @@ export function Wall({ office }: { office: WallOffice }) {
   const stops = useMemo(() => (focusOn !== null ? [focusOn] : tourStops(tour.map((r) => r.id), TOUR[office].racesPerLeg)), [focusOn, tour, office]);
   const { stop: stopId, upNext } = useTour(stops, TOUR[office]);
   const stop = races.find((r) => r.id === stopId) ?? null;
+  // Ultrawide Senate wall, focus switched on: half the time the two closest toss-ups counting (closest counting leans
+  // if there aren't two), each with its own map and card; the other half the usual wall.
+  const ultrawide = useUltrawide();
+  const [focusTwo, toggleFocusTwo] = useFocusTwo();
+  const pair = useMemo(() => {
+    const counting = races.filter((r) => r.total > 0 && !isCalled(r)).sort(watchFirst);
+    const tossups = counting.filter(isTossup);
+    return (tossups.length >= 2 ? tossups : [...tossups, ...counting.filter((r) => !isTossup(r) && r.rating?.startsWith("lean"))]).slice(0, 2);
+  }, [races]);
+  const focusing = useFocusPhase(office === "senate" && ultrawide && focusTwo && pair.length === 2);
   // The toured race with its counties, for the map's shading.
   const stopLive = useLive<{ race: RaceDetail; fetchedAt?: number }>(stop ? `/api/midterms/race/${stop.id}` : null).data;
   // With DDHQ's own counties on a connected screen, as on the office pages: civicAPI's county breakdown can lag its
@@ -331,6 +403,11 @@ export function Wall({ office }: { office: WallOffice }) {
               {data.stale && " · source is slow"}
             </span>
           )}
+          {office === "senate" && ultrawide && (
+            <button type="button" className="mt-wall-focus-switch" aria-pressed={focusTwo} onClick={toggleFocusTwo} title="Half the time, show the two closest toss-ups counting side by side, each with its map">
+              Focus 2
+            </button>
+          )}
           <Clock />
         </header>
         {error && <p className="error">{data ? `${error} Showing the last results we got.` : error}</p>}
@@ -338,7 +415,15 @@ export function Wall({ office }: { office: WallOffice }) {
         {data && (
           <>
             <SeatHeader office={office} data={data} forecast={forecast} />
-            <div className="mt-wall-body">
+            {focusing && (
+              <div className="mt-wall-two">
+                {pair.map((r) => (
+                  <FocusPanel key={r.id} race={r} races={races} updatedAt={data.ratings.updatedAt} results={results} />
+                ))}
+              </div>
+            )}
+            {/* Kept mounted while the two races show, so its fitted grids pick up where they were. */}
+            <div className="mt-wall-body" hidden={focusing}>
               <section className="mt-wall-tour" aria-label="Race tour">
                 <div className="mt-section-head tight">
                   <h2>
