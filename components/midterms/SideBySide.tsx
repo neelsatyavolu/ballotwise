@@ -12,6 +12,7 @@ import { STATE_NAMES, type Office, type Overview } from "@/lib/midterms/view";
 import { CallsFeed } from "./CallsFeed";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { CountyTip, fillFor } from "./county";
+import { RemainingButton, useRemaining } from "./remaining";
 import { useClock, useLive, useStars } from "./hooks";
 import { ModeNav } from "./ModeNav";
 import { MomentPopup } from "./MomentPopup";
@@ -61,6 +62,10 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
     for (const c of shownDetail.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: <CountyTip county={c} /> });
     return out;
   }, [shownDetail]);
+  // The Remaining view, switched on from the race card: circles sized by each county's votes left.
+  const [showLeft, setShowLeft] = useState(false);
+  const remaining = useRemaining(shownDetail);
+  const leftOn = showLeft && !!remaining;
   const districtFills = useMemo(() => {
     if (office !== "house") return undefined;
     const out = new Map<number, Fill>();
@@ -90,7 +95,8 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
         fills={fills}
         focus={focus}
         onFocus={(state) => zoomTo(state)}
-        countyFills={focus && shownId ? (shownDetail ? countyFills : undefined) : null}
+        countyFills={focus && shownId ? (shownDetail ? (leftOn ? remaining!.fills : countyFills) : undefined) : null}
+        bubbles={leftOn ? remaining!.bubbles : null}
         raceId={shownId}
         districtFills={districtFills}
         nationDistricts={nationDistricts}
@@ -109,7 +115,7 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
           {shown && (
             <>
               <ul className="mt-grid one">
-                <RaceCard race={shown} starred={star.ids ? star.ids.includes(shown.id) : null} onStar={star.toggle} />
+                <RaceCard race={shown} starred={star.ids ? star.ids.includes(shown.id) : null} onStar={star.toggle} tool={remaining && <RemainingButton on={showLeft} onChange={setShowLeft} />} />
               </ul>
               <p className="small">
                 <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>

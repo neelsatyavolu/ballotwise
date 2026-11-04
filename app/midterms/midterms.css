@@ -94,6 +94,12 @@
 .mt-star { position: relative; z-index: 1; border: 0; background: none; padding: 0 2px; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; }
 .mt-star:hover { color: var(--tossup); }
 .mt-star.on { color: var(--tossup); }
+/* The race card's switch for the map's Remaining view, just left of the star. */
+.mt-remaining { flex: none; font: inherit; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule); background: none; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.mt-remaining:hover { color: var(--ink); }
+.mt-remaining.on { color: var(--accent); border-color: var(--accent); }
+/* Remaining-view circles: see-through, so the counties under them and each other still show. */
+.mt-bubbles circle { fill-opacity: 0.55; stroke-width: 1; stroke-opacity: 0.9; }
 
 .mt-rating { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
 .mt-rating.r-tossup { color: var(--tossup); }

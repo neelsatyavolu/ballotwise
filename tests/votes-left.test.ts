@@ -48,6 +48,14 @@ describe("votesLeft", () => {
     expect(votesLeft(race([{ ...county("City", 80, 20, 50), expected: 90 }, { ...county("Rural", 90, 210, 40), expected: 300 }]))).toMatchObject({ left: 0 });
   });
 
+  it("lists each mapped county's votes left and who they favor, for the map's Remaining view", () => {
+    const est = votesLeft(race([{ ...county("City", 80, 20, 50), fips: "13121", expected: 400 }, { ...county("Rural", 30, 70, 50), fips: "13001", expected: 300 }, { ...county("Done", 5, 5, 100), fips: "13003" }]))!;
+    expect(est.counties).toEqual([
+      { fips: "13121", left: 300, party: "Democratic" },
+      { fips: "13001", left: 200, party: "Republican" },
+    ]);
+  });
+
   it("starts a quiet county at its 2024 vote times the turnout so far, in its 2024 lean moved by the swing", () => {
     // Counted: 2024 was even, now 60/40 at half its precincts, a 20-point swing to Dee. Quiet: 2024 was 50/25, so 60/15.
     const est = votesLeft(race([county("Counted", 60, 40, 50, [200, 200, 400]), county("Quiet", 0, 0, 0, [400, 200, 800])]))!;

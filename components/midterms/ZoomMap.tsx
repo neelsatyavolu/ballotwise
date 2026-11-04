@@ -33,12 +33,17 @@ function raceBounds(state: Bounds, race: Bounds): Bounds {
   return atLeast(race, state, 0.22);
 }
 
+/** One county's circle in the Remaining view: its key, the votes it has left, and the color of whoever they favor. */
+export type Bubble = { key: string; left: number; color: string };
+/** The biggest circle's radius, as a share of the zoomed state's longer side. */
+const BUBBLE_MAX = 0.07;
+
 /**
  * The nation by state; picking a state zooms to it and draws its counties, shaded by `countyFills`.
  * States without a fill have no race of this kind and can't be picked. Given `districtFills`, a state with no
  * county results on show draws its congressional districts instead, and picking one calls `onPickDistrict`.
  */
-export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, districtFills, district, onPickDistrict, nationDistricts, onPickNationDistrict, nationDistrict, corner }: {
+export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, districtFills, district, onPickDistrict, nationDistricts, onPickNationDistrict, nationDistrict, corner, bubbles }: {
   fills: Map<string, Fill>;
   focus: string | null;
   onFocus: (state: string | null) => void;
@@ -63,6 +68,11 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   nationDistrict?: string | null;
   /** A control laid over the map's bottom-right corner. */
   corner?: ReactNode;
+  /**
+   * The Remaining view, as DDHQ draws it: a circle on each county, by its key, sized by the votes it has left and
+   * colored for whoever they favor.
+   */
+  bubbles?: Bubble[] | null;
 }) {
   const [nation, setNation] = useState<Nation | null | "error">(null);
   const [layer, setLayer] = useState<{ state: string; towns: boolean; data: Layer } | null>(null);
@@ -250,6 +260,24 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
       ),
     [showDistricts, districtFills, counties, countyFills, patternId, pickedDistrict],
   );
+  const bubbleLayer = useMemo(() => {
+    const frame = bubbles?.length && counties && focused ? boundsOf([focused.d]) : null;
+    if (!frame || !counties) return null;
+    const most = Math.max(...bubbles!.map((b) => b.left));
+    const reach = Math.max(frame[2] - frame[0], frame[3] - frame[1]) * BUBBLE_MAX;
+    const shapes = new Map(counties.map((c) => [c.fips, c.d]));
+    const placed = bubbles!.flatMap((b) => {
+      const d = shapes.get(b.key);
+      const at = d && boundsOf([d]);
+      return at && most > 0 ? [{ ...b, x: (at[0] + at[2]) / 2, y: (at[1] + at[3]) / 2, r: reach * Math.sqrt(b.left / most) }] : [];
+    });
+    // Biggest first, so a small county's circle sits on top of a big neighbor's.
+    return (
+      <g className="mt-bubbles" pointerEvents="none">
+        {placed.sort((a, b) => b.r - a.r).map((b) => <circle key={b.key} cx={b.x} cy={b.y} r={b.r} style={{ fill: b.color, stroke: b.color }} vectorEffect="non-scaling-stroke" />)}
+      </g>
+    );
+  }, [bubbles, counties, focused]);
   // Election night: pre-election toss-ups get a yellow outline, called or not, and uncalled leans a thinner dashed
   // one. Leans go first so a toss-up's outline sits on top where they meet.
   const watchLayer = useMemo(() => {
@@ -400,6 +428,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
         {stateLayer}
         {nationDistrictLayer}
         {placeLayer}
+        {bubbleLayer}
         {/* Outlines are drawn in a layer above every shape, so neighbors can't cover part of them. */}
         {county && <path d={county.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
         {pickedDistrict && <path d={pickedDistrict.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}

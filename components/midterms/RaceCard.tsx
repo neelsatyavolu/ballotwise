@@ -1,6 +1,6 @@
 // Rendered inside the tracker's client components.
 import Link from "next/link";
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import { lead, raceLabel, RATING_LABEL, signalLine, type RaceSummary } from "@/lib/midterms/view";
 import { CandidateTable } from "./CandidateTable";
@@ -56,7 +56,8 @@ export function CardStatus({ race, zone = true }: { race: RaceSummary; zone?: bo
  * counted, and the estimated votes still to count.
  */
 /** `bare` cuts a Senate or governor title to the state, for screens where every card is the same office (the walls); no state has two of either this year. */
-export function RaceCard({ race, starred, onStar, limit = 3, bare = false }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void; limit?: number; bare?: boolean }) {
+/** `tool` is a control set just left of the star (the map's Remaining switch). */
+export function RaceCard({ race, starred, onStar, limit = 3, bare = false, tool }: { race: RaceSummary; starred: boolean | null; onStar: (id: number) => void; limit?: number; bare?: boolean; tool?: ReactNode }) {
   const label = raceLabel(race);
   const title = bare ? label.replace(/ (?:Senate|Governor)\b.*$/, "") : label;
   // Before votes or a call, the forecast alone; the markets and polls behind it are in the line's hover title.
@@ -77,6 +78,7 @@ export function RaceCard({ race, starred, onStar, limit = 3, bare = false }: { r
         <PulseTag race={race} />
         {/* Once called, the pre-election rating gives way to the call's time. */}
         {!called && <RatingTag rating={race.rating} signal={race.signal} />}
+        {tool}
         {starred !== null && <StarButton starred={starred} label={label} onToggle={() => onStar(race.id)} />}
       </div>
       {race.about && <p className="mt-card-about" title={race.about.text}>{race.about.text}</p>}

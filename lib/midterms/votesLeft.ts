@@ -17,6 +17,8 @@ export type VotesLeft = {
   places: Place[];
   /** Counties with nothing counted and no 2024 vote to go on, left out of the estimate. */
   unknown: number;
+  /** Every mapped county with votes left, for the map's Remaining view: what's left and who it favors (`party`). */
+  counties: { fips: string; left: number; party: string | null }[];
 };
 
 /** A rough count, so it doesn't read as exact: 182,431 is "182,000", 4,620 is "4,600". */
@@ -195,7 +197,7 @@ function sharesIn(c: CountyResult, counted: number, names: readonly [string, str
   return base ? [counted * a + (1 - counted) * base[0], counted * b + (1 - counted) * base[1]] : [a, b];
 }
 
-type Row = { name: string; left: number; a: number; b: number; edge: number | null };
+type Row = { name: string; fips?: string | null; left: number; a: number; b: number; edge: number | null };
 
 /**
  * The county estimates scaled to `left`, DDHQ's own figure for the race (its expected vote less the count), keeping
@@ -247,7 +249,7 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
   const byCounty = estimated.flatMap(({ c, left, counted }) => {
     if (!left) return [];
     const [sa, sb] = sharesIn(c, counted, names, parties, overall, swing, prior);
-    return [{ name: c.name, left, a: left * sa, b: left * sb, edge: sa + sb > 0 ? (sa - sb) * 100 : null }];
+    return [{ name: c.name, fips: c.fips, left, a: left * sa, b: left * sb, edge: sa + sb > 0 ? (sa - sb) * 100 : null }];
   });
   const rows = race.expected === undefined ? byCounty : toExpected(byCounty, Math.max(0, race.expected - race.total), race.title, overall);
   return {
@@ -259,5 +261,6 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
       .slice(0, PLACES)
       .map((r) => ({ name: r.name, left: Math.round(r.left), edge: r.edge })),
     unknown: estimated.filter((e) => e.left === null).length,
+    counties: rows.flatMap((r) => (r.fips && r.left >= 1 ? [{ fips: r.fips, left: Math.round(r.left), party: r.edge === null || r.edge === 0 ? null : r.edge > 0 ? parties[0] : parties[1] }] : [])),
   };
 }
