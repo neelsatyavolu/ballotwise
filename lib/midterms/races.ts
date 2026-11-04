@@ -169,10 +169,11 @@ export const LAST_CLOSE = Math.max(...Object.keys(POLL_CLOSE).map((s) => stateFi
 
 /**
  * Whether a Nov 3 race's numbers are hidden. No state counts a vote before its first polls close, and civicAPI
- * rehearses with test counts and test calls ahead of the night, so anything earlier is a test. `test` is civicAPI's
- * own test_data flag, which only a single race's answer carries; a race it marks is never shown.
+ * rehearses with test counts and test calls ahead of the night, so anything earlier is a test. civicAPI's own
+ * test_data flag isn't asked: on the night it marked every Pennsylvania race's real count, and only single-race
+ * answers carried it, so each race went blank and came back (its call withdrawn and made again) every few minutes.
  */
-export const resultsHidden = (state: string, now: number, test = false) => test || now < (stateCloses(state) ?? LAST_CLOSE);
+export const resultsHidden = (state: string, now: number) => now < (stateCloses(state) ?? LAST_CLOSE);
 
 /** Whether civicAPI marks a race's answer as test data. */
 export const isTestData = (input: unknown) => (input as { test_data?: unknown } | null)?.test_data === true;

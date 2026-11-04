@@ -4,7 +4,8 @@ import { stateCloses } from "../lib/midterms/polls";
 import { LAST_CLOSE, resultsHidden, summarize } from "../lib/midterms/races";
 
 // civicAPI rehearses election night with test counts and test calls (from Oct 25, 2026), marking each race's answer
-// test_data: true. None of it may reach a page, a call list or a push alert.
+// test_data: true. None of it may reach a page, a call list or a push alert. On the night itself civicAPI left the flag
+// on every Pennsylvania race's real count, so once a state's polls close the flag no longer hides anything.
 
 const SIX_AM_ET = Date.parse("2026-11-03T11:00:00Z");
 const GA_CLOSE = stateCloses("GA")!;
@@ -45,20 +46,25 @@ describe("resultsHidden", () => {
     expect(resultsHidden("ZZ", LAST_CLOSE)).toBe(false);
   });
 
-  it("always hides a race civicAPI marks as test data", () => {
-    expect(resultsHidden("GA", LAST_CLOSE + 3_600_000, true)).toBe(true);
-  });
 });
 
 describe("fetchRace", () => {
   const summary = summarize(georgia(), [], SIX_AM_ET)!;
 
-  it("shows no votes, county votes or call for a race marked as test data, even after polls close", async () => {
+  it("shows no votes, county votes or call for a race marked as test data before polls close", async () => {
     vi.stubGlobal("fetch", async () => Response.json(georgia({ test_data: true })));
-    const { race } = await fetchRace(summary, GA_CLOSE + 3_600_000, {});
+    const { race } = await fetchRace(summary, GA_CLOSE - 60_000, {});
     expect(race.total).toBe(0);
     expect(race.candidates.some((c) => c.winner || c.votes > 0)).toBe(false);
     expect(race.counties.every((c) => c.total === 0)).toBe(true);
+  });
+
+  // Pennsylvania's House races on Nov 3, flagged as test data with their real counts.
+  it("shows the count and the call of a race still marked as test data once its state's polls have closed", async () => {
+    vi.stubGlobal("fetch", async () => Response.json(georgia({ test_data: true })));
+    const { race } = await fetchRace(summary, GA_CLOSE + 3_600_000, {});
+    expect(race.total).toBe(2_300_000);
+    expect(race.candidates.find((c) => c.winner)?.name).toBe("Jon Ossoff");
   });
 
   it("shows nothing between 6 a.m. and the state's closing, when civicAPI may still hold its rehearsal numbers", async () => {

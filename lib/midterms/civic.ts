@@ -358,7 +358,7 @@ async function fetchRaces(now: number, deadline: number): Promise<{ races: RaceS
   for (const page of pages) {
     for (const raw of "races" in page ? page.races : []) {
       const race = summarize(raw, [], now);
-      if (race && !byId.has(race.id)) byId.set(race.id, resultsHidden(race.state, now, isTestData(raw)) ? blankResults(race) : race);
+      if (race && !byId.has(race.id)) byId.set(race.id, resultsHidden(race.state, now) ? blankResults(race) : race);
     }
   }
   return { races: [...byId.values()], failed };
@@ -394,7 +394,7 @@ async function fetchByRace(failed: readonly string[], known: Known, listed: Read
       const raw = (await civicOnce(`race/${r.id}`, deadline)) as Record<string, unknown>;
       if (raw.province !== r.state) return null;
       const race = summarize({ election_type: "Statewide", ...raw, id: r.id, type: TYPE_OF[r.office as Exclude<Office, "measure">] }, [], now);
-      return race && (resultsHidden(race.state, now, isTestData(raw)) ? blankResults(race) : race);
+      return race && (resultsHidden(race.state, now) ? blankResults(race) : race);
     } catch {
       return null;
     }
@@ -427,7 +427,7 @@ async function fetchStrays(searched: readonly RaceSummary[], registered: Readonl
       const raw = (await civic(`race/${r.race_id}`, deadline)) as Record<string, unknown>;
       if (raw.province !== r.state) return null;
       const race = summarize({ ...raw, id: r.race_id, type: "Referendum", election_type: "Statewide" }, [], now);
-      return race && (resultsHidden(race.state, now, isTestData(raw)) ? blankResults(race) : race);
+      return race && (resultsHidden(race.state, now) ? blankResults(race) : race);
     } catch {
       return null;
     }
@@ -592,7 +592,7 @@ export async function fetchRace(summary: RaceSummary, now: number, baseline: Rea
   try {
     const input = await civic(`race/${summary.id}`, Date.now() + RACE_WAIT_MS);
     const detail = raceDetail(summary, input, baseline, now);
-    const race = resultsHidden(summary.state, now, isTestData(input)) ? blankDetail(detail) : detail;
+    const race = resultsHidden(summary.state, now) ? blankDetail(detail) : detail;
     raceMemo.set(summary.id, { at: now, value: race });
     await keep(`race/${summary.id}`, now, race);
     return { race, fetchedAt: now, stale: false };
@@ -656,7 +656,8 @@ export async function fetchOtherRace(id: number, now: number, baseline: Readonly
   }
   const detail = withColors(raceDetail(summary, input, baseline, now), new Map(summary.candidates.map((c) => [c.name, c.color])));
   // Like tracked races, a Nov 3 race shows no numbers before its state's polls close: civicAPI posts test counts beforehand.
-  const race = isTestData(input) || (summary.local?.date === ELECTION_DATE && resultsHidden(summary.state, now)) ? blankDetail(detail) : detail;
+  // A Nov 3 race goes by its state's polls, as resultsHidden says; civicAPI's test flag still hides a race on another day.
+  const race = (summary.local?.date === ELECTION_DATE ? resultsHidden(summary.state, now) : isTestData(input)) ? blankDetail(detail) : detail;
   remember(otherMemo, id, { at: now, value: race });
   return { race, fetchedAt: now, stale: false };
 }
@@ -733,7 +734,7 @@ export async function searchLive(query: string, now: number): Promise<{ races: R
   const races = (Array.isArray(found) ? found : []).flatMap((input) => {
     const race = summarizeOther(input, now);
     if (race?.local?.date !== ELECTION_DATE) return [];
-    return [resultsHidden(race.state, now, isTestData(input)) ? blankResults(race) : race];
+    return [resultsHidden(race.state, now) ? blankResults(race) : race];
   });
   return { races, stale };
 }
