@@ -1,4 +1,5 @@
 import type { Pickups } from "@/lib/midterms/explore";
+import { chamberCall } from "@/lib/midterms/moments";
 import type { Party, Tally } from "@/lib/midterms/view";
 
 const NOTE = {
@@ -6,6 +7,9 @@ const NOTE = {
   house: "All 435 seats are up.",
   governor: "Includes the 14 governors not up this year.",
 } as const;
+
+/** The note once a chamber is called: what control takes no longer needs saying. */
+const NOTE_CALLED = { ...NOTE, senate: "Includes the 65 seats not up this year." } as const;
 
 /** Where control sits. Governors aren't a chamber, so there's no line for them. */
 const CONTROL = { senate: "51 D · 50 R for control", house: "218 for control", governor: "No majority to win" } as const;
@@ -87,6 +91,8 @@ export function SeatBar({ tally, ahead: leading, office, projected = null, picku
   const ahead = projected?.ahead ?? leading;
   const word = projected ? "projected" : "leading";
   const open = tally.total - tally.D - tally.R - tally.other - ahead.D - ahead.R - ahead.other;
+  // Once a party has won enough seats, the chamber's call leads the middle line in its color.
+  const call = projected ? null : chamberCall(office, tally);
   return (
     <section className="mt-seats">
       <div className="mt-seats-nums">
@@ -95,7 +101,7 @@ export function SeatBar({ tally, ahead: leading, office, projected = null, picku
         </span>
         <span className="mt-seats-mid">
           {projected && "Projected · "}
-          {CONTROL[office]}
+          {call ? <span className={`mt-seats-called ${call.side === "D" ? "d" : "r"}`}>✓ {call.text}</span> : CONTROL[office]}
           {tally.other + ahead.other > 0 && ` · Other ${tally.other}${ahead.other ? ` +${ahead.other}` : ""}`}
           {projected ? (controlOdds(projected.dControl) ? ` · ${controlOdds(projected.dControl)}` : "") : ` · ${open} uncounted`}
         </span>
@@ -123,7 +129,7 @@ export function SeatBar({ tally, ahead: leading, office, projected = null, picku
             {". "}
           </span>
         )}
-        {NOTE[office]}
+        {call ? NOTE_CALLED[office] : NOTE[office]}
         {projected && ` ${PROJECTED_NOTE}`}
       </p>
     </section>

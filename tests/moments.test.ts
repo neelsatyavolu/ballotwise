@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moments } from "../lib/midterms/moments";
+import { chamberCall, moments } from "../lib/midterms/moments";
 import type { CallEvent, RaceSummary } from "../lib/midterms/view";
 
 // Georgia's Senate seat is held by a Democrat, North Carolina's by a Republican (holders.json).
@@ -48,5 +48,19 @@ describe("election-night moments", () => {
 
   it("ignores events for races the overview doesn't carry", () => {
     expect(moments(data([], [event(1, 7)]))).toEqual([]);
+  });
+});
+
+describe("chamberCall", () => {
+  const tally = (D: number, R: number) => ({ D, R, other: 0, total: D + R, majority: 0, uncalled: 0 });
+  it("names the party that has won enough seats for control, and whether it takes or keeps the chamber", () => {
+    expect(chamberCall("house", tally(217, 100))).toBeNull();
+    expect(chamberCall("house", tally(218, 100))).toEqual({ side: "D", text: "Democrats take the House" });
+    expect(chamberCall("house", tally(100, 218))).toEqual({ side: "R", text: "Republicans keep the House" });
+    // The vice president's tiebreak: 50 is enough for Republicans, Democrats need 51.
+    expect(chamberCall("senate", tally(50, 40))).toBeNull();
+    expect(chamberCall("senate", tally(40, 50))).toEqual({ side: "R", text: "Republicans keep the Senate" });
+    expect(chamberCall("senate", tally(51, 40))).toEqual({ side: "D", text: "Democrats take the Senate" });
+    expect(chamberCall("governor", tally(40, 10))).toBeNull();
   });
 });

@@ -10,6 +10,22 @@ export const CONTROL_NEED = { senate: { D: 51, R: 50 }, house: { D: 218, R: 218 
 
 const PARTY = { D: "Democrats", R: "Republicans" } as const;
 
+/** Who controls each chamber going in: Republicans hold both. */
+const HELD: Record<keyof typeof CONTROL_NEED, "D" | "R"> = { senate: "R", house: "R" };
+const CHAMBER_NAME = { senate: "Senate", house: "House" } as const;
+
+/**
+ * The party that has won control of a chamber, from seats won (called races plus those not up): "Democrats take the
+ * House", "Republicans keep the Senate". Null until one has CONTROL_NEED, and always for governors.
+ */
+export function chamberCall(office: string, tally: { D: number; R: number }): { side: "D" | "R"; text: string } | null {
+  if (office !== "senate" && office !== "house") return null;
+  const need = CONTROL_NEED[office];
+  const side = tally.D >= need.D ? "D" : tally.R >= need.R ? "R" : null;
+  if (!side) return null;
+  return { side, text: `${PARTY[side]} ${HELD[office] === side ? "keep" : "take"} the ${CHAMBER_NAME[office]}` };
+}
+
 export type Moment = {
   /** Stable across polls, so the same moment never pops twice. */
   key: string;

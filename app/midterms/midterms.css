@@ -253,6 +253,10 @@
 .mt-seats-nums .yes b { color: var(--yes); }
 .mt-seats-nums .no b { color: var(--no); }
 .mt-seats-mid { align-self: center; font-size: 14px; color: var(--muted); text-align: center; }
+/* A chamber's call, in place of what it takes for control (Balance.tsx). */
+.mt-seats-mid .mt-seats-called { font-weight: 700; }
+.mt-seats-called.d { color: var(--dem-ink, var(--dem)); }
+.mt-seats-called.r { color: var(--rep-ink, var(--rep)); }
 .mt-seats-pickups .d { color: var(--dem-ink, var(--dem)); font-weight: 600; }
 .mt-seats-pickups .r { color: var(--rep-ink, var(--rep)); font-weight: 600; }
 .mt-seats-bar { height: 18px; }
