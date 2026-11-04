@@ -27,9 +27,13 @@ export type PulsePoint = { at: number } & Partial<Record<PulseChamberName, numbe
  */
 /** DDHQ's call of one race: the winner's name and party, and when it was called. */
 export type PulseWinner = { name: string; side: "D" | "R" | "I"; at: number };
-export type Pulse = { at: number | null; chambers: Partial<Record<PulseChamberName, PulseChamber>>; races: Record<string, PulseRace>; calls?: Partial<Record<PulseChamberName, PulseCall>>; winners?: Record<string, PulseWinner>; history: PulsePoint[] };
+/**
+ * `ids` maps each seat on the pages to DDHQ's race id, keyed as votes.ts seatKey keys seats ("house:AL:7:g"), so a
+ * connected screen's DDHQ feed finds every race without searching for it.
+ */
+export type Pulse = { at: number | null; chambers: Partial<Record<PulseChamberName, PulseChamber>>; races: Record<string, PulseRace>; calls?: Partial<Record<PulseChamberName, PulseCall>>; winners?: Record<string, PulseWinner>; ids?: Record<string, number>; history: PulsePoint[] };
 
-export const NO_PULSE: Pulse = { at: null, chambers: {}, races: {}, calls: {}, winners: {}, history: [] };
+export const NO_PULSE: Pulse = { at: null, chambers: {}, races: {}, calls: {}, winners: {}, ids: {}, history: [] };
 /** The most points kept: twelve hours of one-a-minute reads, the newest kept. */
 const MAX_HISTORY = 720;
 
@@ -144,9 +148,13 @@ function callOf(text: string): PulseCall | undefined {
   return Number.isFinite(at) ? { side: sideOf(m[1]), at } : undefined;
 }
 
-const winnerRecord = z.object({
+const seatRecord = z.object({
+  raceId: z.number().int().positive(),
+  name: z.string().nullish(),
   stateAbb: z.string().regex(/^[A-Z]{2}$/),
   district: z.string().nullish(),
+});
+const winnerRecord = seatRecord.extend({
   results: z.object({
     candidates: z.array(z.object({ firstName: z.string().nullish(), lastName: z.string().nullish(), winner: z.boolean().nullish(), called_at: z.string().nullish(), party: z.object({ abbrev: z.string() }).nullish() })),
   }),
@@ -161,32 +169,40 @@ function callTime(value: string | null | undefined): number | null {
 }
 
 /**
- * Every race DDHQ has called on the page, keyed by seats.ts raceKey: the winner and when. The page lists each race's
- * results with `"winner":true` and `called_at` on the called candidate.
+ * Every seat on the page: DDHQ's race id for each (`ids`, keyed as votes.ts seatKey: "house:AL:7:g", "senate:OH::s"),
+ * and the winner and call time of each race DDHQ has called (`winners`, keyed by seats.ts raceKey). The page lists each
+ * race's results with `"winner":true` and `called_at` on the called candidate.
  */
-function winnersOf(text: string, office: PulseOffice): Record<string, PulseWinner> {
+function seatsOf(text: string, office: PulseOffice): { winners: Record<string, PulseWinner>; ids: Record<string, number> } {
   const out: Record<string, PulseWinner> = {};
+  const ids: Record<string, number> = {};
   for (let i = text.indexOf('{"raceId":'); i >= 0; i = text.indexOf('{"raceId":', i + 1)) {
     const json = objectAt(text, i);
     if (!json) break;
-    let parsed;
+    let record: unknown;
     try {
-      parsed = winnerRecord.safeParse(JSON.parse(json));
+      record = JSON.parse(json);
     } catch {
       continue;
     }
+    const seat = seatRecord.safeParse(record);
+    if (seat.success) {
+      const district = office === "house" ? Number(seat.data.district) || 0 : "";
+      ids[`${office}:${seat.data.stateAbb}:${district}:${/special/i.test(seat.data.name ?? "") ? "s" : "g"}`] = seat.data.raceId;
+    }
+    const parsed = winnerRecord.safeParse(record);
     if (!parsed.success) continue;
     const won = parsed.data.results.candidates.find((c) => c.winner);
     const at = callTime(won?.called_at);
     if (!won || at === null) continue;
-    const seat = office === "house" ? Number(parsed.data.district) || 0 : null;
-    out[raceKey(office, parsed.data.stateAbb, seat)] = { name: [won.firstName, won.lastName].filter(Boolean).join(" ").trim(), side: sideOf(won.party?.abbrev ?? ""), at };
+    const house = office === "house" ? Number(parsed.data.district) || 0 : null;
+    out[raceKey(office, parsed.data.stateAbb, house)] = { name: [won.firstName, won.lastName].filter(Boolean).join(" ").trim(), side: sideOf(won.party?.abbrev ?? ""), at };
   }
-  return out;
+  return { winners: out, ids };
 }
 
 /** What one office's balance-of-power page says of Pulse. */
-export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "chambers" | "races" | "history"> & { calls: NonNullable<Pulse["calls"]>; winners: NonNullable<Pulse["winners"]> } {
+export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "chambers" | "races" | "history"> & { calls: NonNullable<Pulse["calls"]>; winners: NonNullable<Pulse["winners"]>; ids: NonNullable<Pulse["ids"]> } {
   const races: Record<string, PulseRace> = {};
   for (const record of raceRecords(text)) {
     const parsed = raceRecord.safeParse(record);
@@ -198,9 +214,9 @@ export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "c
   const chamber = office === "governor" ? undefined : chamberOf(text);
   const call = office === "governor" ? undefined : callOf(text);
   const calls = call && office !== "governor" ? { [office]: call } : {};
-  const winners = winnersOf(text, office);
-  if (!chamber || office === "governor") return { chambers: {}, races, calls, winners, history: [] };
-  return { chambers: { [office]: chamber.now }, races, calls, winners, history: chamber.points.map((p) => ({ at: p.at, [office]: p.dem })) };
+  const { winners, ids } = seatsOf(text, office);
+  if (!chamber || office === "governor") return { chambers: {}, races, calls, winners, ids, history: [] };
+  return { chambers: { [office]: chamber.now }, races, calls, winners, ids, history: chamber.points.map((p) => ({ at: p.at, [office]: p.dem })) };
 }
 
 async function fetchPage(office: PulseOffice, signal: AbortSignal): Promise<string> {
@@ -227,7 +243,7 @@ export async function fetchPulse(signal: AbortSignal): Promise<Pulse | null> {
   const at = Date.now();
   const chambers: Pulse["chambers"] = Object.assign({}, ...read.map((r) => r.chambers));
   const now: PulsePoint = { at, ...(chambers.senate && { senate: chambers.senate.dem }), ...(chambers.house && { house: chambers.house.dem }) };
-  return { at, chambers, races: Object.assign({}, ...read.map((r) => r.races)), calls: Object.assign({}, ...read.map((r) => r.calls)), winners: Object.assign({}, ...read.map((r) => r.winners)), history: mergeHistory(read.flatMap((r) => r.history), [now]) };
+  return { at, chambers, races: Object.assign({}, ...read.map((r) => r.races)), calls: Object.assign({}, ...read.map((r) => r.calls)), winners: Object.assign({}, ...read.map((r) => r.winners)), ids: Object.assign({}, ...read.map((r) => r.ids)), history: mergeHistory(read.flatMap((r) => r.history), [now]) };
 }
 
 /** The last Pulse read while it's under PULSE_STALE_MS old, without asking DDHQ: for pages that mustn't wait on it. */
@@ -251,7 +267,7 @@ export async function loadPulse(db: Db, now: number): Promise<Pulse> {
     // Every read joins the day's line, so it fills in even if DDHQ's own chart points don't. Entries cached before
     // the line existed have none.
     // A chamber's call stands once made, so a page that failed this time keeps the call it had.
-    const fresh: Pulse = { ...read, calls: { ...cached?.calls, ...read.calls }, winners: { ...cached?.winners, ...read.winners }, history: mergeHistory(cached?.history ?? [], read.history) };
+    const fresh: Pulse = { ...read, calls: { ...cached?.calls, ...read.calls }, winners: { ...cached?.winners, ...read.winners }, ids: { ...cached?.ids, ...read.ids }, history: mergeHistory(cached?.history ?? [], read.history) };
     await putCached(db, CACHE_KEY, fresh, now).catch((err) => console.error("DDHQ Pulse cache write failed:", err));
     return fresh;
   }

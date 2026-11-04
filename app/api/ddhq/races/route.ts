@@ -4,7 +4,8 @@ import { z } from "zod";
 import { AccountError } from "@/lib/auth/accounts";
 import { currentUser } from "@/lib/auth/session";
 import { deleteDdhqSession, loadDdhqSession } from "@/lib/ddhq/vault";
-import { ddhqSeats, loadRaceIds, saveRaceIds } from "@/lib/ddhq/votes";
+import { cachedPulse } from "@/lib/ddhq/pulse";
+import { ddhqSeats, loadRaceIds, rememberRaceIds, saveRaceIds } from "@/lib/ddhq/votes";
 import { appEnv, db } from "@/lib/env";
 
 const PRIVATE = { "cache-control": "private, no-store" };
@@ -29,6 +30,10 @@ export async function POST(req: NextRequest) {
   if (!saved) return NextResponse.json({ error: "Connect a Votes Pro account to see Decision Desk HQ here." }, { status: 404, headers: PRIVATE });
   try {
     await loadRaceIds(db());
+    // DDHQ's own seat-to-race map from its balance-of-power pages (read each minute for Pulse), so every seat matches
+    // its race exactly, without searching.
+    const pulse = await cachedPulse(db(), Date.now());
+    if (pulse?.ids) rememberRaceIds(Object.entries(pulse.ids).map(([key, id]) => ({ key, id: String(id) })));
     const races = await ddhqSeats(saved.session, parsed.data.seats, req.signal);
     getCloudflareContext().ctx.waitUntil(saveRaceIds(db()));
     return NextResponse.json({ races }, { headers: PRIVATE });
