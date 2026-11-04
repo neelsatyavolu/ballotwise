@@ -4,6 +4,7 @@
 // and the type grows with the screen (+ and - adjust it). It never joins the two-screen setup, so a wall on a monitor
 // plugged into the same computer can't take over as the main screen or become a companion.
 
+import { countiesForMap } from "@/lib/midterms/countyRollup";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { readMock } from "@/lib/midterms/clock";
@@ -206,7 +207,8 @@ function TourMap({ office, races, updatedAt, results, race: toured, detail }: { 
     // No counties yet (the public race didn't load and no DDHQ breakdown is in): as before any loaded.
     if (!detail?.counties.length) return undefined;
     const out = new Map<string, Fill>();
-    for (const c of detail.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: null });
+    // Towns (New England) roll up into the counties the map draws.
+    for (const c of countiesForMap(detail.state, detail.counties)) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: null });
     return out;
   }, [detail]);
   return (

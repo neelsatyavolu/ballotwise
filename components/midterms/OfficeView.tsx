@@ -1,5 +1,6 @@
 "use client";
 
+import { countiesForMap } from "@/lib/midterms/countyRollup";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
@@ -215,7 +216,8 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
     if (!shownDetail) return null;
     const mode = past ? "2024" : "results";
     const out = new Map<string, Fill>();
-    for (const c of shownDetail.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} mode={mode} /> });
+    // Towns (New England) roll up into the counties the map draws; the 2024 view has no town results to roll up.
+    for (const c of past ? shownDetail.counties : countiesForMap(shownDetail.state, shownDetail.counties)) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} mode={mode} /> });
     return out;
   }, [shownDetail, past]);
   const list = useMemo(() => {

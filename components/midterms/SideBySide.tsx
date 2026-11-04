@@ -1,5 +1,7 @@
 "use client";
 
+import { countiesForMap } from "@/lib/midterms/countyRollup";
+import { useDeskDetail } from "./useDeskDetail";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { parseWeights, resize } from "@/lib/midterms/columns";
@@ -51,12 +53,15 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
   const shownId = focus ? (picked && inState.some((r) => r.id === picked) ? picked : office === "house" ? null : (inState[0]?.id ?? null)) : null;
   const shown = inState.find((r) => r.id === shownId) ?? null;
   const detail = useLive<{ race: RaceDetail }>(shownId ? `/api/midterms/race/${shownId}` : null);
+  // On a connected screen, DDHQ's own counties for the shown race, as on the office pages.
+  const shownDetail = useDeskDetail(detail.data?.race, detail.data as { fetchedAt?: number } | null);
   const countyFills = useMemo(() => {
-    if (!detail.data) return null;
+    if (!shownDetail) return null;
     const out = new Map<string, Fill>();
-    for (const c of detail.data.race.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: <CountyTip county={c} /> });
+    // Towns (New England) roll up into the counties the map draws.
+    for (const c of countiesForMap(shownDetail.state, shownDetail.counties)) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: <CountyTip county={c} /> });
     return out;
-  }, [detail.data]);
+  }, [shownDetail]);
   const districtFills = useMemo(() => {
     if (office !== "house") return undefined;
     const out = new Map<number, Fill>();
