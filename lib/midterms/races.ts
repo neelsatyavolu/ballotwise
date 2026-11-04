@@ -379,9 +379,10 @@ export function raceDetail(summary: RaceSummary, input: unknown, baseline: Reado
   const named = codes.some((code, i) => code !== (regions[i].fips ?? null));
   const listed = regions.map((region, i): CountyResult => {
     const list = candidates(region.candidates);
-    // Only civicAPI's own codes key the 2024 baseline: it files Alaska's house districts under 02001-02040, which
-    // overlap its borough codes.
-    const pres = region.fips ? baseline[region.fips] : undefined;
+    // Only civicAPI's own codes key the 2024 baseline. The baseline files Alaska's house districts under 02001-02040,
+    // which overlap its borough codes (Anchorage is 02020, Aleutians West 02016), and Alaska reports no 2024 vote by
+    // borough: there a borough row gets none, or its votes left would be read off a house district's.
+    const pres = region.fips && (summary.state !== "AK" || /district/i.test(region.name)) ? baseline[region.fips] : undefined;
     return {
       fips: codes[i],
       name: region.name,
