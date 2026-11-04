@@ -216,24 +216,29 @@ function ThirdSwitch({ third }: { third: Third }) {
 }
 
 /**
- * Every House toss-up (the Senate's are in its own column), as cards with the top two candidates: those with results
- * first (counting, then called, in watchFirst order), always up, and those still waiting only in the space left. When
- * the ones with results don't all fit, they rotate among themselves; a page of races with no results never comes up.
+ * Toss-ups as cards with the top two candidates: the House's, or with the House column hidden (`noHouse`) the
+ * Senate's and the governors' followed by their closest leans that are counting. Toss-ups with results come first
+ * (counting, then called, in watchFirst order) and are always up; the rest only fill the space left. When the ones
+ * with results don't all fit, they rotate among themselves; a page of races with no results never comes up.
  */
-function TossupColumn({ data, star, handle, toggle }: { data: Overview; star: Star; handle: ReactNode; toggle: ReactNode }) {
+function TossupColumn({ data, star, handle, toggle, noHouse = false }: { data: Overview; star: Star; handle: ReactNode; toggle: ReactNode; noHouse?: boolean }) {
   const { races, fixed } = useMemo(() => {
-    const all = data.races.filter((r) => r.rating === "tossup" && r.office === "house").sort(watchFirst);
+    const offices: readonly string[] = noHouse ? ["senate", "governor"] : ["house"];
+    const mine = data.races.filter((r) => offices.includes(r.office));
+    const all = mine.filter((r) => r.rating === "tossup").sort(watchFirst);
     const counting = all.filter((r) => r.total > 0 && !isCalled(r));
     const called = all.filter(isCalled);
     const waiting = all.filter((r) => r.total === 0 && !isCalled(r));
-    return { races: [...counting, ...called, ...waiting], fixed: counting.length + called.length };
-  }, [data]);
+    // With the House hidden there's room for the races next closest: leans still counting, closest first.
+    const leans = noHouse ? mine.filter((r) => r.rating?.startsWith("lean") && r.total > 0 && !isCalled(r)).sort(watchFirst) : [];
+    return { races: [...counting, ...called, ...leans, ...waiting], fixed: counting.length + called.length };
+  }, [data, noHouse]);
   const cards = useRef<HTMLUListElement>(null);
   useRotatingFit(cards, undefined, true, fixed);
   return (
     <section className="mt-sbs-col" aria-label="Toss-up races" data-panel="tossups">
       <div className="mt-section-head tight">
-        <h2>House toss-ups</h2>
+        <h2>{noHouse ? "Senate & governor toss-ups" : "House toss-ups"}</h2>
         <span className="muted small mt-sbs-count">{count(races.length)}</span>
         {toggle}
       </div>
@@ -390,7 +395,7 @@ export function SideBySide() {
             if (c.office === "house" && !showHouse) return null;
             const handle = <ColumnHandle i={i} label={`Resize ${i === 2 ? next[1] : c.title} and ${next[i]}`} grid={grid} widths={widths} />;
             // The third column can swap the governors for the toss-ups; the switch sits in its heading either way.
-            if (c.office === "governor" && third === "tossups") return <TossupColumn key="tossups" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} />;
+            if (c.office === "governor" && third === "tossups") return <TossupColumn key="tossups" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} noHouse={!showHouse} />;
             // The House column's heading can hide it; once hidden, the Senate column's heading brings it back.
             const toggle = c.office === "governor" ? <ThirdSwitch third={third} /> : c.office === "house" ? <HouseSwitch shown /> : !showHouse ? <HouseSwitch shown={false} /> : undefined;
             return <OfficeColumn key={c.office} {...c} data={data} forecast={forecast} results={results} star={star} status={i === 0 ? status : undefined} handle={handle} toggle={toggle} />;
