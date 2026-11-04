@@ -68,15 +68,17 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace): T {
     next.trend = undefined;
     next.round = undefined;
     next.call = winner && Number.isFinite(calledAt) ? { id: race.id, at: calledAt, winner, replaced: null, withdrawn: false } : null;
-    if ("counties" in race) {
+    // DDHQ's batch topline (every screen's live counts) carries no county breakdown; only a single race's fetch does.
+    // Without one, the public counties stay: blanking them would grey the race's map and throw off its votes left.
+    if ("counties" in race && desk.counties.length) {
       const detail = next as unknown as RaceDetail;
       detail.counties = (race as unknown as RaceDetail).counties.map((county) => mergeCounty(county, desk));
       for (const county of desk.counties) {
         if (detail.counties.some((row) => row.fips === county.fips)) continue;
         detail.counties.push(mergeCounty({ fips: county.fips, name: county.name ?? county.fips, total: 0, reporting: 0, candidates: [], baseline2024: null, pres2024: null }, desk));
       }
-      detail.updated = desk.resultsUpdatedAt ?? null;
     }
+    if ("counties" in race) (next as unknown as RaceDetail).updated = desk.resultsUpdatedAt ?? null;
     marked.add(next);
   }
   if (canonical.forecast.length) {

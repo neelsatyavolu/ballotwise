@@ -108,7 +108,7 @@ describe("observed Votes result schema", () => {
     expect(applyDesk(detail, { ...parsed(topline([500, 497, 3])), counties: counting.counties }).counties[0]).toMatchObject({ total: 1000, expected: 4000 });
   });
 
-  it("does not invent call times or keep stale civic reporting and county data", () => {
+  it("does not invent call times or keep stale civic reporting, and keeps civic counties when DDHQ sends none", () => {
     const detail: RaceDetail = { ...rawRace(), updated: "2026-11-03T00:00:00Z", pollsClose: null,
       counties: [{ fips: "13049", name: "Example County", total: 9999, reporting: 99, candidates: [{ name: "Blake Candidate", party: "Republican", votes: 9999, pct: 100 }], baseline2024: 4, pres2024: null }],
     };
@@ -120,7 +120,10 @@ describe("observed Votes result schema", () => {
     expect(next.call).toBeNull();
     expect(next.reporting).toBe(40);
     expect(next.updated).toBe("2026-11-04T03:00:00.123Z");
-    expect(next.counties[0]).toMatchObject({ total: 0, reporting: 0, reportingUnknown: true, candidates: [], baseline2024: 4 });
+    // The topline carries no county breakdown: blanking the counties would grey the race's map and drop its votes
+    // left, so the public counties stay until DDHQ's own arrive.
+    expect(next.counties[0]).toMatchObject({ total: 9999, reporting: 99, baseline2024: 4 });
+    expect(next.counties[0].candidates.map((candidate) => candidate.name)).toEqual(["Blake Candidate"]);
     expect(next.trend).toBeUndefined();
     expect(next.missing).toBeUndefined();
     expect(next.callUnknown).toBeUndefined();
@@ -146,6 +149,9 @@ describe("observed Votes result schema", () => {
     expect(next.counties[0]).toMatchObject({ total: 10, reporting: 20, baseline2024: 4 });
     expect(next.counties[0].candidates.map((candidate) => candidate.name)).toEqual(["Avery Candidate"]);
     expect(next.counties[1]).toMatchObject({ name: "Another County", total: 3, baseline2024: null });
+    // With DDHQ's counties in hand, a county it doesn't list has nothing counted rather than civicAPI's count.
+    const partial = applyDesk({ ...detail, counties: [...detail.counties, { fips: "13053", name: "Quiet County", total: 50, reporting: 10, candidates: [], baseline2024: null, pres2024: null }] }, source);
+    expect(partial.counties.find((county) => county.fips === "13053")).toMatchObject({ total: 0, reporting: 0, reportingUnknown: true });
   });
 });
 
