@@ -121,7 +121,7 @@
 .mt-borders { fill: none; stroke: var(--sheet); stroke-width: 1; pointer-events: none; }
 /* Stripes over a state or district projected to change party. */
 .mt-flip { stroke: none; pointer-events: none; }
-.mt-flip-band { fill: var(--sheet); fill-opacity: 0.6; }
+.mt-flip-band { fill: var(--sheet); fill-opacity: 0.4; }
 .mt-legend i.flip { background: repeating-linear-gradient(-45deg, var(--muted) 0 2px, var(--sheet) 2px 4px); }
 .mt-tip { position: absolute; z-index: 5; transform: translate(12px, 12px); pointer-events: none; min-width: 180px; max-width: 280px; padding: 8px 10px; background: var(--sheet); border: 1px solid var(--ink); border-radius: var(--radius); font-size: 12px; display: grid; gap: 4px; }
 .mt-tip table { border-collapse: collapse; width: 100%; }
@@ -253,6 +253,8 @@
 .mt-seats-nums .yes b { color: var(--yes); }
 .mt-seats-nums .no b { color: var(--no); }
 .mt-seats-mid { align-self: center; font-size: 14px; color: var(--muted); text-align: center; }
+.mt-seats-pickups .d { color: var(--dem-ink, var(--dem)); font-weight: 600; }
+.mt-seats-pickups .r { color: var(--rep-ink, var(--rep)); font-weight: 600; }
 .mt-seats-bar { height: 18px; }
 .mt-seats > p { font-size: 12px; }
 

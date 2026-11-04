@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeCount, DEFAULT_FILTERS, explore, flipTo, fromQuery, isCompetitive, isTossup, isWatch, leaderOf, raceFill, safeSide, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
+import { activeCount, DEFAULT_FILTERS, explore, flipTo, pickups, fromQuery, isCompetitive, isTossup, isWatch, leaderOf, raceFill, safeSide, statusOf, tierOf, toQuery, viewCounts, type Filters } from "../lib/midterms/explore";
 import { compareRaces, type RaceSummary } from "../lib/midterms/view";
 
 let nextId = 1;
@@ -56,10 +56,13 @@ describe("race classification", () => {
     expect(raceFill(race({ rating: "lean-d" }))).toBe("var(--rate-lean-d)");
     expect(raceFill(race())).toBe("var(--rule-strong)");
     // Votes outrank the projection.
-    expect(raceFill(race({ signal: safeR, votes: [530, 470] }))).toBe("color-mix(in srgb, var(--dem) 45%, var(--sheet))");
+    expect(raceFill(race({ signal: safeR, votes: [530, 470] }))).toBe("color-mix(in srgb, var(--dem) 52%, var(--sheet))");
     // A call takes the winner's full color; a lead never gets that strong.
     expect(raceFill(race({ votes: [900, 100], winner: 0 }))).toBe("var(--rate-safe-d)");
     expect(raceFill(race({ votes: [900, 100] }))).toBe("color-mix(in srgb, var(--dem) 60%, var(--sheet))");
+    // An early or narrow lead is still strong enough to read under flip stripes on a dark map.
+    expect(raceFill(race({ votes: [900, 100], reporting: 3 }))).toBe("color-mix(in srgb, var(--dem) 45%, var(--sheet))");
+    expect(raceFill(race({ votes: [510, 490] }))).toBe("color-mix(in srgb, var(--dem) 48%, var(--sheet))");
     // From election day on, a race with no votes is plain grey whatever its forecast.
     expect(raceFill(race({ rating: "lean-d" }), true)).toBe("var(--rule-strong)");
   });
@@ -145,6 +148,21 @@ describe("projected flips", () => {
     expect(flipTo(race({ state: "GA", signal: market(0.1), votes: [600, 400], winner: 0 }))).toBeNull();
     // Even an early count: the map stripes a seat as soon as the other party leads it.
     expect(flipTo(race({ state: "GA", signal: market(0.9), votes: [400, 600], reporting: 3 }))).toBe("R");
+  });
+});
+
+describe("pickups", () => {
+  it("counts seats each party has taken from the other, won and leading, for one office", () => {
+    // Georgia's and Michigan's Senate seats are the Democrats'; North Carolina's is the Republicans'.
+    const races = [
+      race({ state: "GA", votes: [400, 600], winner: 1 }),
+      race({ state: "MI", title: "Michigan US Senate", votes: [450, 550], reporting: 5 }),
+      race({ state: "NC", title: "North Carolina US Senate", votes: [600, 400] }),
+      race({ state: "GA", office: "house", district: 1, title: "Georgia US House 1", votes: [400, 600], winner: 1 }),
+      // Holds don't count.
+      race({ state: "NC", title: "North Carolina US Senate", votes: [400, 600], winner: 1 }),
+    ];
+    expect(pickups(races, "senate")).toEqual({ D: { won: 0, leading: 1 }, R: { won: 1, leading: 1 } });
   });
 });
 

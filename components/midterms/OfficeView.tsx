@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { projection } from "@/lib/midterms/forecastTab";
-import { closestFirst, flipTo, isCalled, isCompetitive, isTossup, raceFill } from "@/lib/midterms/explore";
+import { closestFirst, flipTo, isCalled, isCompetitive, isTossup, pickups, raceFill } from "@/lib/midterms/explore";
 import { districtMargin2024, margin2024Label, stateMargin2024 } from "@/lib/midterms/past2024";
 import { showsResults } from "@/lib/midterms/polls";
 import { lead, leading, measureCount, raceLabel, shade, STATE_NAMES, type Office, type Overview, type RaceSummary } from "@/lib/midterms/view";
@@ -159,7 +159,7 @@ export function SeatHeader({ office, data, forecast = null }: { office: Office; 
     );
   }
   const tally = office === "senate" ? data.balance.senate : office === "house" ? data.balance.house : data.balance.governor;
-  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} projected={projection(data.races, office, tally, forecast?.chambers?.[office], forecast?.source ?? data.forecastSource)} />;
+  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} pickups={pickups(data.races, office)} projected={projection(data.races, office, tally, forecast?.chambers?.[office], forecast?.source ?? data.forecastSource)} />;
 }
 
 export function OfficeView({ office, initialState }: { office: Office; initialState: string | null }) {

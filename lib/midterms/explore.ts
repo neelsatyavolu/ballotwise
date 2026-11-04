@@ -93,6 +93,23 @@ export function watchFirst(a: RaceSummary, b: RaceSummary): number {
   return tier(a) - tier(b) || Number(likelyFlip(b)) - Number(likelyFlip(a)) || closestFirst(a, b);
 }
 
+/** Each party's pickups in one office: seats it has won from the other party, and uncalled ones it leads (see flipTo). */
+export type Pickups = Record<"D" | "R", { won: number; leading: number }>;
+
+export function pickups(races: readonly RaceSummary[], office: Office): Pickups {
+  const won = { D: 0, R: 0 };
+  const leading = { D: 0, R: 0 };
+  for (const r of races) {
+    if (r.office !== office) continue;
+    const outcome = outcomeOf(r);
+    const side = outcome ? (outcome.gain ? outcome.side : null) : lead(r.candidates) ? leadingFlip(r, true) : null;
+    if (side !== "D" && side !== "R") continue;
+    if (outcome) won[side] += 1;
+    else leading[side] += 1;
+  }
+  return { D: { won: won.D, leading: leading.D }, R: { won: won.R, leading: leading.R } };
+}
+
 export function statusOf(r: RaceSummary): Status {
   if (isCalled(r)) return "called";
   return r.total > 0 ? "counting" : "awaiting";
@@ -152,7 +169,8 @@ export function raceFill(r: RaceSummary, results = false): string {
   }
   const ahead = lead(r.candidates);
   if (ahead) {
-    const strength = r.reporting < 15 ? 25 : Math.min(LEAD_CAP, ahead.margin >= 10 ? 60 : ahead.margin >= 5 ? 45 : 32);
+    // Early and narrow leads stay light but readable: flip stripes darken them further on a dark map.
+    const strength = r.reporting < 15 ? 45 : Math.min(LEAD_CAP, ahead.margin >= 10 ? 60 : ahead.margin >= 5 ? 52 : 48);
     return `color-mix(in srgb, ${colorOf(ahead.leader)} ${strength}%, var(--sheet))`;
   }
   if (results) return ratingFill(null);

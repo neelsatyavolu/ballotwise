@@ -1,3 +1,4 @@
+import type { Pickups } from "@/lib/midterms/explore";
 import type { Party, Tally } from "@/lib/midterms/view";
 
 const NOTE = {
@@ -64,12 +65,24 @@ export function BalanceBar({ title, office, tally, projected = null }: { title: 
   );
 }
 
+/** "Dem 2 +1 leading": a party's seats taken from the other, won and then led; null when it has none. */
+function PickupCount({ side, n }: { side: "D" | "R"; n: Pickups["D"] }) {
+  if (!n.won && !n.leading) return null;
+  return (
+    <span className={side === "D" ? "d" : "r"}>
+      {side === "D" ? "Dem" : "Rep"} {n.won}
+      {n.leading > 0 && ` +${n.leading} leading`}
+    </span>
+  );
+}
+
 /**
  * The office screens' seat count, from each end toward the majority line. On election night: seats won (solid) and
  * races led but not called (light). Before votes, `projected` takes the leaders' place: the big numbers are the
  * forecast's projected totals, the light segments its expected seats, and the middle gives the chance of control.
+ * `pickups` adds each party's seats taken from the other (won, then led) to the middle on election night.
  */
-export function SeatBar({ tally, ahead: leading, office, projected = null }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE; projected?: Projected }) {
+export function SeatBar({ tally, ahead: leading, office, projected = null, pickups = null }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE; projected?: Projected; pickups?: Pickups | null }) {
   const share = (n: number) => `${(n / tally.total) * 100}%`;
   const ahead = projected?.ahead ?? leading;
   const word = projected ? "projected" : "leading";
@@ -85,6 +98,14 @@ export function SeatBar({ tally, ahead: leading, office, projected = null }: { t
           {CONTROL[office]}
           {tally.other + ahead.other > 0 && ` · Other ${tally.other}${ahead.other ? ` +${ahead.other}` : ""}`}
           {projected ? (controlOdds(projected.dControl) ? ` · ${controlOdds(projected.dControl)}` : "") : ` · ${open} uncounted`}
+          {!projected && pickups && (pickups.D.won + pickups.D.leading + pickups.R.won + pickups.R.leading > 0) && (
+            <span className="mt-seats-pickups" title="Seats taken from the other party: won, then leading but not called">
+              {" · Pickups "}
+              <PickupCount side="D" n={pickups.D} />
+              {(pickups.D.won || pickups.D.leading) && (pickups.R.won || pickups.R.leading) ? " · " : ""}
+              <PickupCount side="R" n={pickups.R} />
+            </span>
+          )}
         </span>
         <span className="r">
           {!projected && ahead.R > 0 && <em>{ahead.R} {word} + </em>}Rep <b>{projected ? tally.R + ahead.R : tally.R}</b>
