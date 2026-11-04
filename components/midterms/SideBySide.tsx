@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { parseWeights, resize } from "@/lib/midterms/columns";
-import { closestFirst, watchFirst } from "@/lib/midterms/explore";
+import { closestFirst, isCalled, watchFirst } from "@/lib/midterms/explore";
 import { showsResults } from "@/lib/midterms/polls";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
@@ -195,13 +195,20 @@ function ThirdSwitch({ third }: { third: Third }) {
 }
 
 /**
- * Every House toss-up (the Senate's are in its own column), as cards with the top two candidates, closest counts
- * first: as many whole cards as fit, rotating through the rest when they don't all fit.
+ * Every House toss-up (the Senate's are in its own column), as cards with the top two candidates: those with results
+ * first (counting, then called, in watchFirst order), always up, and those still waiting only in the space left. When
+ * the ones with results don't all fit, they rotate among themselves; a page of races with no results never comes up.
  */
 function TossupColumn({ data, star, handle, toggle }: { data: Overview; star: Star; handle: ReactNode; toggle: ReactNode }) {
-  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && r.office === "house").sort(watchFirst), [data]);
+  const { races, fixed } = useMemo(() => {
+    const all = data.races.filter((r) => r.rating === "tossup" && r.office === "house").sort(watchFirst);
+    const counting = all.filter((r) => r.total > 0 && !isCalled(r));
+    const called = all.filter(isCalled);
+    const waiting = all.filter((r) => r.total === 0 && !isCalled(r));
+    return { races: [...counting, ...called, ...waiting], fixed: counting.length + called.length };
+  }, [data]);
   const cards = useRef<HTMLUListElement>(null);
-  useRotatingFit(cards);
+  useRotatingFit(cards, undefined, true, fixed);
   return (
     <section className="mt-sbs-col" aria-label="Toss-up races" data-panel="tossups">
       <div className="mt-section-head tight">
