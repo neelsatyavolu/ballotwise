@@ -1,4 +1,6 @@
 import type { Db } from "../auth/accounts";
+import { cachedPulse } from "../ddhq/pulse";
+import { withDeskCalls } from "./deskCalls";
 import { agrees, recordCalls, type Call } from "./calls";
 import { CivicError, CRON_REFRESH_BUDGET_MS, fetchCatalog, fetchOtherRace, fetchRace, FRESH_MS } from "./civic";
 import { fetchCountyRace, isCountyRace } from "./county";
@@ -34,8 +36,13 @@ export async function overview(db: Db, now: number, background: (work: Promise<u
   const catalog = await fetchCatalog(now, ratedRaces(odds), db, background, true);
   const { races, fetchedAt, coverage, partial } = catalog;
   // Both record only from a fresh catalog newer than the last one processed; a stale one just reads what's known.
-  const [{ calls, events, counts }, trends] = await Promise.all([recordCalls(db, catalog, now), recordHistory(db, catalog, now)]);
-  const withSignals = races.map((r) => ({ ...withCall(r, calls.get(r.id) ?? null), signal: odds?.signals[raceKey(r.office, r.state, r.district)] ?? null, trend: trends.get(r.id) ?? null }));
+  const [{ calls, events, counts }, trends, pulse] = await Promise.all([recordCalls(db, catalog, now), recordHistory(db, catalog, now), cachedPulse(db, now)]);
+  // DDHQ's calls from its public pages (the last Pulse read, never waited on), for races our call log hasn't called
+  // yet: civicAPI calls later than DDHQ.
+  const withSignals = withDeskCalls(
+    races.map((r) => ({ ...withCall(r, calls.get(r.id) ?? null), signal: odds?.signals[raceKey(r.office, r.state, r.district)] ?? null, trend: trends.get(r.id) ?? null })),
+    pulse?.winners,
+  );
   return {
     races: withSignals,
     // Counted after calls are applied, so a race whose answer left out its winner still counts for the called side.

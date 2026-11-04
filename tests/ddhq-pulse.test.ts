@@ -16,7 +16,7 @@ describe("DDHQ Pulse", () => {
 
   it("reads the chamber's chance of control", () => {
     expect(readPulsePage(pages.senate, "senate").chambers).toEqual({ senate: { dem: 65, rep: 35 } });
-    expect(readPulsePage(pages.house, "house")).toEqual({ chambers: { house: { dem: 84, rep: 16 } }, races: {}, calls: {}, history: [{ at: 1793633039384, house: 84 }] });
+    expect(readPulsePage(pages.house, "house")).toEqual({ chambers: { house: { dem: 84, rep: 16 } }, races: {}, calls: {}, winners: {}, history: [{ at: 1793633039384, house: 84 }] });
     expect(readPulsePage(pages.senate, "senate").history).toEqual([{ at: 1793633039384, senate: 65 }]);
   });
 
@@ -29,8 +29,14 @@ describe("DDHQ Pulse", () => {
     expect(readPulsePage(called.replace('"DEM"', '"GOP"'), "senate").calls).toEqual({ senate: { side: "R", at: Date.parse("2026-11-04T02:09:24.452Z") } });
   });
 
+  it("reads each race DDHQ has called, with its winner and call time", () => {
+    // As the House page carried AL-07 on Nov 3 2026.
+    const page = '9:{"races":[{"raceId":294716,"displayName":"AL-07","stateAbb":"AL","district":"7","results":{"totalVotes":204074,"percentIn":81,"candidates":[{"firstName":"Terri","lastName":"Sewall","votes":139371,"winner":true,"called_at":"2026-11-04 01:00:00.135809Z","party":{"id":1,"name":"Democratic","abbrev":"DEM"}},{"firstName":"Ammie","lastName":"Akin","votes":64703,"winner":false,"called_at":null,"party":{"abbrev":"GOP"}}]}},{"raceId":294717,"stateAbb":"AL","district":"1","results":{"candidates":[{"firstName":"A","lastName":"B","winner":false,"called_at":null,"party":{"abbrev":"GOP"}}]}}]}\n';
+    expect(readPulsePage(page, "house").winners).toEqual({ "house:AL:7": { name: "Terri Sewall", side: "D", at: Date.parse("2026-11-04T01:00:00.135Z") } });
+  });
+
   it("finds nothing in a page of another shape", () => {
-    expect(readPulsePage('0:{"P":null}\n', "senate")).toEqual({ chambers: {}, races: {}, calls: {}, history: [] });
+    expect(readPulsePage('0:{"P":null}\n', "senate")).toEqual({ chambers: {}, races: {}, calls: {}, winners: {}, history: [] });
     expect(readPulsePage(pages.senate, "governor").chambers).toEqual({});
   });
 
