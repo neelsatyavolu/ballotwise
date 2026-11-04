@@ -345,13 +345,10 @@ export function Wall({ office }: { office: WallOffice }) {
     return { cards: [...open, ...tossups.filter(isCalled), ...leans], fixed: open.length };
   }, [races, office]);
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
-  // A card clicked pins the map to its race until it's clicked again. Otherwise, with one toss-up left counting, the
-  // map stays on it; with more, it tours.
+  // A card clicked pins the map to its race until it's clicked again. Otherwise the map tours every race left open (the
+  // last toss-up and the leans with it, the whole country between them), and stays on one only when it's the last.
   const [pinned, setPinned] = useState<number | null>(null);
-  const lone = useMemo(() => {
-    const active = races.filter((r) => isWatch(r) && r.total > 0);
-    return active.length === 1 ? active[0].id : null;
-  }, [races]);
+  const lone = tour.length === 1 && isWatch(tour[0]) && tour[0].total > 0 ? tour[0].id : null;
   const focusOn = pinned !== null && races.some((r) => r.id === pinned) ? pinned : lone;
   const stops = useMemo(() => (focusOn !== null ? [focusOn] : tourStops(tour.map((r) => r.id), TOUR[office].racesPerLeg)), [focusOn, tour, office]);
   const { stop: stopId, upNext } = useTour(stops, TOUR[office]);
