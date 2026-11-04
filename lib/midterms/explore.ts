@@ -72,6 +72,27 @@ export function closestFirst(a: RaceSummary, b: RaceSummary): number {
   return compareRaces(a, b);
 }
 
+/**
+ * An uncalled toss-up that looks set to change party: the challenger's party leads a count past its first few
+ * percent, or, before then, the forecast favors it.
+ */
+export function likelyFlip(r: RaceSummary): boolean {
+  if (!isTossup(r) || isCalled(r)) return false;
+  if (leadingFlip(r)) return true;
+  if (r.total > 0 && !isEarly(r)) return false;
+  const holder = holderOf(r);
+  const side = favoredSide(r);
+  return !!holder && !!side && side !== holder;
+}
+
+/**
+ * The order the walls and screens watch races in: closestFirst's tiers, with the toss-ups that look set to flip
+ * (likelyFlip) ahead of the other toss-ups, then closest first.
+ */
+export function watchFirst(a: RaceSummary, b: RaceSummary): number {
+  return tier(a) - tier(b) || Number(likelyFlip(b)) - Number(likelyFlip(a)) || closestFirst(a, b);
+}
+
 export function statusOf(r: RaceSummary): Status {
   if (isCalled(r)) return "called";
   return r.total > 0 ? "counting" : "awaiting";

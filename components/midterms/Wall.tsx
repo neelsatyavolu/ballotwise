@@ -7,7 +7,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import { readMock } from "@/lib/midterms/clock";
-import { closestFirst, isTossup, isWatch } from "@/lib/midterms/explore";
+import { isTossup, isWatch, watchFirst } from "@/lib/midterms/explore";
 import { countdown, formatTime, nextWave, showsResults } from "@/lib/midterms/polls";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { autoScale, nextScale, TOUR, tourRaces, tourStops, type TourPlan } from "@/lib/midterms/wall";
@@ -265,7 +265,8 @@ export function Wall({ office }: { office: WallOffice }) {
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
   // The cards beside the map: the Senate's closest races (counting toss-ups and leans first), as many as fit; the
   // House's toss-ups, a screenful at a time when they don't all fit.
-  const cards = useMemo(() => (office === "senate" ? [...races].sort(closestFirst).slice(0, MAX_CARDS) : races.filter(isTossup).sort(closestFirst)), [races, office]);
+  // Toss-ups that look set to flip come first (watchFirst).
+  const cards = useMemo(() => (office === "senate" ? [...races].sort(watchFirst).slice(0, MAX_CARDS) : races.filter(isTossup).sort(watchFirst)), [races, office]);
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
   // A card clicked pins the map to its race until it's clicked again. Otherwise, with one toss-up left counting, the
   // map stays on it; with more, it tours.

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { parseWeights, resize } from "@/lib/midterms/columns";
-import { closestFirst } from "@/lib/midterms/explore";
+import { closestFirst, watchFirst } from "@/lib/midterms/explore";
 import { showsResults } from "@/lib/midterms/polls";
 import type { ForecastOverview } from "@/app/api/midterms/forecast/route";
 import type { RaceDetail } from "@/lib/midterms/races";
@@ -63,7 +63,7 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
     for (const r of inState) if (r.district !== null && !out.has(r.district)) out.set(r.district, districtFill(r, updatedAt, results));
     return out;
   }, [office, inState, updatedAt, results]);
-  const closest = useMemo(() => [...races].sort(closestFirst), [races]);
+  const closest = useMemo(() => [...races].sort(watchFirst), [races]);
   const zoomTo = (state: string | null, raceId: number | null = null) => {
     setFocus(state);
     setPicked(raceId);
@@ -199,7 +199,7 @@ function ThirdSwitch({ third }: { third: Third }) {
  * first: as many whole cards as fit, rotating through the rest when they don't all fit.
  */
 function TossupColumn({ data, star, handle, toggle }: { data: Overview; star: Star; handle: ReactNode; toggle: ReactNode }) {
-  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && r.office === "house").sort(closestFirst), [data]);
+  const races = useMemo(() => data.races.filter((r) => r.rating === "tossup" && r.office === "house").sort(watchFirst), [data]);
   const cards = useRef<HTMLUListElement>(null);
   useRotatingFit(cards);
   return (

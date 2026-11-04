@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { autoScale, nextScale, TOUR, tourRaces, tourStops } from "../lib/midterms/wall";
 import type { RaceSummary } from "../lib/midterms/view";
+import { likelyFlip, watchFirst } from "../lib/midterms/explore";
 
 let nextId = 1;
 function race(over: Partial<RaceSummary> & { votes?: [number, number]; winner?: 0 | 1 } = {}): RaceSummary {
@@ -28,6 +29,24 @@ describe("wall tour", () => {
     const wide = race({ rating: "likely-d", votes: [70, 30], winner: 0 });
     const uncounted = race({ rating: "likely-r" });
     expect(tourRaces([wide, uncounted, close], "senate").map((r: RaceSummary) => r.id)).toEqual([close.id, wide.id]);
+  });
+
+  it("puts toss-ups that look set to flip ahead of the other toss-ups, closer or not", () => {
+    // Georgia's Senate seat is the Democrats'.
+    const holding = race({ rating: "tossup", votes: [50, 49] });
+    const flipping = race({ rating: "tossup", votes: [44, 56] });
+    const lean = race({ rating: "lean-r", votes: [49, 51] });
+    expect(likelyFlip(flipping)).toBe(true);
+    expect(likelyFlip(holding)).toBe(false);
+    expect(tourRaces([lean, holding, flipping], "senate").map((r: RaceSummary) => r.id)).toEqual([flipping.id, holding.id, lean.id]);
+    expect([lean, holding, flipping].sort(watchFirst).map((r) => r.id)).toEqual([flipping.id, holding.id, lean.id]);
+    // Before votes, a toss-up flips when the forecast favors the challenger's party.
+    const forecast = (d: number) => ({ market: null, polls: null, rating: null, forecast: { odds: { D: d, R: 1 - d } } }) as unknown as RaceSummary["signal"];
+    expect(likelyFlip(race({ rating: "tossup", signal: forecast(0.45) }))).toBe(true);
+    expect(likelyFlip(race({ rating: "tossup", signal: forecast(0.55) }))).toBe(false);
+    // Called, or not a toss-up: not on the list.
+    expect(likelyFlip(race({ rating: "tossup", votes: [44, 56], winner: 1 }))).toBe(false);
+    expect(likelyFlip(race({ rating: "lean-r", votes: [44, 56] }))).toBe(false);
   });
 
   it("goes where votes are being counted before the toss-ups still waiting", () => {

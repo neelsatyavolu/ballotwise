@@ -1,6 +1,6 @@
 // A wall screen: one office's results for a TV or spare monitor across the room. It sizes its type to the screen and
 // its map tours the closest races on its own. Kept free of the browser so the rules can be tested on their own.
-import { closestFirst, isCalled, isCompetitive, isWatch } from "./explore";
+import { isCalled, isCompetitive, isWatch, watchFirst } from "./explore";
 import type { Office, RaceSummary } from "./view";
 
 /** The most races one trip around the tour visits, so it comes back to the start within a few minutes. */
@@ -22,15 +22,15 @@ export const TOUR: Record<"senate" | "house", TourPlan> = {
 /**
  * The races the map zooms into, where there are votes to show first: this office's uncalled toss-ups and leans that
  * are counting, then its other uncalled races that are counting, then the toss-ups and leans still waiting for votes,
- * each closest first. Once every one of those is called, the closest of the office's races with votes counted, so the
+ * each in watchFirst order (toss-ups that look set to flip first, then closest). Once every one of those is called, the closest of the office's races with votes counted, so the
  * map still has results to show.
  */
 export function tourRaces(races: readonly RaceSummary[], office: Office): RaceSummary[] {
   const mine = races.filter((r) => r.office === office);
   const open = (r: RaceSummary) => isWatch(r) || isCompetitive(r);
   const counting = mine.filter((r) => r.total > 0 && !isCalled(r));
-  const tour = [...counting.filter(open).sort(closestFirst), ...counting.filter((r) => !open(r)).sort(closestFirst), ...mine.filter((r) => open(r) && r.total === 0).sort(closestFirst)];
-  return (tour.length ? tour : mine.filter((r) => r.total > 0).sort(closestFirst)).slice(0, MAX_TOUR);
+  const tour = [...counting.filter(open).sort(watchFirst), ...counting.filter((r) => !open(r)).sort(watchFirst), ...mine.filter((r) => open(r) && r.total === 0).sort(watchFirst)];
+  return (tour.length ? tour : mine.filter((r) => r.total > 0).sort(watchFirst)).slice(0, MAX_TOUR);
 }
 
 /** The tour's stops: null is the whole country, shown first and again after every `racesPerLeg` races (never when null). */
