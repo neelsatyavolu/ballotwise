@@ -269,16 +269,16 @@ export function Wall({ office }: { office: WallOffice }) {
   useWakeLock();
 
   const races = useMemo(() => (data?.races ?? []).filter((r) => r.office === office), [data, office]);
-  // The cards beside the map: the Senate's closest races (counting toss-ups and leans first), as many as fit; the
-  // House's toss-ups and then its closest leans (CLOSE_LEANS), a screenful at a time when they don't all fit.
-  // Toss-ups that look set to flip come first (watchFirst).
-  const cards = useMemo(
-    () =>
-      office === "senate"
-        ? [...races].sort(watchFirst).slice(0, MAX_CARDS)
-        : [...races.filter(isTossup).sort(watchFirst), ...races.filter((r) => r.rating?.startsWith("lean") && !isCalled(r)).sort(watchFirst).slice(0, CLOSE_LEANS)],
-    [races, office],
-  );
+  // The cards beside the map: the Senate's closest races (counting toss-ups and leans first), as many as fit. The
+  // House's uncalled toss-ups, always up (`fixed`), then its called toss-ups and closest leans (CLOSE_LEANS) taking
+  // turns in the space left. Toss-ups that look set to flip come first (watchFirst).
+  const { cards, fixed } = useMemo(() => {
+    if (office === "senate") return { cards: [...races].sort(watchFirst).slice(0, MAX_CARDS), fixed: 0 };
+    const tossups = races.filter(isTossup).sort(watchFirst);
+    const open = tossups.filter((r) => !isCalled(r));
+    const leans = races.filter((r) => r.rating?.startsWith("lean") && !isCalled(r)).sort(watchFirst).slice(0, CLOSE_LEANS);
+    return { cards: [...open, ...tossups.filter(isCalled), ...leans], fixed: open.length };
+  }, [races, office]);
   const tour = useMemo(() => tourRaces(races, office), [races, office]);
   // A card clicked pins the map to its race until it's clicked again. Otherwise, with one toss-up left counting, the
   // map stays on it; with more, it tours.
@@ -296,7 +296,7 @@ export function Wall({ office }: { office: WallOffice }) {
   const next = upNext.map((id) => races.find((r) => r.id === id)).filter((r): r is RaceSummary => !!r);
   const grid = useRef<HTMLUListElement>(null);
   const detail = useRef<HTMLDivElement>(null);
-  useRotatingFit(grid, office === "house" ? ROTATE_MS : null, !!data);
+  useRotatingFit(grid, office === "house" ? ROTATE_MS : null, !!data, fixed);
   useFit(detail, fitTour, !!data);
   // The toured race's card in the grid is outlined (its own card shows under the map too, with its count).
   useLayoutEffect(() => {

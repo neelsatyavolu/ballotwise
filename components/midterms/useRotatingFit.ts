@@ -8,32 +8,51 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "re
 /** How long each screenful of cards stays up. */
 export const ROTATE_MS = 12_000;
 
+/** Which children are up: the first `from` of the rotating ones (after any fixed), how many of those, and of how many. */
+type Shown = { from: number; count: number; total: number };
+
 /**
- * Keeps `box`'s children to the ones that fit, starting from the current screenful, and moves on to the next screenful
- * every `ms` (null: never, so only the first screenful shows). `box` must have a fixed height (a flex or grid child
- * with min-height 0), or every child fits. `ready` is false until the box is on the page.
+ * Lays out `items` with `fixed` first, always up, and the rest from `start`, wrapping around; hides what doesn't fit
+ * below `bottom`. When the fixed ones alone don't all fit, they rotate among themselves and the rest stay hidden.
  */
-export function useRotatingFit(box: RefObject<HTMLElement | null>, ms: number | null = ROTATE_MS, ready = true): void {
-  const [start, setStart] = useState(0);
-  const shown = useRef({ from: 0, count: 0, total: 0 });
-  const fit = () => {
-    const el = box.current;
-    if (!el) return;
-    const items = [...el.children] as HTMLElement[];
-    const n = items.length;
-    const from = start < n ? start : 0;
-    // The list from `from` on, then from the top: laid out in that order with CSS order, so the DOM stays React's.
-    const ordered = [...items.slice(from), ...items.slice(0, from)];
+export function layout(items: readonly HTMLElement[], fixed: number, start: number, bottom: () => number): Shown {
+  const pinned = items.slice(0, fixed);
+  const rest = items.slice(fixed);
+  const place = (ordered: readonly HTMLElement[]) => {
+    items.forEach((x) => (x.hidden = true));
     ordered.forEach((x, i) => {
       x.hidden = false;
       x.style.order = String(i);
     });
-    const bottom = el.getBoundingClientRect().bottom;
-    const past = ordered.findIndex((x) => x.getBoundingClientRect().bottom > bottom + 1);
+    const edge = bottom();
+    const past = ordered.findIndex((x) => x.getBoundingClientRect().bottom > edge + 1);
     // At least one item shows, even in a box too short for it.
-    const count = past < 0 ? n : Math.max(past, 1);
+    const count = past < 0 ? ordered.length : Math.max(past, 1);
     ordered.slice(count).forEach((x) => (x.hidden = true));
-    shown.current = { from, count, total: n };
+    return count;
+  };
+  const from = start < rest.length ? start : 0;
+  const count = place([...pinned, ...rest.slice(from), ...rest.slice(0, from)]);
+  if (count >= pinned.length) return { from, count: count - pinned.length, total: rest.length };
+  // Not even the fixed ones fit: they take turns, and nothing else shows.
+  const turn = start < pinned.length ? start : 0;
+  return { from: turn, count: place([...pinned.slice(turn), ...pinned.slice(0, turn)]), total: pinned.length };
+}
+
+/**
+ * Keeps `box`'s children to the ones that fit, starting from the current screenful, and moves on to the next screenful
+ * every `ms` (null: never, so only the first screenful shows). The first `fixed` children are always up and never
+ * rotated out; the rest take turns in the space left (see layout). `box` must have a fixed height (a flex or grid
+ * child with min-height 0), or every child fits. `ready` is false until the box is on the page.
+ */
+export function useRotatingFit(box: RefObject<HTMLElement | null>, ms: number | null = ROTATE_MS, ready = true, fixed = 0): void {
+  const [start, setStart] = useState(0);
+  const shown = useRef<Shown>({ from: 0, count: 0, total: 0 });
+  const fit = () => {
+    const el = box.current;
+    if (!el) return;
+    // Laid out in turn order with CSS order, so the DOM stays React's.
+    shown.current = layout([...el.children] as HTMLElement[], fixed, start, () => el.getBoundingClientRect().bottom);
   };
   // After every render (results change cards' heights) and whenever the box changes size.
   useLayoutEffect(fit);
