@@ -12,10 +12,11 @@ const UNSURE = "var(--muted)";
 /**
  * Each county's circle for the Remaining view, from the votes-left estimate (DDHQ's own expected vote per county on a
  * connected screen), and the county fills beneath them: plain, so the circles read, with the votes left in the tip.
- * Null when the race has nothing left to show (no count yet, or called).
+ * Null when the race has nothing left to show (no count yet, or every county counted).
  */
 export function useRemaining(race: RaceDetail | null | undefined): { bubbles: Bubble[]; fills: Map<string, Fill> } | null {
-  const est = useMemo(() => (race ? votesLeft(race) : null), [race]);
+  // A called race still has votes out, and DDHQ's map keeps showing them: the estimate is read as if it weren't called.
+  const est = useMemo(() => (race ? votesLeft({ ...race, candidates: race.candidates.map((c) => ({ ...c, winner: false })) }) : null), [race]);
   return useMemo(() => {
     if (!race || !est?.counties.length) return null;
     const colorOf = (party: string | null) => {
