@@ -14,6 +14,7 @@ function browser() {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.resetModules();
 });
@@ -21,14 +22,17 @@ afterEach(() => {
 describe("mock election night", () => {
   it("is shared through localStorage, so every tab and wall runs it", async () => {
     browser();
-    const { readMock, setMock } = await import("../lib/midterms/clock");
+    const { readMock, setMock, MOCK_UNTIL } = await import("../lib/midterms/clock");
+    // Before the real night's cutoff, whatever today's date.
+    vi.useFakeTimers({ now: MOCK_UNTIL - 60 * 60_000, toFake: ["Date"] });
     setMock(18, 60);
     expect(readMock()).toMatchObject({ speed: 60 });
   });
 
   it("ends by itself after MOCK_TTL", async () => {
     const store = browser();
-    const { readMock, MOCK_TTL } = await import("../lib/midterms/clock");
+    const { readMock, MOCK_TTL, MOCK_UNTIL } = await import("../lib/midterms/clock");
+    vi.useFakeTimers({ now: MOCK_UNTIL - 60 * 60_000, toFake: ["Date"] });
     store.set("mt-mock", JSON.stringify({ start: 1, at: Date.now() - MOCK_TTL - 1, speed: 1 }));
     expect(readMock()).toBeNull();
     store.set("mt-mock", JSON.stringify({ start: 1, at: Date.now() - MOCK_TTL + 60_000, speed: 1 }));
