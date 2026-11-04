@@ -46,7 +46,7 @@ export function CardStatus({ race, zone = true }: { race: RaceSummary; zone?: bo
   // When the call was made, as DDHQ's "#DecisionMade" line shows it: a race can be called before any votes are in.
   if (race.candidates.some((c) => c.winner)) return <span className="called">Called{race.call && !race.call.withdrawn ? ` ${stampTime(race.call.at)}${zone ? ` ${zoneAbbr(race.call.at)}` : ""}` : ""}</span>;
   // A connected screen showing civicAPI's count until DDHQ posts its first votes says so.
-  if (ahead) return <span title={race.countFrom === "civic" ? "civicAPI's count, which is ahead of Decision Desk HQ's" : undefined}>Lead {ahead.margin.toFixed(1)} pts{race.countFrom === "civic" ? " · civicAPI" : ""}</span>;
+  if (ahead) return <span title={race.countFrom === "civic" ? "civicAPI's count, which is ahead of Decision Desk HQ's" : undefined}>Lead {ahead.margin.toFixed(1)} pts</span>;
   const final = stateFinal(race.state);
   return <span>{final && final > now ? `Polls close ${stampTime(final)} ${zoneAbbr(final)}` : "No results yet"}</span>;
 }

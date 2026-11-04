@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ForecastOverview } from "../app/api/midterms/forecast/route";
-import { applyDesk, civicFresh, deskFor, overlayLive, isDesk } from "../lib/ddhq/apply";
+import { applyDesk, deskFor, overlayLive, isDesk } from "../lib/ddhq/apply";
 import type { DdhqForecastBundle } from "../lib/ddhq/forecast-types";
 import type { DdhqRace } from "../lib/ddhq/votes";
 import { safeSide, tierOf } from "../lib/midterms/explore";
@@ -154,7 +154,7 @@ describe("private DDHQ forecast overlay", () => {
     const counted = (d: number, r: number) => zeros.map((c, i) => ({ ...c, votes: i ? r : d }));
     // civicAPI: 6,000 to 4,000, 10% of precincts; any civicAPI winner flag is ignored.
     // The public payload is current: civicAPI's count may stand in.
-    const apply = (r: RaceSummary, d: DdhqRace) => applyDesk(r, d, true);
+    const apply = (r: RaceSummary, d: DdhqRace) => applyDesk(r, d, Date.now() - 10_000);
     const raw = { ...civic(), total: 10_000, candidates: civic().candidates.map((c) => ({ ...c, votes: c.party === "Democratic" ? 6000 : 4000, winner: c.party === "Democratic" })) };
     // DDHQ has nothing in yet: civicAPI's count, its % in against DDHQ's expected vote.
     const first = apply(raw, desk({ candidates: zeros, total: 0, reporting: 0, expected: 50_000 }));
@@ -179,17 +179,21 @@ describe("private DDHQ forecast overlay", () => {
     // Not from a race civicAPI left out, nor when the parties don't line up.
     expect(apply({ ...raw, missing: true }, desk({ candidates: zeros, total: 0 })).total).toBe(0);
     expect(apply(raw, desk({ candidates: [zeros[0], { ...zeros[1], party: "Democratic" }], total: 0 })).total).toBe(0);
-    // When civicAPI is failing (a stale or old public payload), DDHQ's count shows, whatever civicAPI last said.
+    // Without a time for the public numbers, DDHQ's count shows.
     expect(applyDesk(raw, desk({ candidates: counted(5000, 4000), total: 9000 }))).toMatchObject({ total: 9000 });
     const now = Date.now();
-    expect(civicFresh({ stale: false, fetchedAt: now - 30_000 }, now)).toBe(true);
-    expect(civicFresh({ stale: true, fetchedAt: now - 30_000 }, now)).toBe(false);
-    expect(civicFresh({ stale: false, fetchedAt: now - 3 * 60_000 }, now)).toBe(false);
+    const behind = desk({ candidates: counted(5000, 4000), total: 9000 });
+    // civicAPI down: its last count, well ahead, stands in for 5 minutes after it last reported the race, then DDHQ's.
+    expect(applyDesk(raw, behind, now - 4 * 60_000).total).toBe(10_000);
+    expect(applyDesk(raw, behind, now - 6 * 60_000).total).toBe(9000);
+    expect(applyDesk({ ...raw, missing: true, lastSeen: now - 60_000 }, behind, now).total).toBe(10_000);
+    expect(applyDesk({ ...raw, missing: true, lastSeen: now - 6 * 60_000 }, behind, now).total).toBe(9000);
     const key = "senate:GA::g";
-    const board = new Map([[key, desk({ forecast: [], candidates: counted(5000, 4000), total: 9000 })]]);
+    const board = new Map([[key, behind]]);
     const shown = (o: Overview) => overlayLive("/api/midterms", o, board).races[0].total;
-    expect(shown({ ...overview(raw), fetchedAt: now - 10_000 })).toBe(10_000);
-    expect(shown({ ...overview(raw), fetchedAt: now - 10_000, stale: true })).toBe(9000);
+    // A stale catalog (civicAPI's latest refresh failed) from a minute ago still counts; one 6 minutes old doesn't.
+    expect(shown({ ...overview(raw), fetchedAt: now - 60_000, stale: true })).toBe(10_000);
+    expect(shown({ ...overview(raw), fetchedAt: now - 6 * 60_000, stale: true })).toBe(9000);
   });
 
   it("applies both sources and clears a stale public call when DDHQ has not called it", () => {

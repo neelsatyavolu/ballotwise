@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/client";
-import { applyDesk, civicFresh, isDesk, overlayLive } from "@/lib/ddhq/apply";
+import { applyDesk, civicSeen, isDesk, overlayLive } from "@/lib/ddhq/apply";
 import type { DdhqRace } from "@/lib/ddhq/votes";
 import { useAccount } from "@/components/AccountProvider";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
@@ -58,7 +58,7 @@ export function RaceView({ id }: { id: number }) {
   const fallback = overlaid && isDesk(overlaid.race) ? { ...overlaid, history: undefined } : overlaid;
   useDeskWaiting(waiting);
   const base = fallback ?? rendered ?? (active ? catalogData : null);
-  const data = base && active ? { ...base, race: applyDesk(base.race, active, civicFresh(base)), fetchedAt: mine!.at, stale: false, history: undefined, callPending: false } : base;
+  const data = base && active ? { ...base, race: applyDesk(base.race, active, civicSeen(base)), fetchedAt: mine!.at, stale: false, history: undefined, callPending: false } : base;
   const race = data?.race;
 
   useEffect(() => {

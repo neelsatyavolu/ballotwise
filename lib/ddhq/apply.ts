@@ -51,12 +51,15 @@ function forecastOf(desk: DdhqRace): Forecast {
  */
 const AHEAD_SHARE = 0.02;
 const AHEAD_VOTES = 500;
-/** A public payload older than this, or marked stale (civicAPI failed and an older copy was served), is not used over DDHQ's. */
-export const CIVIC_FRESH_MS = 2 * 60_000;
+/**
+ * How long after civicAPI last reported a race its count may still stand in for DDHQ's. Counts only go up, so a count
+ * a few minutes old that's well ahead is still the newer one (on Nov 3 civicAPI went down holding South Carolina at
+ * 345,809 votes while DDHQ had 53,084); past this, with civicAPI down, DDHQ's own count shows.
+ */
+export const CIVIC_KEEP_MS = 5 * 60_000;
 
-/** Whether a public payload is fresh enough for its count to stand in for DDHQ's (see CIVIC_FRESH_MS). */
-export const civicFresh = (data: { stale?: boolean; fetchedAt?: number } | null | undefined, now = Date.now()): boolean =>
-  !!data && !data.stale && typeof data.fetchedAt === "number" && now - data.fetchedAt < CIVIC_FRESH_MS;
+/** When a public payload's numbers are from (its fetch time), for applyDesk; null when it doesn't say. */
+export const civicSeen = (data: { fetchedAt?: number } | null | undefined): number | null => (typeof data?.fetchedAt === "number" ? data.fetchedAt : null);
 
 const sideOfParty = (party: string) => (/^Democrat/i.test(party) ? "D" : /^Republican/i.test(party) ? "R" : null);
 
@@ -65,10 +68,12 @@ const sideOfParty = (party: string) => (/^Democrat/i.test(party) ? "D" : /^Repub
  * civicAPI had Indiana House votes before DDHQ posted any): any votes while DDHQ has none, else more by AHEAD_SHARE
  * and AHEAD_VOTES. Each takes the votes of the one public candidate of its party, so DDHQ's names stay ("Cynthia
  * Wirth" where civicAPI says "Cinde Wirth") and nothing jumps when DDHQ's count catches up. Null when civicAPI isn't
- * that far ahead, left the race out, or the two don't have exactly one Democrat and one Republican each.
+ * that far ahead, last reported the race more than CIVIC_KEEP_MS ago (`seenAt` is the payload's time, or the race's
+ * own last sighting when civicAPI left it out), or the two don't have exactly one Democrat and one Republican each.
  */
-function publicCount(race: RaceSummary, rows: readonly DdhqCandidate[], deskTotal: number): DdhqCandidate[] | null {
-  if (race.total <= 0 || race.missing) return null;
+function publicCount(race: RaceSummary, rows: readonly DdhqCandidate[], deskTotal: number, seenAt: number | null): DdhqCandidate[] | null {
+  const seen = race.missing ? (race.lastSeen ?? null) : seenAt;
+  if (race.total <= 0 || seen === null || Date.now() - seen > CIVIC_KEEP_MS) return null;
   if (deskTotal > 0 && (race.total < deskTotal * (1 + AHEAD_SHARE) || race.total - deskTotal < AHEAD_VOTES)) return null;
   const only = <C extends { party: string }>(list: readonly C[], match: (c: C) => boolean) => {
     const hit = list.filter(match);
@@ -84,11 +89,11 @@ function publicCount(race: RaceSummary, rows: readonly DdhqCandidate[], deskTota
 }
 
 /**
- * `race` with DDHQ's count, call and forecast laid over it. With `civicFresh` (the public payload is current; see
- * civicFresh), civicAPI's count stands in where it's well ahead of DDHQ's (see publicCount); without it, DDHQ's always
+ * `race` with DDHQ's count, call and forecast laid over it. With `civicAt` (when the public payload's numbers are
+ * from; see civicSeen), civicAPI's count stands in where it's recent and well ahead of DDHQ's (see publicCount); without it, DDHQ's always
  * shows, so a failing civicAPI never holds a screen back.
  */
-export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicFresh = false): T {
+export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicAt: number | null = null): T {
   if (!desk.candidates && !desk.forecast.length) return race;
   const published = sources.get(race);
   // The count endpoint may omit the category. Keep the published forecast as one coherent snapshot.
@@ -99,8 +104,8 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicF
   if (desk.candidates) {
     const winner = desk.call?.name ?? desk.candidates.find((row) => row.winner)?.name ?? null;
     const calledAt = desk.call ? Date.parse(desk.call.at) : NaN;
-    // Where civicAPI is current and well ahead, its count stands in under DDHQ's names; DDHQ's call and forecast rule.
-    const stand = civicFresh ? publicCount(race, desk.candidates, desk.total) : null;
+    // Where civicAPI's count is recent and well ahead, its count stands in under DDHQ's names; DDHQ's call and forecast rule.
+    const stand = civicAt !== null ? publicCount(race, desk.candidates, desk.total, civicAt) : null;
     // DDHQ's expected vote estimates the race's final total whichever count shows, so % in and votes left stay on
     // DDHQ's scale; without it, civicAPI's count keeps its own % in.
     const standIn = stand ? expectedIn(race.total, desk.expected) : undefined;
@@ -185,7 +190,7 @@ export function overlayLive<T>(path: string | null, data: T, desk: ReadonlyMap<s
   if (!path || (!desk.size && !forecast) || !data || typeof data !== "object") return data;
   if (path === "/api/midterms" && "races" in data) {
     const overview = data as unknown as Overview;
-    const fresh = civicFresh(overview);
+    const fresh = civicSeen(overview);
     let changed = false;
     let countsChanged = false;
     const races = overview.races.map((race) => {
@@ -209,7 +214,7 @@ export function overlayLive<T>(path: string | null, data: T, desk: ReadonlyMap<s
     const body = data as { race: RaceDetail };
     if (body.race.office === "measure") return data;
     const hit = desk.get(deskKeyFor(body.race));
-    let next = hit ? applyDesk(body.race, hit, civicFresh(data as { stale?: boolean; fetchedAt?: number })) : body.race;
+    let next = hit ? applyDesk(body.race, hit, civicSeen(data as { fetchedAt?: number })) : body.race;
     if (forecast && !hit?.forecast.length) next = withoutForecast(next);
     return next === body.race ? data : { ...body, race: next } as T;
   }
