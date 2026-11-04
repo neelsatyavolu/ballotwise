@@ -129,7 +129,10 @@ function OfficeColumn({ office, title, href, data, forecast, results, star, stat
 const WIDTHS_KEY = "mt-sbs-widths";
 /** What the third column shows: the governors' dashboard, or cards for every Senate and House toss-up. */
 const THIRD_KEY = "mt-sbs-third";
-type Third = "governor" | "tossups";
+/** What the third column shows: the governors, toss-ups, the Senate's races as cards, or the latest calls. */
+const THIRDS = ["governor", "tossups", "senate", "calls"] as const;
+type Third = (typeof THIRDS)[number];
+const THIRD_LABEL: Record<Third, string> = { governor: "Governors", tossups: "Toss-ups", senate: "Senate", calls: "Calls" };
 /** Fired when this page saves a setting, so every reader of it updates. */
 const SETTINGS_CHANGED = "mt-sbs-settings";
 /** Each column's share of the width: Senate, House, Governors, then the calls feed on ultrawide screens. */
@@ -181,7 +184,8 @@ function useWidths() {
 
 /** Whether the third column shows the governors or the toss-ups, as last chosen in this browser. */
 function useThird(): Third {
-  return useSyncExternalStore(subscribeSettings, () => readSetting(THIRD_KEY), () => null) === "tossups" ? "tossups" : "governor";
+  const saved = useSyncExternalStore(subscribeSettings, () => readSetting(THIRD_KEY), () => null);
+  return THIRDS.find((t) => t === saved) ?? "governor";
 }
 
 const HOUSE_KEY = "mt-sbs-house";
@@ -204,12 +208,11 @@ function HouseSwitch({ shown }: { shown: boolean }) {
 function ThirdSwitch({ third }: { third: Third }) {
   return (
     <div className="mt-seg" role="group" aria-label="Third column shows">
-      <button type="button" aria-pressed={third === "governor"} onClick={() => saveSetting(THIRD_KEY, null)}>
-        Governors
-      </button>
-      <button type="button" aria-pressed={third === "tossups"} onClick={() => saveSetting(THIRD_KEY, "tossups")}>
-        Toss-ups
-      </button>
+      {THIRDS.map((t) => (
+        <button key={t} type="button" aria-pressed={third === t} onClick={() => saveSetting(THIRD_KEY, t === "governor" ? null : t)}>
+          {THIRD_LABEL[t]}
+        </button>
+      ))}
     </div>
   );
 }
@@ -220,24 +223,26 @@ function ThirdSwitch({ third }: { third: Third }) {
  * (counting, then called, in watchFirst order) and are always up; the rest only fill the space left. When the ones
  * with results don't all fit, they rotate among themselves; a page of races with no results never comes up.
  */
-function TossupColumn({ data, star, handle, toggle, noHouse = false }: { data: Overview; star: Star; handle: ReactNode; toggle: ReactNode; noHouse?: boolean }) {
+function TossupColumn({ data, star, handle, toggle, noHouse = false, senate = false }: { data: Overview; star: Star; handle: ReactNode; toggle: ReactNode; noHouse?: boolean; senate?: boolean }) {
   const { races, fixed } = useMemo(() => {
-    const offices: readonly string[] = noHouse ? ["senate", "governor"] : ["house"];
+    const offices: readonly string[] = senate ? ["senate"] : noHouse ? ["senate", "governor"] : ["house"];
     const mine = data.races.filter((r) => offices.includes(r.office));
-    const all = mine.filter((r) => r.rating === "tossup").sort(watchFirst);
+    // The Senate view takes every Senate race (closest first), not just its toss-ups.
+    const all = mine.filter((r) => senate || r.rating === "tossup").sort(watchFirst);
     const counting = all.filter((r) => r.total > 0 && !isCalled(r));
     const called = all.filter(isCalled);
     const waiting = all.filter((r) => r.total === 0 && !isCalled(r));
     // With the House hidden there's room for the races next closest: leans still counting, closest first.
-    const leans = noHouse ? mine.filter((r) => r.rating?.startsWith("lean") && r.total > 0 && !isCalled(r)).sort(watchFirst) : [];
-    return { races: [...counting, ...called, ...leans, ...waiting], fixed: counting.length + called.length };
-  }, [data, noHouse]);
+    const leans = noHouse && !senate ? mine.filter((r) => r.rating?.startsWith("lean") && r.total > 0 && !isCalled(r)).sort(watchFirst) : [];
+    // The Senate view pins only the races still counting; its many called ones take turns with the rest.
+    return { races: [...counting, ...called, ...leans, ...waiting], fixed: senate ? counting.length : counting.length + called.length };
+  }, [data, noHouse, senate]);
   const cards = useRef<HTMLUListElement>(null);
   useRotatingFit(cards, undefined, true, fixed);
   return (
     <section className="mt-sbs-col" aria-label="Toss-up races" data-panel="tossups">
       <div className="mt-section-head tight">
-        <h2>{noHouse ? "Senate & governor toss-ups" : "House toss-ups"}</h2>
+        <h2>{senate ? "Senate races" : noHouse ? "Senate & governor toss-ups" : "House toss-ups"}</h2>
         <span className="muted small mt-sbs-count">{count(races.length)}</span>
         {toggle}
       </div>
@@ -378,7 +383,7 @@ export function SideBySide() {
   );
   const third = useThird();
   const showHouse = useShowHouse();
-  const next = ["House", third === "tossups" ? "Toss-ups" : "Governors", "the calls feed"];
+  const next = ["House", THIRD_LABEL[third], "the calls feed"];
 
   return (
     <div className="wrap mt mt-sbs-page">
@@ -395,6 +400,19 @@ export function SideBySide() {
             const handle = <ColumnHandle i={i} label={`Resize ${i === 2 ? next[1] : c.title} and ${next[i]}`} grid={grid} widths={widths} />;
             // The third column can swap the governors for the toss-ups; the switch sits in its heading either way.
             if (c.office === "governor" && third === "tossups") return <TossupColumn key="tossups" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} noHouse={!showHouse} />;
+            if (c.office === "governor" && third === "senate") return <TossupColumn key="senate-cards" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} senate />;
+            if (c.office === "governor" && third === "calls") {
+              return (
+                <section key="calls" className="mt-sbs-col mt-sbs-calls" aria-label="Latest calls" data-panel="calls">
+                  {/* The calls feed carries its own heading; this row holds just the switch. */}
+                  <div className="mt-section-head tight">
+                    <ThirdSwitch third={third} />
+                  </div>
+                  <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" fill />
+                  {handle}
+                </section>
+              );
+            }
             // The House column's heading can hide it; once hidden, the Senate column's heading brings it back.
             const toggle = c.office === "governor" ? <ThirdSwitch third={third} /> : c.office === "house" ? <HouseSwitch shown /> : !showHouse ? <HouseSwitch shown={false} /> : undefined;
             return <OfficeColumn key={c.office} {...c} data={data} forecast={forecast} results={results} star={star} status={i === 0 ? status : undefined} handle={handle} toggle={toggle} />;
