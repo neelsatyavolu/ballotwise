@@ -1,6 +1,9 @@
 import type { Districts } from "../ballot/census";
 import { countyRaces } from "../ddhq/elections";
-import { searchLive } from "./civic";
+import type { Db } from "../auth/accounts";
+import { fetchCatalog, fetchRace, searchLive } from "./civic";
+import { BASELINE_2024 } from "./data";
+import { MIDTERM_TURNOUT } from "./votesLeft";
 import { countyRacesFor, normal } from "./county";
 import countyNames from "./countyNames.json";
 import type { RaceSummary } from "./races";
@@ -90,7 +93,7 @@ async function legislature(districts: Districts, state: string, now: number): Pr
 const SCHOOL_KIND = /\b(school|district|elementary|high|joint|union|unified|board|of|education|trustees?|sd|hsd|esd|usd)\b/g;
 const schoolCore = (name: string) => normal(name).replace(SCHOOL_KIND, " ").replace(/\s+/g, " ").trim();
 /** A contest for part of a city or district (a council district, a trustee area), which the Census can't place an address in. */
-const SUB_AREA = /,\s*District\s+\S+$|\b(Trustee Area|Ward|District)\s+\d+[A-Z]?\b/i;
+const SUB_AREA = /,\s*District\s+(?!At-Large)\S+$|\b(Trustee Area|Ward|District)\s+\d+[A-Z]?\b/i;
 /** A statewide measure on a county page, named by its number ("Proposition 1 - …"), not by a place ("Palo Alto Measure J"). */
 const STATEWIDE_MEASURE = /^(Proposition|Question|Amendment|Constitutional Amendment|Issue|Measure|Initiative|Referendum)\s+\d/i;
 
@@ -150,10 +153,44 @@ async function cityAndCounty(districts: Districts, state: string | null, place: 
   return { source: "civicAPI", yours: [], nearby, fetchedAt: now, stale: answered.length < answers.length || answered.some((a) => a.stale) };
 }
 
-export async function localRaces(districts: Districts, now: number): Promise<LocalRaces> {
+/**
+ * How much of the county's vote is counted, from 0 to 0.99: its count in the state's governor (else Senate) race,
+ * which every ballot in it carries, against its 2024 presidential vote at midterm turnout. Null when that can't be
+ * read. Every race in the county is counted off the same ballots, so a local race the county gives no reporting for
+ * (mail is counted before precincts) is about as far along.
+ */
+async function countyShare(state: string, fips: string | null, now: number, db?: Db): Promise<number | null> {
+  const base = fips ? BASELINE_2024[fips] : undefined;
+  if (!fips || !base?.[2]) return null;
+  try {
+    // The served catalog, never a wait on civicAPI's searches; the race itself has a short limit and a fallback.
+    const { races } = await fetchCatalog(now, [], db, (work) => void work.catch(() => {}), true);
+    const summary = races.find((r) => r.state === state && r.office === "governor") ?? races.find((r) => r.state === state && r.office === "senate");
+    if (!summary) return null;
+    const { race } = await fetchRace(summary, now, BASELINE_2024);
+    const county = race.counties.find((c) => c.fips === fips);
+    return county && county.total > 0 ? Math.min(0.99, county.total / (base[2] * MIDTERM_TURNOUT)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A local race with no reporting of its own, given the county's share counted (see countyShare) and the expected vote it implies. */
+function withShare(r: RaceSummary, share: number | null): RaceSummary {
+  if (share === null || share <= 0 || !r.local || r.expected !== undefined || r.total <= 0 || (r.reporting > 0 && !r.reportingUnknown)) return r;
+  return { ...r, reporting: share * 100, reportingUnknown: undefined, expected: Math.round(r.total / share) };
+}
+
+export async function localRaces(districts: Districts, now: number, db?: Db): Promise<LocalRaces> {
   const place = placeName(districts.place);
   const area = [place, districts.county, districts.state].filter(Boolean).join(", ");
   const state = Object.keys(STATE_NAMES).find((code) => STATE_NAMES[code] === districts.state) ?? null;
-  const [local, seats] = await Promise.all([cityAndCounty(districts, state, place, now), state ? legislature(districts, state, now) : { races: [], stale: false }]);
-  return { area, state, countyFips: state && countyFips(state, districts.county), house: houseDistrict(districts.congressional), legislature: seats.races, ...local, stale: local.stale || seats.stale };
+  const fips = state && countyFips(state, districts.county);
+  const [local, seats, share] = await Promise.all([
+    cityAndCounty(districts, state, place, now),
+    state ? legislature(districts, state, now) : { races: [], stale: false },
+    state ? countyShare(state, fips, now, db) : Promise.resolve(null),
+  ]);
+  const shared = (list: readonly RaceSummary[]) => list.map((r) => withShare(r, share));
+  return { area, state, countyFips: fips, house: houseDistrict(districts.congressional), legislature: seats.races, ...local, yours: shared(local.yours), nearby: shared(local.nearby), stale: local.stale || seats.stale };
 }

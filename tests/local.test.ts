@@ -55,7 +55,8 @@ describe("localRaces", () => {
     const local = await localRaces(paloAlto, AFTER_POLLS);
     expect(local).toMatchObject({ area: "Palo Alto, Santa Clara County, California", source: "county", stale: false, nearby: [] });
     expect(local.yours.map((r) => [r.id - COUNTY_ID_BASE, r.total])).toEqual([[42, 8]]);
-    expect(fetch.mock.calls.some(([url]) => String(url).includes("civicapi.org"))).toBe(false);
+    // Its local races aren't searched for on civicAPI (the county's share counted comes from the governor race).
+    expect(fetch.mock.calls.some(([url]) => String(url).includes("civicapi.org") && String(url).includes("query="))).toBe(false);
   });
 
   it("elsewhere, lists civicAPI's Nov 3 races in the address's state naming its city or county, school boards included, once each", async () => {

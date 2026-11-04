@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const ballot = await getBallot(db(), user.id);
   if (!ballot) return liveJson(req, { fetchedAt: now, local: null }, PRIVATE);
   try {
-    const { fetchedAt, stale, ...local } = await localRaces(ballot.districts, now);
+    const { fetchedAt, stale, ...local } = await localRaces(ballot.districts, now, db());
     return await liveJson(req, { fetchedAt, stale, local }, PRIVATE);
   } catch (err) {
     console.error("midterms local races failed:", err);

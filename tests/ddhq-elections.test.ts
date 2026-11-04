@@ -30,13 +30,15 @@ describe("DDHQ county pages", () => {
       rec(2, "General Election", "Palo Alto City Council", "", [1, 1]),
       rec(3, "General Election", "Palo Alto Unified School District school board Trustee Area 2", "", [1, 1]),
       rec(4, "General Election", "Los Altos City Council", "2", [1, 1]),
+      rec(9, "General Election", "Palo Alto City Council", "At-Large", [1, 1]),
       rec(5, "Ballot Question", "Mountain View-Los Altos Union High School District Measure E", "", [1, 1]),
       rec(6, "Ballot Question", "Santa Clara County Measure A", "", [1, 1]),
       rec(7, "General Election", "Santa Clara City Council", "3", [1, 1]),
       rec(8, "Ballot Question", "Proposition 1 - Veteran and Housing Assistance Programs Bond Measure", "", [1, 1]),
     ])).map(ddhqRace);
     const picked = pickDdhq(races, districts, "CA", "Palo Alto");
-    expect(picked.yours.map((r) => r.title)).toEqual(["Palo Alto Measure J", "Palo Alto City Council", "Santa Clara County Measure A"]);
+    // An at-large seat is the whole city's; its name drops "District At-Large" (it shares the plain race's name here).
+    expect(picked.yours.map((r) => r.title)).toEqual(["Palo Alto Measure J", "Palo Alto City Council", "Palo Alto City Council", "Santa Clara County Measure A"]);
     expect(picked.nearby.map((r) => r.title)).toEqual(["Palo Alto Unified School District school board Trustee Area 2"]);
     expect(picked.measures?.map((r) => r.title)).toEqual(["Proposition 1 - Veteran and Housing Assistance Programs Bond Measure"]);
   });

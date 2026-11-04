@@ -78,7 +78,8 @@ export function ddhqRace(r: DdhqRecord): RaceSummary {
     office: "measure",
     state: r.stateAbb,
     district: null,
-    title: r.district ? `${r.office}, District ${r.district}` : r.office,
+    // An at-large seat is for the whole place, not a district of it.
+    title: r.district && !/^at-?large$/i.test(r.district) ? `${r.office}, District ${r.district}` : r.office,
     reporting: reporting ?? 0,
     ...(reporting === null && total > 0 ? { reportingUnknown: true as const } : {}),
     ...(expected > 0 ? { expected } : {}),
