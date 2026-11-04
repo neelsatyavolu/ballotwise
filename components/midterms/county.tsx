@@ -15,7 +15,12 @@ export function fillFor(county: CountyResult, mode: Mode): string {
     return m === null ? "var(--rule)" : shade(m > 0 ? "var(--dem)" : "var(--rep)", Math.abs(m));
   }
   const ahead = lead(county.candidates);
-  return ahead ? shade(partyColor(ahead.leader), ahead.margin) : "var(--in-race)";
+  if (!ahead) return "var(--in-race)";
+  // A county rolled up from its towns takes the leader's shade only as far as its towns are in, so one with a few
+  // towns counted reads mostly empty, as a town map would.
+  const share = county.towns ? county.towns.in / Math.max(1, county.towns.of) : 1;
+  const fill = shade(partyColor(ahead.leader), ahead.margin);
+  return share < 1 ? `color-mix(in srgb, ${fill} ${Math.round(15 + share * 85)}%, var(--in-race))` : fill;
 }
 
 /** Hover card for a county: this race's count, or in "2024" mode the 2024 presidential vote. */
@@ -75,7 +80,7 @@ export function CountyTip({ county, mode = "results" }: { county: CountyResult; 
         <span className="muted">{county.baseline2024 !== null ? `2024 ${marginLabel(county.baseline2024)}` : ""}</span>
         {/* DDHQ's share is of its expected vote ("Est."); civicAPI's counts precincts. */}
         <span className="mt-ctip-in" title={county.expected ? "Votes counted, as a share of DDHQ's estimate of the county's final vote" : "Precincts or ballot batches reported (civicAPI)"}>
-          {counted ? `${county.done ? 100 : shown}% ${county.expected ? "Est." : "in"}` : county.total > 0 ? "Counting" : "No votes yet"}
+          {county.towns ? `${county.towns.in} of ${county.towns.of} towns in` : counted ? `${county.done ? 100 : shown}% ${county.expected ? "Est." : "in"}` : county.total > 0 ? "Counting" : "No votes yet"}
           <span className="mt-ct-track" aria-hidden>
             <span style={{ width: `${counted ? (county.done ? 100 : shown) : 0}%` }} />
           </span>

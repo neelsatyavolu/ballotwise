@@ -7,7 +7,10 @@ import { isTownCode } from "./view";
 const NAMES = countyNames as Record<string, Record<string, string>>;
 const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
 
-/** One county from its towns: votes summed per candidate, reporting weighted by each town's count. */
+/**
+ * One county from its towns: votes summed per candidate, and its share reported the average over every town, so
+ * towns with nothing in yet count as none (weighting by votes would put a county with one big town in at 99%).
+ */
 function rollUp(state: string, fips: string, towns: readonly CountyResult[]): CountyResult {
   const total = sum(towns.map((t) => t.total));
   const votes = new Map<string, { party: string; votes: number }>();
@@ -20,7 +23,8 @@ function rollUp(state: string, fips: string, towns: readonly CountyResult[]): Co
     fips,
     name: NAMES[state]?.[fips] ?? fips,
     total,
-    reporting: total > 0 ? sum(counted.map((t) => t.reporting * t.total)) / total : 0,
+    reporting: sum(towns.map((t) => Math.min(100, t.reporting))) / towns.length,
+    towns: { in: counted.length, of: towns.length },
     ...(counted.length > 0 && counted.every((t) => t.reportingUnknown) ? { reportingUnknown: true as const } : {}),
     ...(expected !== undefined ? { expected } : {}),
     ...(towns.every((t) => t.done) ? { done: true as const } : {}),
