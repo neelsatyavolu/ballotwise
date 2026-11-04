@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import type { RaceDetail } from "@/lib/midterms/races";
 import { approx, votesLeft } from "@/lib/midterms/votesLeft";
+import { lastName } from "./CandidateTable";
 import { CountyTip, fillFor } from "./county";
 import { partyColor } from "./party";
 import type { Bubble, Fill } from "./ZoomMap";
@@ -34,7 +35,21 @@ export function useRemaining(race: RaceDetail | null | undefined): { bubbles: Bu
         tip: (
           <>
             <CountyTip county={c} />
-            <div className="small">{l ? `About ${approx(l.left)} votes left${leans ? `, leaning ${leans.name}` : ""}` : "Nothing left to count, by the estimate"}</div>
+            <div className="mt-ctip-left">
+              {l ? (
+                <>
+                  ~{approx(l.left)} left
+                  {leans && (
+                    <>
+                      {" · leans "}
+                      <b style={{ color: partyColor(leans) }}>{lastName(leans.name)}</b>
+                    </>
+                  )}
+                </>
+              ) : (
+                "Nothing left to count"
+              )}
+            </div>
           </>
         ),
       });

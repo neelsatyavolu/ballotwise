@@ -707,6 +707,8 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-ctip-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px 8px 12px; }
 .mt-ctip-in { display: flex; align-items: center; gap: 8px; color: var(--muted); white-space: nowrap; }
 .mt-ctip-in .mt-ct-track { width: 90px; flex: none; }
+/* The Remaining view's line under a county's card: its votes left and whom they lean to. */
+.mt-ctip-left { padding: 6px 12px 8px; border-top: 1px solid var(--rule); font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mt-race-tip-note { padding: 6px 12px; border-top: 1px solid var(--rule); color: var(--muted); }
 .mt-race-tip .mt-watch-note { margin: 0; padding: 6px 12px; border-top: 1px solid var(--rule); }
 
