@@ -123,9 +123,11 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
     const shape = pickedDistrict && boundsOf([pickedDistrict.d]);
     if (shape) return framed(raceBounds(focused.box, shape));
     if (countyFills === undefined) return null;
-    const inRace = counties && countyFills ? boundsOf(counties.filter((c) => countyFills.has(c.fips)).map((c) => c.d)) : null;
+    // A House race frames the counties it covers; a statewide race frames the whole state, even where only some of its
+    // places have results to shade (Alaska's few boroughs pulled the map off most of the state).
+    const inRace = districtFills && counties && countyFills ? boundsOf(counties.filter((c) => countyFills.has(c.fips)).map((c) => c.d)) : null;
     return framed(inRace ? raceBounds(focused.box, inRace) : focused.box);
-  }, [focused, counties, countyFills, pickedDistrict]);
+  }, [focused, counties, countyFills, pickedDistrict, districtFills]);
   const [kept, setKept] = useState<{ focus: string | null; box: Box }>({ focus, box: live ?? FULL });
   if (live && (kept.box !== live || kept.focus !== focus)) setKept({ focus, box: live });
   const county = zoomed && zoomed.focus === focus && zoomed.raceId === raceId ? counties?.find((c) => c.fips === zoomed.fips) : undefined;
