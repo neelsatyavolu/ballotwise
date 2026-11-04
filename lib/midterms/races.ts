@@ -327,6 +327,20 @@ function countyCodes(state: string, regions: readonly { name: string; fips?: str
   return unmatched > missing.length / 2 ? given : found;
 }
 
+/** A region named as a county or its like: "Anchorage Municipality", "Bethel Census Area", "Kent County". */
+const countyLike = (name: string) => /\b(County|Parish|Borough|Census Area|Municipality)$/i.test(name.trim());
+
+/**
+ * The regions without the ones that repeat the same votes: where civicAPI lists counties (Alaska's boroughs), the
+ * state's own row and its state house districts break the same votes down again, and counted beside the counties
+ * they'd count twice (and keep the boroughs from matching the map by name).
+ */
+function withoutRepeats<T extends { name: string }>(state: string, regions: readonly T[]): T[] {
+  if (!regions.some((r) => countyLike(r.name))) return [...regions];
+  const whole = (STATE_NAMES[state] ?? "").toLowerCase();
+  return regions.filter((r) => !/^(State )?House District\s+\d+$/i.test(r.name.trim()) && r.name.trim().toLowerCase() !== whole);
+}
+
 /** Regions matched to the same county counted as that county: the map draws Alaska's Chugach and Copper River as one. */
 function mergeShared(state: string, counties: CountyResult[]): CountyResult[] {
   const groups = Map.groupBy(counties, (c, i) => c.fips ?? `#${i}`);
@@ -360,7 +374,7 @@ export function raceDetail(summary: RaceSummary, input: unknown, baseline: Reado
   const nov3 = race.election_date.startsWith(ELECTION_DATE);
   const counted = candidates(race.candidates, !nov3 || pollsClosed(summary.state, now));
   const list = summary.local ? counted : withIncumbent(counted, summary.office, summary.state, summary.district);
-  const regions = Object.values(race.region_results ?? {});
+  const regions = withoutRepeats(summary.state, Object.values(race.region_results ?? {}));
   const codes = countyCodes(summary.state, regions);
   const named = codes.some((code, i) => code !== (regions[i].fips ?? null));
   const listed = regions.map((region, i): CountyResult => {
