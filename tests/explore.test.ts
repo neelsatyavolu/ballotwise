@@ -143,6 +143,8 @@ describe("projected flips", () => {
     // Once votes are in, the leader decides, then the winner.
     expect(flipTo(race({ state: "GA", signal: market(0.9), votes: [400, 600] }))).toBe("R");
     expect(flipTo(race({ state: "GA", signal: market(0.1), votes: [600, 400], winner: 0 }))).toBeNull();
+    // Even an early count: the map stripes a seat as soon as the other party leads it.
+    expect(flipTo(race({ state: "GA", signal: market(0.9), votes: [400, 600], reporting: 3 }))).toBe("R");
   });
 });
 

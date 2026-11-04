@@ -121,15 +121,16 @@ export function safeSide(r: RaceSummary): "D" | "R" | "I" | null {
 }
 
 /**
- * The party a race is set to take from the one holding the seat: the winner or leader once votes are in, else the
- * pre-election favorite. Null for a hold, a toss-up, no evidence, or a seat with no known holder.
+ * The party a race is set to take from the one holding the seat: the winner or leader once votes are in (even an
+ * early count, so the maps stripe a seat as soon as the other party leads it), else the pre-election favorite. Null
+ * for a hold, a toss-up, no evidence, or a seat with no known holder.
  */
 export function flipTo(r: RaceSummary): "D" | "R" | "I" | null {
   const holder = holderOf(r);
   if (!holder) return null;
   const won = outcomeOf(r);
   if (won) return won.gain ? won.side : null;
-  if (lead(r.candidates)) return leadingFlip(r);
+  if (lead(r.candidates)) return leadingFlip(r, true);
   if (r.rating === "tossup") return null;
   const side = favoredSide(r);
   return side && side !== holder ? side : null;
