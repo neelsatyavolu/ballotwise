@@ -15,6 +15,7 @@ import { raceLabel, STATE_NAMES, type Office, type Overview, type RaceSummary } 
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { fillFor } from "./county";
 import { useClock, useLive } from "./hooks";
+import { useDeskDetail } from "./useDeskDetail";
 import { districtFill, nationDistrictFills, regularFirst, SeatHeader, stateFills, withLeads } from "./OfficeView";
 import { closingPlaces } from "./PollClose";
 import { RaceCard } from "./RaceCard";
@@ -202,7 +203,8 @@ function TourMap({ office, races, updatedAt, results, race: toured, detail }: { 
     return out;
   }, [office, races, focus, updatedAt, results]);
   const countyFills = useMemo(() => {
-    if (!detail) return undefined;
+    // No counties yet (the public race didn't load and no DDHQ breakdown is in): as before any loaded.
+    if (!detail?.counties.length) return undefined;
     const out = new Map<string, Fill>();
     for (const c of detail.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, "results"), tip: null });
     return out;
@@ -292,7 +294,15 @@ export function Wall({ office }: { office: WallOffice }) {
   const { stop: stopId, upNext } = useTour(stops, TOUR[office]);
   const stop = races.find((r) => r.id === stopId) ?? null;
   // The toured race with its counties, for the map's shading.
-  const stopDetail = useLive<{ race: RaceDetail }>(stop ? `/api/midterms/race/${stop.id}` : null).data?.race ?? null;
+  const stopLive = useLive<{ race: RaceDetail; fetchedAt?: number }>(stop ? `/api/midterms/race/${stop.id}` : null).data;
+  // With DDHQ's own counties on a connected screen, as on the office pages: civicAPI's county breakdown can lag its
+  // count or fail outright, which left counties grey. If the public race doesn't load, DDHQ's counties go on the
+  // overview's copy of it.
+  const stopBase = useMemo<RaceDetail | null>(
+    () => stopLive?.race ?? (stop ? { ...stop, pollsClose: null, updated: null, counties: [] } : null),
+    [stopLive, stop],
+  );
+  const stopDetail = useDeskDetail(stopBase, stopLive ?? null);
   const next = upNext.map((id) => races.find((r) => r.id === id)).filter((r): r is RaceSummary => !!r);
   const grid = useRef<HTMLUListElement>(null);
   const detail = useRef<HTMLDivElement>(null);
