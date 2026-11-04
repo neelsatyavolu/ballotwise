@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CallEvent, RaceSummary } from "@/lib/midterms/view";
-import { callKey } from "@/lib/midterms/moments";
+import { momentKey } from "@/lib/midterms/moments";
 import { shortLabel } from "./PollClose";
 import { readStored, useStored, writeStored } from "./seen";
 
@@ -71,17 +71,17 @@ export function CallAlerts({ events, races, currentOnly = false }: { events: rea
     }
     // The first pass after turning on only learns what's already there.
     if (!seen.current) {
-      seen.current = new Set(events.map(callKey));
+      seen.current = new Set(events.map(momentKey));
       return;
     }
-    const fresh = events.filter((e) => !seen.current!.has(callKey(e)));
+    const fresh = events.filter((e) => !seen.current!.has(momentKey(e)));
     if (!fresh.length) return;
-    for (const e of fresh) seen.current.add(callKey(e));
+    for (const e of fresh) seen.current.add(momentKey(e));
     const byId = new Map(races.map((r) => [r.id, r]));
     for (const e of fresh.slice(0, 5)) {
       const { title, body } = describe(e, byId.get(e.raceId));
       try {
-        new Notification(title, { body, tag: `mt-${callKey(e)}` });
+        new Notification(title, { body, tag: `mt-${momentKey(e)}` });
       } catch {
         // Some browsers only allow notifications from a service worker; the chime still sounds.
       }

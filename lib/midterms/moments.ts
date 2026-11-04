@@ -45,6 +45,12 @@ export type Moment = {
 /** A race the forecast rated a toss-up or a lean. */
 const contested = (r: RaceSummary) => r.rating === "tossup" || !!r.rating?.startsWith("lean");
 
+/**
+ * What a pop-up or alert is remembered by: the race, the kind of event and the winner, so the same call shows once
+ * whichever source it comes through (our call log, or a connected screen's DDHQ feed, which a race can switch between).
+ */
+export const momentKey = (e: Pick<CallEvent, "raceId" | "kind"> & Partial<CallEvent>) => `call:${e.raceId}:${e.kind}:${e.winner ?? ""}`;
+
 /** A call event's moment key, the same whatever kind of moment it turns out to be. */
 export const callKey = (e: Pick<CallEvent, "id"> & Partial<CallEvent>) => e.source === "ddhq"
   ? `call:ddhq:${e.raceId}:${e.at}:${e.kind}:${e.winner ?? ""}`
@@ -70,7 +76,7 @@ function fromEvent(e: CallEvent, r: RaceSummary): Moment | null {
   const holder = holderOf(r);
   if (!side || !holder || side === holder) return null;
   return {
-    key: callKey(e),
+    key: momentKey(e),
     title: label(r),
     href: `/midterms/${r.id}`,
     at: e.at,

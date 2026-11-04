@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { callKey, moments, type Moment } from "@/lib/midterms/moments";
+import { momentKey, moments, type Moment } from "@/lib/midterms/moments";
 import { stampTime } from "@/lib/midterms/polls";
 import type { Overview } from "@/lib/midterms/view";
 import { useStored } from "./seen";
@@ -37,7 +37,7 @@ export function MomentPopup({ data, inCompanion = false }: { data: Overview; inC
   const [state, setState] = useState<{ from: Moment[] | null; known: ReadonlySet<string>; open: Moment[] }>({ from: null, known: new Set(), open: [] });
   if (state.from !== all) {
     const fresh = state.from && !off && !covered ? all.filter((m) => !state.known.has(m.key)) : [];
-    const known = new Set([...state.known, ...all.map((m) => m.key), ...(data.callEvents ?? []).map(callKey)]);
+    const known = new Set([...state.known, ...all.map((m) => m.key), ...(data.callEvents ?? []).map(momentKey)]);
     setState({ from: all, known, open: fresh.length ? [...state.open, ...fresh].sort(newestFirst) : state.open });
   }
   const dialog = useRef<HTMLDialogElement>(null);

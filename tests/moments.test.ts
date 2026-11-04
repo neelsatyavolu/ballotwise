@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chamberCall, moments } from "../lib/midterms/moments";
+import { chamberCall, momentKey, moments } from "../lib/midterms/moments";
 import type { CallEvent, RaceSummary } from "../lib/midterms/view";
 
 // Georgia's Senate seat is held by a Democrat, North Carolina's by a Republican (holders.json).
@@ -24,7 +24,7 @@ function data(races: RaceSummary[], callEvents: CallEvent[]) {
 describe("election-night moments", () => {
   it("flags a toss-up or lean seat changing party", () => {
     const [m] = moments(data([race(1, "NC", { rating: "tossup" })], [event(1, 1, { winner: "Roy Cooper" })]));
-    expect(m).toMatchObject({ key: "call:1", kicker: "D gain", side: "D", href: "/midterms/1" });
+    expect(m).toMatchObject({ key: "call:1:call:Roy Cooper", kicker: "D gain", side: "D", href: "/midterms/1" });
     expect(m.body).toBe("Roy Cooper (D) wins, taking the seat from Republicans.");
     expect(moments(data([race(1, "NC", { rating: "lean-r" })], [event(1, 1, { winner: "Roy Cooper" })]))).toHaveLength(1);
   });
@@ -43,7 +43,15 @@ describe("election-night moments", () => {
 
   it("lists several flips newest first", () => {
     const list = moments(data([race(1, "NC", { rating: "tossup" }), race(2, "GA", { rating: "lean-d" })], [event(1, 1, { winner: "A" }), event(2, 2, { winner: "B", party: "Republican" })]));
-    expect(list.map((m) => m.key)).toEqual(["call:2", "call:1"]);
+    expect(list.map((m) => m.key)).toEqual(["call:2:call:B", "call:1:call:A"]);
+  });
+
+  it("keys a call the same whichever source brings it, so its pop-up shows once", () => {
+    // Our call log's event and a connected screen's DDHQ event for the same call: different ids and times.
+    const logged = event(41, 7, { winner: "Roy Cooper" });
+    const desk = { ...event(7, 7, { winner: "Roy Cooper" }), at: 999, source: "ddhq" as const };
+    expect(momentKey(logged)).toBe(momentKey(desk));
+    expect(momentKey(logged)).not.toBe(momentKey({ ...logged, winner: "Michael Whatley" }));
   });
 
   it("ignores events for races the overview doesn't carry", () => {
