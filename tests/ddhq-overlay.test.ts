@@ -146,7 +146,7 @@ describe("private DDHQ forecast overlay", () => {
     expect(raw.total).toBe(100);
   });
 
-  it("shows civicAPI's count under DDHQ's names whenever it has more votes than DDHQ's, keeping DDHQ's call and expected vote", () => {
+  it("shows civicAPI's count under DDHQ's names whenever it has more votes than DDHQ's, keeping DDHQ's call and civicAPI's own % in", () => {
     const zeros = [
       { name: "Dana Nominee", party: "Democratic", votes: 0, pct: 0, winner: false, incumbent: false },
       { name: "Riley Opponent", party: "Republican", votes: 0, pct: 0, winner: false, incumbent: false },
@@ -156,13 +156,14 @@ describe("private DDHQ forecast overlay", () => {
     // The public payload is current: civicAPI's count may stand in.
     const apply = (r: RaceSummary, d: DdhqRace) => applyDesk(r, d, Date.now() - 10_000);
     const raw = { ...civic(), total: 10_000, candidates: civic().candidates.map((c) => ({ ...c, votes: c.party === "Democratic" ? 6000 : 4000, winner: c.party === "Democratic" })) };
-    // DDHQ has nothing in yet: civicAPI's count, its % in against DDHQ's expected vote.
+    // DDHQ has nothing in yet: civicAPI's count with civicAPI's own % in, never its votes over DDHQ's expected vote.
     const first = apply(raw, desk({ candidates: zeros, total: 0, reporting: 0, expected: 50_000 }));
-    expect(first).toMatchObject({ total: 10_000, reporting: 20, expected: 50_000, countFrom: "civic", calledFor: null });
+    expect(first).toMatchObject({ total: 10_000, reporting: 10, countFrom: "civic", calledFor: null });
+    expect(first.expected).toBeUndefined();
     expect(first.reportingUnknown).toBeUndefined();
     expect(first.candidates.map((c) => [c.name, c.votes, c.winner])).toEqual([["Dana Nominee", 6000, false], ["Riley Opponent", 4000, false]]);
     expect(isDesk(first)).toBe(true);
-    // Without DDHQ's expected vote, civicAPI's own % in.
+    // Likewise without DDHQ's expected vote.
     expect(apply(raw, desk({ candidates: zeros, total: 0 }))).toMatchObject({ reporting: 10, countFrom: "civic" });
     // DDHQ behind by any amount: civicAPI's.
     expect(apply(raw, desk({ candidates: counted(5000, 4000), total: 9000, expected: 50_000 }))).toMatchObject({ total: 10_000, countFrom: "civic" });

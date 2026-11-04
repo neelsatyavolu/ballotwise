@@ -3,7 +3,7 @@ import type { Forecast } from "../midterms/forecast";
 import type { CallEvent, Overview } from "../midterms/view";
 import type { DdhqCandidate, DdhqRace } from "./votes";
 import { withDeskSeats } from "../midterms/deskCalls";
-import { expectedIn, seatKey } from "./votes";
+import { seatKey } from "./votes";
 import type { DdhqForecastBundle } from "./forecast-types";
 
 const marked = new WeakSet<object>();
@@ -116,14 +116,13 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicA
     // Where civicAPI's count is recent and has more votes, its count stands in under DDHQ's names; DDHQ's call and forecast rule.
     const recent = civicRecent(race, civicAt);
     const stand = recent ? publicCount(race, desk.candidates, desk.total) : null;
-    // DDHQ's expected vote estimates the race's final total whichever count shows, so % in and votes left stay on
-    // DDHQ's scale; without it, civicAPI's count keeps its own % in.
-    const standIn = stand ? expectedIn(race.total, desk.expected) : undefined;
+    // A count and its % in come from the same source: civicAPI's count keeps civicAPI's own % in, not its votes over
+    // DDHQ's expected vote, so the two sources' figures are never mixed.
     next.candidates = (stand ?? desk.candidates).map((row) => candidate({ ...row, winner: row.name === winner })).sort((a, b) => b.votes - a.votes);
     next.total = stand ? race.total : desk.total;
-    next.reporting = stand ? (standIn ?? race.reporting) : (desk.reporting ?? 0);
-    next.reportingUnknown = stand ? (standIn === undefined ? race.reportingUnknown : undefined) : desk.total > 0 && desk.reporting === undefined ? true : undefined;
-    next.expected = desk.expected;
+    next.reporting = stand ? race.reporting : (desk.reporting ?? 0);
+    next.reportingUnknown = stand ? race.reportingUnknown : desk.total > 0 && desk.reporting === undefined ? true : undefined;
+    next.expected = stand ? undefined : desk.expected;
     next.countFrom = stand ? "civic" : undefined;
     next.calledFor = winner;
     next.callPending = undefined;
@@ -164,18 +163,16 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicA
 }
 
 /**
- * A county from DDHQ's count, or with `civicOk` from civicAPI's when that has more votes in it (keeping DDHQ's expected
- * vote, so its % in is DDHQ's "% Est."). A county DDHQ doesn't list keeps civicAPI's votes when `civicOk`, else has none.
+ * A county from DDHQ's count, or with `civicOk` from civicAPI's when that has more votes in it, with civicAPI's own % in
+ * (never civicAPI's votes over DDHQ's expected vote). A county DDHQ doesn't list keeps civicAPI's votes when `civicOk`,
+ * else has none.
  */
 function mergeCounty(county: CountyResult, desk: DdhqRace, civicOk: boolean): CountyResult {
   const hit = desk.counties.find((row) => row.fips === county.fips);
   if (!hit) return civicOk && county.total > 0 ? county : { ...county, total: 0, reporting: 0, reportingUnknown: true, candidates: [] };
   const candidates = hit.candidates.map((row) => ({ ...row }));
   const total = hit.total ?? candidates.reduce((sum, row) => sum + row.votes, 0);
-  if (civicOk && county.total > total) {
-    const est = expectedIn(county.total, hit.expected);
-    return { ...county, reporting: est ?? county.reporting, reportingUnknown: est === undefined ? county.reportingUnknown : undefined, expected: hit.expected, done: hit.done };
-  }
+  if (civicOk && county.total > total) return county;
   return { ...county, name: hit.name ?? county.name, total, candidates, reporting: hit.reporting ?? 0, reportingUnknown: total > 0 && hit.reporting === undefined ? true : undefined, expected: hit.expected, done: hit.done };
 }
 

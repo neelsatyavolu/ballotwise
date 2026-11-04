@@ -154,8 +154,10 @@ describe("observed Votes result schema", () => {
     ] };
     const next = applyDesk(detail, source, Date.now());
     expect(next.counties.find((c) => c.name === "Harris")).toMatchObject({ total: 1_071_198, expected: 1_350_000 });
-    // Travis: civicAPI's 5,000 over DDHQ's 4,000, its % in against DDHQ's expected vote.
-    expect(next.counties.find((c) => c.name === "Travis")).toMatchObject({ total: 5000, expected: 20_000, reporting: 25 });
+    // Travis: civicAPI's 5,000 over DDHQ's 4,000, with civicAPI's own % in, never its votes over DDHQ's expected vote.
+    const travis = next.counties.find((c) => c.name === "Travis")!;
+    expect(travis).toMatchObject({ total: 5000, reporting: 30 });
+    expect(travis.expected).toBeUndefined();
     // Without a time for the public numbers, DDHQ's counties throughout.
     expect(applyDesk(detail, source).counties.find((c) => c.name === "Travis")).toMatchObject({ total: 4000 });
   });
