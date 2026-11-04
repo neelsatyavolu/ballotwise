@@ -45,6 +45,30 @@ function forecastOf(desk: DdhqRace): Forecast {
 }
 
 /** Replace each available DDHQ field independently; missing counts do not suppress a valid forecast. */
+const sideOfParty = (party: string) => (/^Democrat/i.test(party) ? "D" : /^Republican/i.test(party) ? "R" : null);
+
+/**
+ * DDHQ's candidates carrying civicAPI's count, for a race DDHQ lists with no votes yet while civicAPI has some (on
+ * Nov 3 civicAPI had Indiana House votes before DDHQ posted any). Each takes the votes of the one public candidate of
+ * its party, so DDHQ's names stay ("Cynthia Wirth" where civicAPI says "Cinde Wirth") and nothing jumps when DDHQ's
+ * own count arrives. Null when civicAPI has no votes, left the race out, or the two don't have exactly one Democrat
+ * and one Republican each.
+ */
+function publicCount(race: RaceSummary, rows: readonly DdhqCandidate[]): DdhqCandidate[] | null {
+  if (race.total <= 0 || race.missing) return null;
+  const only = <C extends { party: string }>(list: readonly C[], match: (c: C) => boolean) => {
+    const hit = list.filter(match);
+    return hit.length === 1 ? hit[0] : null;
+  };
+  const twoParty = (["D", "R"] as const).every((side) => only(rows, (c) => sideOfParty(c.party) === side) && only(race.candidates, (c) => sideOfParty(c.party) === side));
+  if (!twoParty) return null;
+  return rows.map((row) => {
+    const side = sideOfParty(row.party);
+    const mine = only(race.candidates, (c) => (side ? sideOfParty(c.party) === side : c.party === row.party));
+    return { ...row, votes: mine?.votes ?? 0, pct: mine?.pct ?? 0 };
+  });
+}
+
 export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace): T {
   if (!desk.candidates && !desk.forecast.length) return race;
   const published = sources.get(race);
@@ -56,11 +80,15 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace): T {
   if (desk.candidates) {
     const winner = desk.call?.name ?? desk.candidates.find((row) => row.winner)?.name ?? null;
     const calledAt = desk.call ? Date.parse(desk.call.at) : NaN;
-    next.candidates = desk.candidates.map((row) => candidate({ ...row, winner: row.name === winner })).sort((a, b) => b.votes - a.votes);
-    next.total = desk.total;
-    next.reporting = desk.reporting ?? 0;
-    next.reportingUnknown = desk.total > 0 && desk.reporting === undefined ? true : undefined;
-    next.expected = desk.expected;
+    // Until DDHQ has any votes in, civicAPI's count stands in under DDHQ's names; DDHQ's call and forecast still rule.
+    const stand = desk.total === 0 ? publicCount(race, desk.candidates) : null;
+    next.candidates = (stand ?? desk.candidates).map((row) => candidate({ ...row, winner: row.name === winner })).sort((a, b) => b.votes - a.votes);
+    next.total = stand ? race.total : desk.total;
+    next.reporting = stand ? race.reporting : (desk.reporting ?? 0);
+    next.reportingUnknown = stand ? race.reportingUnknown : desk.total > 0 && desk.reporting === undefined ? true : undefined;
+    // DDHQ's expected vote goes with its own count only, so % in and votes left aren't one source's over the other's.
+    next.expected = stand ? undefined : desk.expected;
+    next.countFrom = stand ? "civic" : undefined;
     next.calledFor = winner;
     next.callPending = undefined;
     next.callUnknown = undefined;
@@ -71,7 +99,7 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace): T {
     next.call = winner && Number.isFinite(calledAt) ? { id: race.id, at: calledAt, winner, replaced: null, withdrawn: false } : null;
     // DDHQ's batch topline (every screen's live counts) carries no county breakdown; only a single race's fetch does.
     // Without one, the public counties stay: blanking them would grey the race's map and throw off its votes left.
-    if ("counties" in race && desk.counties.length) {
+    if ("counties" in race && desk.counties.length && !stand) {
       const detail = next as unknown as RaceDetail;
       detail.counties = (race as unknown as RaceDetail).counties.map((county) => mergeCounty(county, desk));
       for (const county of desk.counties) {
@@ -79,7 +107,7 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace): T {
         detail.counties.push(mergeCounty({ fips: county.fips, name: county.name ?? county.fips, total: 0, reporting: 0, candidates: [], baseline2024: null, pres2024: null }, desk));
       }
     }
-    if ("counties" in race) (next as unknown as RaceDetail).updated = desk.resultsUpdatedAt ?? null;
+    if ("counties" in race && !stand) (next as unknown as RaceDetail).updated = desk.resultsUpdatedAt ?? null;
     marked.add(next);
   }
   if (canonical.forecast.length) {

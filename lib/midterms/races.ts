@@ -41,6 +41,8 @@ export type RaceSummary = {
    * against), so the votes left agree with it.
    */
   expected?: number;
+  /** On a connected screen, set while DDHQ has no votes in and civicAPI's count is shown under DDHQ's names. */
+  countFrom?: "civic";
   /** A ranked-choice race (Alaska's, and Maine's for Congress): the leader can change between rounds. */
   rcv?: true;
   /** civicAPI's tabulation round for the numbers shown, when it gives one; above 1 means ranked-choice rounds have run. */

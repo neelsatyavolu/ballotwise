@@ -146,6 +146,29 @@ describe("private DDHQ forecast overlay", () => {
     expect(raw.total).toBe(100);
   });
 
+  it("shows civicAPI's count under DDHQ's names while DDHQ has no votes yet, keeping DDHQ's call", () => {
+    const zeros = [
+      { name: "Dana Nominee", party: "Democratic", votes: 0, pct: 0, winner: false, incumbent: false },
+      { name: "Riley Opponent", party: "Republican", votes: 0, pct: 0, winner: false, incumbent: false },
+    ];
+    const raw = { ...civic(), candidates: civic().candidates.map((c) => ({ ...c, winner: c.party === "Democratic" })) };
+    const next = applyDesk(raw, desk({ candidates: zeros, total: 0, reporting: 0, expected: 5000 }));
+    expect(next).toMatchObject({ total: 100, reporting: 10, countFrom: "civic", calledFor: null });
+    expect(next.expected).toBeUndefined();
+    expect(next.candidates.map((c) => [c.name, c.votes, c.winner])).toEqual([["Dana Nominee", 60, false], ["Riley Opponent", 40, false]]);
+    expect(isDesk(next)).toBe(true);
+    // DDHQ's call stands, on the civicAPI count.
+    const called = applyDesk(raw, desk({ candidates: zeros.map((c, i) => ({ ...c, winner: i === 1 })), total: 0, call: { name: "Riley Opponent", at: "2026-11-04T03:00:00Z" } }));
+    expect(called.calledFor).toBe("Riley Opponent");
+    expect(called.candidates.find((c) => c.winner)?.votes).toBe(40);
+    // Once DDHQ has any votes, its count shows, even behind civicAPI's.
+    expect(applyDesk(raw, desk({ candidates: zeros.map((c) => ({ ...c, votes: 5 })), total: 10 }))).toMatchObject({ total: 10 });
+    expect(applyDesk(raw, desk({ candidates: zeros.map((c) => ({ ...c, votes: 5 })), total: 10 })).countFrom).toBeUndefined();
+    // Not from a race civicAPI left out, nor when the parties don't line up.
+    expect(applyDesk({ ...raw, missing: true }, desk({ candidates: zeros, total: 0 })).total).toBe(0);
+    expect(applyDesk(raw, desk({ candidates: [zeros[0], { ...zeros[1], party: "Democratic" }], total: 0 })).total).toBe(0);
+  });
+
   it("applies both sources and clears a stale public call when DDHQ has not called it", () => {
     const raw = { ...civic(), calledFor: "Dana Old", call: { id: 1, at: 5, winner: "Dana Old", replaced: null, withdrawn: false as const } };
     const next = applyDesk(raw, desk({ candidates: [{ name: "Dana Nominee", party: "Democratic", votes: 20, pct: 100, winner: false, incumbent: false }], total: 20 }));
