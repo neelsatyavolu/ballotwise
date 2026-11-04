@@ -1,5 +1,7 @@
+import type { PulseCall } from "@/lib/ddhq/pulse";
 import type { Pickups } from "@/lib/midterms/explore";
 import { chamberCall } from "@/lib/midterms/moments";
+import { stampTime, zoneAbbr } from "@/lib/midterms/polls";
 import type { Party, Tally } from "@/lib/midterms/view";
 
 const NOTE = {
@@ -86,13 +88,13 @@ function PickupCount({ side, n }: { side: "D" | "R"; n: Pickups["D"] }) {
  * forecast's projected totals, the light segments its expected seats, and the middle gives the chance of control.
  * `pickups` adds each party's seats taken from the other (won, then led) to the note line on election night.
  */
-export function SeatBar({ tally, ahead: leading, office, projected = null, pickups = null }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE; projected?: Projected; pickups?: Pickups | null }) {
+export function SeatBar({ tally, ahead: leading, office, projected = null, pickups = null, deskCall = null }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE; projected?: Projected; pickups?: Pickups | null; deskCall?: PulseCall | null }) {
   const share = (n: number) => `${(n / tally.total) * 100}%`;
   const ahead = projected?.ahead ?? leading;
   const word = projected ? "projected" : "leading";
   const open = tally.total - tally.D - tally.R - tally.other - ahead.D - ahead.R - ahead.other;
   // Once a party has won enough seats, the chamber's call leads the middle line in its color.
-  const call = projected ? null : chamberCall(office, tally);
+  const call = projected ? null : chamberCall(office, tally, deskCall);
   return (
     <section className="mt-seats">
       <div className="mt-seats-nums">
@@ -101,7 +103,14 @@ export function SeatBar({ tally, ahead: leading, office, projected = null, picku
         </span>
         <span className="mt-seats-mid">
           {projected && "Projected · "}
-          {call ? <span className={`mt-seats-called ${call.side === "D" ? "d" : "r"}`}>✓ {call.text}</span> : CONTROL[office]}
+          {call ? (
+            <span className={`mt-seats-called ${call.side === "D" ? "d" : "r"}`} title={call.by ? `Projected by Decision Desk HQ at ${stampTime(call.at!)} ${zoneAbbr(call.at!)}` : "Called races give this party a majority"}>
+              ✓ {call.text}
+              {call.by && " (DDHQ)"}
+            </span>
+          ) : (
+            CONTROL[office]
+          )}
           {tally.other + ahead.other > 0 && ` · Other ${tally.other}${ahead.other ? ` +${ahead.other}` : ""}`}
           {projected ? (controlOdds(projected.dControl) ? ` · ${controlOdds(projected.dControl)}` : "") : ` · ${open} uncounted`}
         </span>

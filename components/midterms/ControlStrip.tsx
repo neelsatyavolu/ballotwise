@@ -3,9 +3,11 @@
 import { useSyncExternalStore } from "react";
 import { holderOf, outcomeOf } from "@/lib/midterms/holders";
 import type { Coverage } from "@/lib/midterms/coverage";
-import { CONTROL_NEED } from "@/lib/midterms/moments";
+import { chamberCall, CONTROL_NEED } from "@/lib/midterms/moments";
+import { stampTime, zoneAbbr } from "@/lib/midterms/polls";
 import { leading, partyOf, type Overview, type RaceSummary, type Tally } from "@/lib/midterms/view";
 import { CheckedAgo } from "./CheckedAgo";
+import { usePulse } from "./usePulse";
 
 type Chamber = "senate" | "house" | "governor";
 type Seats = { D: number; R: number; other: number };
@@ -76,12 +78,15 @@ function netLine(n: ReturnType<typeof numbers>, called: number) {
 }
 
 function ChamberCard({ office, tally, races, coverage, onNeed }: { office: Chamber; tally: Tally; races: readonly RaceSummary[]; coverage?: Coverage[Chamber]; onNeed?: (office: Chamber) => void }) {
+  const pulse = usePulse();
   const n = numbers(office, tally, races);
   const need = NEED[office];
   const share = (x: number) => `${(x / tally.total) * 100}%`;
   const called = n.won.D + n.won.R + n.won.other;
   const sub = (p: keyof Seats) => [n.notUp[p] && `${n.notUp[p]} not up`, `${n.won[p]} won`].filter(Boolean).join(" · ");
   const net = netLine(n, called);
+  // Who has control: a majority of seats won, or before that Decision Desk HQ's call of the chamber.
+  const call = office === "governor" ? null : chamberCall(office, tally, pulse?.calls?.[office]);
   return (
     <section className="mt-cs-card" aria-label={`${TITLE[office]}: Democrats ${tally.D} seats and leading in ${n.ahead.D}, Republicans ${tally.R} seats and leading in ${n.ahead.R}, ${n.uncalled} uncalled`}>
       <div className="mt-cs-head">
@@ -109,6 +114,12 @@ function ChamberCard({ office, tally, races, coverage, onNeed }: { office: Chamb
         {need && <i className="d" style={{ left: share(need.D) }} title={`${need.D} for Democratic control`} />}
         {need && need.R !== need.D && <i className="r" style={{ left: `calc(100% - ${share(need.R)})` }} title={`${need.R} for Republican control`} />}
       </div>
+      {call && (
+        <p className={`mt-cs-call ${call.side === "D" ? "d" : "r"}`} title={call.by ? `Projected by Decision Desk HQ at ${stampTime(call.at!)} ${zoneAbbr(call.at!)}` : undefined}>
+          ✓ {call.text}
+          {call.by && " (DDHQ)"}
+        </p>
+      )}
       <div className="mt-cs-need small">
         {(["D", "R"] as const).map((p) => {
           const text = need ? needLine(p, tally[p], need[p], n.ahead[p], openSeats(tally), n.early[p]) : n.ahead[p] ? `${p} ${leadText(n.ahead[p], n.early[p])}` : "";

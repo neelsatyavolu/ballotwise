@@ -9,6 +9,7 @@ import { projection } from "@/lib/midterms/forecastTab";
 import { formatTime, showsResults, stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import { fmt, lead, leading, raceLabel, STATE_NAMES, type RaceSummary } from "@/lib/midterms/view";
 import { SeatBar } from "../Balance";
+import { usePulse } from "../usePulse";
 import { CallsFeed } from "../CallsFeed";
 import { CandidateTable } from "../CandidateTable";
 import { CountyTip, fillFor } from "../county";
@@ -181,9 +182,11 @@ function SeatsChart({ office }: { office?: ChamberOffice }) {
 
 function BalanceTopline({ office }: { office?: ChamberOffice }) {
   const { overview, forecast } = useDashboardData();
+  const pulse = usePulse();
   if (!overview || !office) return <Empty>Loading…</Empty>;
   const tally = overview.balance[office];
-  return <SeatBar office={office} tally={tally} ahead={leading(overview.races, office)} pickups={pickups(overview.races, office)} projected={projection(overview.races, office, tally, forecast?.chambers?.[office], forecast?.source ?? overview.forecastSource)} />;
+  const deskCall = pulse?.calls?.[office as "senate" | "house"] ?? null;
+  return <SeatBar office={office} tally={tally} ahead={leading(overview.races, office)} pickups={pickups(overview.races, office)} deskCall={deskCall} projected={projection(overview.races, office, tally, forecast?.chambers?.[office], forecast?.source ?? overview.forecastSource)} />;
 }
 
 function BalanceMap({ office }: { office?: ChamberOffice }) {

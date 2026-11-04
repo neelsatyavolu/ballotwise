@@ -257,6 +257,9 @@
 .mt-seats-mid .mt-seats-called { font-weight: 700; }
 .mt-seats-called.d { color: var(--dem-ink, var(--dem)); }
 .mt-seats-called.r { color: var(--rep-ink, var(--rep)); }
+.mt-cs-call { margin: 0; font-size: 13px; font-weight: 700; }
+.mt-cs-call.d { color: var(--dem-ink, var(--dem)); }
+.mt-cs-call.r { color: var(--rep-ink, var(--rep)); }
 .mt-seats-pickups .d { color: var(--dem-ink, var(--dem)); font-weight: 600; }
 .mt-seats-pickups .r { color: var(--rep-ink, var(--rep)); font-weight: 600; }
 .mt-seats-bar { height: 18px; }
@@ -1508,6 +1511,15 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
   .mt-sbs { grid-template-columns: var(--sbs-4, repeat(3, minmax(0, 1fr)) minmax(220px, 0.6fr)); }
 }
 .mt-sbs-col { position: relative; }
+/* With the House column hidden (SideBySide.tsx HouseSwitch), the other two share its room; no dividers. */
+@media (min-width: 1800px) {
+  .mt-sbs.no-house { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mt-sbs.no-house .mt-sbs-resize { display: none; }
+}
+@media (min-width: 2560px) {
+  .mt-sbs.no-house { grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(340px, 0.6fr); }
+}
+.mt-sbs-house { margin-left: auto; }
 .mt-sbs-col > .mt-section-head { justify-content: flex-start; min-height: 36px; }
 .mt-sbs-col > .mt-section-head > .mt-seg { margin-left: auto; }
 .mt-sbs-count { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }

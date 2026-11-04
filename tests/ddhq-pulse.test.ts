@@ -16,12 +16,21 @@ describe("DDHQ Pulse", () => {
 
   it("reads the chamber's chance of control", () => {
     expect(readPulsePage(pages.senate, "senate").chambers).toEqual({ senate: { dem: 65, rep: 35 } });
-    expect(readPulsePage(pages.house, "house")).toEqual({ chambers: { house: { dem: 84, rep: 16 } }, races: {}, history: [{ at: 1793633039384, house: 84 }] });
+    expect(readPulsePage(pages.house, "house")).toEqual({ chambers: { house: { dem: 84, rep: 16 } }, races: {}, calls: {}, history: [{ at: 1793633039384, house: 84 }] });
     expect(readPulsePage(pages.senate, "senate").history).toEqual([{ at: 1793633039384, senate: 65 }]);
   });
 
+  it("reads DDHQ's call of the chamber, when it has made one", () => {
+    // As the House page carried it on Nov 3 2026: "Democrats are projected to win control of the U.S. House".
+    const called = '5:{"unit":{"plural":"Seats"},"winnerParty":{"id":1,"name":"Democratic","abbrev":"DEM"},"calledAt":"2026-11-04 02:09:24.452689+00","totalSeats":435,"majorityNeeded":218,"seatCounts":[]}\n';
+    expect(readPulsePage(called, "house").calls).toEqual({ house: { side: "D", at: Date.parse("2026-11-04T02:09:24.452Z") } });
+    const open = '5:{"winnerParty":null,"calledAt":null,"totalSeats":100,"majorityNeeded":51}\n';
+    expect(readPulsePage(open, "senate").calls).toEqual({});
+    expect(readPulsePage(called.replace('"DEM"', '"GOP"'), "senate").calls).toEqual({ senate: { side: "R", at: Date.parse("2026-11-04T02:09:24.452Z") } });
+  });
+
   it("finds nothing in a page of another shape", () => {
-    expect(readPulsePage('0:{"P":null}\n', "senate")).toEqual({ chambers: {}, races: {}, history: [] });
+    expect(readPulsePage('0:{"P":null}\n', "senate")).toEqual({ chambers: {}, races: {}, calls: {}, history: [] });
     expect(readPulsePage(pages.senate, "governor").chambers).toEqual({});
   });
 

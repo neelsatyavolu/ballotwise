@@ -16,15 +16,18 @@ export type PulseChamber = { dem: number; rep: number };
 /** The candidate DDHQ's live model favors in one race, and their chance in percent. */
 export type PulseRace = { name: string; side: "D" | "R" | "I"; chance: number };
 export type PulseChamberName = "senate" | "house";
+/** DDHQ's call of a chamber: the party projected to win control, and when it was called. */
+export type PulseCall = { side: "D" | "R" | "I"; at: number };
 /** One moment of each chamber's Pulse: the Democrats' chance of control in percent. A chamber read at another moment is left out. */
 export type PulsePoint = { at: number } & Partial<Record<PulseChamberName, number>>;
 /**
  * `races` is keyed by seats.ts raceKey. `at` is when DDHQ's pages were read; null when they never were. `history` is
- * the chambers' Pulse over the day, oldest first: DDHQ's own chart points and every read since.
+ * the chambers' Pulse over the day, oldest first: DDHQ's own chart points and every read since. `calls` holds DDHQ's
+ * call of each chamber it has called (missing from reads cached before calls were read).
  */
-export type Pulse = { at: number | null; chambers: Partial<Record<PulseChamberName, PulseChamber>>; races: Record<string, PulseRace>; history: PulsePoint[] };
+export type Pulse = { at: number | null; chambers: Partial<Record<PulseChamberName, PulseChamber>>; races: Record<string, PulseRace>; calls?: Partial<Record<PulseChamberName, PulseCall>>; history: PulsePoint[] };
 
-export const NO_PULSE: Pulse = { at: null, chambers: {}, races: {}, history: [] };
+export const NO_PULSE: Pulse = { at: null, chambers: {}, races: {}, calls: {}, history: [] };
 /** The most points kept: twelve hours of one-a-minute reads, the newest kept. */
 const MAX_HISTORY = 720;
 
@@ -128,8 +131,19 @@ export function mergeHistory(history: readonly PulsePoint[], next: readonly Puls
   return kept.slice(-MAX_HISTORY);
 }
 
+/**
+ * The chamber's call, from the page's balance block: `"winnerParty":{…"abbrev":"DEM"},"calledAt":"2026-11-04
+ * 02:09:24.452689+00","totalSeats":435,"majorityNeeded":218` once DDHQ projects control (null for both before).
+ */
+function callOf(text: string): PulseCall | undefined {
+  const m = /"winnerParty":\{[^{}]*?"abbrev":"([A-Z]+)"\},"calledAt":"(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)(\.\d+)?\+00","totalSeats":\d+,"majorityNeeded":\d+/.exec(text);
+  if (!m) return undefined;
+  const at = Date.parse(`${m[2]}T${m[3]}${(m[4] ?? "").slice(0, 4)}Z`);
+  return Number.isFinite(at) ? { side: sideOf(m[1]), at } : undefined;
+}
+
 /** What one office's balance-of-power page says of Pulse. */
-export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "chambers" | "races" | "history"> {
+export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "chambers" | "races" | "history"> & { calls: NonNullable<Pulse["calls"]> } {
   const races: Record<string, PulseRace> = {};
   for (const record of raceRecords(text)) {
     const parsed = raceRecord.safeParse(record);
@@ -139,8 +153,10 @@ export function readPulsePage(text: string, office: PulseOffice): Pick<Pulse, "c
     races[raceKey(office, stateAbb, seat)] = { name: pulse.lastName, side: sideOf(pulse.party.abbrev), chance: pulse.winProbability };
   }
   const chamber = office === "governor" ? undefined : chamberOf(text);
-  if (!chamber || office === "governor") return { chambers: {}, races, history: [] };
-  return { chambers: { [office]: chamber.now }, races, history: chamber.points.map((p) => ({ at: p.at, [office]: p.dem })) };
+  const call = office === "governor" ? undefined : callOf(text);
+  const calls = call && office !== "governor" ? { [office]: call } : {};
+  if (!chamber || office === "governor") return { chambers: {}, races, calls, history: [] };
+  return { chambers: { [office]: chamber.now }, races, calls, history: chamber.points.map((p) => ({ at: p.at, [office]: p.dem })) };
 }
 
 async function fetchPage(office: PulseOffice, signal: AbortSignal): Promise<string> {
@@ -167,7 +183,7 @@ export async function fetchPulse(signal: AbortSignal): Promise<Pulse | null> {
   const at = Date.now();
   const chambers: Pulse["chambers"] = Object.assign({}, ...read.map((r) => r.chambers));
   const now: PulsePoint = { at, ...(chambers.senate && { senate: chambers.senate.dem }), ...(chambers.house && { house: chambers.house.dem }) };
-  return { at, chambers, races: Object.assign({}, ...read.map((r) => r.races)), history: mergeHistory(read.flatMap((r) => r.history), [now]) };
+  return { at, chambers, races: Object.assign({}, ...read.map((r) => r.races)), calls: Object.assign({}, ...read.map((r) => r.calls)), history: mergeHistory(read.flatMap((r) => r.history), [now]) };
 }
 
 /**
@@ -184,7 +200,8 @@ export async function loadPulse(db: Db, now: number): Promise<Pulse> {
   if (read) {
     // Every read joins the day's line, so it fills in even if DDHQ's own chart points don't. Entries cached before
     // the line existed have none.
-    const fresh: Pulse = { ...read, history: mergeHistory(cached?.history ?? [], read.history) };
+    // A chamber's call stands once made, so a page that failed this time keeps the call it had.
+    const fresh: Pulse = { ...read, calls: { ...cached?.calls, ...read.calls }, history: mergeHistory(cached?.history ?? [], read.history) };
     await putCached(db, CACHE_KEY, fresh, now).catch((err) => console.error("DDHQ Pulse cache write failed:", err));
     return fresh;
   }

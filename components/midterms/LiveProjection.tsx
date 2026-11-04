@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import type { Pulse, PulseChamberName, PulsePoint, PulseRace } from "@/lib/ddhq/pulse";
 import type { Body, Side } from "@/lib/midterms/forecast";
 import type { ChamberProjection, LiveProjection as Projection, RaceOutlook } from "@/lib/midterms/liveProjection";
+import { chamberCall } from "@/lib/midterms/moments";
 import { stampTime } from "@/lib/midterms/polls";
 import { raceKey } from "@/lib/midterms/seats";
 import { raceLabel, type RaceSummary } from "@/lib/midterms/view";
@@ -46,7 +47,17 @@ function useFitRows() {
   return box;
 }
 
-function Control({ office, view }: { office: Body; view: ChamberProjection }) {
+function Control({ office, view, pulse }: { office: Body; view: ChamberProjection; pulse: Pulse | null }) {
+  // Once a party has won control (or Decision Desk HQ has called the chamber), that replaces the chance.
+  const call = office === "governor" ? null : chamberCall(office, { D: view.notUp.D + view.won.D, R: view.notUp.R + view.won.R }, pulse?.calls?.[office]);
+  if (call) {
+    return (
+      <p className={`mt-proj-control ${call.side === "D" ? "d" : "r"}`}>
+        <b>✓ {call.text}</b>
+        {call.by && " (DDHQ)"}
+      </p>
+    );
+  }
   const d = view.dControl;
   const side = d >= 0.5 ? "D" : "R";
   const p = side === "D" ? d : 1 - d;
@@ -154,7 +165,7 @@ function Chamber({ office, view, pulse }: { office: Body; view: ChamberProjectio
         </span>
       </div>
       <SeatBar office={office} view={view} />
-      <Control office={office} view={view} />
+      <Control office={office} view={view} pulse={pulse} />
       {view.pulse !== null && <PulseControl view={view} />}
       {pulse && office !== "governor" && <PulseChart office={office} history={pulse.history ?? []} at={pulse.at} />}
       <p className="mt-proj-tally muted small">

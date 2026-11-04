@@ -16,14 +16,18 @@ const CHAMBER_NAME = { senate: "Senate", house: "House" } as const;
 
 /**
  * The party that has won control of a chamber, from seats won (called races plus those not up): "Democrats take the
- * House", "Republicans keep the Senate". Null until one has CONTROL_NEED, and always for governors.
+ * House", "Republicans keep the Senate"; before that, Decision Desk HQ's call of the chamber (`desk`), marked `by`.
+ * Null until one of those, and always for governors.
  */
-export function chamberCall(office: string, tally: { D: number; R: number }): { side: "D" | "R"; text: string } | null {
+export function chamberCall(office: string, tally: { D: number; R: number }, desk?: { side: string; at: number } | null): { side: "D" | "R"; text: string; by?: "ddhq"; at?: number } | null {
   if (office !== "senate" && office !== "house") return null;
   const need = CONTROL_NEED[office];
-  const side = tally.D >= need.D ? "D" : tally.R >= need.R ? "R" : null;
+  const won = tally.D >= need.D ? "D" : tally.R >= need.R ? "R" : null;
+  // Decision Desk HQ projects control before the seats are all called (see lib/ddhq/pulse.ts callOf).
+  const side = won ?? (desk?.side === "D" || desk?.side === "R" ? desk.side : null);
   if (!side) return null;
-  return { side, text: `${PARTY[side]} ${HELD[office] === side ? "keep" : "take"} the ${CHAMBER_NAME[office]}` };
+  const text = `${PARTY[side]} ${HELD[office] === side ? "keep" : "take"} the ${CHAMBER_NAME[office]}`;
+  return won ? { side, text } : { side, text, by: "ddhq", at: desk!.at };
 }
 
 export type Moment = {

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePulse } from "./usePulse";
 import { countiesForMap } from "@/lib/midterms/countyRollup";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -147,6 +148,7 @@ export function stateFills(office: Office, races: RaceSummary[], updatedAt: numb
 
 /** The office's seat bar: before votes, with the forecast's projected seats (pass `forecast`); after, seats won and led. */
 export function SeatHeader({ office, data, forecast = null }: { office: Office; data: Overview; forecast?: ForecastOverview | null }) {
+  const pulse = usePulse();
   if (office === "measure") {
     const c = measureCount(data.races);
     return (
@@ -160,7 +162,9 @@ export function SeatHeader({ office, data, forecast = null }: { office: Office; 
     );
   }
   const tally = office === "senate" ? data.balance.senate : office === "house" ? data.balance.house : data.balance.governor;
-  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} pickups={pickups(data.races, office)} projected={projection(data.races, office, tally, forecast?.chambers?.[office], forecast?.source ?? data.forecastSource)} />;
+  // Decision Desk HQ's call of the chamber, from its public balance-of-power page, ahead of the seats being called.
+  const deskCall = pulse?.calls?.[office as "senate" | "house"] ?? null;
+  return <SeatBar office={office} tally={tally} ahead={leading(data.races, office)} pickups={pickups(data.races, office)} deskCall={deskCall} projected={projection(data.races, office, tally, forecast?.chambers?.[office], forecast?.source ?? data.forecastSource)} />;
 }
 
 export function OfficeView({ office, initialState }: { office: Office; initialState: string | null }) {

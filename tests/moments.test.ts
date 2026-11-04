@@ -62,5 +62,9 @@ describe("chamberCall", () => {
     expect(chamberCall("senate", tally(40, 50))).toEqual({ side: "R", text: "Republicans keep the Senate" });
     expect(chamberCall("senate", tally(51, 40))).toEqual({ side: "D", text: "Democrats take the Senate" });
     expect(chamberCall("governor", tally(40, 10))).toBeNull();
+    // Decision Desk HQ's projection calls it before the seats are in; won seats still decide once they're there.
+    expect(chamberCall("house", tally(150, 100), { side: "D", at: 5 })).toEqual({ side: "D", text: "Democrats take the House", by: "ddhq", at: 5 });
+    expect(chamberCall("house", tally(100, 218), { side: "D", at: 5 })).toEqual({ side: "R", text: "Republicans keep the House" });
+    expect(chamberCall("senate", tally(40, 40), null)).toBeNull();
   });
 });

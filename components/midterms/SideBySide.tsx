@@ -185,6 +185,22 @@ function useThird(): Third {
   return useSyncExternalStore(subscribeSettings, () => readSetting(THIRD_KEY), () => null) === "tossups" ? "tossups" : "governor";
 }
 
+const HOUSE_KEY = "mt-sbs-house";
+
+/** Whether the House column shows, as last chosen in this browser (it can be turned off for more room). */
+function useShowHouse(): boolean {
+  return useSyncExternalStore(subscribeSettings, () => readSetting(HOUSE_KEY), () => null) !== "off";
+}
+
+/** Hides the House column, or (from the Senate column's heading, once it's hidden) brings it back. */
+function HouseSwitch({ shown }: { shown: boolean }) {
+  return (
+    <button type="button" className="mt-el-quiet small mt-sbs-house" onClick={() => saveSetting(HOUSE_KEY, shown ? "off" : null)} title={shown ? "Hide the House column, giving the others its room" : "Show the House column again"}>
+      {shown ? "Hide" : "Show House"}
+    </button>
+  );
+}
+
 /** The switch in the third column's heading between the governors and the toss-ups. */
 function ThirdSwitch({ third }: { third: Third }) {
   return (
@@ -357,6 +373,7 @@ export function SideBySide() {
     </span>
   );
   const third = useThird();
+  const showHouse = useShowHouse();
   const next = ["House", third === "tossups" ? "Toss-ups" : "Governors", "the calls feed"];
 
   return (
@@ -368,12 +385,15 @@ export function SideBySide() {
       {!data && !error && <ColumnsSkeleton />}
       {/* Each column's seat bar shows who controls its chamber, so the page counts as showing control. */}
       {data && (
-        <div ref={grid} className="mt-sbs mt-in" style={gridVars(widths) as CSSProperties} data-panel="control">
+        <div ref={grid} className={`mt-sbs mt-in${showHouse ? "" : " no-house"}`} style={gridVars(widths) as CSSProperties} data-panel="control">
           {COLUMNS.map((c, i) => {
+            if (c.office === "house" && !showHouse) return null;
             const handle = <ColumnHandle i={i} label={`Resize ${i === 2 ? next[1] : c.title} and ${next[i]}`} grid={grid} widths={widths} />;
             // The third column can swap the governors for the toss-ups; the switch sits in its heading either way.
             if (c.office === "governor" && third === "tossups") return <TossupColumn key="tossups" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} />;
-            return <OfficeColumn key={c.office} {...c} data={data} forecast={forecast} results={results} star={star} status={i === 0 ? status : undefined} handle={handle} toggle={c.office === "governor" ? <ThirdSwitch third={third} /> : undefined} />;
+            // The House column's heading can hide it; once hidden, the Senate column's heading brings it back.
+            const toggle = c.office === "governor" ? <ThirdSwitch third={third} /> : c.office === "house" ? <HouseSwitch shown /> : !showHouse ? <HouseSwitch shown={false} /> : undefined;
+            return <OfficeColumn key={c.office} {...c} data={data} forecast={forecast} results={results} star={star} status={i === 0 ? status : undefined} handle={handle} toggle={toggle} />;
           })}
           <aside className="mt-sbs-side" aria-label="Latest calls and poll closings">
             <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" fill />
