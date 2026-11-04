@@ -1,6 +1,8 @@
 // County shading and hover cards shared by the race page and the zoomable office maps.
 import type { CountyResult } from "@/lib/midterms/races";
 import { fmt, lead, marginLabel, pct, shade } from "@/lib/midterms/view";
+import type { CSSProperties } from "react";
+import { lastName, partyCode } from "./CandidateTable";
 import { partyColor } from "./party";
 
 export type Mode = "results" | "reporting" | "2024";
@@ -43,25 +45,41 @@ export function CountyTip({ county, mode = "results" }: { county: CountyResult; 
       </>
     );
   }
+  // Laid out like DDHQ's county card: a party bar on each row, last name and party, then how much is in.
+  const counted = county.total > 0 && !county.reportingUnknown;
+  const shown = Math.min(100, Math.round(county.reporting));
   return (
-    <>
-      <b>{county.name}</b>
+    <div className="mt-ctip">
       <table>
+        <thead>
+          <tr>
+            <th scope="col">{county.name}</th>
+            <th scope="col" className="num">Votes</th>
+            <th scope="col" className="num">Pct</th>
+          </tr>
+        </thead>
         <tbody>
           {county.candidates.slice(0, 4).map((c) => (
-            <tr key={c.name}>
-              <td>
-                <span className="swatch" style={{ background: partyColor(c) }} /> {c.name}
+            <tr key={c.name} style={{ "--p": partyColor(c) } as CSSProperties}>
+              <td title={c.name}>
+                {lastName(c.name)} ({partyCode(c.party)})
               </td>
               <td className="num">{fmt(c.votes)}</td>
-              <td className="num">{pct(c.pct)}</td>
+              <td className="num">{c.pct.toFixed(2)}%</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <span className="muted">
-        {Math.round(county.reporting)}% reporting{county.baseline2024 !== null && ` · 2024: ${marginLabel(county.baseline2024)}`}
-      </span>
-    </>
+      <div className="mt-ctip-foot">
+        <span className="muted">{county.baseline2024 !== null ? `2024 ${marginLabel(county.baseline2024)}` : ""}</span>
+        {/* DDHQ's share is of its expected vote ("Est."); civicAPI's counts precincts. */}
+        <span className="mt-ctip-in" title={county.expected ? "Votes counted, as a share of DDHQ's estimate of the county's final vote" : "Precincts or ballot batches reported (civicAPI)"}>
+          {counted ? `${county.done ? 100 : shown}% ${county.expected ? "Est." : "in"}` : county.total > 0 ? "Counting" : "No votes yet"}
+          <span className="mt-ct-track" aria-hidden>
+            <span style={{ width: `${counted ? (county.done ? 100 : shown) : 0}%` }} />
+          </span>
+        </span>
+      </div>
+    </div>
   );
 }

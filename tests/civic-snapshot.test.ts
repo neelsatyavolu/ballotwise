@@ -84,7 +84,7 @@ describe("fetchCatalog's civicAPI searches", () => {
     const asked: URLSearchParams[] = [];
     vi.stubGlobal("fetch", async (url: string) => (asked.push(new URL(url).searchParams), new Response(JSON.stringify({ races: [] }))));
     await fetchCatalog(NOW);
-    expect(asked.map((p) => p.get("type")).sort()).toEqual(["Ballot Measure", "Governor", "House of Representatives", "Proposition", "Referendum", "US Senate"]);
+    expect([...new Set(asked.map((p) => p.get("type")))].sort()).toEqual(["Ballot Measure", "Governor", "House of Representatives", "Proposition", "Referendum", "US Senate"]);
     for (const params of asked) {
       expect(params.get("startDate")).toBe("2026-11-03");
       expect(params.get("endDate")).toBe("2026-11-03");

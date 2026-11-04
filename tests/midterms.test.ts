@@ -161,6 +161,41 @@ describe("fetchCatalog", () => {
     expect(races[0].candidates.every((c) => c.votes === 0 && !c.winner)).toBe(true);
   });
 
+  it("asks each search in pages of 100, the House's five at once", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(url);
+      return new Response(JSON.stringify({ races: [] }));
+    });
+    await fetchCatalog(NOW);
+    const house = calls.filter((u) => u.includes("type=House%20of%20Representatives"));
+    expect(house.map((u) => new URL(u).searchParams.get("offset"))).toEqual(["0", "100", "200", "300", "400"]);
+    expect(calls.every((u) => !u.includes("race/search") || u.includes("limit=100"))).toBe(true);
+  });
+
+  it("refreshes a failed search's races one by one, where the polls have closed", async () => {
+    const gov = fixture("civic-search-governor.json");
+    vi.stubGlobal("fetch", async (url: string) => new Response(JSON.stringify({ races: url.includes("type=Governor") ? gov.races : [] })));
+    await fetchCatalog(NOW);
+    // civicAPI's Governor search is overloaded; its race endpoint still answers, without the search's id and type.
+    const florida = gov.races.find((r: { id: number }) => r.id === 87069);
+    const answer = Object.fromEntries(Object.entries(florida).filter(([k]) => k !== "id" && k !== "type")) as typeof florida;
+    const asked: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.includes("race/search")) return new Response(url.includes("type=Governor") ? "overloaded" : JSON.stringify({ races: [] }), { status: url.includes("type=Governor") ? 503 : 200 });
+      asked.push(url);
+      if (url.endsWith("race/87069")) return new Response(JSON.stringify({ ...answer, percent_reporting: 61, candidates: answer.candidates.map((c: { votes?: number }, i: number) => ({ ...c, votes: 1000 - i })) }));
+      return new Response("overloaded", { status: 503 });
+    });
+    const { races } = await fetchCatalog(NOW + 120_000);
+    const fl = races.find((r) => r.id === 87069)!;
+    expect(fl).toMatchObject({ reporting: 61, office: "governor", state: "FL" });
+    expect(fl.missing).toBeUndefined();
+    expect(fl.total).toBeGreaterThan(0);
+    expect(races.find((r) => r.id === 87497)?.missing).toBe(true);
+    expect(asked.length).toBeGreaterThan(1);
+  });
+
   it("serves the last good catalog, marked stale, when civicAPI fails", async () => {
     const gov = fixture("civic-search-governor.json");
     vi.stubGlobal("fetch", async (url: string) => new Response(JSON.stringify({ races: url.includes("type=Governor") ? gov.races : [] })));

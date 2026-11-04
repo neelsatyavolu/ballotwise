@@ -26,7 +26,7 @@ export const initials = (name: string) => {
 };
 
 /** Party as a results desk abbreviates it: DEM, GOP, LIB, GRE, IND, or the party's own short tag. */
-function partyCode(party: string): string {
+export function partyCode(party: string): string {
   if (/^Democrat/i.test(party)) return "DEM";
   if (/^Republican/i.test(party)) return "GOP";
   if (/libertarian/i.test(party)) return "LIB";

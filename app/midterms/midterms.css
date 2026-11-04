@@ -681,6 +681,17 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-race-tip .mt-ct-status td { padding-top: 6px; padding-bottom: 6px; }
 .mt-race-tip .mt-ct .mt-avatar { width: 20px; height: 20px; font-size: 8px; }
 .mt-race-tip .mt-ct-who { gap: 6px; }
+/* A county's hover card, laid out like DDHQ's: the name over the columns, a party bar on each row, how much is in. */
+.mt .mt-tip:has(> .mt-ctip) { width: 300px; min-width: 0; max-width: calc(100vw - 32px); padding: 0; gap: 0; overflow: hidden; }
+.mt-ctip table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mt-ctip th { padding: 8px 10px 6px; font-weight: 400; color: var(--muted); text-align: left; border-bottom: 1px solid var(--rule); }
+.mt-ctip th:first-child { color: var(--ink); font-weight: 700; font-size: 14px; }
+.mt-ctip th.num, .mt-ctip td.num { text-align: right; }
+.mt-ctip td { height: 30px; padding: 0 10px; border-bottom: 1px solid var(--rule); font-size: 13px; white-space: nowrap; }
+.mt-ctip td:first-child { box-shadow: inset 4px 0 0 var(--p); padding-left: 12px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.mt-ctip-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px 8px 12px; }
+.mt-ctip-in { display: flex; align-items: center; gap: 8px; color: var(--muted); white-space: nowrap; }
+.mt-ctip-in .mt-ct-track { width: 90px; flex: none; }
 .mt-race-tip-note { padding: 6px 12px; border-top: 1px solid var(--rule); color: var(--muted); }
 .mt-race-tip .mt-watch-note { margin: 0; padding: 6px 12px; border-top: 1px solid var(--rule); }
 

@@ -104,10 +104,11 @@ describe("observed Votes result schema", () => {
     const county = (lte: Record<string, unknown>) => ({ county: "Example County", fips: "13049", liveTurnoutEstimate: { totalVotes: 1000, precinctsIn: 0, precinctsTot: 0, ...lte },
       candidates: [{ first_name: "Avery", last_name: "Candidate", votes: 1000, percent: 100, party: { name: "Democratic" } }] });
     const counting = readResults({ raceData: { ...topline([500, 497, 3]), countyResults: [county({ estimatedVotesMid: 4000, completedCounty: false })] } });
-    expect(counting.counties[0]).toMatchObject({ expected: 4000 });
+    // Its "% Est." is the count over that estimate, as DDHQ's county card shows it, not the precincts in.
+    expect(counting.counties[0]).toMatchObject({ expected: 4000, reporting: 25 });
     expect(counting.counties[0]).not.toHaveProperty("done");
     const finished = readResults({ raceData: { ...topline([500, 497, 3]), countyResults: [county({ estimatedVotesMid: 1000, completedCounty: true })] } });
-    expect(finished.counties[0]).toMatchObject({ expected: 1000, done: true });
+    expect(finished.counties[0]).toMatchObject({ expected: 1000, done: true, reporting: 100 });
     const detail: RaceDetail = { ...rawRace(), updated: null, pollsClose: null,
       counties: [{ fips: "13049", name: "Example County", total: 0, reporting: 0, candidates: [], baseline2024: null, pres2024: null }] };
     expect(applyDesk(detail, { ...parsed(topline([500, 497, 3])), counties: counting.counties }).counties[0]).toMatchObject({ total: 1000, expected: 4000 });

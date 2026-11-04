@@ -2,11 +2,20 @@ import type { Db } from "../auth/accounts";
 import { coverageOf, type Coverage } from "./coverage";
 import { z } from "zod";
 import { applyRatings, blankDetail, blankResults, ELECTION_DATE, isTestData, raceDetail, resultsHidden, summarize, summarizeOther, type Office, type RaceDetail, type RaceSummary, type RatedRace } from "./races";
+import { stateFinal } from "./polls";
 import { STATE_NAMES } from "./view";
 
 // civicAPI (civicapi.org): free, keyless live results sourced from each Secretary of State. Its terms ask for attribution.
 const BASE = "https://civicapi.org/api/v2/";
-const PAGE = 500;
+/**
+ * Races per search page. On election night civicAPI answered a 500-race House page with 503 CIVICAPI_OVERLOADED
+ * ("the shared response was not ready within its wait budget") while 100-race pages came back.
+ */
+const PAGE = 100;
+/** Pages asked for at once, so a long list doesn't wait on one page after another: the House runs to about 440 races. */
+const FIRST_PAGES: Readonly<Record<string, number>> = { "House of Representatives": 5 };
+/** The most pages one search will read. */
+const MAX_PAGES = 50;
 // The race types that hold Senate, House, Governor and statewide-measure races. Others are filtered out in summarize().
 const TYPES = ["US Senate", "House of Representatives", "Governor", "Referendum", "Proposition", "Ballot Measure"];
 // summarize() keeps only statewide governors and measures, so these are searched for statewide races alone: Referendum
@@ -113,13 +122,17 @@ export async function pooled<T, R>(items: readonly T[], limit: number, work: (it
 // holds only Nov 3 races. Should it stop filtering, it lists newest elections first, so paging still stops at the
 // first page with no Nov 3 race at all; summarize() keeps only Nov 3 races either way.
 async function racesOfType(type: string, deadline: number): Promise<unknown[]> {
-  const out: unknown[] = [];
   const filter = `startDate=${ELECTION_DATE}&endDate=${ELECTION_DATE}${STATEWIDE_ONLY.has(type) ? "&election_type=Statewide" : ""}`;
-  for (let offset = 0; offset < 10 * PAGE; offset += PAGE) {
-    const page = (await civic(`race/search?country=US&${filter}&type=${encodeURIComponent(type)}&limit=${PAGE}&offset=${offset}`, deadline)) as { races?: { election_date?: string }[] };
-    const races = page.races ?? [];
-    out.push(...races);
-    if (races.length < PAGE || !races.some((r) => r.election_date?.startsWith(ELECTION_DATE))) break;
+  const page = async (n: number) =>
+    ((await civic(`race/search?country=US&${filter}&type=${encodeURIComponent(type)}&limit=${PAGE}&offset=${n * PAGE}`, deadline)) as { races?: { election_date?: string }[] }).races ?? [];
+  const more = (races: readonly { election_date?: string }[]) => races.length === PAGE && races.some((r) => r.election_date?.startsWith(ELECTION_DATE));
+  const first = FIRST_PAGES[type] ?? 1;
+  const pages = await Promise.all(Array.from({ length: first }, (_, n) => page(n)));
+  // A page past the end comes back short or empty, so only a full last page means there are more.
+  const out = pages.flat();
+  for (let n = first, last = pages[first - 1]; n < MAX_PAGES && more(last); n++) {
+    last = await page(n);
+    out.push(...last);
   }
   return out;
 }
@@ -319,11 +332,10 @@ function missingByOffice(races: readonly RaceSummary[]): string | null {
 }
 
 /**
- * Every race of each type civicAPI answered for, and the types it didn't. One failed type doesn't discard the
- * others; only when every type fails does this throw.
+ * Every race of each type civicAPI answered for, the types it didn't, and the first error when none answered. One
+ * failed type doesn't discard the others. Searches end by `deadline` (epoch ms).
  */
-async function fetchRaces(now: number, budget: number): Promise<{ races: RaceSummary[]; failed: string[] }> {
-  const deadline = Date.now() + budget;
+async function fetchRaces(now: number, deadline: number): Promise<{ races: RaceSummary[]; failed: string[]; err?: unknown }> {
   // All six searches at once. On Nov 3 civicAPI took 12 to 17 seconds per search and answered about a third with a
   // 503 whether asked one at a time or all together, so two at a time left no room in the budget to ask again.
   const pages = await Promise.all(
@@ -336,7 +348,7 @@ async function fetchRaces(now: number, budget: number): Promise<{ races: RaceSum
     }),
   );
   const failed = TYPES.filter((_, i) => "err" in pages[i]);
-  if (failed.length === TYPES.length) throw (pages[0] as { err: unknown }).err;
+  if (failed.length === TYPES.length) return { races: [], failed, err: (pages[0] as { err: unknown }).err };
   // A race can appear under two type searches; keep the first.
   const byId = new Map<number, RaceSummary>();
   for (const page of pages) {
@@ -346,6 +358,44 @@ async function fetchRaces(now: number, budget: number): Promise<{ races: RaceSum
     }
   }
   return { races: [...byId.values()], failed };
+}
+
+/** The race type a race of each office is searched under, for summarizing a race fetched by id. */
+const TYPE_OF: Readonly<Record<Exclude<Office, "measure">, string>> = { senate: "US Senate", house: "House of Representatives", governor: "Governor" };
+const OFFICE_OF_TYPE = new Map(Object.entries(TYPE_OF).map(([office, type]) => [type, office as Office]));
+/**
+ * Time kept back from the searches for asking a failed search's races one by one. civicAPI's searches took 18 to 40
+ * seconds on election night while a single race came back in about 1.5.
+ */
+const BY_RACE_RESERVE_MS = 12_000;
+/** Races asked for at once when a search failed. */
+const BY_RACE_LANES = 16;
+
+/**
+ * The races of the failed searches, from civicAPI's race endpoint one at a time, where every poll in the state has
+ * closed (elsewhere there's nothing to count yet). Rated races go first, then those counting, so the ones that matter
+ * come back before `deadline`. A race that fails stays out, keeping its last numbers.
+ */
+async function fetchByRace(failed: readonly string[], known: Known, listed: ReadonlySet<number>, now: number, deadline: number): Promise<RaceSummary[]> {
+  const offices = new Set(failed.flatMap((type) => OFFICE_OF_TYPE.get(type) ?? []));
+  const rank = (r: RaceSummary) => (r.rating ? 0 : r.total > 0 ? 1 : 2);
+  const due = [...known.values()]
+    .map((k) => k.race)
+    .filter((r) => offices.has(r.office) && !listed.has(r.id) && (stateFinal(r.state) ?? Infinity) <= now)
+    .sort((a, b) => rank(a) - rank(b));
+  const found = await pooled(due, BY_RACE_LANES, async (r): Promise<RaceSummary | null> => {
+    if (Date.now() >= deadline) return null;
+    try {
+      // One try each: with hundreds to ask for, a retry would hold a lane another race could use.
+      const raw = (await civicOnce(`race/${r.id}`, deadline)) as Record<string, unknown>;
+      if (raw.province !== r.state) return null;
+      const race = summarize({ election_type: "Statewide", ...raw, id: r.id, type: TYPE_OF[r.office as Exclude<Office, "measure">] }, [], now);
+      return race && (resultsHidden(race.state, now, isTestData(raw)) ? blankResults(race) : race);
+    } catch {
+      return null;
+    }
+  });
+  return found.filter((r): r is RaceSummary => r !== null);
 }
 
 /** At most this many strays are fetched one by one per refresh, so a search gone wrong can't fan out to hundreds. */
@@ -461,12 +511,16 @@ function latest(now: number, budget: number, db: Db | undefined, background: ((w
 /** Asks civicAPI for every race, keeps the ones it left out, saves the result to memory and D1. Throws on CivicError. */
 async function load(now: number, budget: number, db: Db | undefined, background: ((work: Promise<unknown>) => void) | undefined, warm: Stored | null, snapshots: Promise<Snapshots | null>): Promise<Stored> {
   const registeredRaces = registry(db, now);
-  const { races: searched, failed } = await fetchRaces(now, budget);
-  if (failed.length) console.error(`midterms: civicAPI failed for ${failed.join(", ")}; those races keep their last known numbers`);
+  const deadline = Date.now() + budget;
+  const { races: searched, failed, err } = await fetchRaces(now, deadline - BY_RACE_RESERVE_MS);
   const registered = await registeredRaces;
-  // A partial answer leaves out every race of the failed types, so strays are only looked for in a complete one.
-  const fetched = failed.length ? searched : [...searched, ...(await fetchStrays(searched, registered, now))];
   let known = warm ? knownFrom(warm) : ((await snapshots)?.known ?? new Map());
+  // A failed search's races are asked for one by one. A partial answer leaves out every race of the failed types, so
+  // strays are only looked for in a complete one.
+  const byRace = failed.length ? await fetchByRace(failed, known, new Set(searched.map((r) => r.id)), now, deadline) : [];
+  if (failed.length) console.error(`midterms: civicAPI failed for ${failed.join(", ")}; ${byRace.length} of those races refreshed one by one, the rest keep their last known numbers`);
+  if (err && byRace.length === 0) throw err;
+  const fetched = failed.length ? [...searched, ...byRace] : [...searched, ...(await fetchStrays(searched, registered, now))];
   const listed = new Set(fetched.map((r) => r.id));
   // Registered races this isolate has no numbers for: another isolate saw them, so D1 may hold their numbers.
   if (db && warm && [...(registered?.keys() ?? [])].some((id) => !listed.has(id) && !known.has(id))) {

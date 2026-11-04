@@ -279,8 +279,10 @@ describe("catalog refresh", () => {
   });
 
   it("pages past a mixed page instead of stopping at the first race from another date", async () => {
+    // Five full pages of 100, asked for at once, the last ending on a race from another date; then a short sixth.
     const pages = [
-      [...Array.from({ length: 499 }, (_, i) => house(i + 1)), house(9000, "2026-12-01T05:00:00.000Z")],
+      ...Array.from({ length: 4 }, (_, p) => Array.from({ length: 100 }, (_, i) => house(p * 100 + i + 1))),
+      [...Array.from({ length: 99 }, (_, i) => house(401 + i)), house(9000, "2026-12-01T05:00:00.000Z")],
       [house(600), house(9001, "2026-08-04T05:00:00.000Z")],
     ];
     const asked: string[] = [];
@@ -288,10 +290,10 @@ describe("catalog refresh", () => {
       const u = new URL(url);
       if (u.searchParams.get("type") !== "House of Representatives") return new Response(JSON.stringify({ races: [] }));
       asked.push(u.searchParams.get("offset")!);
-      return new Response(JSON.stringify({ races: pages[Number(u.searchParams.get("offset")) / 500] ?? [] }));
+      return new Response(JSON.stringify({ races: pages[Number(u.searchParams.get("offset")) / 100] ?? [] }));
     });
     const catalog = await fetchCatalog(NOW);
-    expect(asked).toEqual(["0", "500"]);
+    expect(asked).toEqual(["0", "100", "200", "300", "400", "500"]);
     expect(catalog.races.some((r) => r.id === 600)).toBe(true);
     expect(catalog.races.some((r) => r.id === 9000)).toBe(false);
   });

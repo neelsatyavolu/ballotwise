@@ -240,15 +240,17 @@ export function readResults(body: unknown): DdhqResults {
         return [{ name, party: partyName(candidate.party), votes, percent: candidate.percent }];
       });
       const countyTotal = countOf(record.liveTurnoutEstimate?.totalVotes) ?? rows.reduce((sum, row) => sum + row.votes, 0);
-      const reporting = reportingOf(record.liveTurnoutEstimate?.precinctsIn, record.liveTurnoutEstimate?.precinctsTot);
       const expected = countOf(record.liveTurnoutEstimate?.estimatedVotesMid);
+      const done = record.liveTurnoutEstimate?.completedCounty === true;
+      // DDHQ's own "% Est.": the count over its expected vote, as for the race; precincts only where it has no estimate.
+      const reporting = done ? 100 : expectedIn(countyTotal, expected) ?? reportingOf(record.liveTurnoutEstimate?.precinctsIn, record.liveTurnoutEstimate?.precinctsTot);
       counties.push({
         fips: record.fips,
         ...(typeof record.county === "string" ? { name: record.county } : {}),
         total: countyTotal,
         ...(reporting !== undefined ? { reporting } : {}),
         ...(expected && expected > 0 ? { expected } : {}),
-        ...(record.liveTurnoutEstimate?.completedCounty === true ? { done: true as const } : {}),
+        ...(done ? { done: true as const } : {}),
         candidates: rows.map(({ percent, ...row }) => ({ ...row, pct: pctOf(percent, row.votes, countyTotal) })).sort((a, b) => b.votes - a.votes),
       });
     }
