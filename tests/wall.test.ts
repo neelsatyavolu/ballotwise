@@ -24,11 +24,16 @@ describe("wall tour", () => {
     expect(tourRaces([safe, lean, called, house, tossup], "senate").map((r: RaceSummary) => r.id)).toEqual([tossup.id, lean.id]);
   });
 
-  it("tours the closest counted races once every close one is called", () => {
+  it("tours the called toss-ups and leans once every one is called, the Senate never a safer race", () => {
     const close = race({ rating: "tossup", votes: [51, 49], winner: 0 });
     const wide = race({ rating: "likely-d", votes: [70, 30], winner: 0 });
     const uncounted = race({ rating: "likely-r" });
-    expect(tourRaces([wide, uncounted, close], "senate").map((r: RaceSummary) => r.id)).toEqual([close.id, wide.id]);
+    expect(tourRaces([wide, uncounted, close], "senate").map((r: RaceSummary) => r.id)).toEqual([close.id]);
+    // The House's still falls back to the closest counted races of any kind.
+    const house = (over: Parameters<typeof race>[0]) => race({ office: "house", ...over });
+    const hClose = house({ rating: "tossup", votes: [51, 49], winner: 0 });
+    const hWide = house({ rating: "likely-d", votes: [70, 30], winner: 0 });
+    expect(tourRaces([hWide, hClose], "house").map((r: RaceSummary) => r.id)).toEqual([hClose.id, hWide.id]);
   });
 
   it("puts toss-ups that look set to flip ahead of the other toss-ups, closer or not", () => {
@@ -53,7 +58,11 @@ describe("wall tour", () => {
     const waiting = race({ rating: "tossup" });
     const countingLean = race({ rating: "lean-r", votes: [48, 52] });
     const countingSafe = race({ votes: [40, 60] });
-    expect(tourRaces([waiting, countingSafe, countingLean], "senate").map((r: RaceSummary) => r.id)).toEqual([countingLean.id, countingSafe.id]);
+    // The Senate's tour is only toss-ups and leans; the House's goes on to other counting races.
+    expect(tourRaces([waiting, countingSafe, countingLean], "senate").map((r: RaceSummary) => r.id)).toEqual([countingLean.id]);
+    const hLean = race({ office: "house", rating: "lean-r", votes: [48, 52] });
+    const hSafe = race({ office: "house", votes: [40, 60] });
+    expect(tourRaces([hSafe, hLean], "house").map((r: RaceSummary) => r.id)).toEqual([hLean.id, hSafe.id]);
     // Nothing counted anywhere: no stops, so the map stays on the whole country.
     expect(tourRaces([waiting, race({ rating: "lean-d" })], "senate")).toEqual([]);
   });

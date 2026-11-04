@@ -21,16 +21,20 @@ export const TOUR: Record<"senate" | "house", TourPlan> = {
 
 /**
  * The races the map zooms into, only ones with votes to show: this office's uncalled toss-ups and leans that are
- * counting, then its other uncalled races that are counting, each in watchFirst order (toss-ups that look set to flip
- * first, then closest). Once every one of those is called, the closest of the office's races with votes counted.
- * Before any votes, none: the map stays on the whole country.
+ * counting, then (the House only) its other uncalled races that are counting, each in watchFirst order (toss-ups that
+ * look set to flip first, then closest). Once every one of those is called, the closest of the office's races with
+ * votes counted (the Senate's toss-ups and leans only). Before any votes, none: the map stays on the whole country.
  */
 export function tourRaces(races: readonly RaceSummary[], office: Office): RaceSummary[] {
   const mine = races.filter((r) => r.office === office);
   const open = (r: RaceSummary) => isWatch(r) || isCompetitive(r);
   const counting = mine.filter((r) => r.total > 0 && !isCalled(r));
-  const tour = [...counting.filter(open).sort(watchFirst), ...counting.filter((r) => !open(r)).sort(watchFirst)];
-  return (tour.length ? tour : mine.filter((r) => r.total > 0).sort(watchFirst)).slice(0, MAX_TOUR);
+  // The Senate's few seats: only its toss-ups and leans, never a safer state.
+  const focused = office === "senate";
+  const contested = (r: RaceSummary) => r.rating === "tossup" || !!r.rating?.startsWith("lean");
+  const tour = [...counting.filter(open).sort(watchFirst), ...(focused ? [] : counting.filter((r) => !open(r)).sort(watchFirst))];
+  const done = mine.filter((r) => r.total > 0 && (!focused || contested(r)));
+  return (tour.length ? tour : done.sort(watchFirst)).slice(0, MAX_TOUR);
 }
 
 /** The tour's stops: null is the whole country, shown first and again after every `racesPerLeg` races (never when null). */
