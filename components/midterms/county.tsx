@@ -62,7 +62,8 @@ export function CountyTip({ county, mode = "results" }: { county: CountyResult; 
           {county.candidates.slice(0, 4).map((c) => (
             <tr key={c.name} style={{ "--p": partyColor(c) } as CSSProperties}>
               <td title={c.name}>
-                {lastName(c.name)} ({partyCode(c.party)})
+                {lastName(c.name)}
+                {partyCode(c.party) && ` (${partyCode(c.party)})`}
               </td>
               <td className="num">{fmt(c.votes)}</td>
               <td className="num">{c.pct.toFixed(2)}%</td>

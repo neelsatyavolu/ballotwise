@@ -73,13 +73,11 @@ function matchOf<C extends { name: string; party: string }>(row: DdhqCandidate, 
  * DDHQ's candidates carrying civicAPI's count, for a race where civicAPI has counted more votes than DDHQ (on Nov 3
  * civicAPI had Indiana House votes before DDHQ posted any). Each takes the votes of the public candidate it matches (matchOf), so DDHQ's names stay ("Cynthia
  * Wirth" where civicAPI says "Cinde Wirth") and nothing jumps when DDHQ's count catches up; races without a Democrat
- * (Nebraska's independent) match by name. Null when civicAPI isn't that far ahead, last reported the race more than
- * CIVIC_KEEP_MS ago (`seenAt` is the payload's time, or the race's own last sighting when civicAPI left it out), or
- * civicAPI's two leaders don't each match exactly one DDHQ candidate.
+ * (Nebraska's independent) match by name. Null when civicAPI has no more votes, or its two leaders don't each match
+ * exactly one DDHQ candidate. Only asked when civicAPI's numbers are recent (see civicRecent).
  */
-function publicCount(race: RaceSummary, rows: readonly DdhqCandidate[], deskTotal: number, seenAt: number | null): DdhqCandidate[] | null {
-  const seen = race.missing ? (race.lastSeen ?? null) : seenAt;
-  if (race.total <= 0 || seen === null || Date.now() - seen > CIVIC_KEEP_MS) return null;
+function publicCount(race: RaceSummary, rows: readonly DdhqCandidate[], deskTotal: number): DdhqCandidate[] | null {
+  if (race.total <= 0) return null;
   // Counts only go up, so whichever has more votes is the newer count.
   if (race.total <= deskTotal) return null;
   const matched = rows.map((row) => matchOf(row, race.candidates));
@@ -94,6 +92,15 @@ function publicCount(race: RaceSummary, rows: readonly DdhqCandidate[], deskTota
  * from; see civicSeen), civicAPI's count stands in where it's recent and well ahead of DDHQ's (see publicCount); without it, DDHQ's always
  * shows, so a failing civicAPI never holds a screen back.
  */
+/**
+ * Whether civicAPI reported `race` within CIVIC_KEEP_MS: `civicAt` is the public payload's time, or the race's own last
+ * sighting when civicAPI left it out of its latest answer.
+ */
+function civicRecent(race: RaceSummary, civicAt: number | null): boolean {
+  const seen = race.missing ? (race.lastSeen ?? null) : civicAt;
+  return civicAt !== null && seen !== null && Date.now() - seen <= CIVIC_KEEP_MS;
+}
+
 export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicAt: number | null = null): T {
   if (!desk.candidates && !desk.forecast.length) return race;
   const published = sources.get(race);
@@ -106,7 +113,8 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicA
     const winner = desk.call?.name ?? desk.candidates.find((row) => row.winner)?.name ?? null;
     const calledAt = desk.call ? Date.parse(desk.call.at) : NaN;
     // Where civicAPI's count is recent and has more votes, its count stands in under DDHQ's names; DDHQ's call and forecast rule.
-    const stand = civicAt !== null ? publicCount(race, desk.candidates, desk.total, civicAt) : null;
+    const recent = civicRecent(race, civicAt);
+    const stand = recent ? publicCount(race, desk.candidates, desk.total) : null;
     // DDHQ's expected vote estimates the race's final total whichever count shows, so % in and votes left stay on
     // DDHQ's scale; without it, civicAPI's count keeps its own % in.
     const standIn = stand ? expectedIn(race.total, desk.expected) : undefined;
@@ -126,12 +134,14 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicA
     next.call = winner && Number.isFinite(calledAt) ? { id: race.id, at: calledAt, winner, replaced: null, withdrawn: false } : null;
     // DDHQ's batch topline (every screen's live counts) carries no county breakdown; only a single race's fetch does.
     // Without one, the public counties stay: blanking them would grey the race's map and throw off its votes left.
-    if ("counties" in race && desk.counties.length && !stand) {
+    // With one, each county shows whichever source has more votes in it (civicAPI's only while recent): civicAPI's
+    // county breakdown can lag its own statewide count (Harris at 0 on Nov 3 while DDHQ had a million).
+    if ("counties" in race && desk.counties.length) {
       const detail = next as unknown as RaceDetail;
-      detail.counties = (race as unknown as RaceDetail).counties.map((county) => mergeCounty(county, desk));
+      detail.counties = (race as unknown as RaceDetail).counties.map((county) => mergeCounty(county, desk, recent));
       for (const county of desk.counties) {
         if (detail.counties.some((row) => row.fips === county.fips)) continue;
-        detail.counties.push(mergeCounty({ fips: county.fips, name: county.name ?? county.fips, total: 0, reporting: 0, candidates: [], baseline2024: null, pres2024: null }, desk));
+        detail.counties.push(mergeCounty({ fips: county.fips, name: county.name ?? county.fips, total: 0, reporting: 0, candidates: [], baseline2024: null, pres2024: null }, desk, false));
       }
     }
     if ("counties" in race && !stand) (next as unknown as RaceDetail).updated = desk.resultsUpdatedAt ?? null;
@@ -152,11 +162,19 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicA
   return next;
 }
 
-function mergeCounty(county: CountyResult, desk: DdhqRace): CountyResult {
+/**
+ * A county from DDHQ's count, or with `civicOk` from civicAPI's when that has more votes in it (keeping DDHQ's expected
+ * vote, so its % in is DDHQ's "% Est."). A county DDHQ doesn't list keeps civicAPI's votes when `civicOk`, else has none.
+ */
+function mergeCounty(county: CountyResult, desk: DdhqRace, civicOk: boolean): CountyResult {
   const hit = desk.counties.find((row) => row.fips === county.fips);
-  if (!hit) return { ...county, total: 0, reporting: 0, reportingUnknown: true, candidates: [] };
+  if (!hit) return civicOk && county.total > 0 ? county : { ...county, total: 0, reporting: 0, reportingUnknown: true, candidates: [] };
   const candidates = hit.candidates.map((row) => ({ ...row }));
   const total = hit.total ?? candidates.reduce((sum, row) => sum + row.votes, 0);
+  if (civicOk && county.total > total) {
+    const est = expectedIn(county.total, hit.expected);
+    return { ...county, reporting: est ?? county.reporting, reportingUnknown: est === undefined ? county.reportingUnknown : undefined, expected: hit.expected, done: hit.done };
+  }
   return { ...county, name: hit.name ?? county.name, total, candidates, reporting: hit.reporting ?? 0, reportingUnknown: total > 0 && hit.reporting === undefined ? true : undefined, expected: hit.expected, done: hit.done };
 }
 

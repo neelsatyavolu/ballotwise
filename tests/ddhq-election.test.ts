@@ -144,6 +144,22 @@ describe("observed Votes result schema", () => {
     expect(unknown.reportingUnknown).toBe(true);
   });
 
+  it("shows each county from whichever source has more votes in it when civicAPI's numbers are recent", () => {
+    // civicAPI's statewide count leads, but its county breakdown lags: Harris has nothing there yet.
+    const county = (fips: string, name: string, votes: number) => ({ fips, name, total: votes, reporting: votes ? 30 : 0, candidates: [{ name: "Avery Candidate", party: "Democratic", votes, pct: votes ? 100 : 0 }], baseline2024: null, pres2024: null });
+    const detail: RaceDetail = { ...rawRace(), missing: undefined, lastSeen: undefined, total: 1_200_000, updated: null, pollsClose: null, counties: [county("48201", "Harris", 0), county("48453", "Travis", 5000)] };
+    const source = { ...parsed(topline([500_000, 497_000, 3000])), counties: [
+      { fips: "48201", name: "Harris", total: 1_071_198, expected: 1_350_000, candidates: [{ name: "Avery Candidate", party: "Democratic", votes: 1_071_198, pct: 100 }] },
+      { fips: "48453", name: "Travis", total: 4000, expected: 20_000, candidates: [{ name: "Avery Candidate", party: "Democratic", votes: 4000, pct: 100 }] },
+    ] };
+    const next = applyDesk(detail, source, Date.now());
+    expect(next.counties.find((c) => c.name === "Harris")).toMatchObject({ total: 1_071_198, expected: 1_350_000 });
+    // Travis: civicAPI's 5,000 over DDHQ's 4,000, its % in against DDHQ's expected vote.
+    expect(next.counties.find((c) => c.name === "Travis")).toMatchObject({ total: 5000, expected: 20_000, reporting: 25 });
+    // Without a time for the public numbers, DDHQ's counties throughout.
+    expect(applyDesk(detail, source).counties.find((c) => c.name === "Travis")).toMatchObject({ total: 4000 });
+  });
+
   it("replaces county candidate rows and adds provider counties omitted by the civic catalog", () => {
     const detail: RaceDetail = { ...rawRace(), updated: null, pollsClose: null, counties: [{ fips: "13049", name: "Example County", total: 9999, reporting: 99, candidates: [{ name: "Removed Candidate", party: "Other", votes: 9999, pct: 100 }], baseline2024: 4, pres2024: null }] };
     const source = { ...parsed(topline([5, 3, 0])), counties: [
