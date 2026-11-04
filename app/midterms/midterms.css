@@ -1754,3 +1754,13 @@ body:has(dialog.mt-moment) .mt-callpops { display: none; }
 @media (prefers-reduced-motion: reduce) { .mt-callpop { animation: none; } }
 /* A state panel's votes-left card, in place of polls and markets once its race is counting. */
 .mt-votes-left-card p:not(.mt-mk-q, .mt-mk-lead) { margin: 0; }
+
+/* The zoomed-in state map's own zoom (ZoomMap.tsx): buttons at the top right; drag to pan once zoomed. */
+.mt-zoom { position: relative; }
+.mt-zoom-ctl { position: absolute; top: 10px; right: 10px; z-index: 3; display: grid; gap: 4px; }
+.mt-zoom-ctl button { width: 30px; height: 30px; padding: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); color: var(--ink); font: inherit; font-size: 17px; line-height: 1; cursor: pointer; }
+.mt-zoom-ctl button:disabled { opacity: 0.35; cursor: default; }
+.mt-zoom svg.panning { cursor: grab; touch-action: none; }
+.mt-zoom svg.panning:active { cursor: grabbing; }
+/* Walls aren't touched: no zoom controls there. */
+.mt-wall .mt-zoom-ctl { display: none; }

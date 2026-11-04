@@ -134,7 +134,45 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
     return b ? framed(atLeast(b, focused.box, 0.15)) : null;
   }, [county, focused]);
   const target = countyBox ?? live ?? (kept.focus === focus ? kept.box : framed(focused!.box));
-  const box = useTween(target);
+  const tweened = useTween(target);
+  // The viewer's own zoom and pan inside a state (buttons, wheel, drag), until the state, race or county changes.
+  const [user, setUser] = useState<{ focus: string | null; raceId: number | null; base: Box; box: Box } | null>(null);
+  // The state's own view is recomputed on each render with the same numbers, so it's compared by value.
+  const sameBox = (a: Box, b: Box) => a.every((v, i) => Math.abs(v - b[i]) < 0.5);
+  const mine = user && focus && user.focus === focus && user.raceId === raceId && sameBox(user.base, target) ? user.box : null;
+  const box = mine ?? tweened;
+  const svg = useRef<SVGSVGElement>(null);
+  const drag = useRef<{ x: number; y: number; box: Box; moved: boolean } | null>(null);
+  /** `b` zoomed by `factor` about the map point (cx, cy): never wider than the state's own view, at most 16 times in. */
+  const rescaled = (b: Box, factor: number, cx: number, cy: number): Box | null => {
+    const w = Math.min(target[2], Math.max(target[2] / 16, b[2] / factor));
+    if (w >= target[2] - 1e-6) return null;
+    const k = w / b[2];
+    return [cx - (cx - b[0]) * k, cy - (cy - b[1]) * k, w, b[3] * k];
+  };
+  const setView = (next: Box | null) => setUser(next && focus ? { focus, raceId, base: target, box: next } : null);
+  /** A pointer's place on the map, in the view box's units. */
+  const mapPoint = (clientX: number, clientY: number): [number, number] | null => {
+    const el = svg.current;
+    const m = el?.getScreenCTM();
+    if (!el || !m) return null;
+    const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
+    return [p.x, p.y];
+  };
+  // The wheel zooms toward the pointer, once zoomed into a state; a native listener, so the page doesn't scroll too.
+  useEffect(() => {
+    const el = svg.current;
+    if (!el || !focus) return;
+    const onWheel = (e: WheelEvent) => {
+      const at = mapPoint(e.clientX, e.clientY);
+      if (!at) return;
+      e.preventDefault();
+      const current = mine ?? tweened;
+      setView(rescaled(current, Math.exp(-e.deltaY / 300), at[0], at[1]));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
 
   const nat = nation && nation !== "error" ? nation : null;
   const cities = focus && layer?.state === focus ? layer.data.cities : undefined;
@@ -298,17 +336,52 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
             ← All states
           </button>
         ))}
+      {focus && (
+        <div className="mt-zoom-ctl" role="group" aria-label="Zoom">
+          <button type="button" aria-label="Zoom in" onClick={() => setView(rescaled(box, 1.6, box[0] + box[2] / 2, box[1] + box[3] / 2))}>+</button>
+          <button type="button" aria-label="Zoom out" onClick={() => setView(rescaled(box, 1 / 1.6, box[0] + box[2] / 2, box[1] + box[3] / 2))} disabled={!mine}>−</button>
+          <button type="button" aria-label="Reset zoom" onClick={() => setView(null)} disabled={!mine}>⟲</button>
+        </div>
+      )}
       <svg
+        ref={svg}
         viewBox={box.join(" ")}
         role="img"
         aria-label={label}
+        className={mine ? "panning" : undefined}
+        onPointerDown={(e) => {
+          if (mine && e.button === 0) drag.current = { x: e.clientX, y: e.clientY, box: mine, moved: false };
+        }}
         onPointerMove={(e) => {
+          const d = drag.current;
+          if (d && e.buttons & 1) {
+            const rect = svg.current?.getBoundingClientRect();
+            const dx = e.clientX - d.x;
+            const dy = e.clientY - d.y;
+            if (!d.moved && Math.hypot(dx, dy) < 4) return;
+            d.moved = true;
+            if (rect) {
+              // The view box is laid out to fit the element, so one pixel is the larger of its two scales.
+              const per = Math.max(d.box[2] / rect.width, d.box[3] / rect.height);
+              setView([d.box[0] - dx * per, d.box[1] - dy * per, d.box[2], d.box[3]]);
+            }
+            hover.leave();
+            return;
+          }
           const k = keyOf(e);
           if (k && hit(k)) hover.move(e, k);
           else hover.leave();
         }}
-        onPointerLeave={hover.leave}
+        onPointerUp={() => {
+          // A drag ends without picking what's under the pointer (onClick checks `moved`).
+          setTimeout(() => (drag.current = null), 0);
+        }}
+        onPointerLeave={() => {
+          drag.current = null;
+          hover.leave();
+        }}
         onClick={(e) => {
+          if (drag.current?.moved) return;
           const k = keyOf(e);
           if (k) pick(k);
         }}
