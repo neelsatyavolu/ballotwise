@@ -130,9 +130,9 @@ const WIDTHS_KEY = "mt-sbs-widths";
 /** What the third column shows: the governors' dashboard, or cards for every Senate and House toss-up. */
 const THIRD_KEY = "mt-sbs-third";
 /** What the third column shows: the governors, toss-ups, the Senate's races as cards, or the latest calls. */
-const THIRDS = ["governor", "tossups", "senate", "calls"] as const;
+const THIRDS = ["governor", "tossups", "senate", "senatemap", "calls"] as const;
 type Third = (typeof THIRDS)[number];
-const THIRD_LABEL: Record<Third, string> = { governor: "Governors", tossups: "Toss-ups", senate: "Senate", calls: "Calls" };
+const THIRD_LABEL: Record<Third, string> = { governor: "Governors", tossups: "Toss-ups", senate: "Senate", senatemap: "Senate map", calls: "Calls" };
 /** Fired when this page saves a setting, so every reader of it updates. */
 const SETTINGS_CHANGED = "mt-sbs-settings";
 /** Each column's share of the width: Senate, House, Governors, then the calls feed on ultrawide screens. */
@@ -190,16 +190,30 @@ function useThird(): Third {
 
 const HOUSE_KEY = "mt-sbs-house";
 
-/** Whether the House column shows, as last chosen in this browser (it can be turned off for more room). */
-function useShowHouse(): boolean {
-  return useSyncExternalStore(subscribeSettings, () => readSetting(HOUSE_KEY), () => null) !== "off";
+/** What the second column shows, as last chosen in this browser: the House, a second Senate map, or nothing (more room for the rest). */
+type Second = "house" | "senate" | "off";
+function useSecond(): Second {
+  const saved = useSyncExternalStore(subscribeSettings, () => readSetting(HOUSE_KEY), () => null);
+  return saved === "off" || saved === "senate" ? saved : "house";
 }
 
-/** Hides the House column, or (from the Senate column's heading, once it's hidden) brings it back. */
-function HouseSwitch({ shown }: { shown: boolean }) {
+/** The second column's switch: the House, a second Senate map (zoomed on its own), or hidden. */
+function SecondSwitch({ second }: { second: Second }) {
+  const set = (v: Second) => saveSetting(HOUSE_KEY, v === "house" ? null : v);
   return (
-    <button type="button" className="mt-el-quiet small mt-sbs-house" onClick={() => saveSetting(HOUSE_KEY, shown ? "off" : null)} title={shown ? "Hide the House column, giving the others its room" : "Show the House column again"}>
-      {shown ? "Hide" : "Show House"}
+    <div className="mt-seg" role="group" aria-label="Second column shows">
+      <button type="button" aria-pressed={second === "house"} onClick={() => set("house")}>House</button>
+      <button type="button" aria-pressed={second === "senate"} onClick={() => set("senate")}>Senate</button>
+      <button type="button" aria-pressed={false} onClick={() => set("off")} title="Hide this column, giving the others its room">Hide</button>
+    </div>
+  );
+}
+
+/** From the Senate column's heading, once the second column is hidden: brings it back. */
+function ShowSecond() {
+  return (
+    <button type="button" className="mt-el-quiet small mt-sbs-house" onClick={() => saveSetting(HOUSE_KEY, null)} title="Show the second column again">
+      Show House
     </button>
   );
 }
@@ -382,7 +396,8 @@ export function SideBySide() {
     </span>
   );
   const third = useThird();
-  const showHouse = useShowHouse();
+  const second = useSecond();
+  const showHouse = second === "house";
   const next = ["House", THIRD_LABEL[third], "the calls feed"];
 
   return (
@@ -394,14 +409,17 @@ export function SideBySide() {
       {!data && !error && <ColumnsSkeleton />}
       {/* Each column's seat bar shows who controls its chamber, so the page counts as showing control. */}
       {data && (
-        <div ref={grid} className={`mt-sbs mt-in${showHouse ? "" : " no-house"}`} style={gridVars(widths) as CSSProperties} data-panel="control">
-          {COLUMNS.map((c, i) => {
-            if (c.office === "house" && !showHouse) return null;
+        <div ref={grid} className={`mt-sbs mt-in${second === "off" ? " no-house" : ""}`} style={gridVars(widths) as CSSProperties} data-panel="control">
+          {COLUMNS.map((column, i) => {
+            if (column.office === "house" && second === "off") return null;
+            // The second column can be another Senate map, and the third one too: each zooms on its own.
+            const c = (column.office === "house" && second === "senate") || (column.office === "governor" && third === "senatemap") ? { ...COLUMNS[0], slot: i } : { ...column, slot: i };
             const handle = <ColumnHandle i={i} label={`Resize ${i === 2 ? next[1] : c.title} and ${next[i]}`} grid={grid} widths={widths} />;
+            const thirdSlot = column.office === "governor";
             // The third column can swap the governors for the toss-ups; the switch sits in its heading either way.
-            if (c.office === "governor" && third === "tossups") return <TossupColumn key="tossups" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} noHouse={!showHouse} />;
-            if (c.office === "governor" && third === "senate") return <TossupColumn key="senate-cards" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} senate />;
-            if (c.office === "governor" && third === "calls") {
+            if (thirdSlot && third === "tossups") return <TossupColumn key="tossups" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} noHouse={!showHouse} />;
+            if (thirdSlot && third === "senate") return <TossupColumn key="senate-cards" data={data} star={star} handle={handle} toggle={<ThirdSwitch third={third} />} senate />;
+            if (thirdSlot && third === "calls") {
               return (
                 <section key="calls" className="mt-sbs-col mt-sbs-calls" aria-label="Latest calls" data-panel="calls">
                   {/* The calls feed carries its own heading; this row holds just the switch. */}
@@ -413,9 +431,10 @@ export function SideBySide() {
                 </section>
               );
             }
-            // The House column's heading can hide it; once hidden, the Senate column's heading brings it back.
-            const toggle = c.office === "governor" ? <ThirdSwitch third={third} /> : c.office === "house" ? <HouseSwitch shown /> : !showHouse ? <HouseSwitch shown={false} /> : undefined;
-            return <OfficeColumn key={c.office} {...c} data={data} forecast={forecast} results={results} star={star} status={i === 0 ? status : undefined} handle={handle} toggle={toggle} />;
+            // The second column's heading switches it (House, Senate, hidden); once hidden, the first column's heading brings it back.
+            const toggle = thirdSlot ? <ThirdSwitch third={third} /> : i === 1 ? <SecondSwitch second={second} /> : second === "off" ? <ShowSecond /> : undefined;
+            const { slot, ...props } = c;
+            return <OfficeColumn key={`${slot}-${c.office}`} {...props} data={data} forecast={forecast} results={results} star={star} status={i === 0 ? status : undefined} handle={handle} toggle={toggle} />;
           })}
           <aside className="mt-sbs-side" aria-label="Latest calls and poll closings">
             <CallsFeed races={data.races} events={data.callEvents} counts={data.callEventCounts} office="all" fill />
