@@ -111,6 +111,30 @@ describe("votesLeft", () => {
     expect(votesLeft({ ...called, candidates: called.candidates.map((c, i) => ({ ...c, winner: i === 0 })) })).toBeNull();
   });
 
+  it("matches a county's candidates by party when the race's names come from another source", () => {
+    // DDHQ names the race's candidates its own way; civicAPI's counties keep theirs.
+    const est = votesLeft(race([county("City", 80, 20, 50), county("Rural", 90, 210, 75)], { candidates: [
+      { name: "Arr Smith", party: "Republican", votes: 300, pct: 0, winner: false, incumbent: false },
+      { name: "D. Dee", party: "Democratic", votes: 170, pct: 0, winner: false, incumbent: false },
+    ] }))!;
+    expect(est.leader).toMatchObject({ name: "Arr Smith", votes: 90 });
+    expect(est.runnerUp).toMatchObject({ name: "D. Dee", votes: 110 });
+  });
+
+  it("totals what's left to DDHQ's expected vote for the race, where a connected account has it, split as the counties would", () => {
+    // The counties alone say 200 left (see the first test); DDHQ expects 1000 in all with 400 counted, so 600.
+    const est = votesLeft(race([county("City", 80, 20, 50), county("Rural", 90, 210, 75)], { expected: 1000 }))!;
+    expect(est.left).toBe(600);
+    expect(est.leader.votes).toBe(270);
+    expect(est.runnerUp.votes).toBe(330);
+    expect(est.places[0]).toMatchObject({ name: "City", left: 300 });
+    // With no county breakdown at all, the race's own shares split it.
+    const bare = votesLeft(race([], { total: 200, expected: 500, candidates: [{ name: "Arr", party: "Republican", votes: 120, pct: 60, winner: false, incumbent: false }, { name: "Dee", party: "Democratic", votes: 80, pct: 40, winner: false, incumbent: false }] }))!;
+    expect(bare).toMatchObject({ left: 300, leader: { votes: 180 }, runnerUp: { votes: 120 } });
+    // Counted past DDHQ's estimate: nothing left.
+    expect(votesLeft(race([county("City", 80, 20, 50)], { expected: 50 }))!.left).toBe(0);
+  });
+
   it("treats a race with no county breakdown as one region", () => {
     const est = votesLeft(race([], { reporting: 50, total: 200, candidates: [{ name: "Arr", party: "Republican", votes: 120, pct: 60, winner: false, incumbent: false }, { name: "Dee", party: "Democratic", votes: 80, pct: 40, winner: false, incumbent: false }] }))!;
     expect(est.left).toBe(200);

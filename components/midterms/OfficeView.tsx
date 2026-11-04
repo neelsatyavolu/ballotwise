@@ -21,6 +21,7 @@ import { OfficeSkeleton } from "./Skeleton";
 import { ZoomMap, type Fill } from "./ZoomMap";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { ForecastTip } from "./ForecastTip";
+import { useDeskDetail } from "./useDeskDetail";
 import { VotesLeftCard } from "./VotesLeft";
 import { RaceTip } from "./RaceTip";
 
@@ -194,6 +195,8 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
   // Once the shown race is counting, votes left takes the place of its polls and markets.
   const counting = !!shown && shown.total > 0;
   const detail = useLive<{ race: RaceDetail }>(shownId ? `/api/midterms/race/${shownId}` : null);
+  // On a connected screen, DDHQ's own counties for the shown race: the board's counts carry none.
+  const shownDetail = useDeskDetail(detail.data?.race);
   const districtFills = useMemo(() => {
     if (office !== "house") return undefined;
     const out = new Map<number, Fill>();
@@ -205,12 +208,12 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
     return out;
   }, [office, inState, updatedAt, results, past]);
   const countyFills = useMemo(() => {
-    if (!detail.data) return null;
+    if (!shownDetail) return null;
     const mode = past ? "2024" : "results";
     const out = new Map<string, Fill>();
-    for (const c of detail.data.race.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} mode={mode} /> });
+    for (const c of shownDetail.counties) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} mode={mode} /> });
     return out;
-  }, [detail.data, past]);
+  }, [shownDetail, past]);
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
     return races.filter((r) => !q || `${raceLabel(r)} ${r.title} ${STATE_NAMES[r.state] ?? ""} ${r.candidates.map((c) => c.name).join(" ")}`.toLowerCase().includes(q)).sort(closestFirst);
@@ -274,7 +277,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                         <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>
                       </p>
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
-                      {counting && detail.data && <VotesLeftCard race={detail.data.race} />}
+                      {counting && shownDetail && <VotesLeftCard race={shownDetail} />}
                       {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} pollsExpected={!!publicSignal?.polls} polls={!counting} />}
                     </>
                   )}

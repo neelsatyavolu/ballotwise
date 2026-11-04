@@ -132,6 +132,18 @@ function leanIn(c: CountyResult, parties: readonly [string, string], swing: numb
 }
 
 /**
+ * A candidate's votes in a county: by name, else by party where one candidate there has it. A connected DDHQ account
+ * names the race's candidates its own way ("Cynthia Wirth") while civicAPI's counties keep theirs ("Cinde Wirth").
+ */
+function votesIn(c: CountyResult, name: string, party: string): number {
+  const named = c.candidates.find((x) => x.name === name);
+  if (named) return named.votes;
+  const side = partyOf(party);
+  const same = side === "other" ? [] : c.candidates.filter((x) => partyOf(x.party) === side);
+  return same.length === 1 ? same[0].votes : 0;
+}
+
+/**
  * The two leaders' shares of a county's remaining vote. Where some is counted: its shares so far, blended toward its
  * 2024 lean moved by the swing (see leanIn) by how much of its vote is still out (`counted` is the share in). A county
  * that counts its mail or early vote first shows that vote's lean, and what's left there (mostly election-day vote)
@@ -141,15 +153,28 @@ function leanIn(c: CountyResult, parties: readonly [string, string], swing: numb
  */
 function sharesIn(c: CountyResult, counted: number, names: readonly [string, string], parties: readonly [string, string], statewide: readonly [number, number], swing: number, whole: boolean): [number, number] {
   if (c.total === 0) return leanIn(c, parties, swing) ?? [...statewide];
-  const [a, b] = names.map((n) => (c.candidates.find((x) => x.name === n)?.votes ?? 0) / c.total);
+  const [a, b] = names.map((n, i) => votesIn(c, n, parties[i]) / c.total);
   const lean = whole ? leanIn(c, parties, swing) : null;
   return lean ? [counted * a + (1 - counted) * lean[0], counted * b + (1 - counted) * lean[1]] : [a, b];
+}
+
+type Row = { name: string; left: number; a: number; b: number; edge: number | null };
+
+/**
+ * The county estimates scaled to `left`, DDHQ's own figure for the race (its expected vote less the count), keeping
+ * where they put the vote and how it splits. With no county estimate to scale, one row split by the race's shares.
+ */
+function toExpected(rows: readonly Row[], left: number, title: string, overall: readonly [number, number]): Row[] {
+  const sumLeft = sum(rows.map((r) => r.left));
+  if (sumLeft > 0) return rows.map((r) => ({ ...r, left: (r.left * left) / sumLeft, a: (r.a * left) / sumLeft, b: (r.b * left) / sumLeft }));
+  return left > 0 ? [{ name: title, left, a: left * overall[0], b: left * overall[1], edge: (overall[0] - overall[1]) * 100 }] : [];
 }
 
 /**
  * Roughly how many votes are left in a race still counting and how they might split between the two leaders, from each
  * county's count, reporting figure and 2024 vote (see leftIn), split by the count so far and the 2024 lean moved by the
- * swing since (see sharesIn).
+ * swing since (see sharesIn). Where a connected DDHQ account gives the race's expected vote, what's left totals that
+ * less the count (see toExpected), so it agrees with DDHQ's "% in".
  * civicAPI's reporting figure counts precincts or ballot batches, not ballots, and late mail can lean differently, so
  * it's an estimate to read loosely. Null before any votes, once called, or with fewer than two candidates.
  */
@@ -169,11 +194,12 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
     return { c, left, counted: left === null ? 0 : c.total + left > 0 ? c.total / (c.total + left) : 1 };
   });
   const swing = swingOf(estimated);
-  const rows = estimated.flatMap(({ c, left, counted }) => {
+  const byCounty = estimated.flatMap(({ c, left, counted }) => {
     if (!left) return [];
     const [sa, sb] = sharesIn(c, counted, names, parties, overall, swing, statewide);
     return [{ name: c.name, left, a: left * sa, b: left * sb, edge: sa + sb > 0 ? (sa - sb) * 100 : null }];
   });
+  const rows = race.expected === undefined ? byCounty : toExpected(byCounty, Math.max(0, race.expected - race.total), race.title, overall);
   return {
     left: Math.round(sum(rows.map((r) => r.left))),
     leader: { name: a.name, party: a.party, votes: Math.round(sum(rows.map((r) => r.a))) },

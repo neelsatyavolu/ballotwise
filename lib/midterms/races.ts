@@ -36,6 +36,11 @@ export type RaceSummary = {
    * the winner but the race's recorded call is kept rather than read as withdrawn.
    */
   callUnknown?: true;
+  /**
+   * From a connected DDHQ account only: DDHQ's live estimate of the race's final vote (what its "% in" is counted
+   * against), so the votes left agree with it.
+   */
+  expected?: number;
   /** A ranked-choice race (Alaska's, and Maine's for Congress): the leader can change between rounds. */
   rcv?: true;
   /** civicAPI's tabulation round for the numbers shown, when it gives one; above 1 means ranked-choice rounds have run. */

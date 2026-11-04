@@ -60,6 +60,7 @@ export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace): T {
     next.total = desk.total;
     next.reporting = desk.reporting ?? 0;
     next.reportingUnknown = desk.total > 0 && desk.reporting === undefined ? true : undefined;
+    next.expected = desk.expected;
     next.calledFor = winner;
     next.callPending = undefined;
     next.callUnknown = undefined;

@@ -77,6 +77,11 @@ describe("observed Votes result schema", () => {
     expect(readResults({ raceData: { ...counted, turnout: { precincts_in: 0, precincts_tot: 0, estimated_votes_mid: 590 } } }).reporting).toBe(99);
     expect(readResults({ raceData: { ...counted, turnout: { precincts_in: 4, precincts_tot: 10, estimated_votes_mid: 0 } } }).reporting).toBe(40);
     expect(readResults({ raceData: { ...counted, turnout: { precincts_in: 0, precincts_tot: 0 } } }).reporting).toBeUndefined();
+    // The estimate itself rides along to the race shown, for its votes left.
+    const estimated = readResults({ raceData: { ...counted, turnout: { precincts_in: 0, precincts_tot: 0, estimated_votes_mid: 2400 } } });
+    expect(estimated.expected).toBe(2400);
+    expect(applyDesk(rawRace(), { forecast: [], call: null, ...estimated }).expected).toBe(2400);
+    expect(readResults({ raceData: { ...counted, turnout: { precincts_in: 4, precincts_tot: 10, estimated_votes_mid: 0 } } })).not.toHaveProperty("expected");
   });
 
   it("reads actual precinct reporting, county totals and PostgreSQL timestamps", () => {

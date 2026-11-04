@@ -23,8 +23,9 @@ export type DdhqCandidate = { name: string; party: string; votes: number; pct: n
 /** `expected` is DDHQ's live estimate of the county's final vote; `done` is set once DDHQ says it's finished counting. */
 export type DdhqCounty = { fips: string; name?: string; total?: number; reporting?: number; expected?: number; done?: true; candidates: { name: string; party: string; votes: number; pct: number }[] };
 /** `candidates` is null when Votes didn't send a count, so the civicAPI numbers stay. */
-export type DdhqRace = { forecast: DdhqForecast[]; rating?: Rating | null; updatedAt?: number | null; resultsUpdatedAt?: string; reporting?: number; call: DdhqCall | null; candidates: DdhqCandidate[] | null; counties: DdhqCounty[]; total: number };
-type DdhqResults = Pick<DdhqRace, "candidates" | "counties" | "total" | "reporting" | "resultsUpdatedAt">;
+/** `expected` is DDHQ's live estimate of the race's final vote, what its "% in" (`reporting`) is counted against. */
+export type DdhqRace = { forecast: DdhqForecast[]; rating?: Rating | null; updatedAt?: number | null; resultsUpdatedAt?: string; reporting?: number; expected?: number; call: DdhqCall | null; candidates: DdhqCandidate[] | null; counties: DdhqCounty[]; total: number };
+type DdhqResults = Pick<DdhqRace, "candidates" | "counties" | "total" | "reporting" | "expected" | "resultsUpdatedAt">;
 
 export type DdhqSeat = { state: string; office: Exclude<Office, "measure">; district: number | null; special: boolean };
 
@@ -253,8 +254,9 @@ export function readResults(body: unknown): DdhqResults {
     }
   }
   const reporting = expectedIn(total, data?.turnout?.estimated_votes_mid) ?? reportingOf(data?.turnout?.precincts_in, data?.turnout?.precincts_tot);
+  const expected = countOf(data?.turnout?.estimated_votes_mid);
   const resultsUpdatedAt = timestampOf(data?.lastUpdated);
-  return { candidates, counties, total, ...(reporting !== undefined ? { reporting } : {}), ...(resultsUpdatedAt ? { resultsUpdatedAt } : {}) };
+  return { candidates, counties, total, ...(reporting !== undefined ? { reporting } : {}), ...(expected && expected > 0 ? { expected } : {}), ...(resultsUpdatedAt ? { resultsUpdatedAt } : {}) };
 }
 
 export function readCall(body: unknown): DdhqCall | null {
