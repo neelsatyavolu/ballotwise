@@ -19,6 +19,11 @@ export type VotesLeft = {
   unknown: number;
   /** Every mapped county with votes left, for the map's Remaining view: what's left and who it favors (`party`). */
   counties: { fips: string; left: number; party: string | null }[];
+  /**
+   * Every county with votes left, for the live projection: what's left, what the leader would net from it (negative:
+   * the runner-up), and the share of its vote already counted, which says how well its count tells how the rest goes.
+   */
+  breakdown: { left: number; net: number; counted: number }[];
 };
 
 /** A rough count, so it doesn't read as exact: 182,431 is "182,000", 4,620 is "4,600". */
@@ -197,16 +202,16 @@ function sharesIn(c: CountyResult, counted: number, names: readonly [string, str
   return base ? [counted * a + (1 - counted) * base[0], counted * b + (1 - counted) * base[1]] : [a, b];
 }
 
-type Row = { name: string; fips?: string | null; left: number; a: number; b: number; edge: number | null };
+type Row = { name: string; fips?: string | null; left: number; a: number; b: number; edge: number | null; counted: number };
 
 /**
  * The county estimates scaled to `left`, DDHQ's own figure for the race (its expected vote less the count), keeping
  * where they put the vote and how it splits. With no county estimate to scale, one row split by the race's shares.
  */
-function toExpected(rows: readonly Row[], left: number, title: string, overall: readonly [number, number]): Row[] {
+function toExpected(rows: readonly Row[], left: number, title: string, overall: readonly [number, number], total: number): Row[] {
   const sumLeft = sum(rows.map((r) => r.left));
   if (sumLeft > 0) return rows.map((r) => ({ ...r, left: (r.left * left) / sumLeft, a: (r.a * left) / sumLeft, b: (r.b * left) / sumLeft }));
-  return left > 0 ? [{ name: title, left, a: left * overall[0], b: left * overall[1], edge: (overall[0] - overall[1]) * 100 }] : [];
+  return left > 0 ? [{ name: title, left, a: left * overall[0], b: left * overall[1], edge: (overall[0] - overall[1]) * 100, counted: total / (total + left) }] : [];
 }
 
 /**
@@ -249,11 +254,11 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
   const byCounty = estimated.flatMap(({ c, left, counted }) => {
     if (!left) return [];
     const [sa, sb] = sharesIn(c, counted, names, parties, overall, swing, prior);
-    return [{ name: c.name, fips: c.fips, left, a: left * sa, b: left * sb, edge: sa + sb > 0 ? (sa - sb) * 100 : null }];
+    return [{ name: c.name, fips: c.fips, left, a: left * sa, b: left * sb, edge: sa + sb > 0 ? (sa - sb) * 100 : null, counted }];
   });
   // Once the count passes DDHQ's statewide estimate, that estimate says nothing is left while counties still fall short
   // of their own; DDHQ's map goes by the counties then, and so does this.
-  const rows = race.expected === undefined || race.expected <= race.total ? byCounty : toExpected(byCounty, race.expected - race.total, race.title, overall);
+  const rows = race.expected === undefined || race.expected <= race.total ? byCounty : toExpected(byCounty, race.expected - race.total, race.title, overall, race.total);
   return {
     left: Math.round(sum(rows.map((r) => r.left))),
     leader: { name: a.name, party: a.party, votes: Math.round(sum(rows.map((r) => r.a))) },
@@ -264,5 +269,6 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
       .map((r) => ({ name: r.name, left: Math.round(r.left), edge: r.edge })),
     unknown: estimated.filter((e) => e.left === null).length,
     counties: rows.flatMap((r) => (r.fips && r.left >= 1 ? [{ fips: r.fips, left: Math.round(r.left), party: r.edge === null || r.edge === 0 ? null : r.edge > 0 ? parties[0] : parties[1] }] : [])),
+    breakdown: rows.map((r) => ({ left: r.left, net: r.a - r.b, counted: r.counted })),
   };
 }

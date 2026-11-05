@@ -22,7 +22,7 @@ import { MarketPanel } from "./MarketPanel";
 import { RaceInsights } from "./RaceInsights";
 import { ModeNav } from "./ModeNav";
 import { RatingTag, StarButton } from "./RaceCard";
-import { CountingContext, RaceStatus, VoteUpdates } from "./RaceContext";
+import { CountingMeta, RaceStatus, VoteUpdates } from "./RaceContext";
 import { LiveChance } from "./LiveChance";
 import { CheckedAgo } from "./CheckedAgo";
 import { reportingText } from "./reporting";
@@ -176,6 +176,7 @@ export function RaceView({ id }: { id: number }) {
         {data.callPending && <p className="muted small">The call status is catching up with the latest count; it will settle on the next update.</p>}
         <p className="mt-meta small">
           <span title={reportingText(race).title}>{reportingText(race).long}</span>
+          {race.total > 0 && <CountingMeta race={race} />}
           {close && close.getTime() !== stateFinal(race.state) && <span title="civicAPI's closing time for this race, which differs from the state's last scheduled closing">civicAPI lists polls closing {stampTime(close.getTime())} {zoneAbbr(close.getTime())}</span>}
           <span>
             Checked <CheckedAgo at={data.fetchedAt} />
@@ -214,7 +215,7 @@ export function RaceView({ id }: { id: number }) {
             * Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
           {race.office !== "measure" && <RaceInsights race={race} ddhq={active} pollsExpected={!!(loaded ?? race).signal?.polls} forecast={false} />}
-          {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
+          {race.office !== "measure" && race.total === 0 && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
         </section>
 
         <section aria-labelledby="map" className="mt-race-side">
@@ -254,8 +255,9 @@ export function RaceView({ id }: { id: number }) {
           )}
           {mapped && view?.note && <p className="muted small mt-map-note">{view.note}</p>}
           {mapped && race.office === "house" && <p className="muted small">Shaded {towns ? "towns are" : "counties are all or partly"} in this district.</p>}
-          {race.office !== "measure" && <RaceInsights race={race} ddhq={active} polls={false} />}
-          {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
+          {/* Once votes are in, the live projection replaces the pre-election forecast, and the markets fill the space. */}
+          {race.office !== "measure" && race.total === 0 && <RaceInsights race={race} ddhq={active} polls={false} />}
+          {race.office !== "measure" && race.total > 0 && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
           {data.history && <VoteUpdates history={data.history} />}
         </section>
       </div>

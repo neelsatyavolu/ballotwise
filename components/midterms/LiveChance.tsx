@@ -6,6 +6,7 @@ import type { RaceDetail } from "@/lib/midterms/races";
 import { approx, VOTES_LEFT_CAVEAT, votesLeft } from "@/lib/midterms/votesLeft";
 import { colorOf, fmt } from "@/lib/midterms/view";
 import { lastName } from "./CandidateTable";
+import { racePulse, usePulse } from "./usePulse";
 
 /** A margin in votes as points of the vote: "0.4 pts", or "<0.1 pts" for a margin that rounds to nothing. */
 const points = (votes: number, total: number) => {
@@ -15,14 +16,16 @@ const points = (votes: number, total: number) => {
 const pct = (p: number) => (p > 0.99 ? ">99%" : p < 0.01 ? "<1%" : `${Math.round(p * 100)}%`);
 
 export function LiveChance({ race }: { race: RaceDetail }) {
+  const pulse = racePulse(usePulse(), race);
   const est = votesLeft(race);
   if (!est) return null;
-  const c = raceChance(race, est);
+  const c = raceChance(race, est, pulse);
   const name = (s: { name: string }) => lastName(s.name);
   return (
     <section className="mt-mk" aria-label="Live projection">
       <h3 className="mt-mk-head">Live projection</h3>
-      <div className="mt-mk-card mt-votes-left-card" title={`Ballotwise's estimate from the count and the votes left. ${VOTES_LEFT_CAVEAT}`}>
+      <div className="mt-mk-card mt-votes-left-card" title={c.pulse ? "Decision Desk HQ Pulse, DDHQ's live model" : `Ballotwise's estimate from each county's votes left and its margin. ${VOTES_LEFT_CAVEAT}`}>
+        <p className="mt-mk-q">{c.pulse ? "DDHQ Pulse" : "Ballotwise, county by county"}</p>
         <p className="mt-mk-lead">
           {name(c.favorite)} {pct(c.chance)}
         </p>
@@ -31,7 +34,7 @@ export function LiveChance({ race }: { race: RaceDetail }) {
           <span style={{ width: `${(1 - c.chance) * 100}%`, background: colorOf(c.other) }} />
         </div>
         <p className="small">
-          Projected to win by ~{fmt(c.margin)} votes ({points(c.margin, c.total)})
+          {c.margin >= 0 ? `Projected to win by ~${fmt(c.margin)} votes (${points(c.margin, c.total)})` : `Our count projection has ${name(c.other)} ahead by ~${fmt(-c.margin)} votes`}
         </p>
         <p className="muted small">
           {est.left === 0 ? "Little or nothing left to count" : `~${approx(est.left)} votes left · ~${approx(est.leader.votes)} ${name(est.leader)}, ~${approx(est.runnerUp.votes)} ${name(est.runnerUp)}`}

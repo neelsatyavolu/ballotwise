@@ -32,33 +32,25 @@ export function RaceStatus({ race, now }: { race: RaceDetail; now: number }) {
   );
 }
 
-/** What the count so far does and doesn't tell you: freshness and county coverage. */
-export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetchedAt: number }) {
+/**
+ * Where the count stands, for the race header's meta line beside how much is in: when the source last updated, and
+ * how many counties have votes and how many are done.
+ */
+export function CountingMeta({ race }: { race: RaceDetail }) {
   const regions = race.counties;
-  const withVotes = regions.filter((c) => c.total > 0);
+  const withVotes = regions.filter((c) => c.total > 0).length;
+  const done = regions.filter((c) => c.done || c.reporting >= 100).length;
   const updated = race.updated ? Date.parse(race.updated) : NaN;
-  const source = isDesk(race) ? "Decision Desk HQ" : race.source?.name ?? "civicAPI";
-
+  const source = isDesk(race) ? "DDHQ" : race.source?.name ?? "civicAPI";
   return (
-    <section className="mt-context" aria-labelledby="context">
-      <div className="mt-section-head">
-        <h2 id="context">Counting so far</h2>
-      </div>
-      <ul>
-        <li>
-          {Number.isFinite(updated) ? `${source} updated ${stampTime(updated)} ${zoneAbbr(updated)}` : `No update time from ${source}`} · checked {stampTime(fetchedAt)} {zoneAbbr(fetchedAt)}
-        </li>
-        <li>
-          {race.total === 0 ? "No votes counted yet" : race.reportingUnknown || !race.reporting ? `No reporting figure from ${source}` : race.expected !== undefined && !race.local ? `${Math.round(race.reporting)}% of Decision Desk HQ's expected vote in${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? " · it shows 99% until the race is done" : ""}` : `${Math.round(race.reporting)}% of ${isDesk(race) || race.source ? "precincts" : "precincts or batches"} in, not % of expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? " · late ballots can still come in" : ""}`}
-        </li>
-        {regions.length > 1 && (
-          <li>
-            {withVotes.length} of {regions.length} {byTown(regions) ? "towns" : "counties"} reporting
-            {withVotes.length ? `, ${regions.filter((c) => c.reporting >= 100).length} complete` : ""}
-          </li>
-        )}
-      </ul>
-    </section>
+    <>
+      {Number.isFinite(updated) && <span>{source} updated {stampTime(updated)} {zoneAbbr(updated)}</span>}
+      {regions.length > 1 && (
+        <span>
+          {withVotes} of {regions.length} {byTown(regions) ? "towns" : "counties"} in, {done} done
+        </span>
+      )}
+    </>
   );
 }
 

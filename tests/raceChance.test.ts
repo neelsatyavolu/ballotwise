@@ -11,13 +11,15 @@ const race = (d: number, r: number) =>
       { name: "Arr", party: "Republican", votes: r, pct: 0, winner: false, incumbent: false },
     ],
   }) as unknown as RaceDetail;
-const left = (dee: number, arr: number): VotesLeft => ({
+/** `dee` and `arr` votes left in one county with `counted` of its vote in. */
+const left = (dee: number, arr: number, counted = 0.5): VotesLeft => ({
   left: dee + arr,
   leader: { name: "Dee", party: "Democratic", votes: dee },
   runnerUp: { name: "Arr", party: "Republican", votes: arr },
   places: [],
   unknown: 0,
   counties: [],
+  breakdown: [{ left: dee + arr, net: dee - arr, counted }],
 });
 
 describe("raceChance", () => {
@@ -36,6 +38,26 @@ describe("raceChance", () => {
 
   it("is a coin flip for a tie with an even split left", () => {
     expect(raceChance(race(50_000, 50_000), left(5_000, 5_000)).chance).toBeCloseTo(0.5);
+  });
+
+  it("is surer when the votes left are in counties nearly done counting, whose count says how the rest will go", () => {
+    const late = raceChance(race(50_000, 49_000), left(5_000, 5_000, 0.95)).chance;
+    const early = raceChance(race(50_000, 49_000), left(5_000, 5_000, 0.1)).chance;
+    expect(late).toBeGreaterThan(early);
+  });
+
+  it("averages out independent county misses: the same votes left spread over many counties are surer than in one", () => {
+    const one = raceChance(race(50_000, 49_000), left(5_000, 5_000)).chance;
+    const spread = { ...left(5_000, 5_000), breakdown: Array.from({ length: 10 }, () => ({ left: 1_000, net: 0, counted: 0.5 })) };
+    expect(raceChance(race(50_000, 49_000), spread).chance).toBeGreaterThan(one);
+  });
+
+  it("shows DDHQ Pulse's chance where DDHQ models the race, and ours where it doesn't", () => {
+    const pulsed = raceChance(race(50_000, 49_500), left(5_000, 5_000), { side: "R", chance: 90 });
+    expect(pulsed).toMatchObject({ pulse: true, favorite: { name: "Arr" } });
+    expect(pulsed.chance).toBeCloseTo(0.9);
+    // An independent's Pulse can't be read as either leader's chance.
+    expect(raceChance(race(50_000, 49_500), left(5_000, 5_000), { side: "I", chance: 90 }).pulse).toBe(false);
   });
 
   it("is less sure with more votes left for the same projected margin", () => {
