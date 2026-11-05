@@ -215,6 +215,7 @@ export function RaceView({ id }: { id: number }) {
             * Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
+          {race.office !== "measure" && <RaceInsights race={race} ddhq={active} pollsExpected={!!(loaded ?? race).signal?.polls} forecast={false} />}
           {data.history && <VoteUpdates history={data.history} />}
         </section>
 
@@ -255,7 +256,7 @@ export function RaceView({ id }: { id: number }) {
           )}
           {mapped && view?.note && <p className="muted small mt-map-note">{view.note}</p>}
           {mapped && race.office === "house" && <p className="muted small">Shaded {towns ? "towns are" : "counties are all or partly"} in this district.</p>}
-          {race.office !== "measure" && <RaceInsights race={race} ddhq={active} pollsExpected={!!(loaded ?? race).signal?.polls} />}
+          {race.office !== "measure" && <RaceInsights race={race} ddhq={active} polls={false} />}
           {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
         </section>
       </div>
