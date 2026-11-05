@@ -41,7 +41,7 @@
 /* Hero */
 .mt-hero { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
 .mt-hero h1 { font-size: 30px; }
-.mt-kicker { font-weight: 700; color: var(--red); font-size: 14px; }
+.mt-kicker { font-weight: 600; color: var(--muted); font-size: 14px; }
 .mt-updated { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); margin-left: auto; }
 .mt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--yes); box-shadow: 0 0 0 0 color-mix(in srgb, var(--yes) 60%, transparent); animation: mt-pulse 2s infinite; }
 .mt-dot.stale { background: var(--tossup); animation: none; }
@@ -101,6 +101,7 @@
 .mt-arrows polygon { fill: currentColor; }
 .mt-map-modes { display: grid; gap: 6px; margin: 8px 0 12px; }
 .mt-map-modes p { margin: 0; }
+.mt-map-note { margin: 10px 0 0; }
 
 .mt-rating { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
 .mt-rating.r-tossup { color: var(--tossup); }
@@ -157,6 +158,9 @@
 .mt-meta { display: flex; flex-wrap: wrap; gap: 4px 20px; color: var(--muted); }
 .mt-race-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 28px; margin-top: 20px; align-items: start; }
 .mt-race-grid h2 { margin-bottom: 10px; }
+/* The map stays in view beside the long column of candidates, context and forecast. */
+.mt-race-grid > .mt-race-side { position: sticky; top: 16px; }
+@media (max-width: 900px) { .mt-race-grid > .mt-race-side { position: static; } }
 
 .mt-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .mt-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
@@ -181,7 +185,8 @@
 }
 @media (max-width: 520px) {
   .mt-search { min-width: 0; flex: 1; }
-  .mt-cands th:nth-child(2), .mt-cands td:nth-child(2) { display: none; }
+  /* The party column stays (the total in the footer row sits under its neighbor); the share bars go to make room. */
+  .mt-cands .mt-share { display: none; }
   .mt-share { width: 36px; }
 }
 
@@ -372,6 +377,8 @@ body:has(.wrap.mt) .site-footer .wrap { max-width: 1440px; }
 .mt-el-calls-meta { margin: 0; }
 .mt-el-quiet { border: 0; background: none; padding: 0; font: inherit; color: var(--ink); cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 2px; }
 .mt-el-quiet:hover { text-decoration-color: currentColor; }
+/* "+3 more" sits among the gain chips at their size. */
+.mt-el-gains .mt-el-quiet { font-size: 12px; }
 .mt-el-hold { white-space: nowrap; padding-top: 1px; }
 .mt-el-about summary { cursor: pointer; width: max-content; }
 .mt-el-about[open] summary { margin-bottom: 4px; }
@@ -473,7 +480,7 @@ a.mt-flag { text-decoration: none; }
 .mt-el-sched li.next { box-shadow: inset 3px 0 0 var(--red); }
 .mt-el-sched li summary { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; cursor: pointer; font-size: 14px; list-style: none; }
 .mt-el-sched li summary::-webkit-details-marker { display: none; }
-.mt-el-sched-states { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-el-sched-states { color: var(--muted); font-size: 12px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .mt-el-sched-status { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .mt-el-sched li.next .mt-el-sched-status { color: var(--red); font-weight: 700; }
 .mt-el-sched details p { margin: 4px 0 0; color: var(--muted); }
@@ -1012,7 +1019,7 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-pl-table tr.out td, .mt-pl-table tr.out td a { color: var(--muted); }
 .mt-pl-tag { display: inline-block; margin-left: 6px; padding: 0 4px; border: 1px solid var(--rule); border-radius: 4px; color: var(--muted); font-size: 10.5px; white-space: nowrap; }
 .mt-pl-why { display: block; color: var(--muted); font-size: 12px; }
-.mt-method { max-width: 760px; }
+.mt-method, .wrap.mt.mt-method { max-width: 760px; }
 .mt-method h2 { margin-top: 28px; }
 .mt-method table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .mt-method th, .mt-method td { padding: 6px 8px; border-bottom: 1px solid var(--rule); text-align: left; }
@@ -1131,6 +1138,7 @@ html[data-full] body:has(.wrap.mt.mt-sbs-page) .site-header:is(:hover, :focus-wi
 
 .mt .mt-fc-seats { margin-top: 12px; }
 .mt-fc-legend { margin: 0; align-self: center; justify-content: center; }
+@media (max-width: 520px) { .mt-fc-seats .mt-fc-legend, .mt-fc-hero .mt-fc-legend { order: 3; flex-basis: 100%; } }
 .mt-fc-seatbar { position: relative; display: flex; height: 22px; overflow: hidden; background: var(--el-track); }
 .mt-fc-seatbar span { display: grid; place-items: center; min-width: 0; overflow: hidden; color: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mt-fc-seatbar span.dark { color: #111; }
@@ -1161,6 +1169,7 @@ html[data-full] body:has(.wrap.mt.mt-sbs-page) .site-header:is(:hover, :focus-wi
 .mt-fc-filters { display: flex; gap: 8px; }
 .mt-fc-filters input { flex: 1; min-width: 0; }
 .mt-fc-filters select { flex: none; width: auto; }
+.mt-fc-filters .input { min-height: 36px; padding: 6px 10px; font-size: 14px; }
 .mt-fc-table { table-layout: fixed; }
 .mt-fc-table td:first-child { overflow: hidden; text-overflow: ellipsis; }
 .mt-fc-table th:first-child { width: 36%; }
@@ -1351,7 +1360,10 @@ body:has(.wrap.mt.mt-dv) main { padding-top: 0; }
 .mt-dv-races li.muted { padding: 10px 12px; }
 
 .mt-dv-list { margin-top: 20px; }
-.mt-dv-list h2 { font-size: 16px; margin: 0 0 10px; }
+/* The signed-out ask on Near you reads at the reading column, not across the page. */
+.mt-ask { max-width: var(--read); }
+.mt .mt-dv-list h2 { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mt-dv-list > p.muted { font-size: 14px; }
 .mt-dv-list ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 .mt-dv-list li { display: flex; align-items: stretch; justify-content: space-between; gap: 8px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; }
 .mt-dv-list li a { display: grid; gap: 4px; flex: 1; padding: 12px 16px; color: var(--ink); text-decoration: none; }
@@ -1427,6 +1439,8 @@ body:has(.mt-chat-fab) .site-footer { padding-bottom: 76px; }
    reporting columns always show. Once votes are in, the pre-election rating column steps aside (toss-ups keep
    their yellow mark), and the leader's party tag goes since the swatch already shows it. */
 .mt-panel .mt-rows td:first-child { max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* A long name ends in an ellipsis, not mid-letter; its full name is in the title. */
+.mt-panel .mt-rows td:first-child > :is(a, button), .mt-sbs-col .mt-rows td:first-child > :is(a, button) { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .mt-panel .mt-rows th, .mt-panel .mt-rows td { padding-left: 6px; padding-right: 6px; }
 /* Race names start clear of the toss-up bar, on every row and the header alike. */
 .mt .mt-rows th:first-child, .mt .mt-rows td:first-child { padding-left: 12px; }
@@ -1594,7 +1608,7 @@ body:has(.wrap.mt.mt-sbs-page) main { padding-top: 12px; }
 .mt-ev-summary > div { border-left: 1px solid var(--rule); padding-left: 32px; }
 .mt-ev-summary p { margin: 0 0 8px; }
 .mt-ev-stats { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0; }
-.mt-ev-stats dt { font-size: 12px; color: var(--muted); }
+.mt-ev-stats dt { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .mt-ev-stats dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .mt-ev-stats .lead dd { font-family: var(--serif); font-size: 24px; line-height: 1.1; }
 .mt-ev-bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--rule); }

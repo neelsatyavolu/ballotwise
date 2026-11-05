@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Contents } from "@/components/Contents";
 import { CONTACT_EMAIL, MIN_AGE, OPERATOR, TERMS_DATE } from "@/lib/legal";
 
 export const metadata: Metadata = { title: "Terms of Service" };
@@ -15,13 +16,15 @@ export default function Terms() {
         Ballotwise.
       </p>
 
-      <h2>Who can use Ballotwise</h2>
+      <Contents sections={["Who can use Ballotwise", "What Ballotwise is, and isn't", "Your Grok account", "Your information", "Acceptable use", "Content and sources", "Ending your account", "Disclaimers", "Limit of liability", "Governing law", "Changes", "Contact"]} />
+
+      <h2 id="who-can-use-ballotwise">Who can use Ballotwise</h2>
       <p>
         You must be at least {MIN_AGE} years old. You need to give a real email address, keep your password to yourself, and use only
         your own account. You are responsible for what happens on your account.
       </p>
 
-      <h2>What Ballotwise is, and isn&apos;t</h2>
+      <h2 id="what-ballotwise-is-and-isn-t">What Ballotwise is, and isn&apos;t</h2>
       <p>
         Ballotwise uses AI (Grok) to search the web and summarize races, candidates and ballot measures, with links to its sources. It
         then shows which candidates or sides are closest to the answers you give. Please keep in mind:
@@ -36,21 +39,21 @@ export default function Terms() {
         See <Link href="/method">How it works</Link> for how races are researched and kept balanced.
       </p>
 
-      <h2>Your Grok account</h2>
+      <h2 id="your-grok-account">Your Grok account</h2>
       <p>
         Research runs on your own Grok account, which you connect. That account is governed by xAI&apos;s terms, and any usage limits or
         charges on it are between you and xAI. You can disconnect it by deleting your Ballotwise account or by revoking access in your
         Grok settings. If you connect a ChatGPT account instead, the same applies to OpenAI and its terms.
       </p>
 
-      <h2>Your information</h2>
+      <h2 id="your-information">Your information</h2>
       <p>
         Your interview answers and the choices you make stay yours. You let us store and process them only to run Ballotwise for you,
         as described in the <Link href="/privacy">Privacy Policy</Link>. Research about a race contains nothing about you and may be
         shared with other voters who have the same race.
       </p>
 
-      <h2>Acceptable use</h2>
+      <h2 id="acceptable-use">Acceptable use</h2>
       <p>Don&apos;t:</p>
       <ul>
         <li>break the law, or use Ballotwise to mislead voters, suppress votes, or interfere with an election;</li>
@@ -60,46 +63,46 @@ export default function Terms() {
         <li>create accounts in bulk or for someone else without their permission.</li>
       </ul>
 
-      <h2>Content and sources</h2>
+      <h2 id="content-and-sources">Content and sources</h2>
       <p>
         Research summaries link to third-party websites that we don&apos;t control and aren&apos;t responsible for. Quotes and facts
         belong to their sources. You may share what Ballotwise shows you for personal, non-commercial use, as long as you don&apos;t
         present it as official. The Ballotwise name, design and software are ours.
       </p>
 
-      <h2>Ending your account</h2>
+      <h2 id="ending-your-account">Ending your account</h2>
       <p>
         You can <Link href="/account">delete your account</Link> at any time. We may suspend or close an account that breaks these
         terms. We may also change or stop offering Ballotwise, and will try to give notice before shutting it down.
       </p>
 
-      <h2>Disclaimers</h2>
+      <h2 id="disclaimers">Disclaimers</h2>
       <p>
         Ballotwise is free and provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo;, without warranties of any kind, including
         accuracy, completeness, fitness for a particular purpose, or uninterrupted availability, to the fullest extent the law allows.
       </p>
 
-      <h2>Limit of liability</h2>
+      <h2 id="limit-of-liability">Limit of liability</h2>
       <p>
         To the fullest extent the law allows, we are not liable for indirect, incidental, special or consequential damages, or for
         decisions you make based on Ballotwise. Our total liability for any claim about Ballotwise is limited to $50. Some places
         don&apos;t allow these limits, so they may not all apply to you.
       </p>
 
-      <h2>Governing law</h2>
+      <h2 id="governing-law">Governing law</h2>
       <p>
         These terms are governed by the laws of the State of California, without regard to its conflict-of-law rules. Any dispute will
         be decided in the state or federal courts in Santa Clara County, California, unless the law where you live gives you the right
         to bring it elsewhere.
       </p>
 
-      <h2>Changes</h2>
+      <h2 id="changes">Changes</h2>
       <p>
         If we change these terms in a way that matters, we will update the date above and ask you to accept the new version the next
         time you sign in. If you don&apos;t accept, you can delete your account.
       </p>
 
-      <h2>Contact</h2>
+      <h2 id="contact">Contact</h2>
       <p>
         Questions: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
       </p>

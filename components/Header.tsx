@@ -52,7 +52,8 @@ export function Header() {
             </>
           ) : (
             <>
-              <Link href="/signin" prefetch={false}>Sign in</Link>
+              {/* On the narrowest phones, sign-in is one tap away on the create-account page. */}
+              <Link href="/signin" className="roomy-only" prefetch={false}>Sign in</Link>
               <Link href="/signup" className="btn" prefetch={false}>
                 Create account
               </Link>

@@ -4,6 +4,7 @@ import { labelSpot } from "@/lib/midterms/labelSpot";
 import { isTownCode } from "@/lib/midterms/view";
 import { CityLabels, FlipStripes, loadMap, useDistrictShapes, usePatternId, type City } from "./maps";
 import { HoverCard, keyOf, useMapHover } from "./mapHover";
+import { arrowMarks, bubbleMarks, type Arrow, type Bubble } from "./mapMarks";
 import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zoom";
 
 type Nation = { viewBox: string; borders: string; states: { state: string; name: string; d: string; box: [number, number, number, number] }[] };
@@ -33,15 +34,6 @@ function raceBounds(state: Bounds, race: Bounds): Bounds {
   return atLeast(race, state, 0.22);
 }
 
-/** One county's circle: its key, the votes it stands for (votes left, or a lead), and its color. */
-export type Bubble = { key: string; size: number; color: string };
-/** The biggest circle's radius, as a share of the zoomed state's longer side. */
-const BUBBLE_MAX = 0.07;
-/** One county's swing arrow: its key, the shift in points (positive leans left, as a Democratic shift), and its color. */
-export type Arrow = { key: string; shift: number; color: string };
-/** A shift this many points or more draws the longest arrow, as a share of the zoomed state's longer side. */
-const ARROW_FULL = 30;
-const ARROW_MAX = 0.08;
 
 /**
  * The nation by state; picking a state zooms to it and draws its counties, shaded by `countyFills`.
@@ -267,58 +259,18 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
       ),
     [showDistricts, districtFills, counties, countyFills, patternId, pickedDistrict],
   );
-  const bubbleLayer = useMemo(() => {
-    const frame = bubbles?.length && counties && focused ? boundsOf([focused.d]) : null;
+  // The circles and arrows are sized to the zoomed state.
+  const marks = useMemo(() => {
+    const frame = (bubbles?.length || arrows?.length) && counties && focused ? boundsOf([focused.d]) : null;
     if (!frame || !counties) return null;
-    const most = Math.max(...bubbles!.map((b) => b.size));
-    const reach = Math.max(frame[2] - frame[0], frame[3] - frame[1]) * BUBBLE_MAX;
     const shapes = new Map(counties.map((c) => [c.fips, c.d]));
-    const placed = bubbles!.flatMap((b) => {
-      const d = shapes.get(b.key);
-      const at = d && boundsOf([d]);
-      return at && most > 0 ? [{ ...b, x: (at[0] + at[2]) / 2, y: (at[1] + at[3]) / 2, r: reach * Math.sqrt(b.size / most) }] : [];
-    });
-    // Biggest first, so a small county's circle sits on top of a big neighbor's.
     return (
-      <g className="mt-bubbles" pointerEvents="none">
-        {placed.sort((a, b) => b.r - a.r).map((b) => <circle key={b.key} cx={b.x} cy={b.y} r={b.r} style={{ fill: b.color }} vectorEffect="non-scaling-stroke" />)}
-      </g>
+      <>
+        {bubbles?.length ? bubbleMarks(bubbles, shapes, frame) : null}
+        {arrows?.length ? arrowMarks(arrows, shapes, frame) : null}
+      </>
     );
-  }, [bubbles, counties, focused]);
-  const arrowLayer = useMemo(() => {
-    const frame = arrows?.length && counties && focused ? boundsOf([focused.d]) : null;
-    if (!frame || !counties) return null;
-    const side = Math.max(frame[2] - frame[0], frame[3] - frame[1]);
-    const width = side * 0.006;
-    const shapes = new Map(counties.map((c) => [c.fips, c.d]));
-    const drawn = arrows!.flatMap((a) => {
-      const d = shapes.get(a.key);
-      const at = d && boundsOf([d]);
-      const length = side * ARROW_MAX * Math.min(1, Math.abs(a.shift) / ARROW_FULL);
-      if (!at || length < width * 2) return [];
-      // Up and to the left for a shift toward the Democrat, up and to the right toward the Republican, as DDHQ draws them.
-      const dx = (a.shift > 0 ? -1 : 1) * Math.cos(Math.PI / 6);
-      const dy = -Math.sin(Math.PI / 6);
-      const cx = (at[0] + at[2]) / 2;
-      const cy = (at[1] + at[3]) / 2;
-      const head = Math.max(width * 3, length * 0.35);
-      const tip = { x: cx + (dx * length) / 2, y: cy + (dy * length) / 2 };
-      const base = { x: tip.x - dx * head, y: tip.y - dy * head };
-      const wing = head * 0.55;
-      const points = `${tip.x},${tip.y} ${base.x - dy * wing},${base.y + dx * wing} ${base.x + dy * wing},${base.y - dx * wing}`;
-      return [
-        <g key={a.key} style={{ color: a.color }}>
-          <line x1={cx - (dx * length) / 2} y1={cy - (dy * length) / 2} x2={base.x} y2={base.y} strokeWidth={width} />
-          <polygon points={points} />
-        </g>,
-      ];
-    });
-    return (
-      <g className="mt-arrows" pointerEvents="none">
-        {drawn}
-      </g>
-    );
-  }, [arrows, counties, focused]);
+  }, [bubbles, arrows, counties, focused]);
   // Election night: pre-election toss-ups get a yellow outline, called or not, and uncalled leans a thinner dashed
   // one. Leans go first so a toss-up's outline sits on top where they meet.
   const watchLayer = useMemo(() => {
@@ -469,8 +421,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
         {stateLayer}
         {nationDistrictLayer}
         {placeLayer}
-        {bubbleLayer}
-        {arrowLayer}
+        {marks}
         {/* Outlines are drawn in a layer above every shape, so neighbors can't cover part of them. */}
         {county && <path d={county.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}
         {pickedDistrict && <path d={pickedDistrict.d} className="mt-line selected" vectorEffect="non-scaling-stroke" />}

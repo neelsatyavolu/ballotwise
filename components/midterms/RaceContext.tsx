@@ -27,7 +27,7 @@ export function RaceStatus({ race, now }: { race: RaceDetail; now: number }) {
   return (
     <p className={`mt-race-status${won ? " called" : race.call?.withdrawn ? " warn" : ""}`}>
       <b>{text}</b>
-      {holder && race.office !== "measure" && <span className="muted"> · seat held by {holder} going in</span>}
+      {holder && race.office !== "measure" && <span className="muted">(seat held by {holder} going in)</span>}
       {race.call?.replaced && !race.call.withdrawn && won && <span className="mt-flag warn">Call changed from {race.call.replaced}</span>}
       {race.missing && <span className="mt-flag warn">civicAPI left this race out of its latest update; these are the last numbers we have{race.lastSeen ? `, as of ${stampTime(race.lastSeen)} ${zoneAbbr(race.lastSeen)}` : ""}</span>}
     </p>
@@ -74,7 +74,9 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
 
   return (
     <section className="mt-context" aria-labelledby="context">
-      <h2 id="context">Counting so far</h2>
+      <div className="mt-section-head">
+        <h2 id="context">Counting so far</h2>
+      </div>
       <ul>
         <li>
           {Number.isFinite(updated) ? `${source} last updated ${race.source ? "its results" : "this race"} at ${stampTime(updated)} ${zoneAbbr(updated)}` : `${source} gives no update time for this race`}; Ballotwise checked at {stampTime(fetchedAt)} {zoneAbbr(fetchedAt)}.
@@ -99,7 +101,9 @@ export function VoteUpdates({ history }: { history: readonly Observation[] }) {
   if (history.length < 2) return null;
   return (
     <section className="mt-context" aria-labelledby="updates">
-      <h2 id="updates">Vote updates</h2>
+      <div className="mt-section-head">
+        <h2 id="updates">Vote updates</h2>
+      </div>
       <table className="mt-table mt-updates">
         <thead>
           <tr>

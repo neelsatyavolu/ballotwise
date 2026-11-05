@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Contents } from "@/components/Contents";
 import { CONTACT_EMAIL, MIN_AGE, OPERATOR, TERMS_DATE } from "@/lib/legal";
 
 export const metadata: Metadata = { title: "Privacy Policy" };
@@ -15,7 +16,9 @@ export default function Privacy() {
         treat them as sensitive and use them only to show you your own matches.
       </p>
 
-      <h2>What we collect</h2>
+      <Contents sections={["What we collect", "How we use it", "Who else receives it", "What is shared between voters", "How long we keep it", "Your choices and rights", "Security", "Age", "Changes", "Contact"]} />
+
+      <h2 id="what-we-collect">What we collect</h2>
       <ul>
         <li><strong>Account:</strong> your email address and a scrambled form of your password (a salted scrypt hash). We never store or see the password itself.</li>
         <li><strong>Address:</strong> the home address you enter, the standardized version the US Census returns, and the districts it falls in.</li>
@@ -27,14 +30,14 @@ export default function Privacy() {
         <li><strong>Page views:</strong> a cookieless counter records the page you open (without anything after the &ldquo;?&rdquo; and with ids blanked out), the site that sent you, your country, and your browser and device type. It stores no IP address or account details and can&apos;t link your visits from one day to the next.</li>
       </ul>
 
-      <h2>How we use it</h2>
+      <h2 id="how-we-use-it">How we use it</h2>
       <p>
         Only to run Ballotwise for you: to find the races on your ballot, research them, show where each candidate or side stands, place
         your interview answers on each race&apos;s issues, send password reset emails, and keep your account secure. We don&apos;t sell
         your information, share it for advertising, or use it to build profiles of voters. We don&apos;t contact you for marketing.
       </p>
 
-      <h2>Who else receives it</h2>
+      <h2 id="who-else-receives-it">Who else receives it</h2>
       <p>These services handle parts of your information so Ballotwise can work:</p>
       <ul>
         <li>
@@ -58,7 +61,7 @@ export default function Privacy() {
         we are allowed to.
       </p>
 
-      <h2>What is shared between voters</h2>
+      <h2 id="what-is-shared-between-voters">What is shared between voters</h2>
       <p>
         To save time, research about a race (who is running, what the office does, and each candidate&apos;s or side&apos;s profile) is
         shared with other voters who have the same race, for up to three days. The list of contests found in a county is shared with
@@ -66,14 +69,14 @@ export default function Privacy() {
         interview, your matches and your answers are never shared with other voters or used in anyone else&apos;s research.
       </p>
 
-      <h2>How long we keep it</h2>
+      <h2 id="how-long-we-keep-it">How long we keep it</h2>
       <p>
         We keep your information until you delete your account. Sign-in sessions end after 30 days and reset links after one hour.
         When you delete your account, everything listed above is removed from our database at once. Copies can remain in our hosting
         provider&apos;s database backups for up to 30 days before they are overwritten.
       </p>
 
-      <h2>Your choices and rights</h2>
+      <h2 id="your-choices-and-rights">Your choices and rights</h2>
       <ul>
         <li><strong>See and change:</strong> your address, interview and answers are all shown in the app, and you can change or redo them there.</li>
         <li><strong>Delete:</strong> you can <Link href="/account">delete your account</Link> at any time. This also disconnects Grok.</li>
@@ -87,25 +90,25 @@ export default function Privacy() {
         account holder. People in other places can make the same requests and we will honor them.
       </p>
 
-      <h2>Security</h2>
+      <h2 id="security">Security</h2>
       <p>
         All traffic uses HTTPS. Passwords are hashed, Grok tokens are encrypted, and sign-ins are rate limited. No system is perfectly
         secure. If a breach affects your information, we will tell you as the law requires.
       </p>
 
-      <h2>Age</h2>
+      <h2 id="age">Age</h2>
       <p>
         Ballotwise is for people {MIN_AGE} and older. We don&apos;t knowingly collect information from anyone younger. If you believe
         someone under {MIN_AGE} has an account, email us and we will delete it.
       </p>
 
-      <h2>Changes</h2>
+      <h2 id="changes">Changes</h2>
       <p>
         If we change this policy in a way that matters, we will update the date above and ask you to accept the new version the next
         time you sign in.
       </p>
 
-      <h2>Contact</h2>
+      <h2 id="contact">Contact</h2>
       <p>
         Questions or requests: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. See also our{" "}
         <Link href="/terms">Terms of Service</Link>.

@@ -18,9 +18,15 @@ export function DeleteAccount() {
   if (loading) return null;
   if (!user) {
     return (
-      <div className="auth wrap stack">
+      <div className="auth wrap">
         <h1>Your account</h1>
-        <p className="muted"><Link href="/signin?next=/account">Sign in</Link> to manage or delete your account.</p>
+        <p className="muted">Sign in to see your saved races, connect your accounts, or delete your account.</p>
+        <div className="actions">
+          <Link href="/signin?next=/account" className="btn">Sign in</Link>
+        </div>
+        <div className="links">
+          <span>New here? <Link href="/signup">Create an account</Link></span>
+        </div>
       </div>
     );
   }

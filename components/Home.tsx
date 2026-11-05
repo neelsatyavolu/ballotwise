@@ -71,7 +71,7 @@ export function Home({ initialQuery }: { initialQuery: string }) {
           </button>
         </form>
         <div className="examples">
-          <span>Try</span>
+          <span>Try one</span>
           {EXAMPLES.map((ex) => (
             <button key={ex} type="button" className="chip" onClick={() => (ready || !user ? start(ex) : setQuery(ex))}>
               {ex}

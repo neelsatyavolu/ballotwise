@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { ModeNav } from "@/components/midterms/ModeNav";
 import { backtestShare, FIT, modelFor, PARAMS, phi, sigmaOf, TUNING } from "@/lib/midterms/forecast";
 import { AGGREGATES_SOURCE } from "@/lib/midterms/genericAggregates";
 import "../midterms.css";
@@ -34,9 +34,7 @@ export default function Methodology() {
   const cycles = Object.keys(FIT.house.backtest);
   return (
     <article className="wrap mt mt-method prose">
-      <p className="small">
-        <Link href="/midterms">← Midterms 2026</Link>
-      </p>
+      <ModeNav />
       <h1>How the forecast works</h1>
       <p>
         Every Senate, House and governor race gets a chance of winning for each side. We follow the approach{" "}

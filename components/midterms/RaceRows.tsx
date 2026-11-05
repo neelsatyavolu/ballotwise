@@ -48,9 +48,9 @@ function RaceRow({ r, star, onPick, selected, note, found, pulse, showPulse, sho
     <tr ref={row} className={[selected && "selected", isTossup(r) && "watch", isCompetitive(r) && "lean"].filter(Boolean).join(" ") || undefined} aria-current={selected ? "true" : undefined}>
       <td>
         {onPick ? (
-          <button type="button" className="mt-linkish" title={full} onClick={() => onPick(r)}>{name}</button>
+          <button type="button" className="mt-linkish" title={full ?? label} onClick={() => onPick(r)}>{name}</button>
         ) : (
-          <Link href={`/midterms/${r.id}`} title={full}>{name}</Link>
+          <Link href={`/midterms/${r.id}`} title={full ?? label}>{name}</Link>
         )}
         {note?.(r) ? <span className="mt-row-about">{note(r)}</span> : r.about && <span className="mt-row-about" title={r.about.text}>{r.about.text}</span>}
         {found && (

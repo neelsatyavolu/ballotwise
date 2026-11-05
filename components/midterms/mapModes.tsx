@@ -8,11 +8,12 @@ import { lastName } from "./CandidateTable";
 import { CountyTip } from "./county";
 import { partyColor } from "./party";
 import { QUIET, useRemaining } from "./remaining";
-import type { Arrow, Bubble, Fill } from "./ZoomMap";
+import type { Arrow, Bubble } from "./mapMarks";
+import type { Fill } from "./ZoomMap";
 
 export type MapMode = "results" | "margin" | "swing" | "remaining";
-const LABEL: Record<MapMode, string> = { results: "Results", margin: "Margin", swing: "Swing", remaining: "Remaining" };
-const HINT: Record<MapMode, string> = {
+export const MAP_MODE_LABEL: Record<MapMode, string> = { results: "Results", margin: "Margin", swing: "Swing", remaining: "Remaining" };
+export const MAP_MODE_HINT: Record<MapMode, string> = {
   results: "Each county shaded for its leader",
   margin: "A circle on each county sized by its leader's lead in votes",
   swing: "An arrow on each county for how far it has moved from the 2024 presidential vote",
@@ -119,8 +120,8 @@ export function MapModeSwitch({ modes, mode, onChange, note }: { modes: MapMode[
     <div className="mt-map-modes">
       <div className="mt-seg" role="group" aria-label="Map shows">
         {modes.map((m) => (
-          <button key={m} type="button" aria-pressed={mode === m} onClick={() => onChange(m)} title={HINT[m]}>
-            {LABEL[m]}
+          <button key={m} type="button" aria-pressed={mode === m} onClick={() => onChange(m)} title={MAP_MODE_HINT[m]}>
+            {MAP_MODE_LABEL[m]}
           </button>
         ))}
       </div>

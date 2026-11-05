@@ -24,7 +24,7 @@ type Part = { key: "ticket" | "legislature" | "local" | "nearby" | "measures"; t
 
 function Ask({ title, text, href, action }: { title: string; text: string; href: string; action: string }) {
   return (
-    <div className="panel stack mt-in">
+    <div className="panel stack mt-in mt-ask">
       <h2>{title}</h2>
       <p>{text}</p>
       <p>

@@ -23,7 +23,7 @@
 .mt-past-years { display: flex; gap: 4px; padding: 4px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); }
 .mt-past-years button { flex: 1; border: 0; background: none; padding: 8px 0; border-radius: 6px; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
 .mt-past-years button:hover { color: var(--ink); }
-.mt-past-years button[aria-pressed="true"] { background: var(--accent); color: #121212; }
+.mt-past-years button[aria-pressed="true"] { background: var(--el-raised); color: var(--ink); }
 .mt-past-note { margin: 0; font-size: 12px; color: var(--muted); }
 
 /* Results rows carry their candidate's color as a bar on the left (--row). */
@@ -71,3 +71,4 @@
   .mt-past-tip-margin { min-width: 90px; }
   .mt-past-margin b { font-size: 16px; }
 }
+.mt-past-table td:first-child { white-space: nowrap; }

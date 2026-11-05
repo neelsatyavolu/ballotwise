@@ -5,7 +5,8 @@ import { approx, votesLeft } from "@/lib/midterms/votesLeft";
 import { lastName } from "./CandidateTable";
 import { CountyTip } from "./county";
 import { partyColor } from "./party";
-import type { Bubble, Fill } from "./ZoomMap";
+import type { Bubble } from "./mapMarks";
+import type { Fill } from "./ZoomMap";
 
 /** Whoever a county's remaining votes favor can't be told: the circle goes grey. */
 const UNSURE = "var(--muted)";

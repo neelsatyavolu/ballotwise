@@ -120,7 +120,7 @@ export function DecisionView({ layout: initial, onSave, onCopy, popout = false, 
       <div ref={wrap} className={`wrap mt mt-dv${popout ? " mt-dv-popout" : ""}${presenting ? " presenting" : ""}`}>
         <div className="mt-dv-bar">
           <p className="mt-dv-crumb">
-            <Link href={backHref}>Decision View</Link>
+            <Link href={backHref}>Dashboards</Link>
             <span aria-hidden>›</span>
             {renaming && onSave ? (
               <form

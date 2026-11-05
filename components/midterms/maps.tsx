@@ -2,7 +2,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type DOMAttributes, type ReactNode, type RefObject } from "react";
 import { isTownCode } from "@/lib/midterms/view";
 import { HoverCard, keyOf, useMapHover } from "./mapHover";
-import { atLeast, boundsOf, framed, useTween, type Box } from "./zoom";
+import { arrowMarks, bubbleMarks, type Arrow, type Bubble } from "./mapMarks";
+import { atLeast, boundsOf, framed, useTween, type Bounds, type Box } from "./zoom";
 
 export type City = { name: string; at: [number, number] };
 type StateMap = { state: string; name: string; viewBox: string; outline: string; counties: { fips: string; name: string; d: string }[]; cities?: City[] };
@@ -126,7 +127,16 @@ export type CountyFill = { fill: string; tip: ReactNode; active: boolean };
  * A state's counties, or its towns when the fills are keyed by town (New England reports by town). Places without a
  * fill (outside a House district, say) are drawn faint. The selected one is zoomed to.
  */
-export function CountyMap({ state, fills, selected, onSelect }: { state: string; fills: Map<string, CountyFill>; selected: string | null; onSelect: (fips: string | null) => void }) {
+export function CountyMap({ state, fills, selected, onSelect, bubbles, arrows }: {
+  state: string;
+  fills: Map<string, CountyFill>;
+  selected: string | null;
+  onSelect: (fips: string | null) => void;
+  /** Circles on the counties (the Margin and Remaining views). */
+  bubbles?: readonly Bubble[] | null;
+  /** Arrows on the counties (the Swing view). */
+  arrows?: readonly Arrow[] | null;
+}) {
   const towns = useMemo(() => [...fills.keys()].some(isTownCode), [fills]);
   const map = useMap<StateMap>(towns ? `towns/${state}` : state);
   const wrap = useRef<HTMLDivElement>(null);
@@ -154,6 +164,17 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
       ),
     [ready, fills],
   );
+  const marks = useMemo(() => {
+    if (!ready || (!bubbles?.length && !arrows?.length)) return null;
+    const frame: Bounds = [full[0], full[1], full[0] + full[2], full[1] + full[3]];
+    const paths = new Map(ready.counties.map((c) => [c.fips, c.d]));
+    return (
+      <>
+        {bubbles?.length ? bubbleMarks(bubbles, paths, frame) : null}
+        {arrows?.length ? arrowMarks(arrows, paths, frame) : null}
+      </>
+    );
+  }, [ready, full, bubbles, arrows]);
   if (map === "error") return <p className="muted small">The map couldn&apos;t load. The table below has every {towns ? "town" : "county"}.</p>;
   if (!map) return <div className="mt-map mt-map-loading" aria-busy />;
   const hovered = hover.at && fills.has(hover.at.key) ? byFips.get(hover.at.key) : undefined;
@@ -187,6 +208,7 @@ export function CountyMap({ state, fills, selected, onSelect }: { state: string;
       }
     >
       {shapes}
+      {marks}
       {map.cities && <CityLabels cities={map.cities} view={target} />}
     </MapFrame>
   );

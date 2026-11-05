@@ -53,10 +53,15 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
   if (mode === "reset" && !token) {
     return (
-      <div className="auth wrap stack">
+      <div className="auth wrap">
         <h1>Reset link missing</h1>
         <p className="muted">Open the link from your email again, or ask for a new one.</p>
-        <Link href="/forgot" className="btn">Ask for a new link</Link>
+        <div className="actions">
+          <Link href="/forgot" className="btn">Ask for a new link</Link>
+        </div>
+        <div className="links">
+          <Link href="/signin">Back to sign in</Link>
+        </div>
       </div>
     );
   }
@@ -106,7 +111,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       )}
       <div className="links">
         {mode === "signin" && (<><Link href="/forgot">Forgot password?</Link><Link href="/signup">Create an account</Link></>)}
-        {mode === "signup" && <Link href="/signin">Already have an account? Sign in</Link>}
+        {mode === "signup" && <span>Already have an account? <Link href="/signin">Sign in</Link></span>}
         {(mode === "forgot" || mode === "reset") && <Link href="/signin">Back to sign in</Link>}
       </div>
     </div>

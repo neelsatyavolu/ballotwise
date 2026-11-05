@@ -52,7 +52,7 @@ body:has(.mt-wall) .mt-callpops { display: none; }
 /* Rows and cards that don't fit are hidden whole (Wall.tsx); some of them set their own display. */
 .mt-wall [hidden] { display: none !important; }
 /* The cards fill their column, as many whole ones as fit (useRotatingFit): the House's rotate through every toss-up. */
-.mt-wall-cards > .mt-grid { flex: 1 1 0; min-height: 0; margin: 0; overflow: hidden; align-content: start; grid-auto-rows: max-content; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.mt-wall-cards > .mt-grid { flex: 1 1 0; min-height: 0; margin: 0; overflow: hidden; align-content: start; grid-auto-rows: max-content; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); align-items: start; }
 /* A wall's cards show the two leading candidates and nothing after them but the count's rows: no link to the rest
    and no spare height (Wall.tsx passes limit 2). The column headings go too: party colors and numbers read without them. */
 .mt-wall .mt-card .mt-ct-more, .mt-wall .mt-card .mt-ct-fill, .mt-wall .mt-card .mt-ct thead { display: none; }

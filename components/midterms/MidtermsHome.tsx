@@ -231,7 +231,7 @@ export function MidtermsHome({ initialState }: { initialState: string | null }) 
       <ModeNav current="/midterms" />
       <header className="mt-hero">
         <h1>Midterms 2026</h1>
-        <span className="mt-kicker">{counting ? `Live results, checked every ${Math.round(live.interval / 1000)} seconds` : `Tuesday, Nov 3 · first polls close at ${formatTime(FIRST_CLOSE)}`}</span>
+        <span className="mt-kicker">{counting ? "Live results" : `Tuesday, Nov 3 · first polls close at ${formatTime(FIRST_CLOSE)}`}</span>
         {data && (
           <span className="mt-updated small">
             <LiveDot at={data.fetchedAt} stale={data.stale} idle={!counting} /> {counting ? "" : "No votes counted yet · "}Checked <CheckedAgo at={data.fetchedAt} />

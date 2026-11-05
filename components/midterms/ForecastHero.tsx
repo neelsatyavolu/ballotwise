@@ -240,7 +240,7 @@ export function SeatsByRating({ view, office, showProjection = true }: { view: C
           : view.majority
           ? `Seats by forecast rating, Democrats from the left. The line marks ${view.majority} for control.`
           : office === "governor"
-            ? `Governorships by forecast rating, Democrats from the left. Includes the ${view.notUp.D + view.notUp.R + view.notUp.other} governors not up this year.`
+            ? "Governorships by forecast rating, Democrats from the left."
             : "Seats by forecast rating, Democrats from the left."}
       </p>
     </section>

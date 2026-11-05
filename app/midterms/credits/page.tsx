@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ModeNav } from "@/components/midterms/ModeNav";
 import { SANTA_CLARA_RESULTS } from "@/lib/midterms/view";
 import "../midterms.css";
 
@@ -9,9 +10,7 @@ export const metadata: Metadata = { title: "Sources and credits: 2026 midterms" 
 export default function Credits() {
   return (
     <article className="wrap mt mt-method prose">
-      <p className="small">
-        <Link href="/midterms">← Midterms 2026</Link>
-      </p>
+      <ModeNav />
       <h1>Sources and credits</h1>
 
       <h2>Results and calls</h2>

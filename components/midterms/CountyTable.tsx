@@ -115,7 +115,7 @@ export function CountyTable({ race, selected, onSelect }: { race: RaceDetail; se
                   <td className="num">{fmt(r.total)}</td>
                   <td className="num" title={r.reportingUnknown ? "This county has votes but no reporting figure" : undefined}>
                     <span className="mt-share small-bar">
-                      <span style={{ width: `${r.reportingUnknown ? 0 : r.reporting}%`, background: "var(--accent)" }} />
+                      <span style={{ width: `${r.reportingUnknown ? 0 : r.reporting}%`, background: "var(--el-reported)" }} />
                     </span>
                     {r.reportingUnknown ? "n/a" : `${Math.round(r.reporting)}%`}
                   </td>

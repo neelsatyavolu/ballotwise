@@ -16,6 +16,7 @@ import { CountyTable } from "./CountyTable";
 import { pollInterval, useLive, useStars, warmLive } from "./hooks";
 import { useDeskData, useDeskWaiting } from "./desk";
 import { CountyMap, type CountyFill } from "./maps";
+import { MAP_MODE_HINT, MAP_MODE_LABEL, useMapModes, type MapMode } from "./mapModes";
 import { MarketPanel } from "./MarketPanel";
 import { RaceInsights } from "./RaceInsights";
 import { ModeNav } from "./ModeNav";
@@ -28,6 +29,10 @@ import { RcvFlag } from "./ResultList";
 import { RaceSkeleton } from "./Skeleton";
 
 type Fetched = { race: RaceDetail; fetchedAt: number; stale: boolean; history?: Observation[]; callPending?: boolean };
+/** A poll date ("2026-10-22") as "Oct 22"; anything else as given. */
+const pollDay = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : iso);
+/** The race map's views: the office maps' four, then how much is in and the 2024 presidential vote. */
+type RaceMapMode = MapMode | Exclude<Mode, "results">;
 const SCREEN = { senate: "/midterms/senate", house: "/midterms/house", governor: "/midterms/governor", measure: "/midterms/measures" } as const;
 
 export function RaceView({ id }: { id: number }) {
@@ -40,7 +45,7 @@ export function RaceView({ id }: { id: number }) {
   // those requests now runs them alongside the race's instead of after it.
   useEffect(() => warmLive([`${path}/forecast`, `${path}/markets`]), [path]);
   const [reply, setReply] = useState<{ seat: string; race: DdhqRace | null; error: string | null; at: number } | null>(null);
-  const [mode, setMode] = useState<Mode>("results");
+  const [mode, setMode] = useState<RaceMapMode>("results");
   const [selected, setSelected] = useState<string | null>(null);
   const loaded = catalogData?.race;
   const state = loaded?.state;
@@ -94,11 +99,20 @@ export function RaceView({ id }: { id: number }) {
     };
   }, [privateRace, state, office, district, special, seat, refresh]);
 
+  const mapModes = useMapModes(race);
+  // Margin, Swing and Remaining once the race has what they need; who leads, how much is in, and 2024 always.
+  const shown: RaceMapMode = mode === "reporting" || mode === "2024" || mapModes.modes.includes(mode) ? mode : "results";
+  const view = shown === "results" || shown === "reporting" || shown === "2024" ? null : mapModes.views[shown];
   const fills = useMemo(() => {
     const out = new Map<string, CountyFill>();
-    for (const c of race?.counties ?? []) if (c.fips) out.set(c.fips, { fill: fillFor(c, mode), tip: <CountyTip county={c} mode={mode} />, active: true });
+    if (view) {
+      for (const [fips, f] of view.fills) out.set(fips, { ...f, active: true });
+      return out;
+    }
+    const plain = shown as Mode;
+    for (const c of race?.counties ?? []) if (c.fips) out.set(c.fips, { fill: fillFor(c, plain), tip: <CountyTip county={c} mode={plain} />, active: true });
     return out;
-  }, [race, mode]);
+  }, [race, shown, view]);
 
   if (!data || !race) {
     return (
@@ -114,7 +128,7 @@ export function RaceView({ id }: { id: number }) {
   const mapped = race.counties.some((c) => c.fips);
   const towns = byTown(race.counties);
   // There's no 2024 presidential vote by town, so a town map has no 2024 view.
-  const modes = (["results", "reporting", "2024"] as const).filter((m) => m !== "2024" || race.counties.some((c) => c.fips && c.pres2024));
+  const modes: RaceMapMode[] = [...mapModes.modes, "reporting", ...(race.counties.some((c) => c.fips && c.pres2024) ? (["2024"] as const) : [])];
   const called = race.candidates.find((c) => c.winner);
   const closes = stateFinal(race.state);
   const close = race.pollsClose ? new Date(race.pollsClose) : null;
@@ -149,7 +163,7 @@ export function RaceView({ id }: { id: number }) {
             <span>
               {signalLine(race.signal, race)}
               {race.signal?.market && ` (${race.signal.market.sources.join(" and ")})`}
-              {race.signal?.polls && `, polls through ${race.signal.polls.latest}`}
+              {race.signal?.polls && `, polls through ${pollDay(race.signal.polls.latest)}`}
             </span>
           </p>
         )}
@@ -201,21 +215,21 @@ export function RaceView({ id }: { id: number }) {
           {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
         </section>
 
-        <section aria-labelledby="map">
+        <section aria-labelledby="map" className="mt-race-side">
           <div className="mt-section-head">
             <h2 id="map">{towns ? "Towns" : "Counties"}</h2>
             {mapped && (
               <div className="mt-seg" role="group" aria-label="Map shows">
                 {modes.map((m) => (
-                  <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}>
-                    {m === "results" ? "Leader" : m === "reporting" ? "Reporting" : "2024 president"}
+                  <button key={m} type="button" aria-pressed={shown === m} onClick={() => setMode(m)} title={m === "reporting" ? "Each county shaded by how much of its count is in" : m === "2024" ? "Each county's 2024 presidential vote" : MAP_MODE_HINT[m]}>
+                    {m === "reporting" ? "Reporting" : m === "2024" ? "2024 president" : MAP_MODE_LABEL[m]}
                   </button>
                 ))}
               </div>
             )}
           </div>
           {mapped ? (
-            <CountyMap state={race.state} fills={fills} selected={selected} onSelect={setSelected} />
+            <CountyMap state={race.state} fills={fills} selected={selected} onSelect={setSelected} bubbles={view?.bubbles} arrows={view?.arrows} />
           ) : (
             <p className="muted small">
               {race.local
@@ -227,6 +241,7 @@ export function RaceView({ id }: { id: number }) {
                   : "This state reports one statewide total, so there's no county map."}
             </p>
           )}
+          {mapped && view?.note && <p className="muted small mt-map-note">{view.note}</p>}
           {mapped && race.office === "house" && <p className="muted small">Shaded {towns ? "towns are" : "counties are all or partly"} in this district.</p>}
         </section>
       </div>
