@@ -8,6 +8,7 @@ import { lastName } from "./CandidateTable";
 import { useLive } from "./hooks";
 
 const short = (s: Share) => lastName(s.name);
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Whether the runner-up could catch up: the lead now against what they'd net from the votes left. */
 function outlook(race: RaceDetail, est: Estimate): string {
@@ -33,19 +34,18 @@ export function VotesLeftPanel({ race }: { race: RaceDetail }) {
     <div className="mt-turnout mt-votes-left">
       {est.left === 0 ? (
         <p>
-          <b>Little or nothing left to count</b> by civicAPI&apos;s reporting figures.
+          <b>Little or nothing left to count</b>
         </p>
       ) : (
         <>
           <p>
-            <b>About {approx(est.left)} votes left</b>, roughly {approx(est.leader.votes)} for {short(est.leader)} and {approx(est.runnerUp.votes)} for {short(est.runnerUp)}: {outlook(race, est)}.
+            <b>~{approx(est.left)} votes left</b> · ~{approx(est.leader.votes)} {short(est.leader)}, ~{approx(est.runnerUp.votes)} {short(est.runnerUp)}. {cap(outlook(race, est))}.
           </p>
-          {est.places.length > 0 && <p>Most are in {est.places.map((p) => placeLabel(est, p)).join(", ")}.</p>}
+          {est.places.length > 0 && <p className="muted small">Mostly in {est.places.map((p) => placeLabel(est, p)).join(", ")}</p>}
         </>
       )}
-      <p className="muted small">
-        {CAVEAT}
-        {est.unknown > 0 && ` ${est.unknown} ${est.unknown === 1 ? "county has" : "counties have"} nothing counted and no 2024 vote to go on, so ${est.unknown === 1 ? "it isn't" : "they aren't"} included.`}
+      <p className="muted small" title={CAVEAT}>
+        Rough estimate{est.unknown > 0 ? `, excluding ${est.unknown} ${est.unknown === 1 ? "county" : "counties"} with no data` : ""}
       </p>
     </div>
   );
@@ -89,13 +89,13 @@ export function VotesLeftCard({ race, brief = false }: { race: RaceDetail; brief
                 </li>
               ))}
             </ul>
-            <p className="small">{says.charAt(0).toUpperCase() + says.slice(1)}.</p>
+            <p className="small">{cap(says)}.</p>
             {est.places.length > 0 && <p className="muted small">Most are in {est.places.map((p) => placeLabel(est, p)).join(", ")}.</p>}
           </>
         )}
         {!brief && est.unknown > 0 && (
           <p className="muted small">
-            {est.unknown} {est.unknown === 1 ? "county has" : "counties have"} nothing counted and no 2024 vote to go on, so {est.unknown === 1 ? "it isn't" : "they aren't"} included.
+            Excludes {est.unknown} {est.unknown === 1 ? "county" : "counties"} with no data
           </p>
         )}
       </div>

@@ -7,6 +7,7 @@ import { fetchCountyRace, isCountyRace } from "./county";
 import { BASELINE_2024 } from "./data";
 import { raceHistory, recordHistory } from "./history";
 import { evidenceAt, raceKey, ratedRaces, readOdds, refreshOdds } from "./odds";
+import { withPast } from "./pastMargins";
 import { electionModeDefault } from "./polls";
 import { balance, type RaceSummary } from "./races";
 
@@ -92,7 +93,8 @@ export async function race(db: Db, id: number, now: number, background?: (work: 
   const catalog = await fetchCatalog(now, ratedRaces(odds), db, background, true);
   const summary = catalog.races.find((r) => r.id === id);
   if (!summary) return null;
-  const found = await fetchRace(summary, now, BASELINE_2024);
+  const fetched = await fetchRace(summary, now, BASELINE_2024);
+  const found = { ...fetched, race: withPast(fetched.race) };
   // Calls come from the catalog's races, so this reuses the overview's memo and rarely touches the database.
   const [{ calls }, history] = await Promise.all([recordCalls(db, catalog, now), raceHistory(db, id)]);
   // The detail's results come from their own fetch, so a call the catalog hasn't caught up with is held back as pending.
@@ -108,7 +110,7 @@ export async function race(db: Db, id: number, now: number, background?: (work: 
  */
 export async function otherRace(id: number, now: number) {
   const found = isCountyRace(id) ? await fetchCountyRace(id, now) : await fetchOtherRace(id, now, BASELINE_2024);
-  return found && { ...found, race: { ...found.race, signal: null, call: null }, callPending: false as const };
+  return found && { ...found, race: { ...withPast(found.race), signal: null, call: null }, callPending: false as const };
 }
 
 /**

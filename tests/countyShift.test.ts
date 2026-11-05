@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { countyLeads, countySwings, swingSides, swingSummary } from "../lib/midterms/countyShift";
+import { countyLeads, countySwings, swingBases, swingSides, swingSummary } from "../lib/midterms/countyShift";
+import { withPast } from "../lib/midterms/pastMargins";
 import type { CountyResult } from "../lib/midterms/races";
 
 const county = (fips: string | null, votes: [number, number], baseline2024: number | null): CountyResult => ({
@@ -60,5 +61,25 @@ describe("countySwings and swingSummary", () => {
   });
   it("has no summary with nothing counted", () => {
     expect(swingSummary([])).toBeNull();
+  });
+});
+
+describe("swing from other past elections", () => {
+  it("measures against the picked election's margin and lists only the elections the counties have", () => {
+    const withPast = (c: CountyResult, past: Record<string, number>): CountyResult => ({ ...c, past });
+    // 60-40 Colom: D+20. Against a 2024 Senate margin of R+10 that's 30 points toward the Democrat.
+    const race = { candidates: cands as never, counties: [withPast(county("1", [600, 400], 10), { "2024-senate": -10 }), county("2", [300, 700], -50)] };
+    expect(countySwings(race, "2024-senate").map((s) => [s.fips, Math.round(s.shift * 10) / 10])).toEqual([["1", 30]]);
+    expect(swingBases(race)).toEqual(["2024-president", "2024-senate"]);
+  });
+});
+
+describe("withPast", () => {
+  it("attaches each county's past margins on the server, and leaves Alaska and unmapped rows alone", () => {
+    const race = { state: "MS", counties: [county("28049", [1, 1], 50), county(null, [1, 1], null)] };
+    const out = withPast(race);
+    expect(out.counties[0].past).toMatchObject({ "2020-president": expect.any(Number), "2024-senate": expect.any(Number) });
+    expect(out.counties[1].past).toBeUndefined();
+    expect(withPast({ state: "AK", counties: [county("02020", [1, 1], null)] }).counties[0].past).toBeUndefined();
   });
 });

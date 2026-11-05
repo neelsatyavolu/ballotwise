@@ -102,6 +102,7 @@
 .mt-map-modes { display: grid; gap: 6px; margin: 8px 0 12px; }
 .mt-map-modes p { margin: 0; }
 .mt-map-note { margin: 10px 0 0; }
+.mt-swing-base { margin-top: 10px; }
 
 .mt-rating { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
 .mt-rating.r-tossup { color: var(--tossup); }
@@ -159,8 +160,6 @@
 .mt-race-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 28px; margin-top: 20px; align-items: start; }
 .mt-race-grid h2 { margin-bottom: 10px; }
 /* The map stays in view beside the long column of candidates, context and forecast. */
-.mt-race-grid > .mt-race-side { position: sticky; top: 16px; }
-@media (max-width: 900px) { .mt-race-grid > .mt-race-side { position: static; } }
 
 .mt-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .mt-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
@@ -913,6 +912,8 @@ body:has(.wrap.mt) .site-header { font-family: var(--font-sans), system-ui, sans
 .mt-cands { overflow: hidden; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
 .mt-cands .mt-ct { font-size: 14px; }
 .mt-cands .mt-ct td { height: 46px; }
+/* The race page's status row is one line, so center it in the taller row instead of pinning it to the top. */
+.mt-cands .mt-ct-status td { vertical-align: middle; }
 .mt-cands .mt-ct .mt-avatar { width: 30px; height: 30px; font-size: 10px; }
 .mt-cands .mt-ct-who { gap: 10px; }
 

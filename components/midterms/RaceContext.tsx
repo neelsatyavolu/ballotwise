@@ -79,18 +79,17 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
       </div>
       <ul>
         <li>
-          {Number.isFinite(updated) ? `${source} last updated ${race.source ? "its results" : "this race"} at ${stampTime(updated)} ${zoneAbbr(updated)}` : `${source} gives no update time for this race`}; Ballotwise checked at {stampTime(fetchedAt)} {zoneAbbr(fetchedAt)}.
+          {Number.isFinite(updated) ? `${source} updated ${stampTime(updated)} ${zoneAbbr(updated)}` : `No update time from ${source}`} · checked {stampTime(fetchedAt)} {zoneAbbr(fetchedAt)}
         </li>
         <li>
-          {race.total === 0 ? "No votes counted yet." : race.reportingUnknown || !race.reporting ? `${source} has votes but gives no reporting figure for this race.` : `${Math.round(race.reporting)}% reporting, ${isDesk(race) || race.source ? `${source}'s count of precincts` : "civicAPI's estimate of precincts or ballot batches"} in. It isn't the share of the expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? "; mail, provisional and late ballots can still come in" : ""}.`}
+          {race.total === 0 ? "No votes counted yet" : race.reportingUnknown || !race.reporting ? `No reporting figure from ${source}` : `${Math.round(race.reporting)}% of ${isDesk(race) || race.source ? "precincts" : "precincts or batches"} in, not % of expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? " · late ballots can still come in" : ""}`}
         </li>
         {regions.length > 1 && (
           <li>
-            {withVotes.length} of {regions.length} {byTown(regions) ? "towns" : "counties"} have reported votes
-            {withVotes.length ? `; ${source} reports 100% for ${regions.filter((c) => c.reporting >= 100).length} of them` : ""}.
+            {withVotes.length} of {regions.length} {byTown(regions) ? "towns" : "counties"} reporting
+            {withVotes.length ? `, ${regions.filter((c) => c.reporting >= 100).length} complete` : ""}
           </li>
         )}
-        <li className="muted">The votes-left figure above is Ballotwise&apos;s own rough estimate.</li>
       </ul>
     </section>
   );

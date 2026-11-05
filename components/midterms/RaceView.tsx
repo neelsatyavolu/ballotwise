@@ -6,6 +6,7 @@ import { ApiError } from "@/lib/client";
 import { applyDesk, civicSeen, isDesk, overlayLive } from "@/lib/ddhq/apply";
 import type { DdhqRace } from "@/lib/ddhq/votes";
 import { useAccount } from "@/components/AccountProvider";
+import { SWING_BASE_LABEL, swingBases, type SwingBase } from "@/lib/midterms/countyShift";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
@@ -47,6 +48,7 @@ export function RaceView({ id }: { id: number }) {
   const [reply, setReply] = useState<{ seat: string; race: DdhqRace | null; error: string | null; at: number } | null>(null);
   const [mode, setMode] = useState<RaceMapMode>("results");
   const [selected, setSelected] = useState<string | null>(null);
+  const [swingBase, setSwingBase] = useState<SwingBase>("2024-president");
   const loaded = catalogData?.race;
   const state = loaded?.state;
   const office = loaded?.office;
@@ -99,7 +101,10 @@ export function RaceView({ id }: { id: number }) {
     };
   }, [privateRace, state, office, district, special, seat, refresh]);
 
-  const mapModes = useMapModes(race);
+  // Swing measures from 2024's presidential vote unless another past election is picked that the counties have.
+  const bases = race ? swingBases(race) : [];
+  const swingFrom: SwingBase = bases.includes(swingBase) ? swingBase : "2024-president";
+  const mapModes = useMapModes(race, swingFrom);
   // Margin, Swing and Remaining once the race has what they need; who leads, how much is in, and 2024 always.
   const shown: RaceMapMode = mode === "reporting" || mode === "2024" || mapModes.modes.includes(mode) ? mode : "results";
   const view = shown === "results" || shown === "reporting" || shown === "2024" ? null : mapModes.views[shown];
@@ -210,9 +215,7 @@ export function RaceView({ id }: { id: number }) {
             * Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
           {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
-          {race.office !== "measure" && <RaceInsights race={race} ddhq={active} pollsExpected={!!(loaded ?? race).signal?.polls} />}
           {data.history && <VoteUpdates history={data.history} />}
-          {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
         </section>
 
         <section aria-labelledby="map" className="mt-race-side">
@@ -241,8 +244,19 @@ export function RaceView({ id }: { id: number }) {
                   : "This state reports one statewide total, so there's no county map."}
             </p>
           )}
+          {mapped && shown === "swing" && bases.length > 1 && (
+            <div className="mt-seg mt-swing-base" role="group" aria-label="Compare with">
+              {bases.map((b) => (
+                <button key={b} type="button" aria-pressed={swingFrom === b} onClick={() => setSwingBase(b)}>
+                  {SWING_BASE_LABEL[b]}
+                </button>
+              ))}
+            </div>
+          )}
           {mapped && view?.note && <p className="muted small mt-map-note">{view.note}</p>}
           {mapped && race.office === "house" && <p className="muted small">Shaded {towns ? "towns are" : "counties are all or partly"} in this district.</p>}
+          {race.office !== "measure" && <RaceInsights race={race} ddhq={active} pollsExpected={!!(loaded ?? race).signal?.polls} />}
+          {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
         </section>
       </div>
 

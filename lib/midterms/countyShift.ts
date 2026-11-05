@@ -1,5 +1,5 @@
 // The race maps' Margin and Swing views, as DDHQ's county map has them: each county's raw vote lead, and how far it
-// has moved from the 2024 presidential vote.
+// has moved from a past election (2024's presidential vote unless another is picked).
 import type { CountyResult, RaceDetail } from "./races";
 import { partyOf } from "./view";
 
@@ -28,24 +28,44 @@ export function swingSides(race: Pick<RaceDetail, "candidates">): { left: Cand; 
   return right && left ? { left, right } : null;
 }
 
-/** A county's shift from the 2024 presidential margin, in points: positive toward the left side (Harris's). */
+/** The past elections a swing can be measured from, newest first: 2024's presidential race, or one in `past`. */
+export const SWING_BASES = ["2024-president", "2024-senate", "2022-senate", "2022-governor", "2020-president"] as const;
+export type SwingBase = (typeof SWING_BASES)[number];
+export const SWING_BASE_LABEL: Record<SwingBase, string> = {
+  "2024-president": "2024 president",
+  "2024-senate": "2024 Senate",
+  "2022-senate": "2022 Senate",
+  "2022-governor": "2022 governor",
+  "2020-president": "2020 president",
+};
+
+/** A county's Democratic-minus-Republican margin in a past election, in points, or null when it had none on file. */
+const marginIn = (c: CountyResult, base: SwingBase) => (base === "2024-president" ? c.baseline2024 : (c.past?.[base] ?? null));
+
+/** The past elections the race's counties can be compared with, newest first. */
+export function swingBases(race: Pick<RaceDetail, "counties">): SwingBase[] {
+  return SWING_BASES.filter((base) => race.counties.some((c) => c.fips && marginIn(c, base) !== null));
+}
+
+/** A county's shift from a past margin, in points: positive toward the left side (the Democrat's). */
 export type CountySwing = { fips: string; now: number; then: number; shift: number; total: number };
 
-/** Each counted county's margin now, its 2024 presidential margin, and the shift between them. */
-export function countySwings(race: Pick<RaceDetail, "candidates" | "counties">): CountySwing[] {
+/** Each counted county's margin now, its margin in the `base` election, and the shift between them. */
+export function countySwings(race: Pick<RaceDetail, "candidates" | "counties">, base: SwingBase = "2024-president"): CountySwing[] {
   const sides = swingSides(race);
   if (!sides) return [];
   const votesOf = (c: CountyResult, name: string) => c.candidates.find((x) => x.name === name)?.votes ?? 0;
   return race.counties.flatMap((c) => {
-    if (!c.fips || c.total <= 0 || c.baseline2024 === null) return [];
+    const then = marginIn(c, base);
+    if (!c.fips || c.total <= 0 || then === null) return [];
     const now = ((votesOf(c, sides.left.name) - votesOf(c, sides.right.name)) / c.total) * 100;
-    return [{ fips: c.fips, now, then: c.baseline2024, shift: now - c.baseline2024, total: c.total }];
+    return [{ fips: c.fips, now, then, shift: now - then, total: c.total }];
   });
 }
 
 /**
- * The counted counties together: their shift from 2024 weighted by votes counted, and how many have a different
- * leader from 2024's. Null with no county to compare.
+ * The counted counties together: their shift from the past election weighted by votes counted, and how many have a
+ * different leader from then. Null with no county to compare.
  */
 export function swingSummary(swings: readonly CountySwing[]): { shift: number; flipped: number; counties: number } | null {
   const total = swings.reduce((n, s) => n + s.total, 0);

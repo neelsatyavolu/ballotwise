@@ -107,6 +107,8 @@ export type CountyResult = {
   /** 2024 presidential margin, Harris minus Trump, in points. */
   baseline2024: number | null;
   pres2024: Pres2024 | null;
+  /** Democratic-minus-Republican margins, in points, in past elections by id ("2022-senate"), where the county had one. */
+  past?: Readonly<Record<string, number>>;
 };
 export type RaceDetail = RaceSummary & { pollsClose: string | null; updated: string | null; counties: CountyResult[] };
 
