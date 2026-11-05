@@ -24,7 +24,7 @@ import { MapModeSwitch, useMapModes, type MapMode } from "./mapModes";
 import { CheckedAgo, LiveDot } from "./CheckedAgo";
 import { ForecastTip } from "./ForecastTip";
 import { useDeskDetail } from "./useDeskDetail";
-import { VotesLeftCard } from "./VotesLeft";
+import { LiveChance } from "./LiveChance";
 import { RaceTip } from "./RaceTip";
 
 const TITLE: Record<Office, string> = { senate: "Senate", house: "House", governor: "Governors", measure: "Ballot measures" };
@@ -293,7 +293,7 @@ export function OfficeView({ office, initialState }: { office: Office; initialSt
                         <Link href={`/midterms/${shown.id}`}>Full results and every county →</Link>
                       </p>
                       {detail.data && !countyFills?.size && <p className="muted small">This state reports by town, so the county map stays blank.</p>}
-                      {counting && shownDetail && <VotesLeftCard race={shownDetail} />}
+                      {counting && shownDetail && <LiveChance race={shownDetail} />}
                       {shown.office !== "measure" && <RaceInsights key={`fc${shown.id}`} race={shown} pollsExpected={!!publicSignal?.polls} polls={!counting} />}
                     </>
                   )}
