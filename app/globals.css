@@ -99,6 +99,10 @@ main { flex: 1 0 auto; padding: 28px 0 0; }
 
 .field { display: grid; gap: 6px; }
 .field label { font-weight: 600; font-size: 14px; }
+/* The DDHQ panel's results-source choice. */
+.source-pick-label { font-weight: 600; font-size: 14px; }
+.source-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.source-pick .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .input {
   width: 100%; min-height: 44px; padding: 10px 12px; border-radius: var(--radius);
   border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); font: inherit;

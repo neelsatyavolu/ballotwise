@@ -2,13 +2,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/client";
+import type { ResultsSource } from "@/lib/ddhq/source";
 
 type Grok = "connected" | "disconnected" | "refresh-failed";
 type Values = "none" | "in-progress" | "done";
 type Terms = "accepted" | "needed";
 type Provider = "grok" | "codex";
 type Ddhq = "connected" | "disconnected";
-type Me = { user: { id: string; email: string } | null; grok: Grok; provider: Provider | null; values: Values; terms: Terms; ddhq: Ddhq };
+type Me = { user: { id: string; email: string } | null; grok: Grok; provider: Provider | null; values: Values; terms: Terms; ddhq: Ddhq; ddhqSource?: ResultsSource | null };
 type Account = Me & { loading: boolean; refresh: () => Promise<void> };
 
 const SIGNED_OUT: Me = { user: null, grok: "disconnected", provider: null, values: "none", terms: "accepted", ddhq: "disconnected" };

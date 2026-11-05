@@ -5,7 +5,7 @@ import { AccountError } from "@/lib/auth/accounts";
 import { currentUser } from "@/lib/auth/session";
 import { deskSeats, deskView } from "@/lib/ddhq/live";
 import { cachedPulse } from "@/lib/ddhq/pulse";
-import { deleteDdhqSession, loadDdhqSession } from "@/lib/ddhq/vault";
+import { ddhqResultsSource, deleteDdhqSession, loadDdhqSession } from "@/lib/ddhq/vault";
 import { ddhqSeats, loadRaceIds, rememberRaceIds, saveRaceIds } from "@/lib/ddhq/votes";
 import { appEnv, db } from "@/lib/env";
 import { CivicError, overview, race, UNAVAILABLE } from "@/lib/midterms/catalog";
@@ -55,7 +55,8 @@ export async function GET(req: NextRequest) {
     if (pulse?.ids) rememberRaceIds(Object.entries(pulse.ids).map(([seat, raceId]) => ({ key: seat, id: String(raceId) })));
     const results = await ddhqSeats(saved.session, seats, req.signal);
     background(saveRaceIds(db()));
-    return NextResponse.json({ ...deskView(path, data, results), desk: true }, { headers: PRIVATE });
+    const source = (await ddhqResultsSource(db(), user.id)) ?? "auto";
+    return NextResponse.json({ ...deskView(path, data, results, source), desk: true, source }, { headers: PRIVATE });
   } catch (err) {
     if (err instanceof AccountError && err.status === 401) await deleteDdhqSession(db(), user.id);
     const message = err instanceof AccountError ? err.message : "Decision Desk HQ didn't answer.";

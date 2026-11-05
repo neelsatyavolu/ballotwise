@@ -60,12 +60,12 @@ export function RaceView({ id }: { id: number }) {
   const active = mine?.race ?? null;
   // While DDHQ's detail loads, and if it fails, the public race shows with any DDHQ board count already in hand.
   const waiting = privateRace && !active && !mine?.error;
-  const overlaid = mine?.error || waiting ? overlayLive(path, catalogData, privateDesk.races, privateDesk.forecast) : null;
+  const overlaid = mine?.error || waiting ? overlayLive(path, catalogData, privateDesk.races, privateDesk.forecast, privateDesk.source) : null;
   // A DDHQ count is never charted beside civicAPI's vote updates.
   const fallback = overlaid && isDesk(overlaid.race) ? { ...overlaid, history: undefined } : overlaid;
   useDeskWaiting(waiting);
   const base = fallback ?? rendered ?? (active ? catalogData : null);
-  const data = base && active ? { ...base, race: applyDesk(base.race, active, civicSeen(base)), fetchedAt: mine!.at, stale: false, history: undefined, callPending: false } : base;
+  const data = base && active ? { ...base, race: applyDesk(base.race, active, civicSeen(base), privateDesk.source), fetchedAt: mine!.at, stale: false, history: undefined, callPending: false } : base;
   const race = data?.race;
 
   useEffect(() => {

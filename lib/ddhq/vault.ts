@@ -1,4 +1,5 @@
 import type { Db } from "../auth/accounts";
+import { isResultsSource, type ResultsSource } from "./source";
 
 export type DdhqSession = { clientToken: string; sessionId: string };
 
@@ -53,4 +54,17 @@ export async function deleteDdhqSession(db: Db, userId: string): Promise<void> {
 export async function hasDdhqSession(db: Db, userId: string): Promise<boolean> {
   const row = await db.prepare("SELECT 1 AS ok FROM ddhq_connections WHERE user_id = ?").bind(userId).first<{ ok: number }>();
   return Boolean(row);
+}
+
+/** The account's results source (see source.ts), or null when it has no DDHQ connection. */
+export async function ddhqResultsSource(db: Db, userId: string): Promise<ResultsSource | null> {
+  const row = await db.prepare("SELECT results_source FROM ddhq_connections WHERE user_id = ?").bind(userId).first<{ results_source: string }>();
+  if (!row) return null;
+  return isResultsSource(row.results_source) ? row.results_source : "auto";
+}
+
+/** Sets the results source; false when the account has no DDHQ connection to set it on. */
+export async function setDdhqResultsSource(db: Db, userId: string, source: ResultsSource): Promise<boolean> {
+  await db.prepare("UPDATE ddhq_connections SET results_source = ? WHERE user_id = ?").bind(source, userId).run();
+  return hasDdhqSession(db, userId);
 }

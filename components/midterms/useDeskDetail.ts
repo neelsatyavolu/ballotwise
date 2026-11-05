@@ -66,6 +66,6 @@ export function useDeskDetail(race: RaceDetail | null | undefined, from?: { stal
   const seen = civicSeen(from);
   return useMemo(() => {
     const base = race ?? (own && summary ? { ...summary, pollsClose: null, updated: null, counties: [] } : null);
-    return base && own ? applyDesk(base, own, race ? seen : null) : base;
-  }, [race, own, seen, summary]);
+    return base && own ? applyDesk(base, own, race ? seen : null, desk.source) : base;
+  }, [race, own, seen, summary, desk.source]);
 }

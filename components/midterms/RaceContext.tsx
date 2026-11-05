@@ -49,7 +49,7 @@ export function CountingContext({ race, fetchedAt }: { race: RaceDetail; fetched
           {Number.isFinite(updated) ? `${source} updated ${stampTime(updated)} ${zoneAbbr(updated)}` : `No update time from ${source}`} · checked {stampTime(fetchedAt)} {zoneAbbr(fetchedAt)}
         </li>
         <li>
-          {race.total === 0 ? "No votes counted yet" : race.reportingUnknown || !race.reporting ? `No reporting figure from ${source}` : `${Math.round(race.reporting)}% of ${isDesk(race) || race.source ? "precincts" : "precincts or batches"} in, not % of expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? " · late ballots can still come in" : ""}`}
+          {race.total === 0 ? "No votes counted yet" : race.reportingUnknown || !race.reporting ? `No reporting figure from ${source}` : race.expected !== undefined && !race.local ? `${Math.round(race.reporting)}% of Decision Desk HQ's expected vote in${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? " · it shows 99% until the race is done" : ""}` : `${Math.round(race.reporting)}% of ${isDesk(race) || race.source ? "precincts" : "precincts or batches"} in, not % of expected vote${race.reporting >= 99 && !race.candidates.some((c) => c.winner) ? " · late ballots can still come in" : ""}`}
         </li>
         {regions.length > 1 && (
           <li>

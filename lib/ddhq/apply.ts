@@ -5,6 +5,7 @@ import type { DdhqCandidate, DdhqRace } from "./votes";
 import { withDeskSeats } from "../midterms/deskCalls";
 import { seatKey } from "./votes";
 import type { DdhqForecastBundle } from "./forecast-types";
+import type { ResultsSource } from "./source";
 
 const marked = new WeakSet<object>();
 const sources = new WeakMap<object, DdhqRace>();
@@ -102,7 +103,10 @@ function civicRecent(race: RaceSummary, civicAt: number | null): boolean {
   return civicAt !== null && seen !== null && Date.now() - seen <= CIVIC_KEEP_MS;
 }
 
-export function applyDesk<T extends RaceSummary>(race: T, desk: DdhqRace, civicAt: number | null = null): T {
+export function applyDesk<T extends RaceSummary>(race: T, given: DdhqRace, civicAt: number | null = null, source: ResultsSource = "auto"): T {
+  // civicAPI only: DDHQ's forecast still shows, but none of its counts or calls. DDHQ only: civicAPI's count never stands in.
+  const desk = source === "civic" ? { ...given, candidates: null, counties: [], call: null } : given;
+  if (source === "ddhq") civicAt = null;
   if (!desk.candidates && !desk.forecast.length) return race;
   const published = sources.get(race);
   // The count endpoint may omit the category. Keep the published forecast as one coherent snapshot.
@@ -202,7 +206,7 @@ function withoutForecast<T extends RaceSummary>(race: T): T {
 }
 
 /** Derive the private rendered view without modifying the public payload or its shared cache. */
-export function overlayLive<T>(path: string | null, data: T, desk: ReadonlyMap<string, DdhqRace>, forecast?: DdhqForecastBundle["overview"] | null): T {
+export function overlayLive<T>(path: string | null, data: T, desk: ReadonlyMap<string, DdhqRace>, forecast?: DdhqForecastBundle["overview"] | null, source: ResultsSource = "auto"): T {
   if (path === "/api/midterms/forecast" && forecast) return forecast as T;
   if (!path || (!desk.size && !forecast) || !data || typeof data !== "object") return data;
   if (path === "/api/midterms" && "races" in data) {
@@ -213,10 +217,10 @@ export function overlayLive<T>(path: string | null, data: T, desk: ReadonlyMap<s
     const races = overview.races.map((race) => {
       if (race.office === "measure") return race;
       const hit = desk.get(deskKeyFor(race));
-      let next = hit ? applyDesk(race, hit, fresh) : race;
+      let next = hit ? applyDesk(race, hit, fresh, source) : race;
       if (forecast && !hit?.forecast.length) next = withoutForecast(next);
       if (next !== race) changed = true;
-      if (hit?.candidates) countsChanged = true;
+      if (hit?.candidates && source !== "civic") countsChanged = true;
       return next;
     });
     if (!changed && !forecast) return data;
@@ -232,7 +236,7 @@ export function overlayLive<T>(path: string | null, data: T, desk: ReadonlyMap<s
     const body = data as { race: RaceDetail };
     if (body.race.office === "measure") return data;
     const hit = desk.get(deskKeyFor(body.race));
-    let next = hit ? applyDesk(body.race, hit, civicSeen(data as { fetchedAt?: number })) : body.race;
+    let next = hit ? applyDesk(body.race, hit, civicSeen(data as { fetchedAt?: number }), source) : body.race;
     if (forecast && !hit?.forecast.length) next = withoutForecast(next);
     return next === body.race ? data : { ...body, race: next } as T;
   }

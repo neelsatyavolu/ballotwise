@@ -5,7 +5,8 @@ import { accountFailure, invalid } from "@/lib/auth/respond";
 import { currentUser } from "@/lib/auth/session";
 import { endVotesSession, finishVotesCode, startVotesCode, votesSessionCookie } from "@/lib/ddhq/clerk";
 import { deleteDdhqPending, loadDdhqPending, storeDdhqPending } from "@/lib/ddhq/pending";
-import { deleteDdhqSession, loadDdhqSession, storeDdhqSession } from "@/lib/ddhq/vault";
+import { RESULTS_SOURCES } from "@/lib/ddhq/source";
+import { deleteDdhqSession, loadDdhqSession, setDdhqResultsSource, storeDdhqSession } from "@/lib/ddhq/vault";
 import { votesIsPro } from "@/lib/ddhq/votes";
 import { appEnv, db } from "@/lib/env";
 
@@ -14,6 +15,7 @@ const WINDOW = 15 * 60 * 1000;
 const emailSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter the email on your Votes account.").max(254),
 });
+const sourceSchema = z.object({ source: z.enum(RESULTS_SOURCES, "Pick Auto, DDHQ only or civicAPI only.") });
 const codeSchema = z.object({
   code: z.string().trim().regex(/^\d{4,8}$/, "Enter the code from your email."),
 });
@@ -76,4 +78,14 @@ export async function DELETE() {
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   await disconnect(user.id);
   return NextResponse.json({ ok: true });
+}
+
+/** Sets where this account's results come from (see lib/ddhq/source.ts). */
+export async function PATCH(req: NextRequest) {
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  const parsed = sourceSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return invalid(parsed.error);
+  if (!(await setDdhqResultsSource(db(), user.id, parsed.data.source))) return NextResponse.json({ error: "Turn on Decision Desk HQ first." }, { status: 409 });
+  return NextResponse.json({ ok: true, source: parsed.data.source });
 }

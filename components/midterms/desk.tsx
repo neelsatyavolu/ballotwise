@@ -5,6 +5,7 @@ import { useAccount } from "@/components/AccountProvider";
 import { ApiError } from "@/lib/client";
 import { simAt } from "@/lib/midterms/clock";
 import { createDeskStore, deskOwner, EMPTY_DESK, type DeskData, type DeskStorage } from "@/lib/ddhq/store";
+import type { ResultsSource } from "@/lib/ddhq/source";
 import type { DdhqSeat } from "@/lib/ddhq/votes";
 
 /** This tab's session storage, or nothing on the server or where the browser blocks it. */
@@ -99,7 +100,7 @@ const rehearsing = () => simAt() !== null;
  * preview turns DDHQ off: its real counts (none before Nov 3) would cover the made-up ones. The server never runs
  * one, so the first render matches the server's and the switch happens right after.
  */
-export function useDeskData(): DeskData & { enabled: boolean; owner: string | null } {
+export function useDeskData(): DeskData & { enabled: boolean; owner: string | null; source: ResultsSource } {
   const account = useAccount();
   const { refresh } = account;
   const serverOwner = useContext(ServerOwner);
@@ -110,7 +111,8 @@ export function useDeskData(): DeskData & { enabled: boolean; owner: string | nu
     if (owner) store.connect(owner, refresh);
     else store.disconnect();
   }, [owner, refresh]);
-  return useMemo(() => ({ ...snapshot, enabled: owner !== null, owner }), [snapshot, owner]);
+  const source = account.ddhqSource ?? "auto";
+  return useMemo(() => ({ ...snapshot, enabled: owner !== null, owner, source }), [snapshot, owner, source]);
 }
 
 export function useDeskOverlay() {

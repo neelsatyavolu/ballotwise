@@ -1,6 +1,7 @@
 import { balance, type Office, type RaceSummary } from "../midterms/races";
 import type { Overview } from "../midterms/view";
 import { deskKeyFor, isDesk, overlayLive } from "./apply";
+import type { ResultsSource } from "./source";
 import type { DeskData } from "./store";
 
 export type DeskDisplayOptions = { office?: Office; forecastOnly?: boolean };
@@ -41,7 +42,7 @@ function forecastCatalog<T>(path: string | null, raw: T, desk: DeskData): T {
  * back, the page shows the public data with whatever private data is already in hand (this tab's saved snapshot, or
  * races already counted), and DeskStatus says DDHQ is loading. DDHQ's numbers replace the public ones as they arrive.
  */
-export function selectDeskDisplay<T>(path: string | null, raw: T | null, desk: DeskData & { enabled: boolean }, options: DeskDisplayOptions = {}): { data: T | null; loading: boolean; error: string | null; privateSource: boolean } {
+export function selectDeskDisplay<T>(path: string | null, raw: T | null, desk: DeskData & { enabled: boolean; source?: ResultsSource }, options: DeskDisplayOptions = {}): { data: T | null; loading: boolean; error: string | null; privateSource: boolean } {
   const rows = deskRaces(path, raw, options.office);
   const eligible = path === "/api/midterms/forecast" || path === "/api/midterms" && options.office !== "measure" || rows.length > 0;
   if (!desk.enabled || !eligible) return { data: raw, loading: false, error: null, privateSource: false };
@@ -51,7 +52,7 @@ export function selectDeskDisplay<T>(path: string | null, raw: T | null, desk: D
   });
   const failedCounts = !options.forecastOnly && rows.some((race) => desk.countsFailed.has(deskKeyFor(race)));
   const base = options.forecastOnly && desk.forecast ? forecastCatalog(path, raw, desk) : raw;
-  let data = overlayLive(path, base, desk.races, desk.forecast);
+  let data = overlayLive(path, base, desk.races, desk.forecast, desk.source);
   // Public vote-drop history must not be charted alongside this user's current DDHQ count.
   if (path && /^\/api\/midterms\/race\/\d+$/.test(path) && data && typeof data === "object" && "race" in data && isDesk((data as { race: RaceSummary }).race)) {
     data = { ...data, history: [] };

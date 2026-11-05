@@ -2,11 +2,18 @@
 
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/client";
+import { RESULTS_SOURCE_LABEL, RESULTS_SOURCES, type ResultsSource } from "@/lib/ddhq/source";
 import { useAccount } from "./AccountProvider";
 
-/** Turn Decision Desk HQ on with an emailed code, or off again. The code is not kept. */
+const SOURCE_HINT: Record<ResultsSource, string> = {
+  auto: "Decision Desk HQ's count and calls, with civicAPI's count in a race or county where it's recent and has more votes in.",
+  ddhq: "Decision Desk HQ's count and calls everywhere, even where civicAPI has more votes in.",
+  civic: "civicAPI's count and calls. Decision Desk HQ's forecast still shows.",
+};
+
+/** Turn Decision Desk HQ on with an emailed code, or off again, and pick where results come from. The code is not kept. */
 export function VotesConnect() {
-  const { user, loading, ddhq, refresh } = useAccount();
+  const { user, loading, ddhq, ddhqSource, refresh } = useAccount();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
@@ -60,11 +67,36 @@ export function VotesConnect() {
     }
   }
 
+  async function pickSource(source: ResultsSource) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/api/auth/ddhq", { method: "PATCH", body: { source } });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't change where results come from.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (ddhq === "connected") {
+    const source = ddhqSource ?? "auto";
     return (
       <section className="panel" style={{ marginTop: 28 }}>
         <h2>Decision Desk HQ</h2>
-        <p className="muted">On for this account. Results and race calls on your pages come from your Votes Pro account. Other people still see Ballotwise. You can turn this off anytime.</p>
+        <p className="muted">On for this account. Other people still see Ballotwise. You can turn this off anytime.</p>
+        <div className="field">
+          <span id="results-source" className="source-pick-label">Results from</span>
+          <div className="source-pick" role="group" aria-labelledby="results-source">
+            {RESULTS_SOURCES.map((s) => (
+              <button key={s} type="button" className="chip" aria-pressed={source === s} disabled={busy} onClick={() => void pickSource(s)}>
+                {RESULTS_SOURCE_LABEL[s]}
+              </button>
+            ))}
+          </div>
+          <p className="muted small">{SOURCE_HINT[source]}</p>
+        </div>
         {error && <p className="error" role="alert">{error}</p>}
         <button type="button" className="btn quiet" disabled={busy} onClick={disconnect}>Turn off Decision Desk HQ</button>
       </section>

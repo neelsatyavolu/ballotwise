@@ -1,5 +1,6 @@
 import type { RaceSummary } from "../midterms/races";
 import { deskKeyFor, overlayLive } from "./apply";
+import type { ResultsSource } from "./source";
 import type { DdhqRace, DdhqSeat } from "./votes";
 
 type Seated = Pick<RaceSummary, "office" | "state" | "district" | "title" | "local">;
@@ -23,8 +24,8 @@ export function deskSeats(races: readonly Seated[]): DdhqSeat[] {
  * A public payload (the overview or one race page) as a connected screen shows it, with the same overlay the website
  * runs in the browser (lib/ddhq/apply.ts), so the iOS app needn't keep its own copy of the source rules.
  */
-export function deskView<T>(path: string, data: T, results: readonly { key: string; race: DdhqRace | null }[]): T {
+export function deskView<T>(path: string, data: T, results: readonly { key: string; race: DdhqRace | null }[], source: ResultsSource = "auto"): T {
   const desk = new Map<string, DdhqRace>();
   for (const { key, race } of results) if (race) desk.set(key, race);
-  return overlayLive(path, data, desk);
+  return overlayLive(path, data, desk, undefined, source);
 }
