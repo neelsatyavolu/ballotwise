@@ -22,8 +22,8 @@ import { MarketPanel } from "./MarketPanel";
 import { RaceInsights } from "./RaceInsights";
 import { ModeNav } from "./ModeNav";
 import { RatingTag, StarButton } from "./RaceCard";
-import { CountingContext, RaceStatus, TurnoutLine, VoteUpdates } from "./RaceContext";
-import { VotesLeftPanel } from "./VotesLeft";
+import { CountingContext, RaceStatus, VoteUpdates } from "./RaceContext";
+import { LiveChance } from "./LiveChance";
 import { CheckedAgo } from "./CheckedAgo";
 import { reportingText } from "./reporting";
 import { RcvFlag } from "./ResultList";
@@ -199,8 +199,7 @@ export function RaceView({ id }: { id: number }) {
               status={called ? `${called.name} declared the winner` : race.total > 0 ? "Total votes" : closes && closes > now ? `Polls close ${stampTime(closes)} ${zoneAbbr(closes)}` : "No results yet"}
             />
           </div>
-          {race.total > 0 && <TurnoutLine race={race} />}
-          <VotesLeftPanel race={race} />
+          <LiveChance race={race} />
           <p className="muted small mt-source">
             {race.source && (
               <>
@@ -214,9 +213,8 @@ export function RaceView({ id }: { id: number }) {
                 : ""}
             * Incumbent. <Link href="/midterms/credits">Sources and credits</Link>
           </p>
-          {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
           {race.office !== "measure" && <RaceInsights race={race} ddhq={active} pollsExpected={!!(loaded ?? race).signal?.polls} forecast={false} />}
-          {data.history && <VoteUpdates history={data.history} />}
+          {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
         </section>
 
         <section aria-labelledby="map" className="mt-race-side">
@@ -257,7 +255,8 @@ export function RaceView({ id }: { id: number }) {
           {mapped && view?.note && <p className="muted small mt-map-note">{view.note}</p>}
           {mapped && race.office === "house" && <p className="muted small">Shaded {towns ? "towns are" : "counties are all or partly"} in this district.</p>}
           {race.office !== "measure" && <RaceInsights race={race} ddhq={active} polls={false} />}
-          {race.office !== "measure" && <MarketPanel raceId={race.id} expected={!!(loaded ?? race).signal?.market} />}
+          {race.total > 0 && <CountingContext race={race} fetchedAt={data.fetchedAt} />}
+          {data.history && <VoteUpdates history={data.history} />}
         </section>
       </div>
 

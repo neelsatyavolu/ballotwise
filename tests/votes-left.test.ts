@@ -164,8 +164,11 @@ describe("votesLeft", () => {
     // With no county breakdown at all, the race's own shares split it.
     const bare = votesLeft(race([], { total: 200, expected: 500, candidates: [{ name: "Arr", party: "Republican", votes: 120, pct: 60, winner: false, incumbent: false }, { name: "Dee", party: "Democratic", votes: 80, pct: 40, winner: false, incumbent: false }] }))!;
     expect(bare).toMatchObject({ left: 300, leader: { votes: 180 }, runnerUp: { votes: 120 } });
-    // Counted past DDHQ's estimate: nothing left.
-    expect(votesLeft(race([county("City", 80, 20, 50)], { expected: 50 }))!.left).toBe(0);
+    // Counted past DDHQ's statewide estimate, the counties' own estimates stand, as on DDHQ's map (Mississippi's
+    // Senate race, Nov 5: 951,000 counted against a statewide 836,948, while 17 counties still had votes to come).
+    const past = votesLeft(race([{ ...county("City", 80, 20, 50), expected: 160 }, { ...county("Rural", 90, 210, 75), expected: 250 }], { expected: 350 }))!;
+    expect(past.left).toBe(60);
+    expect(past.places.map((p) => p.name)).toEqual(["City"]);
   });
 
   it("leans on the race's forecast in a House race barely counted, not on its first batch", () => {

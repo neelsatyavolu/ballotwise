@@ -1417,9 +1417,6 @@ body:has(.wrap.mt.mt-dv) main { padding-top: 0; }
 @keyframes mt-moment-in { from { opacity: 0; transform: scale(0.97); } }
 @media (prefers-reduced-motion: reduce) { .mt-moment[open] { animation: none; } }
 /* The 2024 comparison under a race's candidates: a headline with its caveat. */
-.mt-turnout { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet); }
-.mt-turnout p { margin: 0; }
-.mt-turnout p + p { margin-top: 4px; }
 .mt-counties tbody tr[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* Phone-only jump links under the control strip. */
 .mt-el-jump { display: none; }

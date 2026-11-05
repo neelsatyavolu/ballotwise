@@ -26,31 +26,6 @@ function placeLabel(est: Estimate, p: Estimate["places"][number]): string {
   return `${p.name} (${short(p.edge > 0 ? est.leader : est.runnerUp)} +${Math.abs(Math.round(p.edge))})`;
 }
 
-/** The estimate as a race-page panel: how many votes are left, how they'd split, where they are and what it means. */
-export function VotesLeftPanel({ race }: { race: RaceDetail }) {
-  const est = votesLeft(race);
-  if (!est) return null;
-  return (
-    <div className="mt-turnout mt-votes-left">
-      {est.left === 0 ? (
-        <p>
-          <b>Little or nothing left to count</b>
-        </p>
-      ) : (
-        <>
-          <p>
-            <b>~{approx(est.left)} votes left</b> · ~{approx(est.leader.votes)} {short(est.leader)}, ~{approx(est.runnerUp.votes)} {short(est.runnerUp)}. {cap(outlook(race, est))}.
-          </p>
-          {est.places.length > 0 && <p className="muted small">Mostly in {est.places.map((p) => placeLabel(est, p)).join(", ")}</p>}
-        </>
-      )}
-      <p className="muted small" title={CAVEAT}>
-        Rough estimate{est.unknown > 0 ? `, excluding ${est.unknown} ${est.unknown === 1 ? "county" : "counties"} with no data` : ""}
-      </p>
-    </div>
-  );
-}
-
 /**
  * The estimate as a card for a state's panel once its race is counting, where it takes the place of polls and
  * markets: votes left, how the top two would split them, what that means, and where they are. The caveat is kept to

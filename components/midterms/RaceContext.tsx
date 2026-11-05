@@ -4,10 +4,8 @@ import { holderOf, leadingFlip, outcomeOf } from "@/lib/midterms/holders";
 import { stampTime, stateFinal, zoneAbbr } from "@/lib/midterms/polls";
 import type { Observation } from "@/lib/midterms/history";
 import type { RaceDetail } from "@/lib/midterms/races";
-import { byTown, fmt, lead, marginLabel, partyOf, partyTag } from "@/lib/midterms/view";
+import { byTown, fmt, lead, partyTag } from "@/lib/midterms/view";
 import { isDesk } from "@/lib/ddhq/apply";
-
-const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
 /** Where the race stands in one line: called (and when we saw it), withdrawn, counting, or waiting on polls. */
 export function RaceStatus({ race, now }: { race: RaceDetail; now: number }) {
@@ -31,37 +29,6 @@ export function RaceStatus({ race, now }: { race: RaceDetail; now: number }) {
       {race.call?.replaced && !race.call.withdrawn && won && <span className="mt-flag warn">Call changed from {race.call.replaced}</span>}
       {race.missing && <span className="mt-flag warn">civicAPI left this race out of its latest update; these are the last numbers we have{race.lastSeen ? `, as of ${stampTime(race.lastSeen)} ${zoneAbbr(race.lastSeen)}` : ""}</span>}
     </p>
-  );
-}
-
-/** Votes counted so far in the reporting counties against their final 2024 presidential vote, statewide races only. */
-function against2024(race: RaceDetail) {
-  // A House district covers parts of counties, so whole-county 2024 totals don't compare.
-  const base = race.office !== "house" ? race.counties.filter((c) => c.total > 0 && c.pres2024) : [];
-  const pres = sum(base.map((c) => c.pres2024!.total));
-  const counted = sum(base.map((c) => c.total));
-  const votesOf = (c: (typeof base)[number], p: "D" | "R") => sum(c.candidates.filter((x) => partyOf(x.party) === p).map((x) => x.votes));
-  const nowMargin = counted ? ((sum(base.map((c) => votesOf(c, "D"))) - sum(base.map((c) => votesOf(c, "R")))) / counted) * 100 : null;
-  const then = pres ? ((sum(base.map((c) => c.pres2024!.harris)) - sum(base.map((c) => c.pres2024!.trump))) / pres) * 100 : null;
-  const partisan = race.office !== "measure" && race.candidates.some((c) => partyOf(c.party) === "D") && race.candidates.some((c) => partyOf(c.party) === "R");
-  return { counties: base.length, pres, counted, nowMargin: partisan ? nowMargin : null, then: partisan ? then : null };
-}
-
-/**
- * The headline under the candidates: how the count so far compares with 2024's final vote in the counties that have
- * reported. Context, never a projection of what's left.
- */
-export function TurnoutLine({ race }: { race: RaceDetail }) {
-  const t = against2024(race);
-  if (!t.counted || !t.pres) return null;
-  return (
-    <div className="mt-turnout">
-      <p>
-        <b>{Math.round((t.counted / t.pres) * 100)}% of 2024&apos;s vote</b> is counted in the {t.counties} {t.counties === 1 ? "county" : "counties"} reporting ({fmt(t.counted)} of {fmt(t.pres)}).
-        {t.nowMargin !== null && t.then !== null && <> The partial margin there is {marginLabel(t.nowMargin)}; 2024&apos;s final presidential margin was {marginLabel(t.then)}.</>}
-      </p>
-      <p className="muted small">Not a projection. The votes in so far may not be the same mix of precincts or ballot types as 2024&apos;s final count, so this is neither a swing nor an estimate of the vote still out.</p>
-    </div>
   );
 }
 

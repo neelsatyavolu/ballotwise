@@ -213,7 +213,7 @@ function toExpected(rows: readonly Row[], left: number, title: string, overall: 
  * Roughly how many votes are left in a race still counting and how they might split between the two leaders, from each
  * county's count, reporting figure and 2024 vote (see leftIn), split by the count so far and the 2024 lean moved by the
  * swing since (see sharesIn). Where a connected DDHQ account gives the race's expected vote, what's left totals that
- * less the count (see toExpected), so it agrees with DDHQ's "% in".
+ * less the count (see toExpected), so it agrees with DDHQ's "% in", until the count passes that estimate.
  * civicAPI's reporting figure counts precincts or ballot batches, not ballots, and late mail can lean differently, so
  * it's an estimate to read loosely. Null before any votes, once called, or with fewer than two candidates.
  */
@@ -251,7 +251,9 @@ export function votesLeft(race: RaceDetail): VotesLeft | null {
     const [sa, sb] = sharesIn(c, counted, names, parties, overall, swing, prior);
     return [{ name: c.name, fips: c.fips, left, a: left * sa, b: left * sb, edge: sa + sb > 0 ? (sa - sb) * 100 : null }];
   });
-  const rows = race.expected === undefined ? byCounty : toExpected(byCounty, Math.max(0, race.expected - race.total), race.title, overall);
+  // Once the count passes DDHQ's statewide estimate, that estimate says nothing is left while counties still fall short
+  // of their own; DDHQ's map goes by the counties then, and so does this.
+  const rows = race.expected === undefined || race.expected <= race.total ? byCounty : toExpected(byCounty, race.expected - race.total, race.title, overall);
   return {
     left: Math.round(sum(rows.map((r) => r.left))),
     leader: { name: a.name, party: a.party, votes: Math.round(sum(rows.map((r) => r.a))) },
