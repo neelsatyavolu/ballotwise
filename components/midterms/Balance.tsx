@@ -91,8 +91,10 @@ function PickupCount({ side, n }: { side: "D" | "R"; n: Pickups["D"] }) {
 export function SeatBar({ tally, ahead: leading, office, projected = null, pickups = null, deskCall = null }: { tally: Tally; ahead: Seats; office: keyof typeof NOTE; projected?: Projected; pickups?: Pickups | null; deskCall?: PulseCall | null }) {
   const share = (n: number) => `${(n / tally.total) * 100}%`;
   // With DDHQ's own seat count (tally.source), some of our leads are races it has already called and counted: the
-  // leads are scaled down to the seats it hasn't, so the bar never adds up to more than the chamber.
-  const raw = projected?.ahead ?? leading;
+  // leads are scaled down to the seats it hasn't, so the bar never adds up to more than the chamber. Races called here
+  // that it hasn't counted yet (tally.calledHere) count as leading, or they'd show as uncounted.
+  const here = tally.calledHere ?? { D: 0, R: 0, other: 0 };
+  const raw = projected?.ahead ?? { D: leading.D + here.D, R: leading.R + here.R, other: leading.other + here.other };
   const room = Math.max(0, tally.total - tally.D - tally.R - tally.other);
   const over = raw.D + raw.R + raw.other;
   const ahead = !projected && over > room ? { D: Math.floor((raw.D * room) / over), R: Math.floor((raw.R * room) / over), other: Math.floor((raw.other * room) / over) } : raw;

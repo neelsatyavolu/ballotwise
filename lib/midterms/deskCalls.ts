@@ -58,10 +58,13 @@ type Balance = { senate: Tally; house: Tally; governor: Tally };
  * way (a connected screen recounts after its DDHQ overlay). Governors keep the tracker's own count.
  */
 export function withDeskSeats(b: Balance, seats: Partial<Record<"senate" | "house", PulseSeats>> | undefined, kept?: Balance): Balance {
+  // Races called here but not yet in DDHQ's count are in neither its seats nor our leads; carried so they aren't lost.
+  const calledHere = (ours: Tally, desk: Pick<Tally, "D" | "R" | "other">) => ({ D: Math.max(0, ours.D - desk.D), R: Math.max(0, ours.R - desk.R), other: Math.max(0, ours.other - desk.other) });
   const one = (office: "senate" | "house"): Tally => {
     const desk = seats?.[office];
-    if (desk) return { ...b[office], ...desk, uncalled: b[office].uncalled, source: "ddhq" };
-    return kept?.[office].source === "ddhq" ? kept[office] : b[office];
+    if (desk) return { ...b[office], ...desk, uncalled: b[office].uncalled, source: "ddhq", calledHere: calledHere(b[office], desk) };
+    const prior = kept?.[office];
+    return prior?.source === "ddhq" ? { ...prior, calledHere: calledHere(b[office], prior) } : b[office];
   };
   return { ...b, senate: one("senate"), house: one("house") };
 }

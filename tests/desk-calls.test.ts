@@ -61,4 +61,11 @@ describe("withDeskSeats", () => {
     expect(withDeskSeats(b, undefined, desk).house).toMatchObject({ D: 211, R: 117 });
     expect(withDeskSeats(b, undefined, b).house).toEqual(b.house);
   });
+
+  it("carries the races called here that DDHQ's count doesn't have yet, so the seat bar can count them as leading", () => {
+    const desk = withDeskSeats(b, { house: { D: 205, R: 114, other: 0 } });
+    expect(desk.house.calledHere).toEqual({ D: 0, R: 2, other: 0 });
+    // After a recount, the gap is measured against the new count.
+    expect(withDeskSeats({ ...b, house: tally(206, 115) }, undefined, desk).house.calledHere).toEqual({ D: 1, R: 1, other: 0 });
+  });
 });
