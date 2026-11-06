@@ -1,6 +1,7 @@
 // Rendered inside OfficeView.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { labelSpot } from "@/lib/midterms/labelSpot";
+import { isAkDistrictCode } from "@/lib/midterms/akHouse";
 import { isTownCode } from "@/lib/midterms/view";
 import { CityLabels, FlipStripes, loadMap, useDistrictShapes, usePatternId, type City } from "./maps";
 import { HoverCard, keyOf, useMapHover } from "./mapHover";
@@ -74,7 +75,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   arrows?: Arrow[] | null;
 }) {
   const [nation, setNation] = useState<Nation | null | "error">(null);
-  const [layer, setLayer] = useState<{ state: string; towns: boolean; data: Layer } | null>(null);
+  const [layer, setLayer] = useState<{ state: string; path: string; data: Layer } | null>(null);
   const [lines, setLines] = useState<{ state: string; data: Districts } | null>(null);
   const patternId = usePatternId();
   const wrap = useRef<HTMLDivElement>(null);
@@ -87,17 +88,20 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
   }, []);
   // New England reports by town: when the results are keyed by town, the state is drawn by town, as DDHQ draws it.
   const towns = !!countyFills && TOWN_STATES.has(focus ?? "") && [...countyFills.keys()].some(isTownCode);
+  // DDHQ reports Alaska by House district: then Alaska is drawn by district, as DDHQ draws it.
+  const akHouse = !!countyFills && focus === "AK" && [...countyFills.keys()].some(isAkDistrictCode);
+  const layerPath = towns ? `albers/towns/${focus}` : akHouse ? "albers/ak-house/AK" : `albers/${focus}`;
   useEffect(() => {
     if (!focus) return;
     let live = true;
-    loadMap<Layer>(towns ? `albers/towns/${focus}` : `albers/${focus}`).then(
-      (data) => live && setLayer({ state: focus, towns, data }),
+    loadMap<Layer>(layerPath).then(
+      (data) => live && setLayer({ state: focus, path: layerPath, data }),
       () => {},
     );
     return () => {
       live = false;
     };
-  }, [focus, towns]);
+  }, [focus, layerPath]);
   const wantsDistricts = !!districtFills;
   const nationStates = useMemo(() => (nationDistricts ? [...new Set([...nationDistricts.keys()].map((k) => k.split("-")[0]))].sort() : null), [nationDistricts]);
   const allDistricts = useDistrictShapes(nationStates);
@@ -120,7 +124,7 @@ export function ZoomMap({ fills, focus, onFocus, countyFills, raceId, label, dis
     };
   }, [focus, wantsDistricts]);
 
-  const counties = focus && layer?.state === focus && layer.towns === towns ? layer.data.counties : null;
+  const counties = focus && layer?.state === focus && layer.path === layerPath ? layer.data.counties : null;
   const districts = districtFills && focus && lines?.state === focus ? lines.data.districts : null;
   // County results take over once a district's counties come in; until then, and in states that report by town, districts show.
   const showDistricts = districts && !countyFills?.size ? districts : null;

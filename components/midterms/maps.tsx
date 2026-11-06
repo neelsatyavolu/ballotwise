@@ -1,5 +1,6 @@
 // Rendered inside the tracker's client components.
 import { useEffect, useId, useMemo, useRef, useState, type DOMAttributes, type ReactNode, type RefObject } from "react";
+import { isAkDistrictCode } from "@/lib/midterms/akHouse";
 import { isTownCode } from "@/lib/midterms/view";
 import { HoverCard, keyOf, useMapHover } from "./mapHover";
 import { arrowMarks, bubbleMarks, type Arrow, type Bubble } from "./mapMarks";
@@ -124,7 +125,8 @@ export function CityLabels({ cities, view }: { cities: readonly City[]; view: re
 export type CountyFill = { fill: string; tip: ReactNode; active: boolean };
 
 /**
- * A state's counties, or its towns when the fills are keyed by town (New England reports by town). Places without a
+ * A state's counties, its towns when the fills are keyed by town (New England reports by town), or Alaska's House
+ * districts when they're keyed by district (DDHQ reports Alaska that way). Places without a
  * fill (outside a House district, say) are drawn faint. The selected one is zoomed to.
  */
 export function CountyMap({ state, fills, selected, onSelect, bubbles, arrows }: {
@@ -138,7 +140,8 @@ export function CountyMap({ state, fills, selected, onSelect, bubbles, arrows }:
   arrows?: readonly Arrow[] | null;
 }) {
   const towns = useMemo(() => [...fills.keys()].some(isTownCode), [fills]);
-  const map = useMap<StateMap>(towns ? `towns/${state}` : state);
+  const akHouse = useMemo(() => state === "AK" && [...fills.keys()].some(isAkDistrictCode), [state, fills]);
+  const map = useMap<StateMap>(towns ? `towns/${state}` : akHouse ? "ak-house/AK" : state);
   const wrap = useRef<HTMLDivElement>(null);
   const hover = useMapHover(wrap);
   const ready = map && map !== "error" ? map : null;
@@ -175,7 +178,7 @@ export function CountyMap({ state, fills, selected, onSelect, bubbles, arrows }:
       </>
     );
   }, [ready, full, bubbles, arrows]);
-  if (map === "error") return <p className="muted small">The map couldn&apos;t load. The table below has every {towns ? "town" : "county"}.</p>;
+  if (map === "error") return <p className="muted small">The map couldn&apos;t load. The table below has every {towns ? "town" : akHouse ? "district" : "county"}.</p>;
   if (!map) return <div className="mt-map mt-map-loading" aria-busy />;
   const hovered = hover.at && fills.has(hover.at.key) ? byFips.get(hover.at.key) : undefined;
   const outlines = [...(selectedPath ? [{ d: selectedPath, kind: "selected" as const }] : []), ...(hovered ? [{ d: hovered.d, kind: "hover" as const }] : [])];
@@ -184,7 +187,7 @@ export function CountyMap({ state, fills, selected, onSelect, bubbles, arrows }:
       wrap={wrap}
       viewBox={box.join(" ")}
       card={hover.at && hovered && <HoverCard at={hover.at} card={hover.card}>{fills.get(hovered.fips)?.tip}</HoverCard>}
-      label={`${towns ? "Town" : "County"} map of ${map.name}`}
+      label={`${towns ? "Town" : akHouse ? "House district" : "County"} map of ${map.name}`}
       outlines={outlines}
       aspect={`${full[2]} / ${full[3]}`}
       events={{

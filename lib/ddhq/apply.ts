@@ -1,7 +1,8 @@
 import { balance, type Candidate, type CountyResult, type RaceDetail, type RaceSummary } from "../midterms/races";
 import type { Forecast } from "../midterms/forecast";
 import type { CallEvent, Overview } from "../midterms/view";
-import type { DdhqCandidate, DdhqRace } from "./votes";
+import type { DdhqCandidate, DdhqCounty, DdhqRace } from "./votes";
+import { AK_HOUSE_2024, isAkDistrictCode } from "../midterms/akHouse";
 import { withDeskSeats } from "../midterms/deskCalls";
 import { seatKey } from "./votes";
 import type { DdhqForecastBundle } from "./forecast-types";
@@ -140,7 +141,11 @@ export function applyDesk<T extends RaceSummary>(race: T, given: DdhqRace, civic
     // Without one, the public counties stay: blanking them would grey the race's map and throw off its votes left.
     // With one, each county shows whichever source has more votes in it (civicAPI's only while recent): civicAPI's
     // county breakdown can lag its own statewide count (Harris at 0 on Nov 3 while DDHQ had a million).
-    if ("counties" in race && desk.counties.length) {
+    if ("counties" in race && desk.counties.length && desk.counties.some((row) => isAkDistrictCode(row.fips))) {
+      // DDHQ counts Alaska by House district and civicAPI by borough, which can't be laid over each other: Alaska's
+      // map shows DDHQ's districts only.
+      (next as unknown as RaceDetail).counties = desk.counties.map(akDistrict);
+    } else if ("counties" in race && desk.counties.length) {
       const detail = next as unknown as RaceDetail;
       detail.counties = (race as unknown as RaceDetail).counties.map((county) => mergeCounty(county, desk, recent));
       for (const county of desk.counties) {
@@ -164,6 +169,24 @@ export function applyDesk<T extends RaceSummary>(race: T, given: DdhqRace, civic
   }
   sources.set(next, canonical);
   return next;
+}
+
+/** One of DDHQ's Alaska House districts as a map place, with its 2024 presidential vote for the votes-left estimate. */
+function akDistrict(row: DdhqCounty): CountyResult {
+  const total = row.total ?? row.candidates.reduce((sum, c) => sum + c.votes, 0);
+  const pres = AK_HOUSE_2024[row.fips];
+  return {
+    fips: row.fips,
+    name: row.name ?? row.fips,
+    total,
+    reporting: row.reporting ?? 0,
+    reportingUnknown: total > 0 && row.reporting === undefined ? true : undefined,
+    expected: row.expected,
+    done: row.done,
+    candidates: row.candidates.map((c) => ({ ...c })),
+    baseline2024: pres ? Math.round(((pres[0] - pres[1]) / pres[2]) * 1000) / 10 : null,
+    pres2024: pres ? { harris: pres[0], trump: pres[1], total: pres[2] } : null,
+  };
 }
 
 /**

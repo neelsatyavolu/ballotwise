@@ -1,3 +1,4 @@
+import { ddhqCountyCode } from "../midterms/akHouse";
 import { AccountError, type Db } from "../auth/accounts";
 import { getCached, putCached } from "../cache";
 import { STATE_NAMES } from "../midterms/view";
@@ -245,7 +246,7 @@ export function readResults(body: unknown): DdhqResults {
       // DDHQ's own "% Est.": the count over its expected vote, as for the race; precincts only where it has no estimate.
       const reporting = done ? 100 : expectedIn(countyTotal, expected) ?? reportingOf(record.liveTurnoutEstimate?.precinctsIn, record.liveTurnoutEstimate?.precinctsTot);
       counties.push({
-        fips: record.fips,
+        fips: ddhqCountyCode(record.fips, record.county),
         ...(typeof record.county === "string" ? { name: record.county } : {}),
         total: countyTotal,
         ...(reporting !== undefined ? { reporting } : {}),

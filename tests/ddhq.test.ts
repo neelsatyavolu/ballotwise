@@ -406,6 +406,27 @@ describe("civicAPI replacement", () => {
     expect(isDesk(kept)).toBe(false);
   });
 
+  it("draws Alaska by DDHQ's House districts, not civicAPI's boroughs", () => {
+    // DDHQ files Alaska's districts under 02001-02040, which are borough codes too (Anchorage is 02020).
+    const body = { raceData: { toplineResults: [
+      { firstName: "Bill", lastName: "Hill", votes: 2249, percent: 50, party: { name: "Nonpartisan" } },
+    ], countyResults: [
+      { fips: "02020", county: "State House District 20", liveTurnoutEstimate: { totalVotes: 4532, estimatedVotesMid: 6150 }, candidates: [{ first_name: "Bill", last_name: "Hill", votes: 2249, party: { name: "Nonpartisan" } }] },
+      { fips: "02013", county: "Aleutians East Borough", candidates: [] },
+    ] } };
+    expect(readResults(body).counties.map((row) => [row.fips, row.name])).toEqual([["02920", "State House District 20"], ["02013", "Aleutians East Borough"]]);
+
+    const civic = summary({ state: "AK", office: "house", district: 0 });
+    const borough = { reporting: 70, total: 900, candidates: [{ name: "Bill Hill", party: "Nonpartisan", votes: 500, pct: 55 }], baseline2024: null, pres2024: null };
+    const detail: RaceDetail = { ...civic, pollsClose: null, updated: null, counties: [{ ...borough, fips: "02020", name: "Anchorage Municipality" }, { ...borough, fips: "02090", name: "Fairbanks North Star Borough" }] };
+    const districts = { ...desk, call: null, counties: [{ fips: "02920", name: "State House District 20", total: 4532, reporting: 73.7, expected: 6150, candidates: [{ name: "Bill Hill", party: "Nonpartisan", votes: 2249, pct: 49.6 }] }] };
+    const next = applyDesk(detail, districts, Date.now());
+    // The districts replace the boroughs, carrying each district's 2024 presidential vote for the votes-left estimate.
+    expect(next.counties).toHaveLength(1);
+    expect(next.counties[0]).toMatchObject({ fips: "02920", name: "State House District 20", total: 4532, expected: 6150, pres2024: { harris: 3924, trump: 3041, total: 6965 } });
+    expect(next.counties[0].baseline2024).toBeCloseTo(12.7, 1);
+  });
+
   it("rebuilds the overview call list for this user only", () => {
     const civic = summary();
     const overview = { races: [civic, summary({ id: 2, office: "measure", title: "Question 1" })], balance: { senate: { D: 0, R: 0, other: 0, total: 100, majority: 51, uncalled: 0 }, house: { D: 0, R: 0, other: 0, total: 435, majority: 218, uncalled: 0 }, governor: { D: 0, R: 0, other: 0, total: 50, majority: 26, uncalled: 0 } }, fetchedAt: 1, stale: false, ratings: { updatedAt: null }, callEvents: [], callEventCounts: { senate: 4, house: 0, governor: 0, measure: 0 } } as Overview;
