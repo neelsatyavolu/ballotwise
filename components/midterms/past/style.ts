@@ -38,6 +38,48 @@ export const FILL: ExpressionSpecification = [
   ramp(RAMPS.a),
 ];
 
+/** The Swing view's own county shapes (scripts/build-past-shift.mjs), each feature id its county code. */
+export const SWING_SOURCE = "past-swing";
+export const SWING_LAYER = "past-swing-fill";
+const SWING_SHAPES = "/midterms/past/swing-counties.json";
+export const SWING_STEPS = [0, 5, 10, 15, 20];
+const NO_SHIFT = 999;
+const steps = (value: ExpressionSpecification, colors: string[]): ExpressionSpecification =>
+  ["step", value, colors[0], ...SWING_STEPS.slice(1).flatMap((s, i) => [s, colors[i + 1]])] as ExpressionSpecification;
+
+/**
+ * The Swing view's county color from `shifts` (each county's move in points, by code): blue toward the Democrat and
+ * red toward the Republican, in 5-point steps to 20+, and gray for a county with nothing to compare.
+ */
+export function swingFill(shifts: Readonly<Record<string, number>>): ExpressionSpecification | string {
+  const entries = Object.entries(shifts);
+  if (!entries.length) return NO_VOTES;
+  const shift = ["match", ["get", "co"], ...entries.flatMap(([co, m]) => [co, m]), NO_SHIFT] as unknown as ExpressionSpecification;
+  const s: ExpressionSpecification = ["var", "s"];
+  return [
+    "let", "s", shift,
+    ["case", ["==", s, NO_SHIFT], NO_VOTES, [">", s, 0], steps(s, RAMPS.d), ["<", s, 0], steps(["-", 0, s], RAMPS.r), TIE],
+  ] as ExpressionSpecification;
+}
+
+/** The tiles' layers the Swing view hides: its counties come from its own shapes, which the tiles' merged counties can't stand in for. */
+const MARGIN_LAYERS = ["past-counties-fill", "past-precincts", "past-precincts-line"];
+const SWING_LAYERS = [SWING_LAYER, "past-swing-line", "past-swing-hover"];
+
+/** Colors the map by margin (`shifts` null) or by each county's swing, adding the swing shapes the first time. */
+export function showView(map: MapLibre, shifts: Readonly<Record<string, number>> | null) {
+  if (shifts && !map.getSource(SWING_SOURCE)) {
+    map.addSource(SWING_SOURCE, { type: "geojson", data: SWING_SHAPES, promoteId: "co", attribution: "Swing: MIT Election Lab, Tony McGovern, US Census Bureau" });
+    // Under the water like the precincts, so lakes stay cut out; the lines go under the tiles' county lines.
+    map.addLayer({ id: SWING_LAYER, type: "fill", source: SWING_SOURCE, paint: { "fill-color": NO_VOTES } }, "water");
+    map.addLayer({ id: "past-swing-line", type: "line", source: SWING_SOURCE, maxzoom: 5, paint: { "line-color": "#000", "line-opacity": 0.3, "line-width": 0.3 } }, "past-counties-line");
+    map.addLayer({ id: "past-swing-hover", type: "line", source: SWING_SOURCE, paint: HOVER_PAINT } as LayerSpecification, "past-states-hover");
+  }
+  if (shifts) map.setPaintProperty(SWING_LAYER, "fill-color", swingFill(shifts));
+  for (const id of MARGIN_LAYERS) map.setLayoutProperty(id, "visibility", shifts ? "none" : "visible");
+  if (map.getSource(SWING_SOURCE)) for (const id of SWING_LAYERS) map.setLayoutProperty(id, "visibility", shifts ? "visible" : "none");
+}
+
 export type Level = "state" | "county" | "precinct";
 export const SOURCE_LAYER: Record<Level, string> = { state: "states", county: "counties", precinct: "precincts" };
 /** The layer the pointer is tested against for each level; counties and states are invisible above the precincts. */
@@ -128,10 +170,11 @@ export function addLayers(map: MapLibre, url: string) {
  * the pointer, while feature state only repaints.
  */
 export function hoverOutline(map: MapLibre) {
-  let last: { source: string; sourceLayer: string; id: string | number } | null = null;
-  return (level: Level | null, id: string | number | undefined) => {
-    const next = level && id !== undefined ? { source: SOURCE, sourceLayer: SOURCE_LAYER[level], id } : null;
-    if (last?.sourceLayer === next?.sourceLayer && last?.id === next?.id) return;
+  let last: { source: string; sourceLayer?: string; id: string | number } | null = null;
+  /** `swing` outlines a county of the Swing view's own shapes. */
+  return (level: Level | null, id: string | number | undefined, swing = false) => {
+    const next = !level || id === undefined ? null : swing ? { source: SWING_SOURCE, id } : { source: SOURCE, sourceLayer: SOURCE_LAYER[level], id };
+    if (last?.source === next?.source && last?.sourceLayer === next?.sourceLayer && last?.id === next?.id) return;
     if (last) map.setFeatureState(last, { hover: false });
     if (next) map.setFeatureState(next, { hover: true });
     last = next;

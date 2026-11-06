@@ -1,5 +1,7 @@
 // The past-elections map's results table: in the hover tooltip, and larger in the sidebar.
 import { lastName, marginOf, type Row } from "@/lib/midterms/pastResults";
+import { swingLabel, type Swing } from "@/lib/midterms/pastShift";
+import { marginLabel } from "@/lib/midterms/view";
 
 const fmt = new Intl.NumberFormat("en-US");
 const pct = (n: number) => `${n.toFixed(2)}%`;
@@ -24,6 +26,47 @@ function Margin({ rows }: { rows: Row[] }) {
     <div className="mt-past-margin" style={{ background: rowColor(m.leader) }}>
       <b>+{pct(m.pct)}</b>
       <span>{lastName(m.leader.name)}</span>
+    </div>
+  );
+}
+
+/** The Swing view's tooltip: the place's margin in each race, and how far it moved, in that party's color. */
+export function SwingTip({ title, subtitle, swing, year, base }: { title: string; subtitle?: string; swing: Swing | null; year: number; base: number }) {
+  const color = !swing || swing.shift === 0 ? "var(--el-raised)" : swing.shift > 0 ? "var(--dem)" : "var(--rep)";
+  return (
+    <div className="mt-past-tip-body">
+      <table>
+        <thead>
+          <tr>
+            <th>
+              {title}
+              {subtitle ? <small>{subtitle}</small> : null}
+            </th>
+            <th className="num">Margin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {swing ? (
+            [[year, swing.now], [base, swing.then]].map(([y, m]) => (
+              <tr key={y} style={{ "--row": m > 0 ? "var(--dem)" : m < 0 ? "var(--rep)" : "var(--muted)" } as React.CSSProperties}>
+                <td>{y}</td>
+                <td className="num">{marginLabel(m)}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={2} className="muted">No {base} result to compare</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div className="mt-past-tip-margin">
+        <span className="mt-past-th">Swing</span>
+        <div className={swing ? "mt-past-margin" : "mt-past-margin tie"} style={swing ? { background: color } : undefined}>
+          <b>{swing ? swingLabel(swing.shift) : "–"}</b>
+          <span>since {base}</span>
+        </div>
+      </div>
     </div>
   );
 }

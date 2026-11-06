@@ -8,11 +8,14 @@ export const OFFICES: { id: Office; label: string }[] = [
   { id: "governor", label: "Governor" },
 ];
 
-/** Newest first within each office; the first is the one the map opens on. */
-export const ELECTIONS: { id: string; office: Office; year: number; label?: string }[] = [
-  { id: "2024-president", office: "president", year: 2024 },
-  { id: "2020-president", office: "president", year: 2020 },
-  { id: "2016-president", office: "president", year: 2016 },
+/**
+ * Newest first within each office; the first is the one the map opens on. `swingFrom` is the race the Swing view
+ * compares against, for the presidential races (scripts/build-past-shift.mjs builds their files).
+ */
+export const ELECTIONS: { id: string; office: Office; year: number; swingFrom?: number; label?: string }[] = [
+  { id: "2024-president", office: "president", year: 2024, swingFrom: 2020 },
+  { id: "2020-president", office: "president", year: 2020, swingFrom: 2016 },
+  { id: "2016-president", office: "president", year: 2016, swingFrom: 2012 },
   { id: "2018-senate", office: "senate", year: 2018 },
   // Minnesota's special election and Mississippi's special runoff, for each state's other seat.
   { id: "2018-senate-special", office: "senate", year: 2018, label: "2018 special" },
@@ -23,3 +26,4 @@ export const ELECTIONS: { id: string; office: Office; year: number; label?: stri
 const TILES = process.env.NEXT_PUBLIC_PAST_TILES ?? "/midterms/past-tiles";
 export const tilesUrl = (id: string) => `pmtiles://${new URL(`${TILES}/${id}.pmtiles`, location.href).href}`;
 export const summaryUrl = (id: string) => `/midterms/past/${id}.json`;
+export const swingUrl = (id: string) => `/midterms/past/swing-${id}.json`;

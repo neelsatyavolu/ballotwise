@@ -72,3 +72,5 @@
   .mt-past-margin b { font-size: 16px; }
 }
 .mt-past-table td:first-child { white-space: nowrap; }
+.mt-past-view button { white-space: nowrap; padding-inline: 8px; }
+.mt-past-swing { margin: 0; font-size: 14px; }

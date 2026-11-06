@@ -3,14 +3,15 @@
 // Past elections down to the precinct, after DDHQ's results map: hover a state, county or precinct for its results;
 // pick a state or county to zoom in and darken everything around it.
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GeoJSONFeature, MapGeoJSONFeature, Map as MapLibre, MapMouseEvent, VectorTileSource } from "maplibre-gl";
 import states from "@/lib/midterms/states.json";
 import { countyLabel, rowsFor, type Summary, type Votes } from "@/lib/midterms/pastResults";
-import { ELECTIONS, summaryUrl, tilesUrl } from "./elections";
-import { PastPanel, type Place } from "./PastPanel";
-import { ResultsTip } from "./Results";
-import { addLayers, BASEMAP, HIT_LAYER, hoverOutline, showSelection, SOURCE, SOURCE_LAYER, type Level } from "./style";
+import { countyShifts, swingOf, type SwingFile } from "@/lib/midterms/pastShift";
+import { ELECTIONS, summaryUrl, swingUrl, tilesUrl } from "./elections";
+import { PastPanel, type Place, type View } from "./PastPanel";
+import { ResultsTip, SwingTip } from "./Results";
+import { addLayers, BASEMAP, HIT_LAYER, hoverOutline, showSelection, showView, SOURCE, SOURCE_LAYER, SWING_LAYER, type Level } from "./style";
 
 const STATE_NAMES = new Map((states as string[][]).map(([, postal, name]) => [postal, name]));
 const US_BOUNDS: [[number, number], [number, number]] = [[-125, 24.5], [-66.9, 49.4]];
@@ -21,7 +22,7 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "precinct", label: "Precinct" },
 ];
 type Mode = "auto" | Level;
-type Tip = { x: number; y: number; right: boolean; low: boolean; level: Level; props: Record<string, unknown> };
+type Tip = { x: number; y: number; right: boolean; low: boolean; level: Level; props: Record<string, unknown>; swing: boolean };
 
 /**
  * Below this zoom the tiles merge neighboring precincts (keeping one's name and summing their votes), so precincts
@@ -43,6 +44,24 @@ const loadBounds = () =>
       console.error("past results bounds failed:", err instanceof Error ? err.message : err);
       return null;
     }));
+/** Each presidential race's swing file, loaded once when first asked for. */
+const swingFiles = new Map<string, Promise<SwingFile | null>>();
+function loadSwing(id: string): Promise<SwingFile | null> {
+  let file = swingFiles.get(id);
+  if (!file) {
+    file = fetch(swingUrl(id))
+      .then((r) => (r.ok ? (r.json() as Promise<SwingFile>) : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .catch((err) => {
+        console.error("past results swing failed:", id, err instanceof Error ? err.message : err);
+        // A failed load is tried again the next time it's asked for.
+        swingFiles.delete(id);
+        return null;
+      });
+    swingFiles.set(id, file);
+  }
+  return file;
+}
+
 const toLngLat = (b: Box | undefined): [[number, number], [number, number]] | null => (b ? [[b[0], b[1]], [b[2], b[3]]] : null);
 
 /** A county's votes from the loaded tiles, or null when it has none in this election (or isn't loaded). */
@@ -85,13 +104,22 @@ export function PastMap() {
   const [place, setPlace] = useState<Place | null>(null);
   const [tip, setTip] = useState<Tip | null>(null);
   const [tilesFailed, setTilesFailed] = useState(false);
-  const level = mode === "auto" ? autoLevel(zoom) : mode === "precinct" && zoom < PRECINCT_ZOOM ? "county" : mode;
+  const [view, setView] = useState<View>("margin");
+  const election = ELECTIONS.find((e) => e.id === electionId) ?? ELECTIONS[0];
+  // Only the presidential races have a Swing view; the others show margins whatever was picked.
+  const swingView = view === "swing" && election.swingFrom !== undefined;
+  const [swingLoaded, setSwingLoaded] = useState<{ id: string; file: SwingFile | "error" } | null>(null);
+  const swingFile = swingView && swingLoaded?.id === electionId ? swingLoaded.file : null;
+  const shifts = useMemo(() => (swingFile && swingFile !== "error" ? countyShifts(swingFile) : null), [swingFile]);
+  const picked = mode === "auto" ? autoLevel(zoom) : mode === "precinct" && zoom < PRECINCT_ZOOM ? "county" : mode;
+  // The Swing view colors counties only: precincts are drawn differently from one election to the next.
+  const level: Level = swingView && picked === "precinct" ? "county" : picked;
 
   // The map's handlers are bound once, so they read the current choices through this.
-  const live = useRef({ level, electionId });
+  const live = useRef({ level, electionId, swingView });
   useEffect(() => {
-    live.current = { level, electionId };
-  }, [level, electionId]);
+    live.current = { level, electionId, swingView };
+  }, [level, electionId, swingView]);
 
   const fit = (bounds: [[number, number], [number, number]] | null) => {
     if (bounds) mapRef.current?.fitBounds(bounds, { padding: padding(), maxZoom: 11, duration: 600 });
@@ -164,14 +192,16 @@ export function PastMap() {
 
       const hit = (e: MapMouseEvent): { lv: Level; f: MapGeoJSONFeature | undefined } => {
         const lv = live.current.level;
-        const f = m.queryRenderedFeatures(e.point, { layers: [HIT_LAYER[lv]] })[0];
+        // The Swing view's counties are its own shapes, not the tiles' (which merge counties when zoomed out).
+        const layer = live.current.swingView && lv === "county" ? SWING_LAYER : HIT_LAYER[lv];
+        const f = m.queryRenderedFeatures(e.point, { layers: [layer] })[0];
         // Where a source has no precinct, the county under it answers instead.
         if (f || lv !== "precinct") return { lv, f };
         return { lv: "county", f: m.queryRenderedFeatures(e.point, { layers: [HIT_LAYER.county] })[0] };
       };
       const showTip = (e: MapMouseEvent, lv: Level, f: MapGeoJSONFeature) => {
         const { width, height } = m.getContainer().getBoundingClientRect();
-        setTip({ x: e.point.x, y: e.point.y, right: e.point.x > width / 2, low: e.point.y > height / 2, level: lv, props: f.properties });
+        setTip({ x: e.point.x, y: e.point.y, right: e.point.x > width / 2, low: e.point.y > height / 2, level: lv, props: f.properties, swing: live.current.swingView });
       };
       // The pointer handlers wait for the election's layers, which they test against.
       m.on("load", () => {
@@ -185,7 +215,7 @@ export function PastMap() {
       const bindPointer = () => {
         m.on("mousemove", (e) => {
           const { lv, f } = hit(e);
-          hover.current?.(f ? lv : null, f?.id);
+          hover.current?.(f ? lv : null, f?.id, f?.layer.id === SWING_LAYER);
           m.getCanvas().style.cursor = f ? "pointer" : "";
           if (f) showTip(e, lv, f);
           else setTip(null);
@@ -198,7 +228,7 @@ export function PastMap() {
           const { lv, f } = hit(e);
           if (!f) return pickers.current.pickNation();
           // A tap shows the tooltip too, since touch screens have no hover.
-          hover.current?.(lv, f.id);
+          hover.current?.(lv, f.id, f.layer.id === SWING_LAYER);
           showTip(e, lv, f);
           if (lv === "state") pickers.current.pickState(String(f.properties.st));
           else pickers.current.pickCounty(f.properties, live.current.level === "county");
@@ -255,6 +285,26 @@ export function PastMap() {
   }, [electionId]);
 
   useEffect(() => {
+    if (!swingView) return;
+    let current = true;
+    void loadSwing(electionId).then((file) => current && setSwingLoaded({ id: electionId, file: file ?? "error" }));
+    return () => {
+      current = false;
+    };
+  }, [swingView, electionId]);
+
+  // Switching views or races clears the hover outline, which may be on the other view's shapes. The Swing view keeps
+  // the last colors until a new race's file arrives.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    hover.current?.(null, undefined);
+    setTip(null);
+    if (!swingView) showView(map, null);
+    else if (shifts) showView(map, shifts);
+  }, [swingView, shifts, ready]);
+
+  useEffect(() => {
     if (ready && mapRef.current) showSelection(mapRef.current, place ? { st: place.st, co: place.co } : null);
   }, [place, ready]);
 
@@ -269,7 +319,17 @@ export function PastMap() {
   return (
     <div className="mt-past">
       <div ref={container} className="mt-past-map" />
-      <PastPanel electionId={electionId} onElection={setElectionId} summary={summary} place={place} onNation={pickNation} onState={pickState} />
+      <PastPanel
+        electionId={electionId}
+        onElection={setElectionId}
+        summary={summary}
+        place={place}
+        onNation={pickNation}
+        onState={pickState}
+        view={view}
+        onView={setView}
+        swingFile={swingFile}
+      />
       <label className="mt-past-mode">
         <span>Selecting:</span>
         <select value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
@@ -279,9 +339,34 @@ export function PastMap() {
         </select>
       </label>
       {tilesFailed ? <p className="mt-past-error">The precinct map didn&rsquo;t load. Try again in a moment.</p> : null}
-      {tip && summary && summary !== "error" ? <PlaceTip tip={tip} summary={summary} /> : null}
+      {tip?.swing && swingFile && swingFile !== "error" ? (
+        <TipBox tip={tip}><SwingPlaceTip tip={tip} file={swingFile} /></TipBox>
+      ) : tip && !tip.swing && summary && summary !== "error" ? (
+        <TipBox tip={tip}><PlaceTip tip={tip} summary={summary} /></TipBox>
+      ) : null}
     </div>
   );
+}
+
+/** A tooltip beside the pointer, on whichever side has room. */
+function TipBox({ tip, children }: { tip: Tip; children: React.ReactNode }) {
+  return (
+    <div
+      className="mt-past-tip"
+      style={{ left: tip.x, top: tip.y, transform: `translate(${tip.right ? "calc(-100% - 14px)" : "14px"}, ${tip.low ? "calc(-100% - 14px)" : "14px"})` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SwingPlaceTip({ tip, file }: { tip: Tip; file: SwingFile }) {
+  const p = tip.props;
+  const st = String(p.st ?? "");
+  const co = String(p.co ?? "");
+  const state = tip.level === "state";
+  const title = state ? STATE_NAMES.get(st) ?? st : countyLabel(st, co, String(p.cn ?? ""));
+  return <SwingTip title={title} subtitle={state ? undefined : st} swing={swingOf(state ? file.states[st] : file.counties[co])} year={file.year} base={file.base} />;
 }
 
 function PlaceTip({ tip, summary }: { tip: Tip; summary: Summary }) {
@@ -291,12 +376,5 @@ function PlaceTip({ tip, summary }: { tip: Tip; summary: Summary }) {
   const county = countyLabel(st, String(p.co ?? ""), String(p.cn ?? ""));
   const title = tip.level === "state" ? STATE_NAMES.get(st) ?? st : tip.level === "county" ? county : String(p.nm ?? "Precinct");
   const subtitle = tip.level === "precinct" ? [county, st].filter(Boolean).join(", ") : tip.level === "county" ? st : undefined;
-  return (
-    <div
-      className="mt-past-tip"
-      style={{ left: tip.x, top: tip.y, transform: `translate(${tip.right ? "calc(-100% - 14px)" : "14px"}, ${tip.low ? "calc(-100% - 14px)" : "14px"})` }}
-    >
-      <ResultsTip title={title} subtitle={subtitle} rows={rows} />
-    </div>
-  );
+  return <ResultsTip title={title} subtitle={subtitle} rows={rows} />;
 }

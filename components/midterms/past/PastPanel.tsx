@@ -1,8 +1,13 @@
 // The past-elections map's sidebar: where you are, which race, its results and the color key.
 import { nationRows, rowsFor, type Row, type Summary, type Votes } from "@/lib/midterms/pastResults";
+import { swingLabel, swingOf, type SwingFile } from "@/lib/midterms/pastShift";
+import { marginLabel } from "@/lib/midterms/view";
 import { ELECTIONS, OFFICES, type Office } from "./elections";
 import { ResultsTable } from "./Results";
-import { LEGEND } from "./style";
+import { LEGEND, SWING_STEPS } from "./style";
+
+/** Margin colors places by who won; Swing colors counties by how far they moved from a past presidential race. */
+export type View = "margin" | "swing";
 
 /** A picked state, or a county with its votes (null when it has none in this election). */
 export type Place = { st: string; stateName: string; co?: string; county?: string; votes?: Votes | null };
@@ -24,19 +29,26 @@ function rowsForPlace(summary: Summary, office: Office, place: Place | null): Ro
   return stateRows(summary, place.st);
 }
 
-export function PastPanel({ electionId, onElection, summary, place, onNation, onState }: {
+export function PastPanel({ electionId, onElection, summary, place, onNation, onState, view, onView, swingFile }: {
   electionId: string;
   onElection: (id: string) => void;
   summary: Summary | null | "error";
   place: Place | null;
   onNation: () => void;
   onState: (st: string) => void;
+  view: View;
+  onView: (view: View) => void;
+  swingFile: SwingFile | null | "error";
 }) {
   const election = ELECTIONS.find((e) => e.id === electionId) ?? ELECTIONS[0];
   const years = ELECTIONS.filter((e) => e.office === election.office);
   const officeLabel = OFFICES.find((o) => o.id === election.office)?.label ?? "";
   const when = election.label ? `the ${election.label}` : election.year;
   const rows = summary && summary !== "error" ? rowsForPlace(summary, election.office, place) : null;
+  const base = election.swingFrom;
+  const swingView = view === "swing" && base !== undefined;
+  const file = swingView && swingFile && swingFile !== "error" ? swingFile : null;
+  const swing = file ? swingOf(!place ? file.us : place.co ? file.counties[place.co] : file.states[place.st]) : null;
 
   return (
     <aside className="mt-past-panel" aria-label="Results">
@@ -63,6 +75,27 @@ export function PastPanel({ electionId, onElection, summary, place, onNation, on
         ))}
       </div>
 
+      {base !== undefined ? (
+        <div className="mt-past-years mt-past-view" role="group" aria-label="Color by">
+          <button aria-pressed={!swingView} onClick={() => onView("margin")}>Margin</button>
+          <button aria-pressed={swingView} onClick={() => onView("swing")}>Swing since {base}</button>
+        </div>
+      ) : null}
+
+      {swingView && swingFile === "error" ? <p className="muted">The swing from {base} didn&rsquo;t load. Try again in a moment.</p> : null}
+      {file ? (
+        <p className="mt-past-swing">
+          {swing ? (
+            <>
+              Moved <b style={{ color: swing.shift > 0 ? "var(--dem)" : swing.shift < 0 ? "var(--rep)" : undefined }}>{swingLabel(swing.shift)}</b> since {base}:{" "}
+              {marginLabel(swing.then)} in {base}, {marginLabel(swing.now)} in {election.year}.
+            </>
+          ) : (
+            `No ${base} result to compare for ${place?.county ?? place?.stateName}.`
+          )}
+        </p>
+      ) : null}
+
       {summary === "error" ? (
         <p className="muted">These results didn&rsquo;t load. Try again in a moment.</p>
       ) : !summary ? (
@@ -78,6 +111,21 @@ export function PastPanel({ electionId, onElection, summary, place, onNation, on
         </p>
       )}
 
+      {swingView ? (
+        <div className="mt-past-legend" aria-label="Swing key">
+          <small>Moved toward Democrats</small>
+          <div>{LEGEND.ramps.d.map((c) => <i key={c} style={{ background: c }} />)}</div>
+          <small>Moved toward Republicans</small>
+          <div>{LEGEND.ramps.r.map((c) => <i key={c} style={{ background: c }} />)}</div>
+          <p>
+            {SWING_STEPS.map((s, i) => <span key={s}>{i === SWING_STEPS.length - 1 ? `${s}+` : `${s}–${SWING_STEPS[i + 1]}`}</span>)}
+          </p>
+          <small>
+            Points of margin each county moved since {base}, not who won it. Gray counties have nothing to compare:
+            {election.year === 2024 ? " Alaska's districts and Connecticut's new planning regions don't line up with 2020's counties." : " Alaska reports by district, not county."}
+          </small>
+        </div>
+      ) : (
       <div className="mt-past-legend" aria-label="Margin key">
         {(["d", "r", "a"] as const).map((k) => (
           <div key={k}>
@@ -89,6 +137,7 @@ export function PastPanel({ electionId, onElection, summary, place, onNation, on
         </p>
         <small>Margin in points. Blue: Democrat, red: Republican, purple: anyone else.</small>
       </div>
+      )}
 
       <p className="mt-past-sources">
         Precinct results from the <a href="https://github.com/nytimes/presidential-precinct-map-2024">New York Times</a> (2024),
@@ -97,6 +146,8 @@ export function PastPanel({ electionId, onElection, summary, place, onNation, on
         from the <a href="https://github.com/MEDSL/2024-elections-official">MIT Election Lab</a>, and Alaska is shown by state House district, since
         the Times has no precincts there or in a few counties. Other years&rsquo; totals add up the precincts, so they can differ slightly from
         certified results.
+        The Swing view compares county results from the <a href="https://github.com/MEDSL/county-returns">MIT Election Lab</a> (2012,
+        2016) and <a href="https://github.com/tonmcg/US_County_Level_Election_Results_08-24">Tony McGovern</a> (2020, 2024).
       </p>
     </aside>
   );
