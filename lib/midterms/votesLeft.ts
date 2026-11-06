@@ -104,10 +104,14 @@ function leftIn(c: CountyResult, turnout: number, statewide: boolean): number | 
   if (c.expected !== undefined) return Math.max(0, c.expected - c.total);
   const scaled = scaledOf(c);
   const prior = statewide && c.pres2024?.total ? Math.max(0, c.pres2024.total * turnout - c.total) : null;
-  if (scaled === null) return prior;
-  if (prior === null) return scaled - c.total;
+  // Without DDHQ's estimate, a county has at most its whole 2024 vote left to count: a midterm rarely outvotes a
+  // presidential year, and a district's part of a county can't outvote the county. AZ-2's Gila, 40% in by precincts,
+  // scaled up to more votes still out than it cast in all of 2024.
+  const most = c.pres2024?.total ? Math.max(0, c.pres2024.total - c.total) : Infinity;
+  if (scaled === null) return prior === null ? null : Math.min(most, prior);
+  if (prior === null) return Math.min(most, scaled - c.total);
   const w = trust(c);
-  return w * (scaled - c.total) + (1 - w) * prior;
+  return Math.min(most, w * (scaled - c.total) + (1 - w) * prior);
 }
 
 /**

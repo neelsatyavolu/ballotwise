@@ -191,6 +191,17 @@ describe("votesLeft", () => {
     expect(Math.abs(quiet.edge!)).toBeLessThan(10);
   });
 
+  it("never leaves a county more votes than its whole 2024 vote, however low its reporting figure", () => {
+    // AZ-2, Nov 5: Gila 40% in with 19,686 counted, scaled up to ~29,000 more, against 27,648 votes in all in 2024.
+    const est = votesLeft(race([county("Gila", 7_000, 12_686, 40.5, [8_000, 19_000, 27_648]), county("Apache", 15_000, 8_000, 100)], { office: "house", district: 2 }))!;
+    expect(est.left).toBe(27_648 - 19_686);
+  });
+
+  it("keeps DDHQ's expected vote even past the county's 2024 vote", () => {
+    const big = { ...county("Gila", 7_000, 12_686, 40.5, [8_000, 19_000, 27_648]), expected: 40_000 };
+    expect(votesLeft(race([big, county("Apache", 15_000, 8_000, 100)], { office: "house", district: 2 }))!.left).toBe(40_000 - 19_686);
+  });
+
   it("treats a race with no county breakdown as one region", () => {
     const est = votesLeft(race([], { reporting: 50, total: 200, candidates: [{ name: "Arr", party: "Republican", votes: 120, pct: 60, winner: false, incumbent: false }, { name: "Dee", party: "Democratic", votes: 80, pct: 40, winner: false, incumbent: false }] }))!;
     expect(est.left).toBe(200);
