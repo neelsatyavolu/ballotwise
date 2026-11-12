@@ -5,11 +5,13 @@ import { linkXanom, LinkError, type Intent } from "./link";
 import { issueTicket } from "./tickets";
 
 export type CallbackResult =
-  | { ok: true; platform: "web"; userId: string; returnTo: string }
+  /** `signIn`: start a new session for `userId`. A link or convert keeps the session the voter already has. */
+  | { ok: true; platform: "web"; userId: string; returnTo: string; signIn: boolean }
   | { ok: true; platform: "ios"; ticket: string }
   | { ok: false; platform: Platform; intent: Intent; code: string };
 
-type Deps = { db: Db; config: XanomConfig; keys: JWTVerifyGetKey; fetcher?: typeof fetch; now: number };
+/** `sessionUserId` is whoever the browser's Ballotwise session belongs to now, at the callback. */
+type Deps = { db: Db; config: XanomConfig; keys: JWTVerifyGetKey; fetcher?: typeof fetch; now: number; sessionUserId: string | null };
 
 /**
  * Finishes the Xanom flow: checks the signed flow cookie and state, trades the code (with the PKCE verifier),
@@ -35,10 +37,22 @@ export async function completeCallback(deps: Deps, cookie: string | undefined, p
     return failed("failed");
   }
 
+  if (flow.intent !== "signin") {
+    if (!flow.userId) return failed("signed-out");
+    // iOS: the browser sheet has no app session to check, so the identity goes back in a ticket that only the same
+    // user's app session can apply (/api/xanom/ios-exchange). A start link forwarded to someone else links nothing.
+    if (flow.platform === "ios") {
+      return { ok: true, platform: "ios", ticket: await issueTicket(deps.db, "ios-link", flow.userId, deps.now, { ...who, intent: flow.intent }) };
+    }
+    // Web: the voter who started must still be signed in here, so a password reset or sign-out cancels a pending link.
+    if (deps.sessionUserId !== flow.userId) return failed("signed-out");
+  }
+
   try {
     const user = await linkXanom(deps.db, who, flow.intent, flow.userId, deps.now);
     if (flow.platform === "ios") return { ok: true, platform: "ios", ticket: await issueTicket(deps.db, "ios-session", user.id, deps.now) };
-    return { ok: true, platform: "web", userId: user.id, returnTo: flow.intent === "signin" ? flow.returnTo : withParam(flow.returnTo, "xanom", "linked") };
+    const signIn = flow.intent === "signin";
+    return { ok: true, platform: "web", userId: user.id, signIn, returnTo: signIn ? flow.returnTo : withParam(flow.returnTo, "xanom", "linked") };
   } catch (err) {
     if (err instanceof LinkError) return failed(err.code);
     throw err;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startSession } from "@/lib/auth/accounts";
-import { setAccountCookie } from "@/lib/auth/session";
+import { currentUser, setAccountCookie } from "@/lib/auth/session";
 import { db } from "@/lib/env";
 import { completeCallback } from "@/lib/xanom/callback";
 import { IOS_CALLBACK, xanomConfig } from "@/lib/xanom/config";
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (!config) return NextResponse.redirect(new URL("/signin?xanom_error=unavailable", req.url), 302);
   const now = Date.now();
   const result = await completeCallback(
-    { db: db(), config, keys: issuerKeys(config.issuer), now },
+    { db: db(), config, keys: issuerKeys(config.issuer), now, sessionUserId: (await currentUser())?.id ?? null },
     req.cookies.get(FLOW_COOKIE)?.value,
     req.nextUrl.searchParams,
   );
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   } else if (result.platform === "ios") {
     res = NextResponse.redirect(`${IOS_CALLBACK}?ticket=${result.ticket}`, 302);
   } else {
-    await setAccountCookie(await startSession(db(), result.userId, now));
+    if (result.signIn) await setAccountCookie(await startSession(db(), result.userId, now));
     res = NextResponse.redirect(new URL(result.returnTo, req.url), 302);
   }
   res.cookies.delete({ name: FLOW_COOKIE, path: "/api/xanom" });

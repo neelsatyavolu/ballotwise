@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
   let user: { id: string; email: string } | null = null;
   if (intent !== "signin") {
     if (platform === "ios") {
-      const userId = await redeemTicket(db(), "ios-start", q.get("ticket") ?? "", now);
-      user = userId ? await db().prepare("SELECT id, email FROM users WHERE id = ?").bind(userId).first<{ id: string; email: string }>() : null;
+      const started = await redeemTicket(db(), ["ios-start"], q.get("ticket") ?? "", now);
+      user = started ? await db().prepare("SELECT id, email FROM users WHERE id = ?").bind(started.userId).first<{ id: string; email: string }>() : null;
     } else {
       user = await currentUser();
     }

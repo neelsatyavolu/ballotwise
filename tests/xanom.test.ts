@@ -65,9 +65,13 @@ function tokenEndpoint(flow: Flow, token: string | Promise<string>): typeof fetc
   }) as typeof fetch;
 }
 
-async function runCallback(db: Db, flow: Flow, token: string, params: Record<string, string> = {}) {
+async function runCallback(db: Db, flow: Flow, token: string, params: Record<string, string> = {}, sessionUserId: string | null = flow.userId) {
   const query = new URLSearchParams({ code: "the-code", state: flow.state, ...params });
-  return completeCallback({ db, config: CONFIG, keys, fetcher: tokenEndpoint(flow, token), now: Date.now() }, sealFlow(flow, CONFIG.clientSecret), query);
+  return completeCallback(
+    { db, config: CONFIG, keys, fetcher: tokenEndpoint(flow, token), now: Date.now(), sessionUserId },
+    sealFlow(flow, CONFIG.clientSecret),
+    query,
+  );
 }
 
 const userRow = (db: Db, email: string) =>
@@ -198,6 +202,8 @@ describe("flow cookie, state and PKCE", () => {
     expect(safeReturn("//evil.example")).toBe("/");
     expect(safeReturn("/\\evil.example")).toBe("/");
     expect(safeReturn("https://evil.example", "/account")).toBe("/account");
+    for (const sneaky of ["/\t/evil.example", "/\n/evil.example", "/\r/evil.example", "/\u0000x"]) expect(safeReturn(sneaky)).toBe("/");
+    expect(safeReturn("/a/../guide?x=1#top")).toBe("/guide?x=1#top");
   });
 });
 
@@ -231,9 +237,35 @@ describe("callback", () => {
   it("fails without a flow cookie and passes on a denied sign-in", async () => {
     const db = testDb();
     const flow = newFlow("signin", "web", "/", null, Date.now());
-    const none = await completeCallback({ db, config: CONFIG, keys, now: Date.now() }, undefined, new URLSearchParams({ code: "c", state: flow.state }));
+    const none = await completeCallback({ db, config: CONFIG, keys, now: Date.now(), sessionUserId: null }, undefined, new URLSearchParams({ code: "c", state: flow.state }));
     expect(none).toMatchObject({ ok: false, code: "expired" });
     expect(await runCallback(db, flow, "", { error: "access_denied" })).toMatchObject({ ok: false, code: "cancelled" });
+  });
+
+  it("links on the web only while the voter who started is still signed in", async () => {
+    const db = testDb();
+    const { user } = await signUp(db, "mine@example.com", "a long password", NOW);
+    const flow = newFlow("link", "web", "/account", user.id, Date.now());
+    const token = await idToken(flow, who);
+    expect(await runCallback(db, flow, token, {}, null)).toMatchObject({ ok: false, code: "signed-out" });
+    expect((await userRow(db, "mine@example.com"))?.xanom_sub).toBeNull();
+    expect(await runCallback(db, flow, token)).toMatchObject({ ok: true, platform: "web", userId: user.id, signIn: false, returnTo: "/account?xanom=linked" });
+    expect((await userRow(db, "mine@example.com"))?.xanom_sub).toBe("xa_cb");
+  });
+
+  it("on iOS, link returns the identity in a ticket instead of linking in the browser", async () => {
+    const db = testDb();
+    const { user } = await signUp(db, "mine@example.com", "a long password", NOW);
+    const flow = newFlow("link", "ios", "/account", user.id, Date.now());
+    const result = await runCallback(db, flow, await idToken(flow, who), {}, null);
+    if (!result.ok || result.platform !== "ios") throw new Error("expected an iOS ticket");
+    expect((await userRow(db, "mine@example.com"))?.xanom_sub).toBeNull();
+    expect(await redeemTicket(db, ["ios-session"], result.ticket, Date.now())).toBeNull();
+    expect(await redeemTicket(db, ["ios-session", "ios-link"], result.ticket, Date.now())).toEqual({
+      kind: "ios-link",
+      userId: user.id,
+      link: { intent: "link", sub: "xa_cb", email: "cb@example.com" },
+    });
   });
 
   it("reports a refused convert to the account page", async () => {
@@ -248,10 +280,10 @@ describe("callback", () => {
     const flow = newFlow("signin", "ios", "/", null, Date.now());
     const result = await runCallback(db, flow, await idToken(flow, who));
     if (!result.ok || result.platform !== "ios") throw new Error("expected an iOS ticket");
-    expect(await redeemTicket(db, "ios-start", result.ticket, Date.now())).toBeNull();
-    const userId = await redeemTicket(db, "ios-session", result.ticket, Date.now());
-    expect(userId).toBe((await userRow(db, "cb@example.com"))?.id);
-    expect(await redeemTicket(db, "ios-session", result.ticket, Date.now())).toBeNull();
+    expect(await redeemTicket(db, ["ios-start"], result.ticket, Date.now())).toBeNull();
+    const redeemed = await redeemTicket(db, ["ios-session", "ios-link"], result.ticket, Date.now());
+    expect(redeemed).toEqual({ kind: "ios-session", userId: (await userRow(db, "cb@example.com"))?.id, link: null });
+    expect(await redeemTicket(db, ["ios-session"], result.ticket, Date.now())).toBeNull();
   });
 });
 
@@ -260,8 +292,8 @@ describe("iOS tickets", () => {
     const db = testDb();
     const { user } = await signUp(db, "t@example.com", "a long password", NOW);
     const ticket = await issueTicket(db, "ios-start", user.id, NOW);
-    expect(await redeemTicket(db, "ios-start", ticket, NOW + TICKET_TTL_MS)).toBeNull();
-    expect(await redeemTicket(db, "ios-start", "not a ticket", NOW)).toBeNull();
+    expect(await redeemTicket(db, ["ios-start"], ticket, NOW + TICKET_TTL_MS)).toBeNull();
+    expect(await redeemTicket(db, ["ios-start"], "not a ticket", NOW)).toBeNull();
   });
 });
 

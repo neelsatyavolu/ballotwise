@@ -27,10 +27,17 @@ const CONVERT_TTL_S = 300;
 
 const random = () => randomBytes(32).toString("base64url");
 
-/** Only same-site paths, so the callback can't be turned into an open redirect. */
+const LOCAL = "https://local.invalid";
+
+/**
+ * Only same-site paths, so the callback can't be turned into an open redirect. Control characters and backslashes
+ * are refused outright because URL parsing drops or rewrites them (`/\t/evil.example` becomes `//evil.example`).
+ */
 export function safeReturn(path: string | null | undefined, fallback = "/"): string {
-  if (!path || !path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\")) return fallback;
-  return path;
+  if (!path || /[\u0000-\u001f\u007f\\]/.test(path) || !path.startsWith("/") || path.startsWith("//")) return fallback;
+  const url = new URL(path, LOCAL);
+  if (url.origin !== LOCAL) return fallback;
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 export function newFlow(intent: Intent, platform: Platform, returnTo: string, userId: string | null, now: number): Flow {
