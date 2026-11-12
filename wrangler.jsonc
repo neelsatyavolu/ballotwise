@@ -30,6 +30,7 @@
   // Re-rates the midterm races from market prices and polls (custom-worker.ts `scheduled`).
   "triggers": { "crons": ["* * * * *"] },
   // APNS_TOPIC is the iOS app's bundle id; APNS_KEY (the .p8 contents), APNS_KEY_ID and APNS_TEAM_ID are secrets.
-  "vars": { "APP_URL": "https://ballotwise.xanom.co", "APNS_TOPIC": "co.xanom.ballotwise" },
+  // Xanom sign-in (lib/xanom): XANOM_CLIENT_SECRET is a secret.
+  "vars": { "APP_URL": "https://ballotwise.xanom.co", "APNS_TOPIC": "co.xanom.ballotwise", "XANOM_ISSUER": "https://accounts.xanom.co", "XANOM_CLIENT_ID": "ballotwise" },
   "observability": { "enabled": true }
 }

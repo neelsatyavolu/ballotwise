@@ -3,7 +3,7 @@ import type { Db } from "./auth/accounts";
 import type { Job } from "./ballot/jobs";
 
 // Secrets set with `wrangler secret put`, not listed in wrangler.jsonc.
-type Secrets = { RESEND_API_KEY?: string; GROK_TOKEN_KEY?: string };
+type Secrets = { RESEND_API_KEY?: string; GROK_TOKEN_KEY?: string; XANOM_ISSUER?: string; XANOM_CLIENT_ID?: string; XANOM_CLIENT_SECRET?: string };
 
 export function appEnv(): CloudflareEnv & Secrets {
   return getCloudflareContext().env as CloudflareEnv & Secrets;

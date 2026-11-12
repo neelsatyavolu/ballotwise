@@ -14,6 +14,8 @@ final class AccountStore {
     var grokConnected: Bool { me?.grok == "connected" }
     /// A Decision Desk HQ Votes Pro account is connected, so results come from DDHQ (see LiveStore).
     var ddhqConnected: Bool { me?.ddhq == "connected" }
+    /// The Xanom account this one is linked to, if any.
+    var xanom: XanomLink? { me?.xanom }
 
     private enum Keys { static let starred = "starredRaceIds" }
     static let maxStars = 200
@@ -31,6 +33,23 @@ final class AccountStore {
         nonisolated struct Reply: Decodable, Sendable { let user: User }
         let body = Body(email: email, password: password, acceptTerms: create ? true : nil)
         _ = try await API.shared.send("POST", create ? "/api/account/signup" : "/api/account/signin", body: body, as: Reply.self)
+        await load()
+    }
+
+    /// "Continue with Xanom", or link and convert from settings (xanom-accounts SPEC §5).
+    /// Throws CancellationError when the voter closes the sheet.
+    func continueWithXanom(_ intent: XanomSignIn.Intent = .signin) async throws {
+        nonisolated struct Ticket: Codable, Sendable { let ticket: String }
+        nonisolated struct Reply: Decodable, Sendable { let user: User }
+        // Link and convert happen in the browser sheet, which doesn't have this app's session, so a one-time
+        // ticket tells the website who is signed in here.
+        var startTicket: String?
+        if intent != .signin {
+            startTicket = try await API.shared.send("POST", "/api/xanom/ios-ticket", body: Empty(), as: Ticket.self).ticket
+        }
+        let ticket = try await XanomSignIn().run(intent: intent, startTicket: startTicket)
+        // The reply sets the bw_session cookie in the shared cookie store, like the password sign-in does.
+        _ = try await API.shared.send("POST", "/api/xanom/ios-exchange", body: Ticket(ticket: ticket), as: Reply.self)
         await load()
     }
 

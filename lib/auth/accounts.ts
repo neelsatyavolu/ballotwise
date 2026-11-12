@@ -43,7 +43,7 @@ async function recordAttempt(db: Db, key: string, now: number): Promise<void> {
   ]);
 }
 
-async function startSession(db: Db, userId: string, now: number): Promise<string> {
+export async function startSession(db: Db, userId: string, now: number): Promise<string> {
   const token = newToken();
   await db.batch([
     db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)").bind(hashToken(token), userId, now + SESSION_TTL_MS),
@@ -74,10 +74,18 @@ export async function acceptTerms(db: Db, userId: string, version: string, now: 
   await db.prepare("UPDATE users SET terms_version = ?, terms_accepted_at = ? WHERE id = ?").bind(version, now, userId).run();
 }
 
-/** Deletes the account. Every table tied to a user cascades, so this removes all of their data. */
-export async function deleteAccount(db: Db, userId: string, password: string): Promise<void> {
-  const row = await db.prepare("SELECT password_hash FROM users WHERE id = ?").bind(userId).first<{ password_hash: string }>();
-  if (!row || !(await verifyPassword(password, row.password_hash))) throw new AccountError("That password isn't right.", 401);
+/**
+ * Deletes the account. Every table tied to a user cascades, so this removes all of their data.
+ * `confirmation` is the password, or for an account with no password (Xanom sign-in only) its email.
+ */
+export async function deleteAccount(db: Db, userId: string, confirmation: string): Promise<void> {
+  const row = await db.prepare("SELECT email, password_hash FROM users WHERE id = ?").bind(userId).first<{ email: string; password_hash: string }>();
+  if (!row) throw new AccountError("That password isn't right.", 401);
+  if (row.password_hash === "") {
+    if (confirmation.trim().toLowerCase() !== row.email.toLowerCase()) throw new AccountError("Type your account's email exactly to confirm.", 401);
+  } else if (!(await verifyPassword(confirmation, row.password_hash))) {
+    throw new AccountError("That password isn't right.", 401);
+  }
   await db.prepare("DELETE FROM users WHERE id = ?").bind(userId).run();
 }
 
@@ -133,7 +141,8 @@ export async function finishReset(db: Db, token: string, password: string, now: 
   if (!row) throw new AccountError("This reset link has expired or was already used. Ask for a new one.", 400);
   await db.batch([
     db.prepare("DELETE FROM password_resets WHERE user_id = ?").bind(row.id),
-    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").bind(await hashPassword(password), row.id),
+    // Opening the emailed link proves the voter owns the address, which Xanom convert tickets vouch for.
+    db.prepare("UPDATE users SET password_hash = ?, email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?").bind(await hashPassword(password), now, row.id),
     db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id),
   ]);
   return { user: row, token: await startSession(db, row.id, now) };

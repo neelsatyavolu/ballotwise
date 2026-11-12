@@ -23,6 +23,9 @@ struct MoreView: View {
                     Text("Your starred races and dashboards follow your account to ballotwise.xanom.co.").font(.caption).foregroundStyle(.secondary)
                 }
             }
+            if account.user != nil {
+                XanomAccountSection()
+            }
             Section {
                 if account.user == nil {
                     Text("Sign in, then connect a Votes Pro account to see Decision Desk HQ's counts, calls and county results here.")
@@ -113,6 +116,20 @@ struct SignInView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Button {
+                        Task { await continueWithXanom() }
+                    } label: {
+                        Text("Continue with Xanom").fontWeight(.semibold).frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(busy)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                } footer: {
+                    Text("One account for Ballotwise and the other Xanom apps. Or use your email below.")
+                }
                 Picker("", selection: $creating) {
                     Text("Sign in").tag(false)
                     Text("Create account").tag(true)
@@ -141,6 +158,19 @@ struct SignInView: View {
             .navigationTitle(creating ? "Create account" : "Sign in")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
+
+    private func continueWithXanom() async {
+        busy = true
+        defer { busy = false }
+        error = nil
+        do {
+            try await account.continueWithXanom()
+            dismiss()
+        } catch is CancellationError {
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

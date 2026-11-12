@@ -7,9 +7,10 @@ import { api, ApiError } from "@/lib/client";
 import { useAccount } from "./AccountProvider";
 import { AiAccount } from "./AiAccount";
 import { VotesConnect } from "./VotesConnect";
+import { XanomAccount } from "./Xanom";
 
 export function DeleteAccount() {
-  const { user, loading, refresh } = useAccount();
+  const { user, loading, refresh, hasPassword = true } = useAccount();
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +51,7 @@ export function DeleteAccount() {
     <div className="auth wrap">
       <h1>Your account</h1>
       <p className="muted">Signed in as {user.email}.</p>
+      <XanomAccount />
       <AiAccount />
       <VotesConnect />
       <h2 style={{ marginTop: 32 }}>Delete your account</h2>
@@ -59,8 +61,18 @@ export function DeleteAccount() {
       </p>
       <form onSubmit={submit} noValidate>
         <div className="field">
-          <label htmlFor="password">Enter your password to confirm</label>
-          <input id="password" className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          {hasPassword ? (
+            <>
+              <label htmlFor="password">Enter your password to confirm</label>
+              <input id="password" className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            </>
+          ) : (
+            <>
+              {/* Accounts made with Xanom have no password, so typing the email confirms instead. */}
+              <label htmlFor="password">Type {user.email} to confirm</label>
+              <input id="password" className="input" type="email" autoComplete="off" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            </>
+          )}
         </div>
         {error && <p className="error" role="alert">{error}</p>}
         <button className="btn danger" type="submit" disabled={busy || !password}>{busy ? "Deleting…" : "Delete my account"}</button>

@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/client";
 import { MIN_AGE } from "@/lib/legal";
 import { useAccount } from "./AccountProvider";
+import { ContinueWithXanom } from "./Xanom";
 
 type Mode = "signin" | "signup" | "forgot" | "reset";
 
@@ -70,6 +71,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
     <div className="auth wrap">
       <h1>{copy.title}</h1>
       <p className="muted">{copy.lede}</p>
+      {(mode === "signin" || mode === "signup") && <ContinueWithXanom next={next} />}
       {sent ? (
         <p className="notice" style={{ marginTop: 24 }} role="status">{sent}</p>
       ) : (

@@ -30,6 +30,7 @@
 		860565827E998B263A724184 /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA800B0116F39479C690117 /* LiveView.swift */; };
 		941BCCDB3C09600F89B80A59 /* MapRaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B8BA45C324237F0137D6EC3 /* MapRaces.swift */; };
 		979C560E7913791E7FF5909E /* WallMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087844FCBB901E1B0C2375F5 /* WallMap.swift */; };
+		97F5A745CA5190393D33D259 /* XanomAccountSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569CF8B4C15DB359DECCF06E /* XanomAccountSection.swift */; };
 		9FE817A54E9159F480C399E5 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B05E8481FA68931AB2B20A /* Format.swift */; };
 		A1DC2B3B36ACEC57C3D16CFD /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12761D3993DBEDF846D83FCB /* Models.swift */; };
 		A603BE34FC63F0321D239A83 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC806712CBAB23CE3A4BD235 /* SearchView.swift */; };
@@ -37,6 +38,7 @@
 		B691D47D769ECA83183EA2E1 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C831CB42A56CFE76EC7696F /* RootView.swift */; };
 		B97154411A23C8CB492EC76D /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4190A93AD7DA5F851513FAC4 /* API.swift */; };
 		BB01D1F1FF3661E71521E152 /* Holders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F59E4213F3659D6A5285A33 /* Holders.swift */; };
+		BCA965CA565C1D9B4AC0AE88 /* XanomSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3D256FD191E07B22834AA4 /* XanomSignIn.swift */; };
 		BFF5E70EB4EE7EF73EF70619 /* CountyMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B1C3E8401526FF17F7432 /* CountyMap.swift */; };
 		D6A775279F84A6AEF1D94AAB /* ForecastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ECE50CBA2AFE6A78C6501E2 /* ForecastView.swift */; };
 		D7D9F5D780A5A6CA459942EB /* RaceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 751F8E2003C202EBF5CD3460 /* RaceDetailView.swift */; };
@@ -84,6 +86,8 @@
 		4D5C7588EFCB8B61896FCD81 /* Telestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Telestrator.swift; sourceTree = "<group>"; };
 		523FC1D914EC3778299EFB82 /* WallLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallLogic.swift; sourceTree = "<group>"; };
 		54CC9BE360CB767B2F0C4015 /* Pulse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pulse.swift; sourceTree = "<group>"; };
+		569CF8B4C15DB359DECCF06E /* XanomAccountSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XanomAccountSection.swift; sourceTree = "<group>"; };
+		5C3D256FD191E07B22834AA4 /* XanomSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XanomSignIn.swift; sourceTree = "<group>"; };
 		69144ECF5853F6BBEACBD363 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		7022C0A8D91C4DB254C60DF5 /* Polls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Polls.swift; sourceTree = "<group>"; };
 		751F8E2003C202EBF5CD3460 /* RaceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceDetailView.swift; sourceTree = "<group>"; };
@@ -251,6 +255,7 @@
 				54CC9BE360CB767B2F0C4015 /* Pulse.swift */,
 				83451627E8AF972B336F6E54 /* PushManager.swift */,
 				DD0437B97061BF860166905A /* Theme.swift */,
+				5C3D256FD191E07B22834AA4 /* XanomSignIn.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -260,6 +265,7 @@
 			children = (
 				69144ECF5853F6BBEACBD363 /* MoreView.swift */,
 				421E46C657E629ABAFB9ED9C /* VotesConnectView.swift */,
+				569CF8B4C15DB359DECCF06E /* XanomAccountSection.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -433,6 +439,8 @@
 				979C560E7913791E7FF5909E /* WallMap.swift in Sources */,
 				02B939392128728E3DFD4472 /* WallRail.swift in Sources */,
 				E3F686F98A732E58D62E0732 /* WallView.swift in Sources */,
+				97F5A745CA5190393D33D259 /* XanomAccountSection.swift in Sources */,
+				BCA965CA565C1D9B4AC0AE88 /* XanomSignIn.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

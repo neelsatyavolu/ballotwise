@@ -165,6 +165,13 @@ main { flex: 1 0 auto; padding: 28px 0 0; }
 .auth .links { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; margin-top: 20px; color: var(--muted); }
 .auth .actions { display: grid; gap: 12px; margin-top: 20px; }
 
+/* Xanom sign-in */
+.xanom-start { display: grid; gap: 8px; margin-top: 24px; }
+.or { display: flex; align-items: center; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+.or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
+.xanom-account { margin-top: 32px; display: grid; gap: 8px; justify-items: start; }
+.xanom-account .actions { width: 100%; }
+
 /* Grok connect */
 .connect ol { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
 .connect .row { display: flex; gap: 10px; margin-top: 16px; }

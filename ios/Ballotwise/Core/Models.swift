@@ -339,7 +339,11 @@ nonisolated struct Me: Codable, Sendable {
     var provider: String?
     /// "connected" when the account has a Decision Desk HQ Votes Pro session.
     var ddhq: String?
+    /// The Xanom account this one is linked to (accounts.xanom.co), if any.
+    var xanom: XanomLink?
 }
+
+nonisolated struct XanomLink: Codable, Sendable { let email: String }
 
 nonisolated struct DashboardSection: Codable, Sendable, Hashable {
     let title: String

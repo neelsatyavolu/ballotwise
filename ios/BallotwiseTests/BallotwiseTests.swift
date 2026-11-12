@@ -233,3 +233,21 @@ struct WallTests {
         #expect(WallLens.available(counties: true) == [.results, .past, .shift])
     }
 }
+
+@MainActor
+struct XanomSignInTests {
+    @Test func startURL() {
+        let signin = URLComponents(url: XanomSignIn.startURL(intent: .signin, startTicket: nil), resolvingAgainstBaseURL: false)!
+        #expect(signin.host == "ballotwise.xanom.co")
+        #expect(signin.path == "/api/xanom/start")
+        #expect(signin.queryItems == [URLQueryItem(name: "platform", value: "ios"), URLQueryItem(name: "intent", value: "signin")])
+        let convert = XanomSignIn.startURL(intent: .convert, startTicket: "abc").absoluteString
+        #expect(convert.hasSuffix("platform=ios&intent=convert&ticket=abc"))
+    }
+
+    @Test func callbackTicket() throws {
+        #expect(try XanomSignIn.ticket(from: URL(string: "ballotwise://xanom?ticket=T123")!) == "T123")
+        #expect(throws: APIError.self) { try XanomSignIn.ticket(from: URL(string: "ballotwise://xanom?error=email-mismatch")!) }
+        #expect(throws: APIError.self) { try XanomSignIn.ticket(from: URL(string: "ballotwise://xanom")!) }
+    }
+}

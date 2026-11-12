@@ -6,6 +6,7 @@ import { ddhqResultsSource } from "@/lib/ddhq/vault";
 import { activeGrokSession } from "@/lib/grok/session";
 import { TERMS_VERSION } from "@/lib/legal";
 import { getValues } from "@/lib/values";
+import { xanomStatus } from "@/lib/xanom/link";
 
 export async function GET() {
   const user = await currentUser();
@@ -15,10 +16,11 @@ export async function GET() {
   const terms = (await acceptedTerms(db(), user.id)) === TERMS_VERSION ? "accepted" : "needed";
   const ddhqSource = await ddhqResultsSource(db(), user.id);
   const ddhq = ddhqSource ? "connected" : "disconnected";
+  const { xanom, hasPassword } = await xanomStatus(db(), user.id);
   try {
     const session = await activeGrokSession(user.id);
-    return NextResponse.json({ user, values, terms, grok: session ? "connected" : "disconnected", provider: session?.provider ?? null, ddhq, ddhqSource });
+    return NextResponse.json({ user, values, terms, grok: session ? "connected" : "disconnected", provider: session?.provider ?? null, ddhq, ddhqSource, xanom, hasPassword });
   } catch {
-    return NextResponse.json({ user, values, terms, grok: "refresh-failed", provider: null, ddhq, ddhqSource });
+    return NextResponse.json({ user, values, terms, grok: "refresh-failed", provider: null, ddhq, ddhqSource, xanom, hasPassword });
   }
 }
